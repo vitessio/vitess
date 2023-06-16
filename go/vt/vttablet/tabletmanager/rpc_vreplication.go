@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -136,16 +135,13 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 		return nil, err
 	}
 	if res == nil || len(res.Rows) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "no VReplication workflow found with name %s on tablet %s", req.Workflow, tm.tabletAlias)
+		return nil, nil
 	}
 	rows := res.Named().Rows
 	resp := &tabletmanagerdatapb.ReadVRWorkflowResponse{Workflow: req.Workflow}
 	streams := make([]*tabletmanagerdatapb.ReadVRWorkflowResponse_Stream, len(rows))
 
 	// First the things that are common to all streams.
-	if resp.Id, err = rows[0]["id"].ToInt32(); err != nil {
-		return nil, vterrors.Wrap(err, "error parsing id field from vreplication table record")
-	}
 	resp.Cells = rows[0]["cell"].ToString()
 	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(rows[0]["tablet_types"].ToString())
 	if err != nil {
@@ -172,18 +168,20 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 
 	// Now the individual streams (there can be more than 1 with shard merges).
 	for i, row := range rows {
+		streams[i] = &tabletmanagerdatapb.ReadVRWorkflowResponse_Stream{}
+		if streams[i].Id, err = row["id"].ToInt32(); err != nil {
+			return nil, vterrors.Wrap(err, "error parsing id field from vreplication table record")
+		}
 		srcBytes, err := row["source"].ToBytes()
 		if err != nil {
 			return nil, vterrors.Wrap(err, "error parsing binlog_source field from vreplication table record")
 		}
 		blspb := &binlogdatapb.BinlogSource{}
-		err = proto.Unmarshal(srcBytes, blspb)
+		err = prototext.Unmarshal(srcBytes, blspb)
 		if err != nil {
-			return nil, vterrors.Wrap(err, "error parsing binlog_source field from vreplication table record")
+			return nil, vterrors.Wrap(err, "error unmarshaling binlog_source field from vreplication table record")
 		}
-		streams[i] = &tabletmanagerdatapb.ReadVRWorkflowResponse_Stream{
-			Bls: blspb,
-		}
+		streams[i].Bls = blspb
 		streams[i].Pos = row["pos"].ToString()
 		streams[i].StopPos = row["stop_pos"].ToString()
 		if streams[i].MaxTps, err = row["max_tps"].ToInt64(); err != nil {
@@ -219,6 +217,7 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 		streams[i].TimeThrottled = &vttime.Time{Seconds: timeThrottled}
 		streams[i].ComponentThrottled = row["component_throttled"].ToString()
 	}
+	resp.Streams = streams
 
 	return resp, nil
 }

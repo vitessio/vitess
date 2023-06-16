@@ -4494,7 +4494,7 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 		copy(dAtA[i:], m.ComponentThrottled)
 		i = encodeVarint(dAtA, i, uint64(len(m.ComponentThrottled)))
 		i--
-		dAtA[i] = 0x6a
+		dAtA[i] = 0x72
 	}
 	if m.TimeThrottled != nil {
 		size, err := m.TimeThrottled.MarshalToSizedBufferVT(dAtA[:i])
@@ -4504,7 +4504,7 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x62
+		dAtA[i] = 0x6a
 	}
 	if m.TimeHeartbeat != nil {
 		size, err := m.TimeHeartbeat.MarshalToSizedBufferVT(dAtA[:i])
@@ -4514,24 +4514,24 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x5a
+		dAtA[i] = 0x62
 	}
 	if m.RowsCopied != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.RowsCopied))
 		i--
-		dAtA[i] = 0x50
+		dAtA[i] = 0x58
 	}
 	if len(m.Message) > 0 {
 		i -= len(m.Message)
 		copy(dAtA[i:], m.Message)
 		i = encodeVarint(dAtA, i, uint64(len(m.Message)))
 		i--
-		dAtA[i] = 0x4a
+		dAtA[i] = 0x52
 	}
 	if m.State != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.State))
 		i--
-		dAtA[i] = 0x40
+		dAtA[i] = 0x48
 	}
 	if m.TransactionTimestamp != nil {
 		size, err := m.TransactionTimestamp.MarshalToSizedBufferVT(dAtA[:i])
@@ -4541,7 +4541,7 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x3a
+		dAtA[i] = 0x42
 	}
 	if m.TimeUpdated != nil {
 		size, err := m.TimeUpdated.MarshalToSizedBufferVT(dAtA[:i])
@@ -4551,31 +4551,31 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x3a
 	}
 	if m.MaxReplicationLag != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.MaxReplicationLag))
 		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x30
 	}
 	if m.MaxTps != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.MaxTps))
 		i--
-		dAtA[i] = 0x20
+		dAtA[i] = 0x28
 	}
 	if len(m.StopPos) > 0 {
 		i -= len(m.StopPos)
 		copy(dAtA[i:], m.StopPos)
 		i = encodeVarint(dAtA, i, uint64(len(m.StopPos)))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x22
 	}
 	if len(m.Pos) > 0 {
 		i -= len(m.Pos)
 		copy(dAtA[i:], m.Pos)
 		i = encodeVarint(dAtA, i, uint64(len(m.Pos)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x1a
 	}
 	if m.Bls != nil {
 		size, err := m.Bls.MarshalToSizedBufferVT(dAtA[:i])
@@ -4585,7 +4585,12 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0xa
+		dAtA[i] = 0x12
+	}
+	if m.Id != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Id))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -4705,11 +4710,6 @@ func (m *ReadVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i = encodeVarint(dAtA, i, uint64(len(m.Workflow)))
 		i--
 		dAtA[i] = 0x12
-	}
-	if m.Id != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.Id))
-		i--
-		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -6787,6 +6787,9 @@ func (m *ReadVRWorkflowResponse_Stream) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	if m.Id != 0 {
+		n += 1 + sov(uint64(m.Id))
+	}
 	if m.Bls != nil {
 		l = m.Bls.SizeVT()
 		n += 1 + l + sov(uint64(l))
@@ -6845,9 +6848,6 @@ func (m *ReadVRWorkflowResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Id != 0 {
-		n += 1 + sov(uint64(m.Id))
-	}
 	l = len(m.Workflow)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
@@ -16353,6 +16353,25 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Id |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Bls", wireType)
 			}
@@ -16388,7 +16407,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 2:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Pos", wireType)
 			}
@@ -16420,7 +16439,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Pos = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StopPos", wireType)
 			}
@@ -16452,7 +16471,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 			}
 			m.StopPos = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 4:
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MaxTps", wireType)
 			}
@@ -16471,7 +16490,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 5:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MaxReplicationLag", wireType)
 			}
@@ -16490,7 +16509,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 6:
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TimeUpdated", wireType)
 			}
@@ -16526,7 +16545,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 7:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TransactionTimestamp", wireType)
 			}
@@ -16562,7 +16581,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 8:
+		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
 			}
@@ -16581,7 +16600,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 9:
+		case 10:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
 			}
@@ -16613,7 +16632,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Message = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 10:
+		case 11:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RowsCopied", wireType)
 			}
@@ -16632,7 +16651,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 11:
+		case 12:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TimeHeartbeat", wireType)
 			}
@@ -16668,7 +16687,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 12:
+		case 13:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TimeThrottled", wireType)
 			}
@@ -16704,7 +16723,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 13:
+		case 14:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ComponentThrottled", wireType)
 			}
@@ -16787,25 +16806,6 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: ReadVRWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
-			}
-			m.Id = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Id |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)

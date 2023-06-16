@@ -26,8 +26,6 @@ import (
 	"strings"
 	"sync"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -37,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -358,16 +357,14 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		// NB: changing the whitespace of this query breaks tests for now.
-		// (TODO:@ajm188) extend FakeDBClient to be less whitespace-sensitive on
-		// expected queries.
-		query := fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(primary.DbName()))
-		p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, query)
+		wf, err := tmc.ReadVRWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVRWorkflowRequest{
+			Workflow: workflow,
+		})
 		if err != nil {
 			return nil, err
 		}
 
-		if len(p3qr.Rows) < 1 {
+		if len(wf.Streams) < 1 {
 			continue
 		}
 
@@ -377,33 +374,16 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			Sources: make(map[int32]*binlogdatapb.BinlogSource),
 		}
 
-		qr := sqltypes.Proto3ToResult(p3qr)
-		for _, row := range qr.Named().Rows {
-			id, err := row["id"].ToInt32()
-			if err != nil {
-				return nil, err
-			}
+		optCells = wf.Cells
+		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
+		workflowType = wf.WorkflowType
+		workflowSubType = wf.WorkflowSubType
 
-			var bls binlogdatapb.BinlogSource
-			rowBytes, err := row["source"].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
-				return nil, err
-			}
-
-			if row["message"].ToString() == Frozen {
+		for _, stream := range wf.Streams {
+			if stream.Message == Frozen {
 				frozen = true
 			}
-
-			target.Sources[id] = &bls
-			optCells = row["cell"].ToString()
-			optTabletTypes = row["tablet_types"].ToString()
-
-			workflowType = getVReplicationWorkflowType(row)
-			workflowSubType = getVReplicationWorkflowSubType(row)
-
+			target.Sources[stream.Id] = stream.Bls
 		}
 
 		targets[targetShard] = target

@@ -26327,9 +26327,6 @@ export namespace tabletmanagerdata {
     /** Properties of a ReadVRWorkflowResponse. */
     interface IReadVRWorkflowResponse {
 
-        /** ReadVRWorkflowResponse id */
-        id?: (number|null);
-
         /** ReadVRWorkflowResponse workflow */
         workflow?: (string|null);
 
@@ -26369,9 +26366,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IReadVRWorkflowResponse);
-
-        /** ReadVRWorkflowResponse id. */
-        public id: number;
 
         /** ReadVRWorkflowResponse workflow. */
         public workflow: string;
@@ -26486,6 +26480,9 @@ export namespace tabletmanagerdata {
         /** Properties of a Stream. */
         interface IStream {
 
+            /** Stream id */
+            id?: (number|null);
+
             /** Stream bls */
             bls?: (binlogdata.IBinlogSource|null);
 
@@ -26534,6 +26531,9 @@ export namespace tabletmanagerdata {
              * @param [properties] Properties to set
              */
             constructor(properties?: tabletmanagerdata.ReadVRWorkflowResponse.IStream);
+
+            /** Stream id. */
+            public id: number;
 
             /** Stream bls. */
             public bls?: (binlogdata.IBinlogSource|null);
