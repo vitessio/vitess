@@ -3296,6 +3296,7 @@ type ForeignKeyDefinition struct {
 	Source            Columns
 	ReferencedTable   TableName
 	ReferencedColumns Columns
+	Index             string
 	OnDelete          ReferenceAction
 	OnUpdate          ReferenceAction
 }
@@ -3304,7 +3305,11 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+	index := ""
+	if f.Index != "" {
+		index = f.Index + " "
+	}
+	buf.Myprintf("foreign key %s%v references %v %v", index, f.Source, f.ReferencedTable, f.ReferencedColumns)
 	if f.OnDelete != DefaultAction {
 		buf.Myprintf(" on delete %v", f.OnDelete)
 	}
