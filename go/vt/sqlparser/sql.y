@@ -198,6 +198,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   eventOnCompletion EventOnCompletion
   intervalExprs []IntervalExpr
   separator Separator
+  srsAttr *SrsAttribute
 }
 
 %token LEX_ERROR
@@ -362,6 +363,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> DAY_MICROSECOND DAY_SECOND DAY_MINUTE DAY_HOUR
 %token <bytes> YEAR_MONTH
 
+// Spatial Reference System Tokens
+%token <bytes> NAME SYSTEM
+
 // MySQL reserved words that are currently unused.
 %token <bytes> ACCESSIBLE ASENSITIVE
 %token <bytes> CUBE
@@ -382,7 +386,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP
-%token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
+%token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE INFILE
 
 // MySQL unreserved keywords that are currently unused
 %token <bytes> ACTIVE AGGREGATE ANY ARRAY ASCII AT AUTOEXTEND_SIZE
@@ -593,6 +597,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
 %type <bytes> any_identifier
+%type <statement> create_spatial_ref_sys
+%type <srsAttr> srs_attribute
 
 %type <tableExpr> json_table
 %type <JSONTableSpec> json_table_column_list
@@ -1109,6 +1115,66 @@ create_statement:
       notExists = true
     }
     $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5, Definer: $2, IfNotExists: notExists, OnSchedule: $8, OnCompletionPreserve: $9, Status: $10, Comment: $11, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
+  }
+| create_spatial_ref_sys
+  {
+    $$ = $1
+  }
+
+create_spatial_ref_sys:
+  CREATE SPATIAL REFERENCE SYSTEM INTEGRAL srs_attribute
+  {
+    $$ = &CreateSpatialRefSys{SRID: NewIntVal($5), SrsAttr: $6}
+  }
+| CREATE SPATIAL REFERENCE SYSTEM IF NOT EXISTS INTEGRAL srs_attribute
+  {
+    $$ = &CreateSpatialRefSys{SRID: NewIntVal($8), IfNotExists: true, SrsAttr: $9}
+  }
+| CREATE OR REPLACE SPATIAL REFERENCE SYSTEM INTEGRAL srs_attribute
+  {
+    $$ = &CreateSpatialRefSys{SRID: NewIntVal($7), OrReplace: true, SrsAttr: $8}
+  }
+
+srs_attribute:
+  {
+    $$ = &SrsAttribute{}
+  }
+| srs_attribute NAME STRING
+  {
+    if $1.Name != "" {
+      yylex.Error("multiple definitions of attribute name")
+      return 1
+    }
+    $1.Name = string($3)
+    $$ = $1
+  }
+| srs_attribute DEFINITION STRING
+  {
+    if $1.Definition != "" {
+      yylex.Error("multiple definitions of attribute definition")
+      return 1
+    }
+    $1.Definition = string($3)
+    $$ = $1
+  }
+| srs_attribute ORGANIZATION STRING IDENTIFIED BY INTEGRAL
+  {
+    if $1.Organization != "" {
+      yylex.Error("multiple definitions of attribute organization")
+      return 1
+    }
+    $1.Organization = string($3)
+    $1.OrgID = NewIntVal($6)
+    $$ = $1
+  }
+| srs_attribute DESCRIPTION STRING
+  {
+    if $1.Description != "" {
+      yylex.Error("multiple definitions of attribute description")
+      return 1
+    }
+    $1.Description = string($3)
+    $$ = $1
   }
 
 default_role_opt:
@@ -3744,6 +3810,10 @@ name_opt:
   {
     $$ = string($1)
   }
+| non_reserved_keyword
+  {
+    $$ = string($1)
+  }
 
 index_column_list:
   index_column
@@ -4299,6 +4369,10 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
   }
 | RENAME COLUMN ID to_or_as ID
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
+  }
+| RENAME COLUMN non_reserved_keyword to_or_as ID
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
   }
@@ -8445,6 +8519,7 @@ non_reserved_keyword:
 | MULTIPOINT
 | MULTIPOLYGON
 | MYSQL_ERRNO
+| NAME
 | NAMES
 | NATIONAL
 | NCHAR
