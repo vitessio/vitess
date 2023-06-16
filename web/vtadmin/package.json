@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=16.19.0",
-    "npm": ">=8.1.0"
+    "node": ">=18.16.0",
+    "npm": ">=9.5.1"
   },
   "dependencies": {
     "@bugsnag/js": "^7.20.0",

@@ -6,6 +6,8 @@
   - **[Breaking Changes](#breaking-changes)**
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
+  - **[VTAdmin](#vtadmin)**
+    - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
@@ -21,6 +23,12 @@
 VTOrc has a new flag `--allow-emergency-reparent` that allows the users to toggle the ability of VTOrc to run emergency reparent operations.
 The users that want VTOrc to fix the replication issues, but don't want it to run any reparents should start using this flag.
 By default, VTOrc will be able to run `EmergencyReparentShard`. The users must specify the flag to `false` to change the behaviour.
+
+### <a id="vtadmin"/>VTAdmin
+#### <a id="updated-node"/>vtadmin-web updated to node v18.16.0 (LTS)
+
+Building vtadmin-web now requires node >= v18.16.0 (LTS). Breaking changes from v16 to v18 are listed
+in https://nodejs.org/en/blog/release/v18.0.0, but none apply to VTAdmin. Full details on v18.16.0 are listed here https://nodejs.org/en/blog/release/v18.16.0.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
