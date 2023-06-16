@@ -4732,7 +4732,7 @@ deallocate_statement:
   {
     $$ = &Deallocate{Name: string($3)}
   }
-| DEALLOCATE PREPARE non_reserved_keyword
+| DEALLOCATE PREPARE all_non_reserved
   {
     $$ = &Deallocate{Name: string($3)}
   }
@@ -4740,7 +4740,7 @@ deallocate_statement:
   {
     $$ = &Deallocate{Name: string($3)}
   }
-| DROP PREPARE non_reserved_keyword
+| DROP PREPARE all_non_reserved
   {
     $$ = &Deallocate{Name: string($3)}
   }
