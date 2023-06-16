@@ -78,22 +78,22 @@ CREATE TABLE t10 (
 );
 
 CREATE TABLE emp (
-                     empno bigint NOT NULL,
-                     ename VARCHAR(10),
-                     job VARCHAR(9),
-                     mgr bigint,
-                     hiredate DATE,
-                     sal bigint,
-                     comm bigint,
-                     deptno bigint,
-                     PRIMARY KEY (empno)
+    empno bigint NOT NULL,
+    ename VARCHAR(10),
+    job VARCHAR(9),
+    mgr bigint,
+    hiredate DATE,
+    sal bigint,
+    comm bigint,
+    deptno bigint,
+    PRIMARY KEY (empno)
 ) Engine = InnoDB
   COLLATE = utf8mb4_general_ci;
 
 CREATE TABLE dept (
-                      deptno bigint,
-                      dname VARCHAR(14),
-                      loc VARCHAR(13),
-                      PRIMARY KEY (deptno)
+    deptno bigint,
+    dname VARCHAR(14),
+    loc VARCHAR(13),
+    PRIMARY KEY (deptno)
 ) Engine = InnoDB
   COLLATE = utf8mb4_general_ci;
