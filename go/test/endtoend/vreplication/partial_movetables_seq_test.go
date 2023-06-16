@@ -32,11 +32,10 @@ import (
 )
 
 /*
-	This file introduces a new helper framework for vreplication tests. The current one uses a lot of global keyspaces
-	and make assumptions which make adding new tests difficult.
+	This file introduces a new helper framework for vreplication tests. The current one uses a lot of globals
+	and make assumptions which make adding new types of tests difficult.
 
 	As part of a separate cleanup we will build on this framework to replace the existing one.
-
 */
 
 type keyspace struct {
@@ -79,47 +78,47 @@ type vrepTestCase struct {
 func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCase {
 	const (
 		seqVSchema = `{
-	"sharded": false,
-	"tables": {
-		"customer_seq": {
- 			"type": "sequence"
-		}
-	}
-}`
+			"sharded": false,
+			"tables": {
+				"customer_seq": {
+					"type": "sequence"
+				}
+			}
+		}`
 		seqSchema       = `create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';`
 		commerceSchema  = `create table customer(cid int, name varchar(128), ts timestamp(3) not null default current_timestamp(3), primary key(cid));`
 		commerceVSchema = `
-{
-  "tables": {
-	"customer": {}
-  }
-}
+		{
+		  "tables": {
+			"customer": {}
+		  }
+		}
 `
 		customerSchema  = ""
 		customerVSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "reverse_bits": {
-      "type": "reverse_bits"
-    }
-  },
-  "tables": {
-    "customer": {
-      "column_vindexes": [
-        {
-          "column": "cid",
-          "name": "reverse_bits"
-        }
-      ],
-      "auto_increment": {
-        "column": "cid",
-        "sequence": "customer_seq"
-      }
-    }
-  }
-}
-`
+		{
+		  "sharded": true,
+		  "vindexes": {
+			"reverse_bits": {
+			  "type": "reverse_bits"
+			}
+		  },
+		  "tables": {
+			"customer": {
+			  "column_vindexes": [
+				{
+				  "column": "cid",
+				  "name": "reverse_bits"
+				}
+			  ],
+			  "auto_increment": {
+				"column": "cid",
+				"sequence": "customer_seq"
+			  }
+			}
+		  }
+		}
+		`
 	)
 	tc := &vrepTestCase{
 		t:               t,
