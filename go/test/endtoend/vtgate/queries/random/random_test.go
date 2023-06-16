@@ -51,7 +51,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 	deleteAll()
 
-	// mcmp.Exec("set sql_mode=''")
+	mcmp.Exec("set sql_mode=''")
 
 	mcmp.Exec("INSERT INTO emp(empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES (7369,'SMITH','CLERK',7902,'1980-12-17',800,NULL,20), (7499,'ALLEN','SALESMAN',7698,'1981-02-20',1600,300,30), (7521,'WARD','SALESMAN',7698,'1981-02-22',1250,500,30), (7566,'JONES','MANAGER',7839,'1981-04-02',2975,NULL,20), (7654,'MARTIN','SALESMAN',7698,'1981-09-28',1250,1400,30), (7698,'BLAKE','MANAGER',7839,'1981-05-01',2850,NULL,30), (7782,'CLARK','MANAGER',7839,'1981-06-09',2450,NULL,10), (7788,'SCOTT','ANALYST',7566,'1982-12-09',3000,NULL,20), (7839,'KING','PRESIDENT',NULL,'1981-11-17',5000,NULL,10), (7844,'TURNER','SALESMAN',7698,'1981-09-08',1500,0,30), (7876,'ADAMS','CLERK',7788,'1983-01-12',1100,NULL,20), (7900,'JAMES','CLERK',7698,'1981-12-03',950,NULL,30), (7902,'FORD','ANALYST',7566,'1981-12-03',3000,NULL,20), (7934,'MILLER','CLERK',7782,'1982-01-23',1300,NULL,10)")
 	mcmp.Exec("INSERT INTO dept(deptno, dname, loc) VALUES ('10','ACCOUNTING','NEW YORK'), ('20','RESEARCH','DALLAS'), ('30','SALES','CHICAGO'), ('40','OPERATIONS','BOSTON')")
@@ -100,20 +100,21 @@ func TestKnownFailures(t *testing.T) {
 	// left instead of right works
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl0.mgr) from emp as tbl0 right join emp as tbl1 on tbl0.mgr = tbl1.empno")
 
-	// only_full_group_by enabled (vitess produces the correct result assuming only_full_group_by is disabled)
-	// vitess error: nil
-	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
-
 	// the type of this expression cannot be statically computed
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
 
 	// Cannot convert value to desired type
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno")
 
+	// sometimes fails if the following query is more complicated (?)
+	// only_full_group_by enabled (vitess produces the correct result assuming only_full_group_by is disabled)
+	// vitess error: nil
+	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
+
 	// only_full_group_by disabled
 	// unknown aggregation random
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (tbl0.comm), count(tbl1.loc), min(tbl1.deptno), min(tbl0.comm) from emp as tbl0, dept as tbl1 left join emp as tbl2 on tbl1.loc = tbl2.job and tbl1.deptno = tbl2.comm where tbl0.empno = tbl1.deptno")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno")
 
 	// unavoidable
 	// mismatched results (group by + limit no order by)
