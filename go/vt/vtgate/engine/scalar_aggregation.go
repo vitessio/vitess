@@ -209,7 +209,8 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 		AggregateSumDistinct,
 		AggregateSum,
 		AggregateMin,
-		AggregateMax:
+		AggregateMax,
+		AggregateRandom:
 		return sqltypes.NULL, nil
 
 	}
