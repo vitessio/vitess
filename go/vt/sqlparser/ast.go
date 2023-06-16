@@ -2729,7 +2729,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		opts = append(opts, keywordStrings[FULLTEXT])
 	}
 	if ct.ForeignKeyDef != nil {
-		// TODO: This isn't great to format this here, right? Splits up handling of ForeignKeyDefinition?
 		opts = append(opts, KeywordString(REFERENCES),
 			ct.ForeignKeyDef.ReferencedTable.String(),
 			fmt.Sprintf("%v", ct.ForeignKeyDef.ReferencedColumns))

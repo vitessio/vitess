@@ -209,7 +209,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
-%left <bytes> FK_REFERENCE_ON
 %token <empty> '(' ',' ')' '@' ':'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
@@ -551,7 +550,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
-%type <ReferenceAction> fk_reference_action fk_on_delete_opt fk_on_update_opt fk_on_delete fk_on_update drop_statement_action
+%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
 %type <str> pk_name_opt constraint_symbol_opt infile_opt ignore_or_replace_opt
 %type <exprs> call_param_list_opt
 %type <procedureParams> proc_param_list_opt proc_param_list
@@ -2854,10 +2853,10 @@ column_type_options:
     }
     $$ = $1
   }
-| column_type_options REFERENCES table_name '(' column_list ')' fk_on_update_opt fk_on_delete_opt
-  // TODO: This currently requires "ON UPDATE" to come before "ON DELETE"; fix!
+| column_type_options REFERENCES table_name '(' column_list ')'
+  // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
-    opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5, OnUpdate: $7, OnDelete: $8}}
+    opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
     if err := $1.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
@@ -3864,26 +3863,6 @@ fk_on_delete:
 
 fk_on_update:
   ON UPDATE fk_reference_action
-  {
-    $$ = $3
-  }
-
-fk_on_delete_opt:
- %prec FK_REFERENCE_ON
-  {
-    $$ = DefaultAction
-  }
-| ON DELETE fk_reference_action
-  {
-    $$ = $3
-  }
-
-fk_on_update_opt:
- %prec FK_REFERENCE_ON
-  {
-    $$ = DefaultAction
-  }
-| ON UPDATE fk_reference_action
   {
     $$ = $3
   }
