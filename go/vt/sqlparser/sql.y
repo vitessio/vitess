@@ -426,7 +426,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> analyze_statement show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt ignored_identifier_opt
+%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
@@ -3860,34 +3860,34 @@ foreign_key_definition:
   }
 
 foreign_key_details:
-  FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')'
+  FOREIGN KEY index_name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')'
   {
-    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, Index: string($3)}
   }
-| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+| FOREIGN KEY index_name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12, Index: string($3)}
   }
-| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+| FOREIGN KEY index_name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnUpdate: $12}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnUpdate: $12, Index: string($3)}
   }
-| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| FOREIGN KEY index_name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12, OnUpdate: $13}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12, OnUpdate: $13, Index: string($3)}
   }
-| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+| FOREIGN KEY index_name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $13, OnUpdate: $12}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $13, OnUpdate: $12, Index: string($3)}
   }
 
-ignored_identifier_opt:
+index_name_opt:
   {
     $$ = nil
   }
 | ID   
   {
-    $$ = nil
+    $$ = $1
   }
 
 check_constraint_definition:

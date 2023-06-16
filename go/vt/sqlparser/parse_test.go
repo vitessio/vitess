@@ -1353,13 +1353,13 @@ var (
 			output: "alter table a add foreign key (x) references y (z)",
 		}, {
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code)",
-			output: "alter table a add constraint abc foreign key (country_code) references premium_country (country_code)",
+			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code)",
 		}, {
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code) on delete cascade",
-			output: "alter table a add constraint abc foreign key (country_code) references premium_country (country_code) on delete cascade",
+			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code) on delete cascade",
 		}, {
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code) on update set null",
-			output: "alter table a add constraint abc foreign key (country_code) references premium_country (country_code) on update set null",
+			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code) on update set null",
 		}, {
 			input: "alter table a add primary key (a, b)",
 		}, {
