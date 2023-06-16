@@ -189,8 +189,7 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	if env.Config().EnableTxThrottler {
 		// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 		// is immutable.
-		healthCheckCells := make([]string, len(env.Config().TxThrottlerHealthCheckCells))
-		copy(healthCheckCells, env.Config().TxThrottlerHealthCheckCells)
+		healthCheckCells := append(env.Config().TxThrottlerHealthCheckCells)
 
 		throttlerConfig = &txThrottlerConfig{
 			enabled:          true,
