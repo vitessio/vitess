@@ -818,13 +818,13 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis) (re
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet)
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
 		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err
 	}
 
-	if err := tabletUndoDemotePrimary(ctx, analyzedTablet, inst.SemiSyncAckers(durabilityPolicy, analyzedTablet) > 0); err != nil {
+	if err := tabletUndoDemotePrimary(ctx, analyzedTablet, reparentutil.SemiSyncAckers(durabilityPolicy, analyzedTablet) > 0); err != nil {
 		return true, topologyRecovery, err
 	}
 	return true, topologyRecovery, nil
@@ -855,7 +855,7 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis) (re
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet)
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
 		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err
@@ -867,6 +867,6 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis) (re
 		return true, topologyRecovery, err
 	}
 
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
 	return true, topologyRecovery, err
 }

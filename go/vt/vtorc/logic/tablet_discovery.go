@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -345,7 +346,7 @@ func restartReplication(replicaAlias string) error {
 		return err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet)
+	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet.Keyspace)
 	if err != nil {
 		log.Info("Could not read the durability policy for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
 		return err
@@ -358,7 +359,7 @@ func restartReplication(replicaAlias string) error {
 		log.Info("Could not stop replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
 		return err
 	}
-	err = tmc.StartReplication(ctx, replicaTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
+	err = tmc.StartReplication(ctx, replicaTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
 	if err != nil {
 		log.Info("Could not start replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
 		return err
