@@ -823,7 +823,6 @@ message MoveTablesCreateRequest {
   repeated string cells = 4;
   repeated topodata.TabletType tablet_types = 5;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
-
   repeated string source_shards = 7;
   bool all_tables = 8;
   repeated string include_tables = 9;
@@ -845,15 +844,6 @@ message MoveTablesCreateRequest {
   bool auto_start = 17;
 }
 
-message MoveTablesCompleteRequest {
-  string workflow = 1;
-  string target_keyspace = 3;
-  bool keep_data = 4;
-  bool keep_routing_rules = 5;
-  bool rename_tables = 6;
-  bool dry_run = 7;
-}
-
 message MoveTablesCreateResponse {
   message TabletInfo {
     topodata.TabletAlias tablet = 1;
@@ -862,6 +852,15 @@ message MoveTablesCreateResponse {
   }
   string summary = 1;
   repeated TabletInfo details = 2;
+}
+
+message MoveTablesCompleteRequest {
+  string workflow = 1;
+  string target_keyspace = 3;
+  bool keep_data = 4;
+  bool keep_routing_rules = 5;
+  bool rename_tables = 6;
+  bool dry_run = 7;
 }
 
 message MoveTablesCompleteResponse {

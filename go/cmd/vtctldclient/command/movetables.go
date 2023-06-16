@@ -36,6 +36,7 @@ import (
 )
 
 var (
+	// The generic default for most commands.
 	tabletTypesDefault = []topodatapb.TabletType{
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_PRIMARY,
@@ -163,7 +164,8 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if !cmd.Flags().Lookup("tablet-types").Changed {
-				moveTablesSwitchTrafficOptions.TabletTypes = tabletTypesDefault
+				// We switch traffic for all tablet types if none are provided.
+				moveTablesSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 			}
 			return nil
 		},
@@ -180,7 +182,8 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if !cmd.Flags().Lookup("tablet-types").Changed {
-				moveTablesSwitchTrafficOptions.TabletTypes = tabletTypesDefault
+				// We switch traffic for all tablet types if none are provided.
+				moveTablesSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 			}
 			return nil
 		},

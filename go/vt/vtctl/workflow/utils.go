@@ -44,6 +44,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const reverseSuffix = "_reverse"
@@ -349,7 +350,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 
 		if si.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
-			return nil, fmt.Errorf("shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
 		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
@@ -401,16 +402,6 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
-}
-
-func getVReplicationWorkflowType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowType {
-	i, _ := row["workflow_type"].ToInt32()
-	return binlogdatapb.VReplicationWorkflowType(i)
-}
-
-func getVReplicationWorkflowSubType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowSubType {
-	i, _ := row["workflow_sub_type"].ToInt32()
-	return binlogdatapb.VReplicationWorkflowSubType(i)
 }
 
 func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {

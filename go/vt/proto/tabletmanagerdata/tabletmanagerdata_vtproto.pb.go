@@ -4625,11 +4625,6 @@ func (m *ReadVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.TabletSelectionPreference != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.TabletSelectionPreference))
-		i--
-		dAtA[i] = 0x58
-	}
 	if len(m.Streams) > 0 {
 		for iNdEx := len(m.Streams) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.Streams[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -4639,7 +4634,7 @@ func (m *ReadVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 			i -= size
 			i = encodeVarint(dAtA, i, uint64(size))
 			i--
-			dAtA[i] = 0x52
+			dAtA[i] = 0x5a
 		}
 	}
 	if m.DeferSecondaryKeys {
@@ -4650,31 +4645,36 @@ func (m *ReadVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x48
+		dAtA[i] = 0x50
 	}
 	if m.WorkflowSubType != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.WorkflowSubType))
 		i--
-		dAtA[i] = 0x40
+		dAtA[i] = 0x48
 	}
 	if m.WorkflowType != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.WorkflowType))
 		i--
-		dAtA[i] = 0x38
+		dAtA[i] = 0x40
 	}
 	if len(m.Tags) > 0 {
 		i -= len(m.Tags)
 		copy(dAtA[i:], m.Tags)
 		i = encodeVarint(dAtA, i, uint64(len(m.Tags)))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x3a
 	}
 	if len(m.DbName) > 0 {
 		i -= len(m.DbName)
 		copy(dAtA[i:], m.DbName)
 		i = encodeVarint(dAtA, i, uint64(len(m.DbName)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x32
+	}
+	if m.TabletSelectionPreference != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.TabletSelectionPreference))
+		i--
+		dAtA[i] = 0x28
 	}
 	if len(m.TabletTypes) > 0 {
 		var pksize2 int
@@ -6863,6 +6863,9 @@ func (m *ReadVRWorkflowResponse) SizeVT() (n int) {
 		}
 		n += 1 + sov(uint64(l)) + l
 	}
+	if m.TabletSelectionPreference != 0 {
+		n += 1 + sov(uint64(m.TabletSelectionPreference))
+	}
 	l = len(m.DbName)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
@@ -6885,9 +6888,6 @@ func (m *ReadVRWorkflowResponse) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
-	}
-	if m.TabletSelectionPreference != 0 {
-		n += 1 + sov(uint64(m.TabletSelectionPreference))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -16940,6 +16940,25 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
 			}
 		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletSelectionPreference", wireType)
+			}
+			m.TabletSelectionPreference = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TabletSelectionPreference |= TabletSelectionPreference(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field DbName", wireType)
 			}
@@ -16971,7 +16990,7 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.DbName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 6:
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Tags", wireType)
 			}
@@ -17003,7 +17022,7 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Tags = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 7:
+		case 8:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowType", wireType)
 			}
@@ -17022,7 +17041,7 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 8:
+		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowSubType", wireType)
 			}
@@ -17041,7 +17060,7 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 9:
+		case 10:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field DeferSecondaryKeys", wireType)
 			}
@@ -17061,7 +17080,7 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.DeferSecondaryKeys = bool(v != 0)
-		case 10:
+		case 11:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Streams", wireType)
 			}
@@ -17095,25 +17114,6 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 11:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TabletSelectionPreference", wireType)
-			}
-			m.TabletSelectionPreference = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.TabletSelectionPreference |= TabletSelectionPreference(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

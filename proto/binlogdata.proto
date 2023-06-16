@@ -226,11 +226,12 @@ enum VReplicationWorkflowSubType {
 
 // VReplicationWorklfowState defines the valid states that a workflow can be in.
 enum VReplicationWorkflowState {
-  Stopped = 0;
-  Copying = 1;
-  Running = 2;
-  Error = 3;
-  Lagging = 4;
+  Init = 0;
+  Stopped = 1;
+  Copying = 2;
+  Running = 3;
+  Error = 4;
+  Lagging = 5;
 }
 
 // BinlogSource specifies the source  and filter parameters for

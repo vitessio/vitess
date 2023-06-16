@@ -549,11 +549,12 @@ message ReadVRWorkflowResponse {
   string workflow = 2;
   string cells = 3;
   repeated topodata.TabletType tablet_types = 4;
-  string db_name = 5;
-  string tags = 6;
-  binlogdata.VReplicationWorkflowType workflow_type = 7;
-  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 8;
-  bool defer_secondary_keys = 9;
+  TabletSelectionPreference tablet_selection_preference = 5;
+  string db_name = 6;
+  string tags = 7;
+  binlogdata.VReplicationWorkflowType workflow_type = 8;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 9;
+  bool defer_secondary_keys = 10;
   message Stream {
     int32 id = 1;
     binlogdata.BinlogSource bls = 2;
@@ -570,8 +571,7 @@ message ReadVRWorkflowResponse {
     vttime.Time time_throttled = 13;
     string component_throttled = 14;
   }
-  repeated Stream streams = 10;
-  TabletSelectionPreference tablet_selection_preference = 11;
+  repeated Stream streams = 11;
 }
 
 message VDiffRequest {
