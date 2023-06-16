@@ -383,6 +383,9 @@ func TestAggregateRandom(t *testing.T) {
 	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
 
 	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
+
+	mcmp.Exec("set sql_mode=''")
+	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno", `[[NULL INT64(0)]]`)
 }
 
 // TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
