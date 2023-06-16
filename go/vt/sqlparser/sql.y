@@ -2669,7 +2669,7 @@ column_definition:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
-| non_reserved_keyword column_type column_type_options
+| all_non_reserved column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
