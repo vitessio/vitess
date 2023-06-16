@@ -612,18 +612,14 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 	return instances, err
 }
 
-func readInstancesByExactKey(tabletAlias string) ([](*Instance), error) {
+// ReadInstance reads an instance from the vtorc backend database
+func ReadInstance(tabletAlias string) (*Instance, bool, error) {
 	condition := `
 			alias = ?
 		`
-	return readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
-}
-
-// ReadInstance reads an instance from the vtorc backend database
-func ReadInstance(tabletAlias string) (*Instance, bool, error) {
-	instances, err := readInstancesByExactKey(tabletAlias)
-	// We know there will be at most one (hostname & port are PK)
-	// And we expect to find one
+	instances, err := readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
+	// We know there will be at most one (alias is the PK).
+	// And we expect to find one.
 	readInstanceCounter.Inc(1)
 	if len(instances) == 0 {
 		return nil, false, err

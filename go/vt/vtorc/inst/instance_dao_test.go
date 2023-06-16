@@ -11,6 +11,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -149,4 +150,389 @@ func TestGetKeyspaceShardName(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ks, keyspaceRead)
 	require.Equal(t, shard, shardRead)
+}
+
+// TestReadInstance is used to test the functionality of ReadInstance and verify its failure modes and successes.
+func TestReadInstance(t *testing.T) {
+	tests := []struct {
+		name              string
+		tabletAliasToRead string
+		instanceFound     bool
+	}{
+		{
+			name:              "Read success",
+			tabletAliasToRead: "zone1-0000000100",
+			instanceFound:     true,
+		}, {
+			name:              "Unknown tablet",
+			tabletAliasToRead: "unknown-tablet",
+			instanceFound:     false,
+		},
+	}
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			got, found, err := ReadInstance(tt.tabletAliasToRead)
+			require.NoError(t, err)
+			require.Equal(t, tt.instanceFound, found)
+			if tt.instanceFound {
+				require.EqualValues(t, tt.tabletAliasToRead, got.InstanceAlias)
+			}
+		})
+	}
+}
+
+// TestReadReplicaInstances is used to test the functionality of ReadReplicaInstances and verify its failure modes and successes.
+func TestReadReplicaInstances(t *testing.T) {
+	tests := []struct {
+		name        string
+		tabletPort  int
+		replicasLen int
+	}{
+		{
+			name: "Read success - Multiple replicas",
+			// This tabletPort corresponds to zone1-0000000101. That is the primary for the data inserted.
+			// Check initialSQL for more details.
+			tabletPort:  6714,
+			replicasLen: 3,
+		}, {
+			name: "Unknown tablet",
+			// This tabletPort corresponds to none of the tablets.
+			// Check initialSQL for more details.
+			tabletPort:  343,
+			replicasLen: 0,
+		}, {
+			name: "Read success - No replicas",
+			// This tabletPort corresponds to zone1-0000000100. That is a replica tablet, with no replicas of its own.
+			// Check initialSQL for more details.
+			tabletPort:  6711,
+			replicasLen: 0,
+		},
+	}
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			instances, err := ReadReplicaInstances("localhost", tt.tabletPort)
+			require.NoError(t, err)
+			require.EqualValues(t, tt.replicasLen, len(instances))
+		})
+	}
+}
+
+// TestReadProblemInstances is used to test the functionality of ReadProblemInstances and verify its failure modes and successes.
+func TestReadProblemInstances(t *testing.T) {
+	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
+	tests := []struct {
+		name              string
+		sql               []string
+		instancesRequired []string
+	}{
+		{
+			name:              "No problems",
+			sql:               nil,
+			instancesRequired: nil,
+		}, {
+			name: "Replication stopped on a replica",
+			sql: []string{
+				"update database_instance set replication_sql_thread_state = 0 where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name: "IO thread stopped on a replica",
+			sql: []string{
+				"update database_instance set replication_io_thread_state = 0 where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name: "High replication lag",
+			sql: []string{
+				"update database_instance set replication_lag_seconds = 1000 where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name: "High replication lag - replica_lag",
+			sql: []string{
+				"update database_instance set replica_lag_seconds = 1000 where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name: "errant GTID",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name: "Many failures",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+				"update database_instance set replication_sql_thread_state = 0 where alias = 'zone1-0000000100'",
+			},
+			instancesRequired: []string{"zone1-0000000112", "zone1-0000000100"},
+		},
+	}
+
+	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
+	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
+	oldVal := config.Config.InstancePollSeconds
+	defer func() {
+		config.Config.InstancePollSeconds = oldVal
+	}()
+	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each test should clear the database. The easiest way to do that is to run all the initialization commands again
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+
+			for _, query := range append(initialSQL, tt.sql...) {
+				_, err := db.ExecVTOrc(query)
+				require.NoError(t, err)
+			}
+
+			instances, err := ReadProblemInstances("ks", "0")
+			require.NoError(t, err)
+			var tabletAliases []string
+			for _, instance := range instances {
+				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+			}
+			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
+		})
+	}
+}
+
+// TestReadInstancesByCondition is used to test the functionality of readInstancesByCondition and verify its failure modes and successes.
+func TestReadInstancesByCondition(t *testing.T) {
+	tests := []struct {
+		name              string
+		condition         string
+		args              []any
+		sort              string
+		instancesRequired []string
+	}{
+		{
+			name:              "All instances with no sort",
+			condition:         "1=1",
+			instancesRequired: []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
+		}, {
+			name:              "All instances sort by data_center descending and then alias ascending",
+			condition:         "1=1",
+			sort:              "data_center desc, alias asc",
+			instancesRequired: []string{"zone2-0000000200", "zone1-0000000100", "zone1-0000000101", "zone1-0000000112"},
+		}, {
+			name:              "Filtering by replication_depth",
+			condition:         "replication_depth=1",
+			instancesRequired: []string{"zone1-0000000100", "zone1-0000000112", "zone2-0000000200"},
+		}, {
+			name:              "Filtering by exact alias",
+			condition:         "alias='zone1-0000000100'",
+			instancesRequired: []string{"zone1-0000000100"},
+		}, {
+			name:      "No qualifying tablets",
+			condition: "replication_depth=15",
+		},
+	}
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			instances, err := readInstancesByCondition(tt.condition, tt.args, tt.sort)
+			require.NoError(t, err)
+			var tabletAliases []string
+			for _, instance := range instances {
+				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+			}
+			require.EqualValues(t, tt.instancesRequired, tabletAliases)
+		})
+	}
+}
+
+// TestReadOutdatedInstanceKeys is used to test the functionality of ReadOutdatedInstanceKeys and verify its failure modes and successes.
+func TestReadOutdatedInstanceKeys(t *testing.T) {
+	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
+	tests := []struct {
+		name              string
+		sql               []string
+		instancesRequired []string
+	}{
+		{
+			name:              "No problems",
+			sql:               []string{"update database_instance set last_checked = now()"},
+			instancesRequired: nil,
+		}, {
+			name: "One instance is outdated",
+			sql: []string{
+				"update database_instance set last_checked = now()",
+				"update database_instance set last_checked = time(now(), '-1 hour') where alias = 'zone1-0000000100'",
+			},
+			instancesRequired: []string{"zone1-0000000100"},
+		}, {
+			name: "One instance doesn't have myql data",
+			sql: []string{
+				"update database_instance set last_checked = now()",
+				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
+			},
+			instancesRequired: []string{"zone1-0000000103"},
+		}, {
+			name: "One instance doesn't have myql data and one is outdated",
+			sql: []string{
+				"update database_instance set last_checked = now()",
+				"update database_instance set last_checked = time(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
+			},
+			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
+		},
+	}
+
+	// We are setting InstancePollSeconds to 59 minutes, just for the test.
+	oldVal := config.Config.InstancePollSeconds
+	defer func() {
+		config.Config.InstancePollSeconds = oldVal
+	}()
+	config.Config.InstancePollSeconds = 60 * 59
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each test should clear the database. The easiest way to do that is to run all the initialization commands again
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+
+			for _, query := range append(initialSQL, tt.sql...) {
+				_, err := db.ExecVTOrc(query)
+				require.NoError(t, err)
+			}
+
+			tabletAliases, err := ReadOutdatedInstanceKeys()
+			require.NoError(t, err)
+			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
+		})
+	}
+}
+
+// TestUpdateInstanceLastChecked is used to test the functionality of UpdateInstanceLastChecked and verify its failure modes and successes.
+func TestUpdateInstanceLastChecked(t *testing.T) {
+	tests := []struct {
+		name             string
+		tabletAlias      string
+		partialSuccess   bool
+		conditionToCheck string
+	}{
+		{
+			name:             "Verify updated last checked",
+			tabletAlias:      "zone1-0000000100",
+			partialSuccess:   false,
+			conditionToCheck: "last_checked >= now() - interval 30 second and last_check_partial_success = false",
+		}, {
+			name:             "Verify partial success",
+			tabletAlias:      "zone1-0000000100",
+			partialSuccess:   true,
+			conditionToCheck: "last_checked >= now() - interval 30 second and last_check_partial_success = true",
+		}, {
+			name:           "Verify no error on unknown tablet",
+			tabletAlias:    "unknown tablet",
+			partialSuccess: true,
+		},
+	}
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := UpdateInstanceLastChecked(tt.tabletAlias, tt.partialSuccess)
+			require.NoError(t, err)
+
+			if tt.conditionToCheck != "" {
+				// Verify the instance we just updated satisfies the condition specified.
+				instances, err := readInstancesByCondition(tt.conditionToCheck, nil, "")
+				require.NoError(t, err)
+				var tabletAliases []string
+				for _, instance := range instances {
+					tabletAliases = append(tabletAliases, instance.InstanceAlias)
+				}
+				require.Contains(t, tabletAliases, tt.tabletAlias)
+			}
+		})
+	}
+}
+
+// UpdateInstanceLastAttemptedCheck is used to test the functionality of UpdateInstanceLastAttemptedCheck and verify its failure modes and successes.
+func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
+	tests := []struct {
+		name             string
+		tabletAlias      string
+		conditionToCheck string
+	}{
+		{
+			name:             "Verify updated last checked",
+			tabletAlias:      "zone1-0000000100",
+			conditionToCheck: "last_attempted_check >= now() - interval 30 second",
+		}, {
+			name:        "Verify no error on unknown tablet",
+			tabletAlias: "unknown tablet",
+		},
+	}
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := UpdateInstanceLastAttemptedCheck(tt.tabletAlias)
+			require.NoError(t, err)
+
+			if tt.conditionToCheck != "" {
+				// Verify the instance we just updated satisfies the condition specified.
+				instances, err := readInstancesByCondition(tt.conditionToCheck, nil, "")
+				require.NoError(t, err)
+				var tabletAliases []string
+				for _, instance := range instances {
+					tabletAliases = append(tabletAliases, instance.InstanceAlias)
+				}
+				require.Contains(t, tabletAliases, tt.tabletAlias)
+			}
+		})
+	}
 }
