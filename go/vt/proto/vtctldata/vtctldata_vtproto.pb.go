@@ -10673,7 +10673,7 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x40
+		dAtA[i] = 0x48
 	}
 	if m.Timeout != nil {
 		size, err := m.Timeout.MarshalToSizedBufferVT(dAtA[:i])
@@ -10683,12 +10683,12 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x3a
+		dAtA[i] = 0x42
 	}
 	if m.Direction != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Direction))
 		i--
-		dAtA[i] = 0x30
+		dAtA[i] = 0x38
 	}
 	if m.EnableReverseReplication {
 		i--
@@ -10698,7 +10698,7 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x30
 	}
 	if m.MaxReplicationLagAllowed != nil {
 		size, err := m.MaxReplicationLagAllowed.MarshalToSizedBufferVT(dAtA[:i])
@@ -10708,7 +10708,7 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x2a
 	}
 	if len(m.TabletTypes) > 0 {
 		var pksize2 int
@@ -10729,7 +10729,16 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize2))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x22
+	}
+	if len(m.Cells) > 0 {
+		for iNdEx := len(m.Cells) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Cells[iNdEx])
+			copy(dAtA[i:], m.Cells[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Cells[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
 	}
 	if len(m.Workflow) > 0 {
 		i -= len(m.Workflow)
@@ -14912,6 +14921,12 @@ func (m *WorkflowSwitchTrafficRequest) SizeVT() (n int) {
 	l = len(m.Workflow)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if len(m.Cells) > 0 {
+		for _, s := range m.Cells {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	if len(m.TabletTypes) > 0 {
 		l = 0
@@ -40207,6 +40222,38 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 			m.Workflow = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cells", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
 			if wireType == 0 {
 				var v topodata.TabletType
 				for shift := uint(0); ; shift += 7 {
@@ -40275,7 +40322,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
 			}
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MaxReplicationLagAllowed", wireType)
 			}
@@ -40311,7 +40358,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field EnableReverseReplication", wireType)
 			}
@@ -40331,7 +40378,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.EnableReverseReplication = bool(v != 0)
-		case 6:
+		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Direction", wireType)
 			}
@@ -40350,7 +40397,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 7:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Timeout", wireType)
 			}
@@ -40386,7 +40433,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 8:
+		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field DryRun", wireType)
 			}

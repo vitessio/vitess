@@ -61500,6 +61500,9 @@ export namespace vtctldata {
         /** WorkflowSwitchTrafficRequest workflow */
         workflow?: (string|null);
 
+        /** WorkflowSwitchTrafficRequest cells */
+        cells?: (string[]|null);
+
         /** WorkflowSwitchTrafficRequest tablet_types */
         tablet_types?: (topodata.TabletType[]|null);
 
@@ -61533,6 +61536,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest workflow. */
         public workflow: string;
+
+        /** WorkflowSwitchTrafficRequest cells. */
+        public cells: string[];
 
         /** WorkflowSwitchTrafficRequest tablet_types. */
         public tablet_types: topodata.TabletType[];

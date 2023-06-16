@@ -219,8 +219,8 @@ type trafficSwitcher struct {
 	tables           []string
 	keepRoutingRules bool
 	sourceKSSchema   *vindexes.KeyspaceSchema
-	optCells         string //cells option passed to MoveTables/Reshard
-	optTabletTypes   string //tabletTypes option passed to MoveTables/Reshard
+	optCells         string // cells option passed to MoveTables/Reshard Create
+	optTabletTypes   string // tabletTypes option passed to MoveTables/Reshard Create
 	externalCluster  string
 	externalTopo     *topo.Server
 	sourceTimeZone   string

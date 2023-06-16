@@ -651,17 +651,13 @@ func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonl
 	return hasReplica, hasRdonly, hasPrimary, nil
 }
 
-func areTabletsAvailableToStreamFrom(ctx context.Context, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
-	var cells []string
-	tabletTypes := ts.optTabletTypes
-	if ts.optCells != "" {
-		cells = strings.Split(ts.optCells, ",")
-	}
-	// FIXME: currently there is a default setting in the tablet that is used if user does not specify a tablet type,
-	// we use the value specified in the tablet flag `-vreplication_tablet_type`
-	// but ideally we should populate the vreplication table with a default value when we setup the workflow
-	if tabletTypes == "" {
-		tabletTypes = "PRIMARY,REPLICA"
+func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
+	// We use the value from the workflow for the TabletPicker.
+	tabletTypesStr := ts.optTabletTypes
+	cells := req.Cells
+	// If no cells were provided in the command then use the value from the workflow.
+	if len(cells) == 0 && ts.optCells != "" {
+		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
 	}
 
 	var wg sync.WaitGroup
@@ -673,7 +669,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, ts *trafficSwitcher, k
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
-			tp, err := discovery.NewTabletPicker(ctx, ts.ws.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypes, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, ts.ws.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypesStr, discovery.TabletPickerOptions{})
 			if err != nil {
 				allErrors.RecordError(err)
 				return

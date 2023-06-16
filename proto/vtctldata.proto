@@ -1403,6 +1403,7 @@ message WorkflowStatusResponse {
   message ShardStreams {
     repeated ShardStreamState streams = 2;
   }
+  // The key is keyspace/shard.
   map<string, TableCopyState> table_copy_state = 1;
   map<string, ShardStreams> shard_streams = 2;
 }
@@ -1410,12 +1411,13 @@ message WorkflowStatusResponse {
 message WorkflowSwitchTrafficRequest {
   string keyspace = 1;
   string workflow = 2;
-  repeated topodata.TabletType tablet_types = 3;
-  vttime.Duration max_replication_lag_allowed = 4;
-  bool enable_reverse_replication = 5;
-  int32 direction = 6;
-  vttime.Duration timeout = 7;
-  bool dry_run = 8;
+  repeated string cells = 3;
+  repeated topodata.TabletType tablet_types = 4;
+  vttime.Duration max_replication_lag_allowed = 5;
+  bool enable_reverse_replication = 6;
+  int32 direction = 7;
+  vttime.Duration timeout = 8;
+  bool dry_run = 9;
 }
 
 message WorkflowSwitchTrafficResponse {

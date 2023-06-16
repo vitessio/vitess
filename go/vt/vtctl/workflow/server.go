@@ -2221,7 +2221,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if hasReplica || hasRdonly {
-		if rdDryRunResults, err = s.switchReads(ctx, ts, state, timeout, false, direction, req.DryRun); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, state, timeout, false, direction); err != nil {
 			return nil, err
 		}
 	}
@@ -2229,7 +2229,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 	if hasPrimary {
-		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, timeout, false, req.EnableReverseReplication, req.DryRun); err != nil {
+		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false, req.EnableReverseReplication); err != nil {
 			return nil, err
 		}
 	}
@@ -2262,21 +2262,21 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
-	roTypesToSwitch := []topodatapb.TabletType{}
-	hasReplica, hasRdonly, _, err := parseTabletTypesStr(ts.optTabletTypes)
-	if err != nil {
-		return nil, err
+func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection) (*[]string, error) {
+	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
+	var hasReplica, hasRdonly bool
+	for _, roType := range req.TabletTypes {
+		switch roType {
+		case topodatapb.TabletType_REPLICA:
+			hasReplica = true
+		case topodatapb.TabletType_RDONLY:
+			hasRdonly = true
+		}
 	}
-	if hasReplica {
-		roTypesToSwitch = append(roTypesToSwitch, topodatapb.TabletType_REPLICA)
-	}
-	if hasRdonly {
-		roTypesToSwitch = append(roTypesToSwitch, topodatapb.TabletType_RDONLY)
-	}
-	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitch, ts.optCells, state.String())
+
+	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
 	if !hasReplica && !hasRdonly {
-		return nil, fmt.Errorf("tablet types must be REPLICA or RDONLY: %v", ts.optTabletTypes)
+		return nil, fmt.Errorf("tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr)
 	}
 	if direction == DirectionBackward && hasReplica && len(state.ReplicaCellsSwitched) == 0 {
 		return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
@@ -2284,9 +2284,9 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 	if direction == DirectionBackward && hasRdonly && len(state.RdonlyCellsSwitched) == 0 {
 		return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 	}
-	ts.optCells = strings.TrimSpace(ts.optCells)
-	var cells []string
-	if ts.optCells != "" {
+	var cells []string = req.Cells
+	// If no cells were provided in the command then use the value from the workflow.
+	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
 	}
 
@@ -2315,7 +2315,7 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 		log.Infof("Found a previous journal entry for %d", ts.id)
 	}
 	var sw iswitcher
-	if dryRun {
+	if req.DryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
 		sw = &switcher{ts: ts, s: s}
@@ -2337,19 +2337,19 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, roTypesToSwitch, direction); err != nil {
+		} else if err := sw.switchTableReads(ctx, cells, req.TabletTypes, direction); err != nil {
 			ts.Logger().Errorf("switchTableReads failed: %v", err)
 			return nil, err
 		}
 		return sw.logs(), nil
 	}
-	ts.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, roTypesToSwitch, direction)
-	if err := sw.switchShardReads(ctx, cells, roTypesToSwitch, direction); err != nil {
+	ts.Logger().Infof("About to switchShardReads: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
+	if err := sw.switchShardReads(ctx, cells, req.TabletTypes, direction); err != nil {
 		ts.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
 
-	ts.Logger().Infof("switchShardReads Completed: %+v, %+v, %+v", cells, roTypesToSwitch, direction)
+	ts.Logger().Infof("switchShardReads Completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
 	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.targetKeyspace, strings.Join(cells, ","))
@@ -2360,11 +2360,11 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 }
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
-func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout time.Duration,
-	cancel, reverseReplication, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, timeout time.Duration,
+	cancel, reverseReplication bool) (journalID int64, dryRunResults *[]string, err error) {
 
 	var sw iswitcher
-	if dryRun {
+	if req.DryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
 		sw = &switcher{ts: ts, s: s}
@@ -2381,7 +2381,7 @@ func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout 
 	}
 
 	if reverseReplication {
-		err := areTabletsAvailableToStreamFrom(ctx, ts, ts.TargetKeyspaceName(), ts.TargetShards())
+		err := areTabletsAvailableToStreamFrom(ctx, req, ts, ts.TargetKeyspaceName(), ts.TargetShards())
 		if err != nil {
 			return 0, nil, err
 		}

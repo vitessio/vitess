@@ -222,6 +222,7 @@ var (
 		StopAfterCopy                bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
+		Cells                    []string
 		TabletTypes              []topodatapb.TabletType
 		MaxReplicationLagAllowed time.Duration
 		EnableReverseReplication bool
@@ -407,6 +408,7 @@ func commandMoveTablesReverseTraffic(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:                 moveTablesOptions.TargetKeyspace,
 		Workflow:                 moveTablesOptions.Workflow,
+		Cells:                    moveTablesSwitchTrafficOptions.Cells,
 		TabletTypes:              moveTablesSwitchTrafficOptions.TabletTypes,
 		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
 		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
@@ -468,12 +470,14 @@ func init() {
 
 	MoveTables.AddCommand(MoveTablesStop)
 
+	MoveTablesSwitchTraffic.Flags().StringSliceVarP(&moveTablesSwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in")
 	MoveTablesSwitchTraffic.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesSwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTables.AddCommand(MoveTablesSwitchTraffic)
 
+	MoveTablesReverseTraffic.Flags().StringSliceVarP(&moveTablesSwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in")
 	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover")
