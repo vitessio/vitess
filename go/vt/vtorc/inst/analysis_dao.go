@@ -38,13 +38,11 @@ import (
 	"github.com/rcrowley/go-metrics"
 )
 
-var analysisChangeWriteAttemptCounter = metrics.NewCounter()
 var analysisChangeWriteCounter = metrics.NewCounter()
 
 var recentInstantAnalysis *cache.Cache
 
 func init() {
-	_ = metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
 	_ = metrics.Register("analysis.change.write", analysisChangeWriteCounter)
 
 	go initializeAnalysisDaoPostConfiguration()
@@ -611,11 +609,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			return nil
 		}
 	}
-	// Passed the cache; but does database agree that there's a change? Here's a persistent cache; this comes here
-	// to verify no two vtorc services are doing this without coordinating (namely, one dies, the other taking its place
-	// and has no familiarity of the former's cache)
-	analysisChangeWriteAttemptCounter.Inc(1)
 
+	// Find if the lastAnalysisHasChanged or not while updating the row if it has.
 	lastAnalysisChanged := false
 	{
 		sqlResult, err := db.ExecVTOrc(`
@@ -637,10 +632,15 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			log.Error(err)
 			return err
 		}
-		lastAnalysisChanged = (rows > 0)
+		lastAnalysisChanged = rows > 0
 	}
+
+	// If the last analysis has not changed, then there is a chance that this is the first insertion.
+	// We need to find that out too when we insert into the database.
+	firstInsertion := false
 	if !lastAnalysisChanged {
-		_, err := db.ExecVTOrc(`
+		// The insert only returns more than 1 row changed if this is the first insertion.
+		sqlResult, err := db.ExecVTOrc(`
 			insert ignore into database_instance_last_analysis (
 					alias, analysis_timestamp, analysis
 				) values (
@@ -653,9 +653,16 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			log.Error(err)
 			return err
 		}
+		rows, err := sqlResult.RowsAffected()
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		firstInsertion = rows > 0
 	}
 	recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
-	if !lastAnalysisChanged {
+	// If the analysis has changed or if it is the first insertion, we need to make sure we write this change to the database.
+	if !lastAnalysisChanged && !firstInsertion {
 		return nil
 	}
 

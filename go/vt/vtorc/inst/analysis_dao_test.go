@@ -18,7 +18,10 @@ package inst
 
 import (
 	"testing"
+	"time"
 
+	"github.com/patrickmn/go-cache"
+	"github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -669,6 +672,78 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			require.Equal(t, tt.codeWanted, got[0].Analysis)
 			require.Equal(t, tt.keyspaceWanted, got[0].AnalyzedKeyspace)
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
+		})
+	}
+}
+
+// TestAuditInstanceAnalysisInChangelog tests the functionality of the auditInstanceAnalysisInChangelog function
+// and verifies that we write the correct amount of times to the database.
+func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
+	tests := []struct {
+		name            string
+		cacheExpiration time.Duration
+	}{
+		{
+			name:            "Long expiration",
+			cacheExpiration: 2 * time.Minute,
+		}, {
+			name:            "Very short expiration",
+			cacheExpiration: 100 * time.Millisecond,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create the cache for the test to use.
+			oldRecentInstantAnalysisCache := recentInstantAnalysis
+			oldAnalysisChangeWriteCounter := analysisChangeWriteCounter
+
+			recentInstantAnalysis = cache.New(tt.cacheExpiration, 100*time.Millisecond)
+			analysisChangeWriteCounter = metrics.NewCounter()
+
+			defer func() {
+				// Set the old values back.
+				recentInstantAnalysis = oldRecentInstantAnalysisCache
+				analysisChangeWriteCounter = oldAnalysisChangeWriteCounter
+				// Each test should clear the database. The easiest way to do that is to run all the initialization commands again.
+				db.ClearVTOrcDatabase()
+			}()
+
+			updates := []struct {
+				tabletAlias             string
+				analysisCode            AnalysisCode
+				writeCounterExpectation int
+				wantErr                 string
+			}{
+				{
+					// Store a new analysis for the zone1-100 tablet.
+					tabletAlias:             "zone1-100",
+					analysisCode:            ReplicationStopped,
+					writeCounterExpectation: 1,
+				}, {
+					// Write the same analysis, no new write should happen.
+					tabletAlias:             "zone1-100",
+					analysisCode:            ReplicationStopped,
+					writeCounterExpectation: 1,
+				}, {
+					// Change the analysis. This should trigger an update.
+					tabletAlias:             "zone1-100",
+					analysisCode:            ReplicaSemiSyncMustBeSet,
+					writeCounterExpectation: 2,
+				},
+			}
+
+			for _, upd := range updates {
+				// We sleep 200 milliseconds to make sure that the cache has had time to update.
+				// It should be able to delete entries if the expiration is less than 200 milliseconds.
+				time.Sleep(200 * time.Millisecond)
+				err := auditInstanceAnalysisInChangelog(upd.tabletAlias, upd.analysisCode)
+				if upd.wantErr != "" {
+					require.EqualError(t, err, upd.wantErr)
+					continue
+				}
+				require.NoError(t, err)
+				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Count())
+			}
 		})
 	}
 }
