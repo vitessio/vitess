@@ -40,6 +40,22 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input: "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
+			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
+		},
+		{
+			input: "CREATE TABLE webhook_events (pk int primary key, event varchar(255) DEFAULT NULL)",
+			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
+		},
+		{
+			input:  "alter table t add column fk int REFERENCES parent(id)",
+			output: "alter table t add column (\n\tfk int references parent [id]\n)",
+		},
+		{
+			input:  "CREATE table t (pk int primary key, fk int REFERENCES parent(id))",
+			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
+		},
+		{
 			input:  "SET @foo = 'o' 'ne';",
 			output: "set @foo = 'one'",
 		},

@@ -2927,6 +2927,16 @@ column_type_options:
     }
     $$ = $1
   }
+| column_type_options REFERENCES table_name '(' column_list ')'
+  // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
+  {
+    opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
 
 column_type:
   numeric_type signed_or_unsigned_opt zero_fill_opt
@@ -4408,22 +4418,7 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
-| DROP CHECK column_name_safe_keyword
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP CHECK non_reserved_keyword
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP CHECK non_reserved_keyword2
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP CHECK non_reserved_keyword3
+| DROP CHECK all_non_reserved
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
@@ -4798,7 +4793,7 @@ deallocate_statement:
   {
     $$ = &Deallocate{Name: string($3)}
   }
-| DEALLOCATE PREPARE non_reserved_keyword
+| DEALLOCATE PREPARE all_non_reserved
   {
     $$ = &Deallocate{Name: string($3)}
   }
@@ -4806,7 +4801,7 @@ deallocate_statement:
   {
     $$ = &Deallocate{Name: string($3)}
   }
-| DROP PREPARE non_reserved_keyword
+| DROP PREPARE all_non_reserved
   {
     $$ = &Deallocate{Name: string($3)}
   }
