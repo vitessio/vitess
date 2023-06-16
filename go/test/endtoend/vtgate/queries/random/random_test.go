@@ -82,8 +82,11 @@ func TestKnownFailures(t *testing.T) {
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
 
-	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc and tbl1.loc = tbl2.loc where (tbl2.deptno) and tbl0.deptno = tbl1.deptno")
+	// mismatched results (left join + odd on)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname")
+
+	// mismatched results (left join + odd where)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)")
 
 	// mismatched results (group by + right join)
 	// left instead of right works
@@ -159,22 +162,24 @@ func TestRandom(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	schemaTables := []tableT{
-		{Name: "emp", Cols: []column{
-			{Name: "empno", Typ: "bigint"},
-			{Name: "ename", Typ: "varchar"},
-			{Name: "job", Typ: "varchar"},
-			{Name: "mgr", Typ: "bigint"},
-			{Name: "hiredate", Typ: "date"},
-			{Name: "sal", Typ: "bigint"},
-			{Name: "comm", Typ: "bigint"},
-			{Name: "deptno", Typ: "bigint"},
-		}},
-		{Name: "dept", Cols: []column{
-			{Name: "deptno", Typ: "bigint"},
-			{Name: "dname", Typ: "varchar"},
-			{Name: "loc", Typ: "varchar"},
-		}},
+		{Name: "emp"},
+		{Name: "dept"},
 	}
+	schemaTables[0].AddColumns([]column{
+		{Name: "empno", Typ: "bigint"},
+		{Name: "ename", Typ: "varchar"},
+		{Name: "job", Typ: "varchar"},
+		{Name: "mgr", Typ: "bigint"},
+		{Name: "hiredate", Typ: "date"},
+		{Name: "sal", Typ: "bigint"},
+		{Name: "comm", Typ: "bigint"},
+		{Name: "deptno", Typ: "bigint"},
+	}...)
+	schemaTables[1].AddColumns([]column{
+		{Name: "deptno", Typ: "bigint"},
+		{Name: "dname", Typ: "varchar"},
+		{Name: "loc", Typ: "varchar"},
+	}...)
 
 	endBy := time.Now().Add(10 * time.Second)
 
@@ -195,30 +200,19 @@ func TestRandom(t *testing.T) {
 	fmt.Printf("Queries successfully executed: %d\n", queryCount)
 }
 
-func getRandomExpr(tables []tableT) string {
+func getRandomExpr(tables []tableT) (string, string) {
 	seed := time.Now().UnixNano()
 	g := sqlparser.NewGenerator(seed, 2, tables...)
-	randomExpr := g.Expression()
-	return sqlparser.String(randomExpr)
+	randomExpr, typ := g.Expression()
+	return sqlparser.String(randomExpr), typ
 }
 
 func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	tables := createTables(schemaTables)
 
-	randomCol := func(tblIdx int) (string, string) {
-		tbl := tables[tblIdx]
-		col := randomEl(tbl.Cols)
-		colAlias := fmt.Sprintf("%s.%s", tbl.Alias, col.Name)
-		if col.Alias != "" {
-			colAlias = col.Alias
-		}
-		return colAlias, col.Typ
-	}
-
-	isDerived := rand.Intn(10) < 1 && TestFailingQueries
-	aggregates, aggrTypes := createAggregations(tables, maxAggrs, randomCol, isDerived)
-	predicates := createPredicates(tables, randomCol, false)
-	grouping, groupTypes := createGroupBy(tables, maxGroupBy, randomCol)
+	grouping, numGBs := createGroupBy(tables, maxGroupBy)
+	aggregates, numAggrs := createAggregations(tables, maxAggrs)
+	predicates := createPredicates(tables, false)
 
 	sel := "select /*vt+ PLANNER=Gen4 */ "
 
@@ -230,99 +224,99 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 
 	// select the grouping columns
 	isJoin := rand.Intn(2) < 1
-	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
-		sel += strings.Join(grouping, ", ") + ", "
+
+	if numGBs > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
+		for i := 0; i < numGBs; i++ {
+			sel += grouping[i].GetSelectName() + ", "
+		}
 	}
 
 	// generate the order by columns
 	// we do it this way, so we don't have to do only `only_full_group_by` queries
 	noOfOrderBy := 0
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
+	if numGBs > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		// panic on rand function call if value is 0
-		noOfOrderBy = rand.Intn(len(grouping))
+		noOfOrderBy = rand.Intn(numGBs)
 	}
+
 	var orderBy []string
 	if noOfOrderBy > 0 {
 		for noOfOrderBy > 0 {
 			noOfOrderBy--
-			if rand.Intn(2) < 1 || len(grouping) == 0 {
-				orderBy = append(orderBy, fmt.Sprintf("caggr%d", rand.Intn(len(aggregates))))
+			if rand.Intn(2) < 1 {
+				orderBy = append(orderBy, aggregates[rand.Intn(numAggrs)].Alias)
 			} else {
-				orderBy = append(orderBy, fmt.Sprintf("cgroup%d", rand.Intn(len(grouping))))
+				orderBy = append(orderBy, grouping[rand.Intn(numGBs)].Alias)
 			}
 		}
 	}
 
+	var newTable tableT
 	// add random expression to select
 	isRandomExpr := rand.Intn(2) < 1
-	randomExpr := getRandomExpr(tables)
+	randomExpr, typ := getRandomExpr(tables)
 	if isRandomExpr && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		sel += "(" + randomExpr + ") as crandom0, "
-	}
-
-	// populate columns of this query to add to schemaTables
-	var newColumns []column
-	for i := range aggregates {
-		newName, newAlias, _ := strings.Cut(aggregates[i], " as ")
-		newColumns = append(newColumns, column{
-			Name:  newName,
-			Alias: newAlias,
-			Typ:   aggrTypes[i],
+		newTable.AddColumns(column{
+			Name: "crandom0",
+			Typ:  typ,
 		})
 	}
-	sel += strings.Join(aggregates, ", ") + " from "
 
+	// add aggregates to select
+	sel += aggregates[0].Name + " as " + aggregates[0].Alias
+	for i := 1; i < numAggrs; i++ {
+		sel += ", " + aggregates[i].Name + " as " + aggregates[i].Alias
+	}
+
+	sel += " from "
 	var tbls []string
-	for _, s := range tables {
-		tbls = append(tbls, fmt.Sprintf("%s as %s", s.Name, s.Alias))
+	for _, t := range tables {
+		tbls = append(tbls, t.GetSelectName())
 	}
 	sel += strings.Join(tbls, ", ")
 
 	// join
 	if isJoin {
 		tables = append(tables, randomEl(schemaTables))
-		tables[len(tables)-1].Alias = fmt.Sprintf("tbl%d", len(tables)-1)
-		join := createPredicates(tables, randomCol, true)
+		tables[len(tables)-1].SetAlias(fmt.Sprintf("tbl%d", len(tables)-1))
+		join := createPredicates(tables, true)
 
-		sel += " left join " + fmt.Sprintf("%s as %s", tables[len(tables)-1].Name, tables[len(tables)-1].Alias)
+		sel += " left join " + fmt.Sprintf("%s as %s", tables[len(tables)-1].Name, tables[len(tables)-1].GetAlias())
 		if len(join) > 0 {
 			sel += " on " + strings.Join(join, " and ")
 		}
 	}
 
+	// where
 	if len(predicates) > 0 {
 		sel += " where "
 		if rand.Intn(2) < 1 {
-			sel += "(" + getRandomExpr(tables) + ") and "
+			predRandomExpr, _ := getRandomExpr(tables)
+			sel += "(" + predRandomExpr + ") and "
 		}
 		sel += strings.Join(predicates, " and ")
 	}
 
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
-		// populate columns of this query to add to schemaTables
-		for i := range grouping {
-			newName, newAlias, _ := strings.Cut(grouping[i], " as ")
-			newColumns = append(newColumns, column{
-				Name:  newName,
-				Alias: newAlias,
-				Typ:   groupTypes[i],
-			})
-		}
-		sel += " group by cgroup0"
-		for i := 1; i < len(grouping); i++ {
-			sel += fmt.Sprintf(", cgroup%d", i)
+	// group by
+	if numGBs > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
+		sel += " group by " + grouping[0].GetUnaliasedName()
+		for i := 1; i < numGBs; i++ {
+			sel += ", " + grouping[i].GetUnaliasedName()
 		}
 		if isRandomExpr {
 			sel += ", "
 		}
 	}
+	// make sure to group by the random expression
 	if isRandomExpr && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
-		if len(grouping) <= 0 {
+		if numGBs <= 0 {
 			sel += " group by "
 		}
 		sel += "crandom0"
 	}
 
+	// order by
 	if noOfOrderBy > 0 {
 		sel += " order by "
 		sel += strings.Join(orderBy, ", ")
@@ -334,23 +328,31 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += fmt.Sprintf(" limit %d", limitNum)
 	}
 
-	// add generated query to schemaTables
-	schemaTables = append(schemaTables, tableT{
-		Name: "(" + sel + ")",
-		Cols: newColumns,
-	})
+	// add new table to schemaTables
+	newTable.Name = "(" + sel + ")"
+
+	// workaround for derived tables only using column alias in select statement; make sure Name is empty
+	for i := 0; i < numGBs; i++ {
+		grouping[i].Name = grouping[i].Alias
+	}
+	for i := 0; i < numAggrs; i++ {
+		aggregates[i].Name = aggregates[i].Alias
+	}
+	newTable.AddColumns(grouping...)
+	newTable.AddColumns(aggregates...)
+	schemaTables = append(schemaTables, newTable)
 
 	// derived tables (partially unsupported)
-	if isDerived {
+	if rand.Intn(10) < 1 && TestFailingQueries {
 		sel = randomQuery(schemaTables, 3, 3)
 	}
 
 	return sel
 }
 
-func createGroupBy(tables []tableT, maxGB int, randomCol func(tblIdx int) (string, string)) (grouping []string, groupTypes []string) {
-	noOfGBs := rand.Intn(maxGB)
-	for i := 0; i < noOfGBs; i++ {
+func createGroupBy(tables []tableT, maxGB int) (grouping []column, numGBs int) {
+	numGBs = rand.Intn(maxGB)
+	for i := 0; i < numGBs; i++ {
 		var tblIdx int
 		for {
 			tblIdx = rand.Intn(len(tables))
@@ -358,15 +360,14 @@ func createGroupBy(tables []tableT, maxGB int, randomCol func(tblIdx int) (strin
 				break
 			}
 		}
-		col, typ := randomCol(tblIdx)
-		// if group by columns are not selected don't alias
-		grouping = append(grouping, col+fmt.Sprintf(" as cgroup%d", i))
-		groupTypes = append(groupTypes, typ)
+		col := randomEl(tables[tblIdx].Cols)
+		col.Alias = fmt.Sprintf("cgroup%d", i)
+		grouping = append(grouping, col)
 	}
-	return grouping, groupTypes
+	return grouping, numGBs
 }
 
-func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int) (string, string), isDerived bool) (aggregates []string, aggrTypes []string) {
+func createAggregations(tables []tableT, maxAggrs int) (aggregates []column, numAggrs int) {
 	aggregations := []func(string) string{
 		func(_ string) string { return "count(*)" },
 		func(e string) string { return fmt.Sprintf("count(%s)", e) },
@@ -376,8 +377,8 @@ func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int
 		func(e string) string { return fmt.Sprintf("max(%s)", e) },
 	}
 
-	noOfAggrs := rand.Intn(maxAggrs) + 1
-	for i := 0; i < noOfAggrs; i++ {
+	numAggrs = rand.Intn(maxAggrs) + 1
+	for i := 0; i < numAggrs; i++ {
 		var tblIdx int
 		for {
 			tblIdx = rand.Intn(len(tables))
@@ -385,48 +386,36 @@ func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int
 				break
 			}
 		}
-		e, typ := randomCol(tblIdx)
-		newAggregate := randomEl(aggregations)(e)
+		col := randomEl(tables[tblIdx].Cols)
+		newAggregate := randomEl(aggregations)(col.GetUnaliasedName())
 
-		// derived tables do not allow duplicate columns
-		addAggr := true
-		if isDerived {
-			for _, aggr := range aggregates {
-				if newAggregate == aggr {
-					addAggr = false
-					break
-				}
-			}
+		col.Alias = fmt.Sprintf("caggr%d", i)
+		if newAggregate == fmt.Sprintf("count(%s)", col.GetQueryName()) || newAggregate == "count(*)" {
+			col.Typ = "bigint"
+		} else if newAggregate == fmt.Sprintf("avg(%s)", col.GetQueryName()) && col.GetQueryName() == "bigint" {
+			col.Typ = "decimal"
 		}
-		if addAggr {
-			aggregates = append(aggregates, newAggregate+fmt.Sprintf(" as caggr%d", i))
-			if newAggregate == fmt.Sprintf("count(%s", e) || newAggregate == "count(*)" {
-				aggrTypes = append(aggrTypes, "bigint")
-			} else if newAggregate == fmt.Sprintf("avg(%s)", e) && typ == "bigint" {
-				aggrTypes = append(aggrTypes, "decimal")
-			} else {
-				aggrTypes = append(aggrTypes, typ)
-			}
-		}
+		col.Name = newAggregate
+		aggregates = append(aggregates, col)
 	}
-	return aggregates, aggrTypes
+	return aggregates, numAggrs
 }
 
 func createTables(schemaTables []tableT) []tableT {
 	var tables []tableT
 	// add at least one of original emp/dept tables for now because derived tables have nil columns
 	tables = append(tables, schemaTables[rand.Intn(2)])
-	tables[0].Alias = "tbl0"
+	tables[0].SetAlias("tbl0")
 
 	noOfTables := rand.Intn(len(schemaTables))
 	for i := 0; i < noOfTables; i++ {
 		tables = append(tables, randomEl(schemaTables))
-		tables[i+1].Alias = fmt.Sprintf("tbl%d", i+1)
+		tables[i+1].SetAlias(fmt.Sprintf("tbl%d", i+1))
 	}
 	return tables
 }
 
-func createPredicates(tables []tableT, randomCol func(tblIdx int) (string, string), isJoin bool) (predicates []string) {
+func createPredicates(tables []tableT, isJoin bool) (predicates []string) {
 	// if creating predicates for a join,
 	// then make sure predicates are created for the last two tables (which are being joined)
 	incr := 0
@@ -436,7 +425,7 @@ func createPredicates(tables []tableT, randomCol func(tblIdx int) (string, strin
 	for idx1 := range tables {
 		for idx2 := range tables {
 			// fmt.Printf("predicate tables:\n%v\n idx1: %d idx2: %d, incr: %d", tables, idx1, idx2, incr)
-			if idx1 >= idx2 || idx1 < incr || idx2 < incr || tables[idx1].Cols == nil || tables[idx2].Cols == nil {
+			if idx1 >= idx2 || idx1 < incr || idx2 < incr {
 				continue
 			}
 			noOfPredicates := rand.Intn(2)
@@ -445,20 +434,20 @@ func createPredicates(tables []tableT, randomCol func(tblIdx int) (string, strin
 			}
 
 			for i := 0; noOfPredicates > 0; i++ {
-				col1, typ1 := randomCol(idx1)
-				col2, typ2 := randomCol(idx2)
+				col1 := randomEl(tables[idx1].Cols)
+				col2 := randomEl(tables[idx2].Cols)
 
 				if i > 50 {
-					predicates = append(predicates, fmt.Sprintf("%s = %s", col1, col1))
+					predicates = append(predicates, fmt.Sprintf("%s = %s", col1.GetUnaliasedName(), col1.GetUnaliasedName()))
 					noOfPredicates--
 					break
 				}
 
-				if typ1 != typ2 {
+				if col1.Typ != col2.Typ {
 					continue
 				}
 
-				predicates = append(predicates, fmt.Sprintf("%s = %s", col1, col2))
+				predicates = append(predicates, fmt.Sprintf("%s = %s", col1.GetUnaliasedName(), col2.GetUnaliasedName()))
 				noOfPredicates--
 			}
 		}

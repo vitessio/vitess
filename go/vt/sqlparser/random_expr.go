@@ -25,31 +25,96 @@ import (
 
 type (
 	Col struct {
-		Name  string
-		Alias string
-		Typ   string
+		TableName string
+		Name      string
+		Alias     string
+		Typ       string
+		// add isDerived flag?
 	}
 	TableT struct {
 		Name  string
-		Alias string
+		alias string
 		Cols  []Col
 	}
 )
 
-func (c *Col) copy() *Col {
-	return &Col{
-		Name:  c.Name,
-		Alias: c.Alias,
-		Typ:   c.Typ,
+// GetSelectName returns the aliasing command if Alias is nonempty
+func (c *Col) GetSelectName() string {
+	// workaround for derived tables only using column alias in select statement; make sure Name is empty
+
+	sel := fmt.Sprintf("%s.%s", c.TableName, c.Name)
+	if c.Alias != "" {
+		sel += fmt.Sprintf(" as %s", c.Alias)
+	}
+	return sel
+}
+
+// GetQueryName returns the Alias if it's nonempty
+func (c *Col) GetQueryName() string {
+	if c.Alias != "" {
+		return c.Alias
+	}
+	return c.GetUnaliasedName()
+}
+
+// GetUnaliasedName returns the name used in queries if the alias is empty (TableName.Name)
+func (c *Col) GetUnaliasedName() string {
+	return fmt.Sprintf("%s.%s", c.TableName, c.Name)
+}
+
+// GetSelectName returns the aliasing command if alias is nonempty
+func (t *TableT) GetSelectName() string {
+	sel := fmt.Sprintf("%s", t.Name)
+	if t.alias != "" {
+		sel += fmt.Sprintf(" as %s", t.alias)
+	}
+	return sel
+}
+
+// GetAlias returns the alias
+func (t *TableT) GetAlias() string {
+	return t.alias
+}
+
+// SetAlias sets the alias for t, as well as setting the TableName for all columns in Cols
+func (t *TableT) SetAlias(newAlias string) {
+	t.alias = newAlias
+	for i := range t.Cols {
+		t.Cols[i].TableName = newAlias
 	}
 }
 
+// GetQueryName returns the alias if it's nonempty
+func (t *TableT) GetQueryName() string {
+	if t.alias != "" {
+		return t.alias
+	}
+	return t.Name
+}
+
+// SetColumns sets the columns of t, and automatically assigns TableName
+// this makes it unnatural (but still possible as Cols is exportable) to modify TableName
+func (t *TableT) SetColumns(col ...Col) {
+	t.Cols = make([]Col, len(col))
+	t.AddColumns(col...)
+}
+
+// AddColumns adds columns to t, and automatically assigns TableName
+// this makes it unnatural (but still possible as Cols is exportable) to modify TableName
+func (t *TableT) AddColumns(col ...Col) {
+	for i := range col {
+		col[i].TableName = t.GetQueryName()
+		t.Cols = append(t.Cols, col[i])
+	}
+}
+
+// copy returns a deep copy of t
 func (t *TableT) copy() *TableT {
 	newCols := make([]Col, len(t.Cols))
 	copy(newCols, t.Cols)
 	return &TableT{
 		Name:  t.Name,
-		Alias: t.Alias,
+		alias: t.alias,
 		Cols:  newCols,
 	}
 }
@@ -100,9 +165,10 @@ func (g *Generator) atMaxDepth() bool {
 Note: It's important to update this method so that it produces all expressions that need precedence checking.
 It's currently missing function calls and string operators
 */
-func (g *Generator) Expression() Expr {
+func (g *Generator) Expression() (Expr, string) {
+	typ := "tinyint"
 	if g.randomBool() {
-		return g.booleanExpr()
+		return g.booleanExpr(), typ
 	}
 	options := []exprF{
 		func() Expr { return g.intExpr() },
@@ -110,7 +176,14 @@ func (g *Generator) Expression() Expr {
 		func() Expr { return g.booleanExpr() },
 	}
 
-	return g.randomOf(options)
+	fn := g.randomOf(options)
+	if fn == g.intExpr() {
+		typ = "bigint"
+	} else if fn == g.stringExpr() {
+		typ = "varchar"
+	}
+
+	return fn, typ
 }
 
 func (g *Generator) booleanExpr() Expr {
@@ -234,12 +307,13 @@ func (g *Generator) caseExpr(valueF func() Expr) Expr {
 		if exp == nil {
 			cond = g.booleanExpr()
 		} else {
-			cond = g.Expression()
+			cond, _ = g.Expression()
 		}
 
+		val, _ := g.Expression()
 		whens = append(whens, &When{
 			Cond: cond,
-			Val:  g.Expression(),
+			Val:  val,
 		})
 	}
 
@@ -279,8 +353,8 @@ func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
 				newName = randCol.Alias
 			}
 			newTableName := table.Name
-			if tableCopy.Alias != "" {
-				newTableName = tableCopy.Alias
+			if tableCopy.alias != "" {
+				newTableName = tableCopy.alias
 			}
 			return &ColName{
 				Metadata:  nil,

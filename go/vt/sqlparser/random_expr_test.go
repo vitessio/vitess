@@ -31,6 +31,6 @@ func TestRandomExprWithTables(t *testing.T) {
 
 	seed := time.Now().UnixNano()
 	g := NewGenerator(seed, 2, schemaTables...)
-	randomExpr := g.Expression()
+	randomExpr, _ := g.Expression()
 	fmt.Println(String(randomExpr))
 }
