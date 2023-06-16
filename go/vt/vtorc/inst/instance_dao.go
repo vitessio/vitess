@@ -1055,6 +1055,22 @@ func ForgetInstance(tabletAlias string) error {
 		return fmt.Errorf(errMsg)
 	}
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
+	log.Infof("Forgetting: %v", tabletAlias)
+
+	// Delete from the 'vitess_tablet' table.
+	_, err := db.ExecVTOrc(`
+					delete
+						from vitess_tablet
+					where
+						alias = ?`,
+		tabletAlias,
+	)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	// Also delete from the 'database_instance' table.
 	sqlResult, err := db.ExecVTOrc(`
 			delete
 				from database_instance
@@ -1066,6 +1082,7 @@ func ForgetInstance(tabletAlias string) error {
 		log.Error(err)
 		return err
 	}
+	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
 		log.Error(err)

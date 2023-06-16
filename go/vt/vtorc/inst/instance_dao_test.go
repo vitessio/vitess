@@ -6,7 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -533,6 +535,70 @@ func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
 				}
 				require.Contains(t, tabletAliases, tt.tabletAlias)
 			}
+		})
+	}
+}
+
+// TestForgetInstanceAndInstanceIsForgotten tests the functionality of ForgetInstance and InstanceIsForgotten together.
+func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
+	tests := []struct {
+		name              string
+		tabletAlias       string
+		errExpected       string
+		instanceForgotten bool
+		tabletsExpected   []string
+	}{
+		{
+			name:              "Unknown tablet",
+			tabletAlias:       "unknown-tablet",
+			errExpected:       "ForgetInstance(): instance unknown-tablet not found",
+			instanceForgotten: true,
+			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
+		}, {
+			name:              "Empty tabletAlias",
+			tabletAlias:       "",
+			errExpected:       "ForgetInstance(): empty tabletAlias",
+			instanceForgotten: false,
+			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
+		}, {
+			name:              "Success",
+			tabletAlias:       "zone1-0000000112",
+			instanceForgotten: true,
+			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone2-0000000200"},
+		},
+	}
+
+	oldCache := forgetAliases
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	}()
+	forgetAliases = cache.New(time.Minute, time.Minute)
+
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ForgetInstance(tt.tabletAlias)
+			if tt.errExpected != "" {
+				require.EqualError(t, err, tt.errExpected)
+			} else {
+				require.NoError(t, err)
+			}
+			isForgotten := InstanceIsForgotten(tt.tabletAlias)
+			require.Equal(t, tt.instanceForgotten, isForgotten)
+
+			instances, err := readInstancesByCondition("1=1", nil, "")
+			require.NoError(t, err)
+			var tabletAliases []string
+			for _, instance := range instances {
+				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+			}
+			require.EqualValues(t, tt.tabletsExpected, tabletAliases)
 		})
 	}
 }

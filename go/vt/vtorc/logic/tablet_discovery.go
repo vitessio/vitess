@@ -246,17 +246,6 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		log.Error(err)
 	}
 	for _, tabletAlias := range toForget {
-		log.Infof("Forgetting: %v", tabletAlias)
-		_, err := db.ExecVTOrc(`
-					delete
-						from vitess_tablet
-					where
-						alias = ?`,
-			tabletAlias,
-		)
-		if err != nil {
-			log.Error(err)
-		}
 		if err := inst.ForgetInstance(tabletAlias); err != nil {
 			log.Error(err)
 		}
