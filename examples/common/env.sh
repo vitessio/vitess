@@ -32,7 +32,11 @@ done;
 
 # vtctlclient has a separate alias setup below
 for binary in vttablet vtgate vtctld mysqlctl vtorc vtctl; do
-  alias $binary="$binary --config-file-not-found-handling=ignore"
+  out=$($binary --version)
+  majorVersion=$(echo $out | awk -F'[:.]' '{print $2}' | awk '{gsub(" ", ""); print}' | tr -d '[:space:]')
+  if [[ $majorVersion -gt "16" ]]; then
+    alias $binary="$binary --config-file-not-found-handling=ignore"
+  fi
 done;
 
 if [ "${TOPO}" = "zk2" ]; then
