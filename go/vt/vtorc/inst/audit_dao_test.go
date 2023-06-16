@@ -30,6 +30,7 @@ import (
 )
 
 // TestAuditOperation tests that auditing a operation works as intended based on the configurations.
+// This test also verifies that we are able to read the recent audits that are written to the databaes.
 func TestAuditOperation(t *testing.T) {
 	// Restore original configurations
 	originalAuditSysLog := config.Config.AuditToSyslog
@@ -83,7 +84,17 @@ func TestAuditOperation(t *testing.T) {
 		err = AuditOperation(auditType, tab100Alias, message)
 		require.NoError(t, err)
 
+		// Check that we can read the recent audits
 		audits, err := ReadRecentAudit(tab100Alias, 0)
+		require.NoError(t, err)
+		require.Len(t, audits, 1)
+		require.EqualValues(t, 1, audits[0].AuditID)
+		require.EqualValues(t, auditType, audits[0].AuditType)
+		require.EqualValues(t, message, audits[0].Message)
+		require.EqualValues(t, tab100Alias, audits[0].AuditTabletAlias)
+
+		// Check the same for no-filtering
+		audits, err = ReadRecentAudit("", 0)
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
