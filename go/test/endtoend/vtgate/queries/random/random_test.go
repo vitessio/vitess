@@ -100,9 +100,10 @@ func TestKnownFailures(t *testing.T) {
 	// left instead of right works
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl0.mgr) from emp as tbl0 right join emp as tbl1 on tbl0.mgr = tbl1.empno")
 
+	// only_full_group_by enabled (vitess produces the correct result assuming only_full_group_by is disabled)
 	// vitess error: nil
 	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (tbl0.ename), min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
 
 	// the type of this expression cannot be statically computed
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
@@ -138,10 +139,6 @@ func TestKnownFailures(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (select count(*) from emp as tbl0) from emp as tbl0")
 
 	// unsupported
-	// unsupported: in scatter query: aggregation function
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ avg(tbl0.deptno) from dept as tbl0")
-
-	// unsupported
 	// unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from (select count(*) from dept as tbl0) as tbl0")
 
@@ -152,6 +149,10 @@ func TestKnownFailures(t *testing.T) {
 	// unsupported
 	// EOF (errno 2013) (sqlstate HY000)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
+
+	// unsupported
+	// unsupported: in scatter query: aggregation function
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ avg(tbl0.deptno) from dept as tbl0")
 }
 
 func TestRandom(t *testing.T) {
@@ -227,7 +228,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 
 	if numGBs > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		for i := 0; i < numGBs; i++ {
-			sel += grouping[i].GetSelectName() + ", "
+			sel += grouping[i].GetAliasedExpression() + ", "
 		}
 	}
 
@@ -272,7 +273,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	sel += " from "
 	var tbls []string
 	for _, t := range tables {
-		tbls = append(tbls, t.GetSelectName())
+		tbls = append(tbls, t.GetAliasedExpression())
 	}
 	sel += strings.Join(tbls, ", ")
 
@@ -390,9 +391,9 @@ func createAggregations(tables []tableT, maxAggrs int) (aggregates []column, num
 		newAggregate := randomEl(aggregations)(col.GetUnaliasedName())
 
 		col.Alias = fmt.Sprintf("caggr%d", i)
-		if newAggregate == fmt.Sprintf("count(%s)", col.GetQueryName()) || newAggregate == "count(*)" {
+		if newAggregate == fmt.Sprintf("count(%s)", col.GetColumnName()) || newAggregate == "count(*)" {
 			col.Typ = "bigint"
-		} else if newAggregate == fmt.Sprintf("avg(%s)", col.GetQueryName()) && col.GetQueryName() == "bigint" {
+		} else if newAggregate == fmt.Sprintf("avg(%s)", col.GetColumnName()) && col.GetColumnName() == "bigint" {
 			col.Typ = "decimal"
 		}
 		col.Name = newAggregate

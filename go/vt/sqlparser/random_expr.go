@@ -32,14 +32,14 @@ type (
 		// add isDerived flag?
 	}
 	TableT struct {
-		Name  string
+		Name  string // select type
 		alias string
 		Cols  []Col
 	}
 )
 
-// GetSelectName returns the aliasing command if Alias is nonempty
-func (c *Col) GetSelectName() string {
+// GetAliasedExpression returns the aliasing command if Alias is nonempty
+func (c *Col) GetAliasedExpression() string {
 	// workaround for derived tables only using column alias in select statement; make sure Name is empty
 
 	sel := fmt.Sprintf("%s.%s", c.TableName, c.Name)
@@ -49,8 +49,8 @@ func (c *Col) GetSelectName() string {
 	return sel
 }
 
-// GetQueryName returns the Alias if it's nonempty
-func (c *Col) GetQueryName() string {
+// GetColumnName returns the Alias if it's nonempty
+func (c *Col) GetColumnName() string {
 	if c.Alias != "" {
 		return c.Alias
 	}
@@ -62,8 +62,8 @@ func (c *Col) GetUnaliasedName() string {
 	return fmt.Sprintf("%s.%s", c.TableName, c.Name)
 }
 
-// GetSelectName returns the aliasing command if alias is nonempty
-func (t *TableT) GetSelectName() string {
+// GetAliasedExpression returns the aliasing command if alias is nonempty
+func (t *TableT) GetAliasedExpression() string {
 	sel := fmt.Sprintf("%s", t.Name)
 	if t.alias != "" {
 		sel += fmt.Sprintf(" as %s", t.alias)
@@ -84,8 +84,8 @@ func (t *TableT) SetAlias(newAlias string) {
 	}
 }
 
-// GetQueryName returns the alias if it's nonempty
-func (t *TableT) GetQueryName() string {
+// GetColumnName returns the alias if it's nonempty
+func (t *TableT) GetColumnName() string {
 	if t.alias != "" {
 		return t.alias
 	}
@@ -103,7 +103,7 @@ func (t *TableT) SetColumns(col ...Col) {
 // this makes it unnatural (but still possible as Cols is exportable) to modify TableName
 func (t *TableT) AddColumns(col ...Col) {
 	for i := range col {
-		col[i].TableName = t.GetQueryName()
+		col[i].TableName = t.GetColumnName()
 		t.Cols = append(t.Cols, col[i])
 	}
 }
