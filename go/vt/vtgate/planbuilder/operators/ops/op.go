@@ -49,7 +49,6 @@ type (
 
 		GetColumns() ([]*sqlparser.AliasedExpr, error)
 
-		Description() OpDescription
 		ShortDescription() string
 
 		GetOrdering() ([]OrderBy, error)
@@ -61,14 +60,5 @@ type (
 
 		// See GroupBy#SimplifiedExpr for more details about this
 		SimplifiedExpr sqlparser.Expr
-	}
-
-	OpDescription struct {
-		OperatorType string
-		Variant      string         `json:",omitempty"`
-		Other        map[string]any `json:",omitempty"`
-
-		// This field will be filled in by the JSON producer. No need to set it manually
-		Inputs []OpDescription `json:",omitempty"`
 	}
 )

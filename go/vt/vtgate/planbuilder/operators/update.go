@@ -65,12 +65,6 @@ func (u *Update) TablesUsed() []string {
 	return nil
 }
 
-func (u *Update) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Update",
-	}
-}
-
 func (u *Update) ShortDescription() string {
 	return u.VTable.String()
 }

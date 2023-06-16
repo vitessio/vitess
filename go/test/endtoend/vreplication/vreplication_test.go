@@ -609,6 +609,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	insertInitialData(t)
+
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, keyspace, 2)
 	})

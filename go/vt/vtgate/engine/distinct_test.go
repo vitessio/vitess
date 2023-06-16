@@ -96,7 +96,6 @@ func TestDistinct(t *testing.T) {
 			distinct := &Distinct{
 				Source:    &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
 				CheckCols: checkCols,
-				Truncate:  false,
 			}
 
 			qr, err := distinct.TryExecute(context.Background(), &noopVCursor{}, nil, true)
@@ -145,7 +144,7 @@ func TestWeightStringFallBack(t *testing.T) {
 	distinct := &Distinct{
 		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
 		CheckCols: checkCols,
-		Truncate:  true,
+		Truncate:  1,
 	}
 
 	qr, err := distinct.TryExecute(context.Background(), &noopVCursor{}, nil, true)

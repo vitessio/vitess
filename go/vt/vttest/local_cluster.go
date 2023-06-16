@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -759,4 +761,29 @@ func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	}
 
 	return sql, nil
+}
+
+func (db *LocalCluster) VTProcess() *VtProcess {
+	return db.vt
+}
+
+// ReadVSchema reads the vschema from the vtgate endpoint for it and returns
+// a pointer to the interface. To read this vschema, the caller must convert it to a map
+func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", "127.0.0.1", vt.Port))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var results interface{}
+	err = json.Unmarshal(res, &results)
+	if err != nil {
+		return nil, err
+	}
+	return &results, nil
 }

@@ -33,9 +33,10 @@ import (
 )
 
 var (
-	_ SingleColumn = (*Hash)(nil)
-	_ Reversible   = (*Hash)(nil)
-	_ Hashing      = (*Hash)(nil)
+	_ SingleColumn    = (*Hash)(nil)
+	_ Reversible      = (*Hash)(nil)
+	_ Hashing         = (*Hash)(nil)
+	_ ParamValidating = (*Hash)(nil)
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
@@ -44,12 +45,16 @@ var (
 // Note that at once stage we used a 3DES-based hash here,
 // but for a null key as in our case, they are completely equivalent.
 type Hash struct {
-	name string
+	name          string
+	unknownParams []string
 }
 
-// NewHash creates a new Hash.
-func NewHash(name string, _ map[string]string) (Vindex, error) {
-	return &Hash{name: name}, nil
+// newHash creates a new Hash.
+func newHash(name string, params map[string]string) (Vindex, error) {
+	return &Hash{
+		name:          name,
+		unknownParams: FindUnknownParams(params, nil),
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -132,6 +137,11 @@ func (vind *Hash) Hash(id sqltypes.Value) ([]byte, error) {
 	return vhash(num), nil
 }
 
+// UnknownParams implements the ParamValidating interface.
+func (vind *Hash) UnknownParams() []string {
+	return vind.unknownParams
+}
+
 var blockDES cipher.Block
 
 func init() {
@@ -140,7 +150,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	Register("hash", NewHash)
+	Register("hash", newHash)
 }
 
 func vhash(shardKey uint64) []byte {

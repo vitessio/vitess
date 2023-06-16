@@ -47,11 +47,9 @@ fi
 chmod -R o=rx *;
 
 arch=$(uname -m)
-[ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'
-
 
 base_image="${base_image:-vitess/bootstrap:$version-common}"
-image="${image:-vitess/bootstrap:$version-$flavor$arch_ext}"
+image="${image:-vitess/bootstrap:$version-$flavor}"
 
 while [ $# -gt 0 ]; do
    if [[ $1 == *"--"* ]]; then
@@ -61,6 +59,6 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ -f "docker/bootstrap/Dockerfile.$flavor$arch_ext" ]; then
-    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t $image --build-arg bootstrap_version=$version --build-arg image=$base_image .
+if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
+    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor -t $image --build-arg bootstrap_version=$version --build-arg image=$base_image .
 fi

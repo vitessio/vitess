@@ -62,12 +62,6 @@ func (d *Delete) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
 }
 
-func (d *Delete) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Delete",
-	}
-}
-
 func (d *Delete) ShortDescription() string {
 	return fmt.Sprintf("%s.%s %s", d.VTable.Keyspace.Name, d.VTable.Name.String(), sqlparser.String(d.AST.Where))
 }

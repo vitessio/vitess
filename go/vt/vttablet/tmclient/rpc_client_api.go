@@ -51,7 +51,6 @@ func init() {
 		"vtctl",
 		"vtctld",
 		"vtctldclient",
-		"vtgr",
 		"vtorc",
 		"vttablet",
 		"vttestserver",

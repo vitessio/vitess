@@ -31,7 +31,7 @@ const (
 										left join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
 										where vd.keyspace = %s and vd.workflow = %s`
 	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-							and vd.vdiff_uuid = %s`
+							where vd.vdiff_uuid = %s`
 	sqlVDiffSummary = `select vd.state as vdiff_state, vd.last_error as last_error, vdt.table_name as table_name,
 						vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
 						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,

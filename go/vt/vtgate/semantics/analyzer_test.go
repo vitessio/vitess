@@ -1186,7 +1186,7 @@ func TestScopingWVindexTables(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			hash, _ := vindexes.NewHash("user_index", nil)
+			hash, _ := vindexes.CreateVindex("hash", "user_index", nil)
 			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
