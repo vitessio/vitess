@@ -44,6 +44,10 @@ var (
 			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
 		},
 		{
+			input: "CREATE TABLE webhook_events (pk int primary key, event varchar(255) DEFAULT NULL)",
+			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
+		},
+		{
 			input:  "alter table t add column fk int REFERENCES parent(id)",
 			output: "alter table t add column (\n\tfk int references parent [id]\n)",
 		},
