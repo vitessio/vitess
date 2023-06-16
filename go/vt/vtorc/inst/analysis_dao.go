@@ -535,10 +535,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		//		}
 
 		appendAnalysis := func(analysis *ReplicationAnalysis) {
-			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 && !hints.IncludeNoProblem {
-				return
-			}
-			if a.SkippableDueToDowntime && !hints.IncludeDowntimed {
+			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 {
 				return
 			}
 			result = append(result, a)

@@ -76,9 +76,7 @@ const (
 type PeerAnalysisMap map[string]int
 
 type ReplicationAnalysisHints struct {
-	IncludeDowntimed bool
-	IncludeNoProblem bool
-	AuditAnalysis    bool
+	AuditAnalysis bool
 }
 
 type AnalysisInstanceType string
@@ -119,7 +117,6 @@ type ReplicationAnalysis struct {
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
-	IsReplicasDowntimed                       bool // as good as downtimed because all replicas are downtimed AND analysis is all about the replicas (e.e. AllPrimaryReplicasNotReplicating)
 	IsBinlogServer                            bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool
@@ -140,14 +137,11 @@ type ReplicationAnalysis struct {
 	IsActionableRecovery                      bool
 	ProcessingNodeHostname                    string
 	ProcessingNodeToken                       string
-	CountAdditionalAgreeingNodes              int
 	StartActivePeriod                         string
-	SkippableDueToDowntime                    bool
 	GTIDMode                                  string
 	MinReplicaGTIDMode                        string
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
-	CommandHint                               string
 	IsReadOnly                                bool
 }
 

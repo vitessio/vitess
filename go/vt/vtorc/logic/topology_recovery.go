@@ -723,7 +723,7 @@ func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover() {
 	// Allow the analysis to run even if we don't want to recover
-	replicationAnalysis, err := inst.GetReplicationAnalysis("", "", &inst.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
+	replicationAnalysis, err := inst.GetReplicationAnalysis("", "", &inst.ReplicationAnalysisHints{AuditAnalysis: true})
 	if err != nil {
 		log.Error(err)
 		return
@@ -731,10 +731,6 @@ func CheckAndRecover() {
 	// intentionally iterating entries in random order
 	for _, j := range rand.Perm(len(replicationAnalysis)) {
 		analysisEntry := replicationAnalysis[j]
-		if analysisEntry.SkippableDueToDowntime {
-			// Only recover a downtimed server if explicitly requested
-			continue
-		}
 
 		go func() {
 			err = executeCheckAndRecoverFunction(analysisEntry)
