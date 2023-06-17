@@ -41,15 +41,24 @@ import (
 
 var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 
-// executeSchemaCommands executes some SQL commands, using the mysql
-// command line tool. It uses the dba connection parameters, with credentials.
-func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
-	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+// executeSchemaCommands executes some SQL commands. It uses the dba connection parameters, with credentials.
+func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
-
-	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
+	defer conn.Recycle()
+	_, more, err := conn.ExecuteFetchMulti(sql, 0, false)
+	if err != nil {
+		return err
+	}
+	for more {
+		_, more, _, err = conn.ReadQueryResult(0, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func encodeEntityName(name string) string {
@@ -427,7 +436,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 			initialCopySQL += s + ";\n"
 		}
 	}
-	if err = mysqld.executeSchemaCommands(initialCopySQL); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, initialCopySQL); err != nil {
 		return nil, err
 	}
 
@@ -443,7 +452,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 		sql := "SET sql_log_bin = 0;\n"
 		sql += "USE _vt_preflight;\n"
 		sql += change
-		if err = mysqld.executeSchemaCommands(sql); err != nil {
+		if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
 			return nil, err
 		}
 
@@ -459,7 +468,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	// and clean up the extra database
 	dropSQL := "SET sql_log_bin = 0;\n"
 	dropSQL += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeSchemaCommands(dropSQL); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, dropSQL); err != nil {
 		return nil, err
 	}
 
@@ -519,7 +528,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.executeSchemaCommands(sql); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
 		return nil, err
 	}
 
