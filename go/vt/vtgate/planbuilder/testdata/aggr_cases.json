@@ -6734,5 +6734,68 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "plan a query with any_value()",
+    "query": "select count(*), any_value(u.name), any_value(ue.title) from user u join user_extra ue on u.bar = ue.foo ",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), any_value(u.name), any_value(ue.title) from user u join user_extra ue on u.bar = ue.foo ",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*), random(1) AS any_value(u.`name`), random(2) AS any_value(ue.title)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * [COLUMN 1] as count(*)",
+              "[COLUMN 2] as any_value(u.`name`)",
+              "[COLUMN 3] as any_value(ue.title)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1,R:1",
+                "JoinVars": {
+                  "u_bar": 2
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), any_value(u.`name`), u.bar from `user` as u where 1 != 1 group by u.bar",
+                    "Query": "select count(*), any_value(u.`name`), u.bar from `user` as u group by u.bar",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), any_value(ue.title) from user_extra as ue where 1 != 1 group by .0",
+                    "Query": "select count(*), any_value(ue.title) from user_extra as ue where ue.foo = :u_bar group by .0",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
