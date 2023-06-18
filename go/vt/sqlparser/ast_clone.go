@@ -55,6 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -726,6 +728,16 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfAnyValue creates a deep clone of the input.
+func CloneRefOfAnyValue(n *AnyValue) *AnyValue {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -3407,6 +3419,8 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BitAnd:
@@ -3509,6 +3523,8 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3773,6 +3789,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:

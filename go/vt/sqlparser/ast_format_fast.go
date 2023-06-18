@@ -3538,6 +3538,12 @@ func (node *CountStar) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("*)")
 }
 
+func (node *AnyValue) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("any_value(")
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
 func (node *Avg) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.AggrName())
 	buf.WriteByte('(')
