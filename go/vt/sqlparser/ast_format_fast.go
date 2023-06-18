@@ -3533,9 +3533,7 @@ func (node *Count) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
-	buf.WriteString("*)")
+	buf.WriteString("count(*)")
 }
 
 func (node *AnyValue) formatFast(buf *TrackedBuffer) {
@@ -3545,8 +3543,7 @@ func (node *AnyValue) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Avg) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("avg(")
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3555,8 +3552,7 @@ func (node *Avg) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Max) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("max(")
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3565,8 +3561,7 @@ func (node *Max) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Min) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("min(")
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3575,8 +3570,7 @@ func (node *Min) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Sum) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("sum(")
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3585,71 +3579,61 @@ func (node *Sum) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *BitAnd) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("bit_and(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *BitOr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("bit_or(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *BitXor) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("bit_xor(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *Std) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("std(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *StdDev) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("stddev(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *StdPop) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("stddev_pop(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *StdSamp) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("stddev_samp(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *VarPop) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("var_pop(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *VarSamp) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("var_samp(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
 
 func (node *Variance) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.AggrName())
-	buf.WriteByte('(')
+	buf.WriteString("variance(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }

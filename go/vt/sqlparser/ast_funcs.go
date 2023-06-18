@@ -2401,3 +2401,11 @@ func (node *IntervalDateExpr) FnName() string {
 		return "<unknown>"
 	}
 }
+
+func IsDistinct(f AggrFunc) bool {
+	da, ok := f.(DistinctableAggr)
+	if !ok {
+		return false
+	}
+	return da.IsDistinct()
+}
