@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,69 +27,28 @@ type (
 	Col struct {
 		TableName string
 		Name      string
-		Alias     string
 		Typ       string
 		// add isDerived flag?
 	}
 	TableT struct {
-		Name  string // select type
-		alias string
-		Cols  []Col
+		// Name will be a TableName object if it is used, with Name: alias or name if no alias is provided
+		// Name will only be a DerivedTable for moving that data around
+		Name SimpleTableExpr
+		Cols []Col
 	}
 )
 
-// GetAliasedExpression returns the aliasing command if Alias is nonempty
-func (c *Col) GetAliasedExpression() string {
-	// workaround for derived tables only using column alias in select statement; make sure Name is empty
-
-	sel := fmt.Sprintf("%s.%s", c.TableName, c.Name)
-	if c.Alias != "" {
-		sel += fmt.Sprintf(" as %s", c.Alias)
-	}
-	return sel
-}
-
-// GetColumnName returns the Alias if it's nonempty
+// GetColumnName returns TableName.Name
 func (c *Col) GetColumnName() string {
-	if c.Alias != "" {
-		return c.Alias
-	}
-	return c.GetUnaliasedName()
-}
-
-// GetUnaliasedName returns the name used in queries if the alias is empty (TableName.Name)
-func (c *Col) GetUnaliasedName() string {
 	return fmt.Sprintf("%s.%s", c.TableName, c.Name)
 }
 
-// GetAliasedExpression returns the aliasing command if alias is nonempty
-func (t *TableT) GetAliasedExpression() string {
-	sel := fmt.Sprintf("%s", t.Name)
-	if t.alias != "" {
-		sel += fmt.Sprintf(" as %s", t.alias)
-	}
-	return sel
-}
-
-// GetAlias returns the alias
-func (t *TableT) GetAlias() string {
-	return t.alias
-}
-
-// SetAlias sets the alias for t, as well as setting the TableName for all columns in Cols
-func (t *TableT) SetAlias(newAlias string) {
-	t.alias = newAlias
+// SetName sets the alias for t, as well as setting the TableName for all columns in Cols
+func (t *TableT) SetName(newName string) {
+	t.Name = NewTableName(newName)
 	for i := range t.Cols {
-		t.Cols[i].TableName = newAlias
+		t.Cols[i].TableName = newName
 	}
-}
-
-// GetColumnName returns the alias if it's nonempty
-func (t *TableT) GetColumnName() string {
-	if t.alias != "" {
-		return t.alias
-	}
-	return t.Name
 }
 
 // SetColumns sets the columns of t, and automatically assigns TableName
@@ -103,7 +62,11 @@ func (t *TableT) SetColumns(col ...Col) {
 // this makes it unnatural (but still possible as Cols is exportable) to modify TableName
 func (t *TableT) AddColumns(col ...Col) {
 	for i := range col {
-		col[i].TableName = t.GetColumnName()
+		// only change TableName if
+		if tName, ok := t.Name.(TableName); ok {
+			col[i].TableName = tName.Name.String()
+		}
+
 		t.Cols = append(t.Cols, col[i])
 	}
 }
@@ -113,9 +76,8 @@ func (t *TableT) copy() *TableT {
 	newCols := make([]Col, len(t.Cols))
 	copy(newCols, t.Cols)
 	return &TableT{
-		Name:  t.Name,
-		alias: t.alias,
-		Cols:  newCols,
+		Name: t.Name,
+		Cols: newCols,
 	}
 }
 
@@ -348,18 +310,14 @@ func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
 		idx := rand.Intn(len(tableCopy.Cols))
 		randCol := tableCopy.Cols[idx]
 		if randCol.Typ == typ {
-			newName := randCol.Name
-			if randCol.Alias != "" {
-				newName = randCol.Alias
-			}
-			newTableName := table.Name
-			if tableCopy.alias != "" {
-				newTableName = tableCopy.alias
+			newTableName := NewIdentifierCS("")
+			if tName, ok := table.Name.(TableName); ok {
+				newTableName = tName.Name
 			}
 			return &ColName{
 				Metadata:  nil,
-				Name:      NewIdentifierCI(newName),
-				Qualifier: TableName{Name: NewIdentifierCS(newTableName)},
+				Name:      NewIdentifierCI(randCol.Name),
+				Qualifier: TableName{Name: newTableName},
 			}
 		} else {
 			// delete randCol from table.columns
