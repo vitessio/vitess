@@ -17,8 +17,8 @@ limitations under the License.
 CREATE TABLE IF NOT EXISTS reparent_journal
 (
     `time_created_ns`      bigint(20) unsigned NOT NULL,
-    `action_name`          varbinary(250)      NOT NULL,
-    `primary_alias`        varbinary(32)       NOT NULL,
+    `action_name`          varbinary(255)      NOT NULL,
+    `primary_alias`        varbinary(255)       NOT NULL,
     `replication_position` varbinary(64000) DEFAULT NULL,
 
     PRIMARY KEY (`time_created_ns`)

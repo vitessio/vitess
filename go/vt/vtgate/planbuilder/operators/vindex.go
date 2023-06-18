@@ -62,7 +62,11 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	return &clone
 }
 
-func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+	}
+
 	offset, err := addColumn(ctx, v, expr.Expr)
 	if err != nil {
 		return nil, 0, err
@@ -148,10 +152,6 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 // It is not keyspace-qualified.
 func (v *Vindex) TablesUsed() []string {
 	return []string{v.Table.Table.Name.String()}
-}
-
-func (v *Vindex) Description() ops.OpDescription {
-	return ops.OpDescription{OperatorType: "Vindex"}
 }
 
 func (v *Vindex) ShortDescription() string {

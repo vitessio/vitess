@@ -19,9 +19,6 @@ package operators
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -31,7 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // InfoSchemaRouting used for information_schema queries.

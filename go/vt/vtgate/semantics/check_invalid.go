@@ -42,6 +42,10 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return checkDerived(node)
 	case *sqlparser.AssignmentExpr:
 		return vterrors.VT12001("Assignment expression")
+	case *sqlparser.Insert:
+		if node.Action == sqlparser.ReplaceAct {
+			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
+		}
 	}
 
 	return nil

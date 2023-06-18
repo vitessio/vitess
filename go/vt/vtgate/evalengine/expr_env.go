@@ -51,9 +51,9 @@ type (
 
 func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
 	if utc {
-		return datetime.FromStdTime(env.now.UTC())
+		return datetime.NewDateTimeFromStd(env.now.UTC())
 	}
-	return datetime.FromStdTime(env.now)
+	return datetime.NewDateTimeFromStd(env.now)
 }
 
 func (env *ExpressionEnv) currentUser() string {

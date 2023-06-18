@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"github.com/nsf/jsondiff"
@@ -36,9 +38,96 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+// TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
+// tables that have a gipk column and those that make it visible.
+func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
+		t.Skip("skipping test as server does not support generated invisible primary keys")
+	}
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
+		"create table t1(val varbinary(128))",
+		fmt.Sprintf("create table %s.t1(val varbinary(128))", vrepldb),
+		"create table t2(val varbinary(128))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
+		fmt.Sprintf("create table %s.t2(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		input:  "insert into t1(val) values ('aaa')",
+		output: "insert into t1(my_row_id,val) values (1,'aaa')",
+		table:  "t1",
+		data: [][]string{
+			{"aaa"},
+		},
+		query: "select my_row_id, val from t1",
+		queryResult: [][]string{
+			{"1", "aaa"},
+		},
+	}, {
+		input:  "insert into t2(val) values ('bbb')",
+		output: "insert into t2(my_row_id,val) values (1,'bbb')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "bbb"},
+		},
+		query: "select my_row_id, val from t2",
+		queryResult: [][]string{
+			{"1", "bbb"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		if tcases.query != "" {
+			expectQueryResult(t, tcases.query, tcases.queryResult)
+		}
+	}
+}
 
 func TestPlayerInvisibleColumns(t *testing.T) {
 	if !supportsInvisibleColumns() {

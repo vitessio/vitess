@@ -98,43 +98,6 @@ order by table_name, ordinal_position`
 
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
-
-	// DetectViewChange query detects if there is any view change from previous copy.
-	DetectViewChange = `
-SELECT distinct table_name
-FROM (
-	SELECT table_name, view_definition
-	FROM information_schema.views
-	WHERE table_schema = database()
-
-	UNION ALL
-
-	SELECT table_name, view_definition
-	FROM %s.views
-	WHERE table_schema = database()
-) _inner
-GROUP BY table_name, view_definition
-HAVING COUNT(*) = 1
-`
-	// FetchViewDefinition retrieves view definition from information_schema.views table.
-	FetchViewDefinition = `select table_name, view_definition from information_schema.views
-where table_schema = database() and table_name in ::tableNames`
-
-	// FetchCreateStatement retrieves create statement.
-	FetchCreateStatement = `show create table %s`
-
-	// DeleteFromViewsTable removes the views from the table.
-	DeleteFromViewsTable = `delete from %s.views where table_schema = database() and table_name in ::tableNames`
-
-	// InsertIntoViewsTable using information_schema.views.
-	InsertIntoViewsTable = `insert %s.views(table_schema, table_name, create_statement, view_definition)
-values (database(), :table_name, :create_statement, :view_definition)`
-
-	// FetchUpdatedViews queries fetches information about updated views
-	FetchUpdatedViews = `select table_name, create_statement from %s.views where table_schema = database() and table_name in ::viewnames`
-
-	// FetchViews queries fetches all views
-	FetchViews = `select table_name, create_statement from %s.views where table_schema = database()`
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.

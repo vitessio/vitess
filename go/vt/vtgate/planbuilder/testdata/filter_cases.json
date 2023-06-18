@@ -1794,7 +1794,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
+            "Query": "select user_extra.id from user_extra where user_extra.user_id = :user_col and user_extra.col = :user_col",
             "Table": "user_extra",
             "Values": [
               ":user_col"
@@ -1880,7 +1880,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where 1 = 1 and user_extra.col = :user_col",
+            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and 1 = 1",
             "Table": "user_extra"
           }
         ]
@@ -6598,7 +6598,7 @@
         "Inputs": [
           {
             "OperatorType": "Filter",
-            "Predicate": "repeat(a.textcol1, :1) like 'And%res'",
+            "Predicate": "repeat(a.textcol1, sum(a.id)) like 'And%res'",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -6609,16 +6609,16 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] as textcol1",
-                      "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as sum(a.id)"
+                      "[COLUMN 2] as textcol1",
+                      "[COLUMN 0] * [COLUMN 1] as sum(a.id)"
                     ],
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,L:1,R:1",
+                        "JoinColumnIndexes": "L:0,R:0,L:1",
                         "JoinVars": {
-                          "a_textcol1": 0
+                          "a_textcol1": 1
                         },
                         "TableName": "`user`_`user`",
                         "Inputs": [
@@ -6629,9 +6629,9 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select a.textcol1, sum(a.id) from `user` as a where 1 != 1 group by a.textcol1",
-                            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-                            "Query": "select a.textcol1, sum(a.id) from `user` as a group by a.textcol1 order by a.textcol1 asc",
+                            "FieldQuery": "select sum(a.id), a.textcol1 from `user` as a where 1 != 1 group by a.textcol1",
+                            "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
+                            "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc",
                             "Table": "`user`"
                           },
                           {
@@ -6641,8 +6641,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select 1, count(*) from `user` as b where 1 != 1 group by 1",
-                            "Query": "select 1, count(*) from `user` as b where b.textcol2 = :a_textcol1 group by 1",
+                            "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
+                            "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 group by .0",
                             "Table": "`user`"
                           }
                         ]
@@ -6758,6 +6758,74 @@
       "TablesUsed": [
         "main.unsharded",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "push filter under aggregation",
+    "query": "select count(*) from user left join user_extra on user.id = user_extra.bar where IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join user_extra on user.id = user_extra.bar where IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
+              "[COLUMN 2] as collections_status"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Filter",
+                "Predicate": "IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "L:0,R:0,R:1",
+                    "JoinVars": {
+                      "user_id": 1
+                    },
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.id from `user` where 1 != 1 group by `user`.id",
+                        "Query": "select count(*), `user`.id from `user` group by `user`.id",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), user_extra.collections_status from user_extra where 1 != 1 group by user_extra.collections_status",
+                        "Query": "select count(*), user_extra.collections_status from user_extra where user_extra.bar = :user_id group by user_extra.collections_status",
+                        "Table": "user_extra"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
     }
   }

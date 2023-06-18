@@ -45,11 +45,10 @@ type (
 
 		// AddColumn tells an operator to also output an additional column specified.
 		// The offset to the column is returned.
-		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (Operator, int, error)
+		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (Operator, int, error)
 
 		GetColumns() ([]*sqlparser.AliasedExpr, error)
 
-		Description() OpDescription
 		ShortDescription() string
 
 		GetOrdering() ([]OrderBy, error)
@@ -57,16 +56,9 @@ type (
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	OrderBy struct {
-		Inner         *sqlparser.Order
-		WeightStrExpr sqlparser.Expr
-	}
+		Inner *sqlparser.Order
 
-	OpDescription struct {
-		OperatorType string
-		Variant      string         `json:",omitempty"`
-		Other        map[string]any `json:",omitempty"`
-
-		// This field will be filled in by the JSON producer. No need to set it manually
-		Inputs []OpDescription `json:",omitempty"`
+		// See GroupBy#SimplifiedExpr for more details about this
+		SimplifiedExpr sqlparser.Expr
 	}
 )

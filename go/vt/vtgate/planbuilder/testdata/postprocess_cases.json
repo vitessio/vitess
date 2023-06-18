@@ -2626,22 +2626,28 @@
       "QueryType": "SELECT",
       "Original": "select count(id), num from user order by 2",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
-            "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` order by num asc",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count(0) AS count(id), random(1) AS num, random(2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
+                "Query": "select count(id), num, weight_string(num) from `user`",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
@@ -2855,23 +2861,30 @@
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col order by c1",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1",
-        "GroupBy": "0",
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(2|3) ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col, count(*), c1, weight_string(c1) from `user` where 1 != 1 group by col",
-            "OrderBy": "(2|3) ASC, 0 ASC",
-            "Query": "select col, count(*), c1, weight_string(c1) from `user` group by col order by c1 asc, col asc",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1, random(3)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, count(*), c1, weight_string(c1) from `user` where 1 != 1 group by col",
+                "OrderBy": "0 ASC",
+                "Query": "select col, count(*), c1, weight_string(c1) from `user` group by col order by col asc",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
@@ -2944,9 +2957,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
+                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
                 "Table": "`user`"
               },
               {
@@ -2956,8 +2969,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
+                "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
+                "Query": "select 1 from user_extra group by .0",
                 "Table": "user_extra"
               }
             ]
@@ -3013,9 +3026,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1 group by a, a, weight_string(a)",
             "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
+            "Query": "select a as c, a, weight_string(a) from `user` group by a, a, weight_string(a) order by a asc, a asc",
             "Table": "`user`"
           }
         ]
@@ -3045,9 +3058,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1",
+            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1 group by a, a, weight_string(a)",
             "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select distinct a, a, weight_string(a) from `user` order by a asc, a asc",
+            "Query": "select a, a, weight_string(a) from `user` group by a, a, weight_string(a) order by a asc, a asc",
             "Table": "`user`"
           }
         ]
@@ -3089,7 +3102,7 @@
       "Original": "select count(*) a from user having a = 0x01",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": ":0 = 0x01",
+        "Predicate": "count(*) = 0x01",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3224,48 +3237,41 @@
       "QueryType": "SELECT",
       "Original": "select id from user, user_extra order by coalesce(user.col, user_extra.col)",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "(1|2) ASC",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0,R:1",
+            "JoinVars": {
+              "user_col": 1
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,R:1",
-                "JoinVars": {
-                  "user_col": 1
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, `user`.col from `user` where 1 != 1",
-                    "Query": "select id, `user`.col from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra where 1 != 1",
-                    "Query": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "FieldQuery": "select id, `user`.col from `user` where 1 != 1",
+                "Query": "select id, `user`.col from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra where 1 != 1",
+                "Query": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
@@ -3274,6 +3280,75 @@
       "TablesUsed": [
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "having filter with %",
+    "query": "select a.tcol1 from user a join music b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like \"A\\%B\" order by a.tcol1",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select a.tcol1 from user a join music b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like \"A\\%B\" order by a.tcol1",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(0|2) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "repeat(a.tcol1, min(a.id)) like 'A\\%B'",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "min(1) AS min(a.id)",
+                "GroupBy": "(0|2)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:1,L:0,L:2",
+                    "JoinVars": {
+                      "a_tcol1": 1
+                    },
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select min(a.id), a.tcol1, weight_string(a.tcol1) from `user` as a where 1 != 1 group by a.tcol1, weight_string(a.tcol1)",
+                        "OrderBy": "(1|2) ASC",
+                        "Query": "select min(a.id), a.tcol1, weight_string(a.tcol1) from `user` as a group by a.tcol1, weight_string(a.tcol1) order by a.tcol1 asc",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from music as b where 1 != 1 group by .0",
+                        "Query": "select 1 from music as b where b.tcol2 = :a_tcol1 group by .0",
+                        "Table": "music"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
       ]
     }
   }

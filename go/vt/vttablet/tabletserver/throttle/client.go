@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -46,7 +48,7 @@ func initThrottleTicker() {
 // Client construct is used by apps who wish to consult with a throttler. It encapsulates the check/throttling/backoff logic
 type Client struct {
 	throttler *Throttler
-	appName   string
+	appName   throttlerapp.Name
 	checkType ThrottleCheckType
 	flags     CheckFlags
 
@@ -54,7 +56,7 @@ type Client struct {
 }
 
 // NewProductionClient creates a client suitable for foreground/production jobs, which have normal priority.
-func NewProductionClient(throttler *Throttler, appName string, checkType ThrottleCheckType) *Client {
+func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
 	initThrottleTicker()
 	return &Client{
 		throttler: throttler,
@@ -68,7 +70,7 @@ func NewProductionClient(throttler *Throttler, appName string, checkType Throttl
 
 // NewBackgroundClient creates a client suitable for background jobs, which have low priority over productio ntraffic,
 // e.g. migration, table pruning, vreplication
-func NewBackgroundClient(throttler *Throttler, appName string, checkType ThrottleCheckType) *Client {
+func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
 	initThrottleTicker()
 	return &Client{
 		throttler: throttler,
@@ -85,7 +87,7 @@ func NewBackgroundClient(throttler *Throttler, appName string, checkType Throttl
 // The function caches results for a brief amount of time, hence it's safe and efficient to
 // be called very frequenty.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName string) (throttleCheckOK bool) {
+func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (throttleCheckOK bool) {
 	if c == nil {
 		// no client
 		return true
@@ -103,7 +105,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName string) (t
 	if overrideAppName != "" {
 		checkApp = overrideAppName
 	}
-	checkResult := c.throttler.CheckByType(ctx, checkApp, "", &c.flags, c.checkType)
+	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), "", &c.flags, c.checkType)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
@@ -116,7 +118,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName string) (t
 // otherwise it briefly sleeps and returns 'false'.
 // Non-empty appName overrides the default appName.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName string) bool {
+func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) bool {
 	ok := c.ThrottleCheckOK(ctx, appName)
 	if !ok {
 		time.Sleep(throttleCheckDuration)
@@ -140,7 +142,7 @@ func (c *Client) Throttle(ctx context.Context) {
 			return
 		}
 		if c.ThrottleCheckOKOrWait(ctx) {
-			break
+			return
 		}
 	}
 }

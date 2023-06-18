@@ -43,3 +43,9 @@ insert into datze(id, dt2, ts1) values (5, '2022-03-27 03:15:00', current_timest
 insert into datze(id, dt2, ts1) values (6, current_timestamp, current_timestamp);
 
 insert into geom_tbl(id, g, p, ls, pg, mp, mls, mpg, gc) values(1,ST_GeomFromText("LINESTRING(0 0,1 2,2 4)"), POINT(32767, 12345678901234567890),ST_GeomFromText("LINESTRING(-1 1,32627 32678,32679 65536,1234567890123456789 489749749734.234212908)"),ST_GeomFromText("POLYGON ((1 2, 2 3, 3 4, 1 2))"), ST_GeomFromText("MULTIPOINT(0 0, 15 25, 45 65)"),ST_GeomFromText("MULTILINESTRING((12 12, 22 22), (19 19, 32 18))"),ST_GeomFromText("MULTIPOLYGON(((0 0,11 0,12 11,0 9,0 0)),((3 5,7 4,4 7,7 7,3 5)))"),ST_GeomFromText("GEOMETRYCOLLECTION(POINT(3 2),LINESTRING(0 0,1 3,2 5,3 5,4 7))"));
+
+insert into reftable (id, val1) values (1, 'a')
+insert into reftable (id, val1) values (2, 'b')
+insert into reftable (id, val1) values (3, 'c')
+insert into reftable (id, val1) values (4, 'd')
+insert into reftable (id, val1) values (5, 'e')

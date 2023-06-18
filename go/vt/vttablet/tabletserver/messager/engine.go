@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -44,7 +45,7 @@ type TabletService interface {
 // VStreamer defines  the functions of VStreamer
 // that the messager needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error
 	StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
 }
 
@@ -83,7 +84,7 @@ func (me *Engine) Open() {
 	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
-	me.se.RegisterNotifier("messages", me.schemaChanged)
+	me.se.RegisterNotifier("messages", me.schemaChanged, true)
 }
 
 // Close closes the Engine service.
@@ -137,10 +138,11 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 	return mm.Subscribe(ctx, send), nil
 }
 
-func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	for _, name := range append(dropped, altered...) {
+	for _, table := range append(dropped, altered...) {
+		name := table.Name.String()
 		mm := me.managers[name]
 		if mm == nil {
 			continue
@@ -150,8 +152,8 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		delete(me.managers, name)
 	}
 
-	for _, name := range append(created, altered...) {
-		t := tables[name]
+	for _, t := range append(created, altered...) {
+		name := t.Name.String()
 		if t.Type != schema.Message {
 			continue
 		}

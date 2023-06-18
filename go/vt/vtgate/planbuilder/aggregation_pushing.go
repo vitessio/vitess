@@ -69,7 +69,7 @@ func (hp *horizonPlanning) pushAggregation(
 		pushed = false
 
 		for _, grp := range grouping {
-			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
+			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.SimplifiedExpr, plan.input)
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -166,8 +166,8 @@ func pushAggrOnRoute(
 			pos = newOffset(groupingCols[idx])
 		}
 
-		if expr.WeightStrExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
-			wsExpr := weightStringFor(expr.WeightStrExpr)
+		if expr.SimplifiedExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
+			wsExpr := weightStringFor(expr.SimplifiedExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
 				return nil, nil, nil, err
@@ -228,12 +228,8 @@ func addAggregationToSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Sel
 
 func countStarAggr() *operators.Aggr {
 	f := &sqlparser.CountStar{}
-
-	return &operators.Aggr{
-		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   popcode.AggregateCountStar,
-		Alias:    "count(*)",
-	}
+	aggr := operators.NewAggr(popcode.AggregateCountStar, f, &sqlparser.AliasedExpr{Expr: f}, "count(*)")
+	return &aggr
 }
 
 /*
@@ -287,7 +283,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			return nil, nil, err
 		}
 		l = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
-		rhsGrouping = append(rhsGrouping, operators.GroupBy{Inner: l})
+		rhsGrouping = append(rhsGrouping, operators.NewGroupBy(l, nil, nil))
 	}
 
 	// Next we push the aggregations to both sides

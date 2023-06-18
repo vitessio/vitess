@@ -668,13 +668,13 @@ func TestMerge(t *testing.T) {
 		"1|3|2.8|2|bc",
 	)
 
-	merged, _, err := merge(fields, r.Rows[0], r.Rows[1], nil, nil, oa.Aggregates)
+	merged, _, err := merge(fields, r.Rows[0], r.Rows[1], nil, oa.Aggregates)
 	assert.NoError(err)
 	want := sqltypes.MakeTestResult(fields, "1|5|6.0|2|bc").Rows[0]
 	assert.Equal(want, merged)
 
 	// swap and retry
-	merged, _, err = merge(fields, r.Rows[1], r.Rows[0], nil, nil, oa.Aggregates)
+	merged, _, err = merge(fields, r.Rows[1], r.Rows[0], nil, oa.Aggregates)
 	assert.NoError(err)
 	assert.Equal(want, merged)
 }
@@ -1018,7 +1018,6 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
 		Input:       fp,
-		Collations:  map[int]collations.ID{0: collationID},
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
@@ -1060,7 +1059,6 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
-		Collations:  map[int]collations.ID{0: collationID},
 		Input:       fp,
 	}
 
@@ -1105,7 +1103,6 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
-		Collations:  map[int]collations.ID{0: collationID},
 		Input:       fp,
 	}
 

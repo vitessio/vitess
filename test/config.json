@@ -129,7 +129,7 @@
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
@@ -873,18 +873,9 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vtgate_grpc_server_auth_static": {
+		"vtgate_grpc_api": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_auth_static"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"vtgate_grpc_server_acls": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_acls"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_api"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",

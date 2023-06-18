@@ -61,7 +61,7 @@ func (j *Join) SetInputs(ops []ops.Operator) {
 	j.LHS, j.RHS = ops[0], ops[1]
 }
 
-func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return j, rewrite.SameTree, nil
@@ -84,7 +84,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.
 			return nil, rewrite.SameTree, err
 		}
 	}
-	return newOp, rewrite.NewTree, nil
+	return newOp, rewrite.NewTree("merge querygraphs into a single one", newOp), nil
 }
 
 func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
@@ -157,15 +157,6 @@ func (j *Join) IsInner() bool {
 func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 	return nil
-}
-
-func (j *Join) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Join",
-		Other: map[string]any{
-			"Predicate": sqlparser.String(j.Predicate),
-		},
-	}
 }
 
 func (j *Join) ShortDescription() string {
