@@ -28,18 +28,6 @@ func setDDL(yylex yyLexer, node Statement) {
   yylex.(*Tokenizer).partialDDL = node
 }
 
-func incNesting(yylex yyLexer) bool {
-  yylex.(*Tokenizer).nesting++
-  if yylex.(*Tokenizer).nesting == 200 {
-    return true
-  }
-  return false
-}
-
-func decNesting(yylex yyLexer) {
-  yylex.(*Tokenizer).nesting--
-}
-
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -185,7 +173,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   vexplainType 	  VExplainType
-  intervalType	  IntervalTypes
+  intervalType	  IntervalType
   lockType LockType
   referenceDefinition *ReferenceDefinition
   txAccessModes []TxAccessMode
@@ -346,10 +334,11 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
+%token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
+%token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
@@ -368,6 +357,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
 %token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude ST_EndPoint ST_IsClosed ST_Length ST_NumPoints ST_StartPoint ST_PointN
+%token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings ST_NumGeometries ST_GeometryN ST_LongFromGeoHash ST_PointFromGeoHash ST_LatFromGeoHash ST_GeoHash ST_AsGeoJSON ST_GeomFromGeoJSON
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -463,7 +453,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinition> subpartition_definition
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
-%type <intervalType> interval_time_stamp interval
+%type <intervalType> interval timestampadd_interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -473,8 +463,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
+%type <expr> simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -922,7 +912,7 @@ insert_statement:
     ins.Action = $1
     ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
-    ins.Table = $4
+    ins.Table = getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
     ins.OnDup = OnDup($7)
     $$ = ins
@@ -935,7 +925,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: getAliasedTableExprFromTableName($4), Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -979,11 +969,11 @@ from_or_using:
 view_name_list:
   table_name
   {
-    $$ = TableNames{$1.ToViewName()}
+    $$ = TableNames{$1}
   }
 | view_name_list ',' table_name
   {
-    $$ = append($$, $3.ToViewName())
+    $$ = append($$, $3)
   }
 
 table_name_list:
@@ -1154,7 +1144,7 @@ create_statement:
   }
 | CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
+    $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -3180,7 +3170,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
 // and the database identifier is optional. When no identifier is given, the current database
@@ -5355,6 +5345,14 @@ bit_expr '|' bit_expr %prec '|'
   {
 	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
   }
+| bit_expr '+' INTERVAL bit_expr interval %prec '+'
+  {
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: $1, Unit: $5, Interval: $4}
+  }
+| bit_expr '-' INTERVAL bit_expr interval %prec '-'
+  {
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: $1, Unit: $5, Interval: $4}
+  }
 | bit_expr '*' bit_expr %prec '*'
   {
 	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
@@ -5473,18 +5471,14 @@ function_call_keyword
   {
 	 $$ = &Default{ColName: $2}
   }
-| interval_value
+| INTERVAL bit_expr interval '+' bit_expr %prec INTERVAL
   {
-	// INTERVAL can trigger a shift / reduce conflict. We want
-	// to shift here for the interval rule. In case we do have
-	// the additional expression_list below, we'd pick that path
-	// and thus properly parse it as a function when needed.
-	$$ = $1
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: $5, Unit: $3, Interval: $2}
   }
 | INTERVAL openb expression ',' expression_list closeb
-{
-       $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
-}
+  {
+    $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
+  }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
@@ -5492,12 +5486,6 @@ function_call_keyword
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
-  }
-
-interval_value:
-  INTERVAL bit_expr sql_id
-  {
-     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 
 column_names_opt_paren:
@@ -5580,23 +5568,21 @@ frame_point:
   {
     $$ = &FramePoint{Type:UnboundedFollowingType}
   }
-| frame_expression PRECEDING
+| NUM_literal PRECEDING
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
   }
-| frame_expression FOLLOWING
+| INTERVAL bit_expr interval PRECEDING
+  {
+    $$ = &FramePoint{Type:ExprPrecedingType, Expr:$2, Unit: $3}
+  }
+| NUM_literal FOLLOWING
   {
     $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
   }
-
-frame_expression:
-  NUM_literal
+| INTERVAL bit_expr interval FOLLOWING
   {
-    $$ = $1
-  }
-| interval_value
-  {
-    $$ = $1
+    $$ = &FramePoint{Type:ExprFollowingType, Expr:$2, Unit:$3}
   }
 
 frame_clause_opt:
@@ -5997,17 +5983,17 @@ UTC_DATE func_paren_opt
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
-| TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
+| TIMESTAMPADD openb timestampadd_interval ',' expression ',' expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: $7, Interval: $5, Unit: $3}
   }
-| TIMESTAMPDIFF openb sql_id ',' expression ',' expression closeb
+| TIMESTAMPDIFF openb timestampadd_interval ',' expression ',' expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &TimestampDiffExpr{Unit:$3, Expr1:$5, Expr2:$7}
   }
 | EXTRACT openb interval FROM expression closeb
   {
-	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
+    $$ = &ExtractFuncExpr{IntervalType: $3, Expr: $5}
   }
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
@@ -6385,6 +6371,78 @@ UTC_DATE func_paren_opt
   {
     $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
   }
+| ST_Area openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: Area, Polygon: $3 }
+ }
+| ST_Centroid openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: Centroid, Polygon: $3 }
+ }
+| ST_ExteriorRing openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: ExteriorRing, Polygon: $3 }
+ }
+| ST_InteriorRingN openb expression ',' expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: InteriorRingN, Polygon: $3, PropertyDefArg: $5 }
+ }
+| ST_NumInteriorRings openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: NumInteriorRings, Polygon: $3 }
+ }
+| ST_GeometryN openb expression ',' expression closeb
+ {
+   $$ = &GeomCollPropertyFuncExpr{ Property: GeometryN, GeomColl: $3, PropertyDefArg: $5 }
+ }
+| ST_NumGeometries openb expression closeb
+ {
+   $$ = &GeomCollPropertyFuncExpr{ Property: NumGeometries, GeomColl: $3 }
+ }
+| ST_GeoHash openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeoHashFromLatLongExpr{ Longitude: $3, Latitude: $5, MaxLength: $7 }
+  }
+| ST_GeoHash openb expression ',' expression closeb
+  {
+    $$ = &GeoHashFromPointExpr{ Point: $3, MaxLength: $5 }
+  }
+| ST_LatFromGeoHash openb expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: LatitudeFromHash, GeoHash: $3 }
+  }
+| ST_LongFromGeoHash openb expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: LongitudeFromHash, GeoHash: $3 }
+  }
+| ST_PointFromGeoHash openb expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: PointFromHash, GeoHash: $3, SridOpt: $5 }
+  }
+| ST_GeomFromGeoJSON openb expression closeb
+  {
+    $$ = &GeomFromGeoJSONExpr{ GeoJSON: $3 }
+  }
+| ST_GeomFromGeoJSON openb expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoJSONExpr{ GeoJSON: $3, HigherDimHandlerOpt: $5 }
+  }
+| ST_GeomFromGeoJSON openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoJSONExpr{ GeoJSON: $3, HigherDimHandlerOpt: $5 , Srid: $7 }
+  }
+| ST_AsGeoJSON openb expression closeb
+  {
+    $$ = &GeoJSONFromGeomExpr{ Geom: $3 }
+  }
+| ST_AsGeoJSON openb expression ',' expression closeb
+  {
+    $$ = &GeoJSONFromGeomExpr{ Geom: $3, MaxDecimalDigits: $5 }
+  }
+| ST_AsGeoJSON openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeoJSONFromGeomExpr{ Geom: $3, MaxDecimalDigits: $5 , Bitmask: $7 }
+  }
 | JSON_OBJECT openb json_object_param_opt closeb
   {
     $$ = &JSONObjectExpr{ Params:$3 }
@@ -6548,6 +6606,30 @@ UTC_DATE func_paren_opt
 | lag_lead_expr_type openb expression ',' null_int_variable_arg default_with_comma_opt closeb null_treatment_clause_opt over_clause
   {
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
+  }
+| ADDDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: $3, Interval: $6, Unit: $7}
+  }
+| ADDDATE openb expression ',' expression closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: $3, Interval: $5, Unit: IntervalNone}
+  }
+| DATE_ADD openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: $3, Interval: $6, Unit: $7}
+  }
+| DATE_SUB openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: $3, Interval: $6, Unit: $7}
+  }
+| SUBDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: $3, Interval: $6, Unit: $7}
+  }
+| SUBDATE openb expression ',' expression closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: $3, Interval: $5, Unit: IntervalNone}
   }
 | regular_expressions
 | xml_expressions
@@ -6714,9 +6796,7 @@ returning_type_opt:
   }
 
 interval:
- interval_time_stamp
- {}
-| DAY_HOUR
+  DAY_HOUR
   {
 	$$=IntervalDayHour
   }
@@ -6760,9 +6840,7 @@ interval:
   {
 	$$=IntervalYearMonth
   }
-
-interval_time_stamp:
- DAY
+| DAY
   {
  	$$=IntervalDay
   }
@@ -6797,6 +6875,80 @@ interval_time_stamp:
 | YEAR
   {
 	$$=IntervalYear
+  }
+
+timestampadd_interval:
+  DAY
+  {
+    $$=IntervalDay
+  }
+| WEEK
+  {
+    $$=IntervalWeek
+  }
+| HOUR
+  {
+    $$=IntervalHour
+  }
+| MINUTE
+  {
+    $$=IntervalMinute
+  }
+| MONTH
+  {
+    $$=IntervalMonth
+  }
+| QUARTER
+  {
+    $$=IntervalQuarter
+  }
+| SECOND
+  {
+    $$=IntervalSecond
+  }
+| MICROSECOND
+  {
+    $$=IntervalMicrosecond
+  }
+| YEAR
+  {
+    $$=IntervalYear
+  }
+| SQL_TSI_DAY
+  {
+    $$=IntervalDay
+  }
+| SQL_TSI_WEEK
+  {
+    $$=IntervalWeek
+  }
+| SQL_TSI_HOUR
+  {
+    $$=IntervalHour
+  }
+| SQL_TSI_MINUTE
+  {
+    $$=IntervalMinute
+  }
+| SQL_TSI_MONTH
+  {
+    $$=IntervalMonth
+  }
+| SQL_TSI_QUARTER
+  {
+    $$=IntervalQuarter
+  }
+| SQL_TSI_SECOND
+  {
+    $$=IntervalSecond
+  }
+| SQL_TSI_MICROSECOND
+  {
+    $$=IntervalMicrosecond
+  }
+| SQL_TSI_YEAR
+  {
+    $$=IntervalYear
   }
 
 func_paren_opt:
@@ -7856,8 +8008,6 @@ reserved_keyword:
 | SYSTEM
 | TABLE
 | THEN
-| TIMESTAMPADD
-| TIMESTAMPDIFF
 | TO
 | TRAILING
 | TRUE
@@ -7890,6 +8040,7 @@ non_reserved_keyword:
   AGAINST
 | ACTION
 | ACTIVE
+| ADDDATE %prec FUNCTION_CALL_NON_KEYWORD
 | ADMIN
 | AFTER
 | ALGORITHM
@@ -7942,6 +8093,8 @@ non_reserved_keyword:
 | CURRENT
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| DATE_ADD %prec FUNCTION_CALL_NON_KEYWORD
+| DATE_SUB %prec FUNCTION_CALL_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DECIMAL_TYPE
@@ -8187,6 +8340,14 @@ non_reserved_keyword:
 | SMALLINT
 | SNAPSHOT
 | SQL
+| SQL_TSI_DAY
+| SQL_TSI_HOUR
+| SQL_TSI_MINUTE
+| SQL_TSI_MONTH
+| SQL_TSI_QUARTER
+| SQL_TSI_SECOND
+| SQL_TSI_WEEK
+| SQL_TSI_YEAR
 | SRID
 | START
 | STARTING
@@ -8200,23 +8361,33 @@ non_reserved_keyword:
 | STDDEV_POP %prec FUNCTION_CALL_NON_KEYWORD
 | STDDEV_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | STREAM
+| ST_Area %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
+| ST_AsGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Centroid %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
 | ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
+| ST_ExteriorRing %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeoHash %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeomFromGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryN %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryType %prec FUNCTION_CALL_NON_KEYWORD
+| ST_InteriorRingN %prec FUNCTION_CALL_NON_KEYWORD
 | ST_IsClosed %prec FUNCTION_CALL_NON_KEYWORD
 | ST_IsEmpty %prec FUNCTION_CALL_NON_KEYWORD
 | ST_IsSimple %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LatFromGeoHash %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Latitude %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Length %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LongFromGeoHash %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Longitude %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
@@ -8224,7 +8395,10 @@ non_reserved_keyword:
 | ST_MultiPointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_NumGeometries %prec FUNCTION_CALL_NON_KEYWORD
+| ST_NumInteriorRings %prec FUNCTION_CALL_NON_KEYWORD
 | ST_NumPoints %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromGeoHash %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointN %prec FUNCTION_CALL_NON_KEYWORD
@@ -8233,6 +8407,7 @@ non_reserved_keyword:
 | ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_X %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Y %prec FUNCTION_CALL_NON_KEYWORD
+| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
@@ -8248,6 +8423,8 @@ non_reserved_keyword:
 | TIES
 | TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMPADD %prec FUNCTION_CALL_NON_KEYWORD
+| TIMESTAMPDIFF %prec FUNCTION_CALL_NON_KEYWORD
 | TINYBLOB
 | TINYINT
 | TINYTEXT
@@ -8299,6 +8476,7 @@ non_reserved_keyword:
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS
+| WEEK %prec FUNCTION_CALL_NON_KEYWORD
 | WITHOUT
 | WORK
 | YEAR
@@ -8328,16 +8506,11 @@ non_reserved_keyword:
 openb:
   '('
   {
-    if incNesting(yylex) {
-      yylex.Error("max nesting level reached")
-      return 1
-    }
   }
 
 closeb:
   ')'
   {
-    decNesting(yylex)
   }
 
 skip_to_end:

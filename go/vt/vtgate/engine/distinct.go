@@ -35,7 +35,7 @@ type (
 	Distinct struct {
 		Source    Primitive
 		CheckCols []CheckCol
-		Truncate  bool
+		Truncate  int
 	}
 	CheckCol struct {
 		Col       int
@@ -189,8 +189,8 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 			result.Rows = append(result.Rows, row)
 		}
 	}
-	if d.Truncate {
-		return result.Truncate(len(d.CheckCols)), nil
+	if d.Truncate > 0 {
+		return result.Truncate(d.Truncate), nil
 	}
 	return result, err
 }
@@ -260,8 +260,8 @@ func (d *Distinct) description() PrimitiveDescription {
 		other["Collations"] = colls
 	}
 
-	if d.Truncate {
-		other["ResultColumns"] = len(d.CheckCols)
+	if d.Truncate > 0 {
+		other["ResultColumns"] = d.Truncate
 	}
 	return PrimitiveDescription{
 		Other:        other,

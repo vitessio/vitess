@@ -184,7 +184,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 }
 
 // Clone implements the Operator interface
-func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
+func (qg *QueryGraph) Clone([]ops.Operator) ops.Operator {
 	result := &QueryGraph{
 		Tables:     nil,
 		innerJoins: nil,
@@ -219,13 +219,6 @@ func (qt *QueryTable) Clone() *QueryTable {
 		Table:       sqlparser.CloneTableName(qt.Table),
 		Predicates:  qt.Predicates,
 		IsInfSchema: qt.IsInfSchema,
-	}
-}
-
-func (qg *QueryGraph) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "QueryGraph",
-		Other:        map[string]any{"Tables": qg.tableNames()},
 	}
 }
 

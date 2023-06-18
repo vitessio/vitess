@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -31,18 +30,64 @@ import (
 var reverseBits SingleColumn
 
 func init() {
-	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{})
 	if err != nil {
 		panic(err)
+	}
+	unknownParams := hv.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("reverse_bits test init: expected 0 unknown params")
 	}
 	reverseBits = hv.(SingleColumn)
 }
 
-func TestReverseBitsInfo(t *testing.T) {
-	assert.Equal(t, 1, reverseBits.Cost())
-	assert.Equal(t, "rr", reverseBits.String())
-	assert.True(t, reverseBits.IsUnique())
-	assert.False(t, reverseBits.NeedsVCursor())
+func reverseBitsCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "reverse_bits",
+		vindexName:   "reverse_bits",
+		vindexParams: vindexParams,
+
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "reverse_bits",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestReverseBitsCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		reverseBitsCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		reverseBitsCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		reverseBitsCreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"hello": "world",
+			},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestReverseBitsMap(t *testing.T) {

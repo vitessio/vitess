@@ -82,6 +82,7 @@ type (
 
 var (
 	releaseNotesPath = `changelog/`
+	numberOfThreads  = 10
 )
 
 const (
@@ -134,7 +135,6 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 
 	prefixType        = "Type: "
 	prefixComponent   = "Component: "
-	numberOfThreads   = 10
 	lengthOfSingleSHA = 40
 )
 
@@ -499,6 +499,7 @@ func main() {
 	pflag.StringVarP(&to, "to", "t", to, "to sha/tag/branch")
 	pflag.StringVarP(&versionName, "version", "v", "", "name of the version (has to be the following format: v11.0.0)")
 	pflag.StringVarP(&summaryFile, "summary", "s", "", "readme file on which there is a summary of the release")
+	pflag.IntVar(&numberOfThreads, "threads", numberOfThreads, "Define the number of threads used to fetch data from GitHub's API. Lower this number if you hit request limit errors.")
 	pflag.Parse()
 
 	// The -version flag must be of a valid format.

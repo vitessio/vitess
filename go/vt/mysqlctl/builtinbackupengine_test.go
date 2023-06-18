@@ -64,6 +64,9 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 		if err != nil {
 			return err
 		}
+		if _, err := f.Write([]byte("hello, world!")); err != nil {
+			return err
+		}
 		defer f.Close()
 	}
 
@@ -75,6 +78,12 @@ func TestExecuteBackup(t *testing.T) {
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
+	dataDir := path.Join(backupRoot, "datadir")
+	// Add some files under data directory to force backup to actually backup files.
+	require.NoError(t, createBackupDir(dataDir, "test1"))
+	require.NoError(t, createBackupDir(dataDir, "test2"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
 	ctx := context.Background()
@@ -126,6 +135,8 @@ func TestExecuteBackup(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	// mysqld.ShutdownTime = time.Minute
 
+	fakeStats := backupstats.NewFakeStats()
+
 	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
@@ -134,14 +145,54 @@ func TestExecuteBackup(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
+		Concurrency:  2,
 		HookExtraEnv: map[string]string{},
 		TopoServer:   ts,
 		Keyspace:     keyspace,
 		Shard:        shard,
+		Stats:        fakeStats,
 	}, bh)
 
 	require.NoError(t, err)
 	assert.True(t, ok)
+
+	var destinationCloseStats int
+	var destinationOpenStats int
+	var destinationWriteStats int
+	var sourceCloseStats int
+	var sourceOpenStats int
+	var sourceReadStats int
+
+	for _, sr := range fakeStats.ScopeReturns {
+		sfs := sr.(*backupstats.FakeStats)
+		switch sfs.ScopeV[backupstats.ScopeOperation] {
+		case "Destination:Close":
+			destinationCloseStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Destination:Open":
+			destinationOpenStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Destination:Write":
+			destinationWriteStats++
+			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+		case "Source:Close":
+			sourceCloseStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Source:Open":
+			sourceOpenStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Source:Read":
+			sourceReadStats++
+			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+		}
+	}
+
+	require.Equal(t, 4, destinationCloseStats)
+	require.Equal(t, 4, destinationOpenStats)
+	require.Equal(t, 4, destinationWriteStats)
+	require.Equal(t, 4, sourceCloseStats)
+	require.Equal(t, 4, sourceOpenStats)
+	require.Equal(t, 4, sourceReadStats)
 
 	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
 	mysqld.ShutdownTime = time.Minute           // reminder that shutdownDeadline is 1s
@@ -327,6 +378,9 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	bh = filebackupstorage.NewBackupHandle(nil, "", "", true)
 	mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+
+	fakeStats := backupstats.NewFakeStats()
+
 	restoreParams := mysqlctl.RestoreParams{
 		Cnf: &mysqlctl.Mycnf{
 			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
@@ -348,13 +402,51 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		StartTime:           time.Now(),
 		RestoreToPos:        mysql.Position{},
 		DryRun:              false,
-		Stats:               backupstats.NewFakeStats(),
+		Stats:               fakeStats,
 	}
 
 	// Successful restore.
 	bm, err := be.ExecuteRestore(ctx, restoreParams, bh)
 	assert.NoError(t, err)
 	assert.NotNil(t, bm)
+
+	var destinationCloseStats int
+	var destinationOpenStats int
+	var destinationWriteStats int
+	var sourceCloseStats int
+	var sourceOpenStats int
+	var sourceReadStats int
+
+	for _, sr := range fakeStats.ScopeReturns {
+		sfs := sr.(*backupstats.FakeStats)
+		switch sfs.ScopeV[backupstats.ScopeOperation] {
+		case "Destination:Close":
+			destinationCloseStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Destination:Open":
+			destinationOpenStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Destination:Write":
+			destinationWriteStats++
+			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+		case "Source:Close":
+			sourceCloseStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Source:Open":
+			sourceOpenStats++
+			require.Len(t, sfs.TimedIncrementCalls, 1)
+		case "Source:Read":
+			sourceReadStats++
+			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+		}
+	}
+
+	require.Equal(t, 4, destinationCloseStats)
+	require.Equal(t, 4, destinationOpenStats)
+	require.Equal(t, 4, destinationWriteStats)
+	require.Equal(t, 4, sourceCloseStats)
+	require.Equal(t, 4, sourceOpenStats)
+	require.Equal(t, 4, sourceReadStats)
 
 	// Restore using timed-out context
 	mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))

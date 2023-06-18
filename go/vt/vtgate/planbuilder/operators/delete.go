@@ -42,7 +42,7 @@ func (d *Delete) Introduces() semantics.TableSet {
 }
 
 // Clone implements the Operator interface
-func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {
+func (d *Delete) Clone([]ops.Operator) ops.Operator {
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,
@@ -60,12 +60,6 @@ func (d *Delete) TablesUsed() []string {
 
 func (d *Delete) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
-}
-
-func (d *Delete) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Delete",
-	}
 }
 
 func (d *Delete) ShortDescription() string {

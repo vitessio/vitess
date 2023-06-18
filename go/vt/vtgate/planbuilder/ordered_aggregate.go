@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -226,18 +225,6 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 
 // Primitive implements the logicalPlan interface
 func (oa *orderedAggregate) Primitive() engine.Primitive {
-	colls := map[int]collations.ID{}
-	for _, key := range oa.aggregates {
-		if key.CollationID != collations.Unknown {
-			colls[key.KeyCol] = key.CollationID
-		}
-	}
-	for _, key := range oa.groupByKeys {
-		if key.CollationID != collations.Unknown {
-			colls[key.KeyCol] = key.CollationID
-		}
-	}
-
 	input := oa.input.Primitive()
 	if len(oa.groupByKeys) == 0 {
 		return &engine.ScalarAggregate{
@@ -245,7 +232,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 			AggrOnEngine:        oa.aggrOnEngine,
 			Aggregates:          oa.aggregates,
 			TruncateColumnCount: oa.truncateColumnCount,
-			Collations:          colls,
 			Input:               input,
 		}
 	}
@@ -256,7 +242,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
-		Collations:          colls,
 		Input:               input,
 	}
 }

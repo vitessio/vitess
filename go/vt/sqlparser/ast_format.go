@@ -116,17 +116,17 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			InsertStr,
 			node.Comments, node.Ignore.ToString(),
-			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	case ReplaceAct:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			ReplaceStr,
 			node.Comments, node.Ignore.ToString(),
-			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	default:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			"Unkown Insert Action",
 			node.Comments, node.Ignore.ToString(),
-			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	}
 
 }
@@ -1392,18 +1392,13 @@ func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *IntervalExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit)
-}
-
-// Format formats the node.
-func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%#s(%#s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
+func (node *TimestampDiffExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "timestampdiff(%#s, %v, %v)", node.Unit.ToString(), node.Expr1, node.Expr2)
 }
 
 // Format formats the node.
 func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "extract(%#s from %v)", node.IntervalTypes.ToString(), node.Expr)
+	buf.astPrintf(node, "extract(%#s from %v)", node.IntervalType.ToString(), node.Expr)
 }
 
 // Format formats the node
@@ -1461,6 +1456,28 @@ func (node *RegexpSubstrExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ", %v", node.MatchType)
 	}
 	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *IntervalDateExpr) Format(buf *TrackedBuffer) {
+	switch node.Syntax {
+	case IntervalDateExprAdddate, IntervalDateExprSubdate:
+		if node.Unit == IntervalNone {
+			buf.astPrintf(node, "%s(%v, %v)", node.FnName(), node.Date, node.Interval)
+			return
+		}
+		fallthrough
+	case IntervalDateExprDateAdd, IntervalDateExprDateSub:
+		buf.astPrintf(node, "%s(%v, interval %v %#s)", node.FnName(), node.Date, node.Interval, node.Unit.ToString())
+	case IntervalDateExprBinaryAdd:
+		buf.astPrintf(node, "%l + interval %r %#s", node.Date, node.Interval, node.Unit.ToString())
+	case IntervalDateExprBinaryAddLeft:
+		buf.astPrintf(node, "interval %l %#s + %r", node.Interval, node.Unit.ToString(), node.Date)
+	case IntervalDateExprBinarySub:
+		buf.astPrintf(node, "%l - interval %r %#s", node.Date, node.Interval, node.Unit.ToString())
+	case IntervalDateExprTimestampadd:
+		buf.astPrintf(node, "timestampadd(%#s, %v, %v)", node.Unit.ToString(), node.Interval, node.Date)
+	}
 }
 
 // Format formats the node.
@@ -1611,7 +1628,11 @@ func (node *FromFirstLastClause) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *FramePoint) Format(buf *TrackedBuffer) {
 	if node.Expr != nil {
-		buf.astPrintf(node, " %v", node.Expr)
+		if node.Unit != IntervalNone {
+			buf.astPrintf(node, " interval %v %#s", node.Expr, node.Unit.ToString())
+		} else {
+			buf.astPrintf(node, " %v", node.Expr)
+		}
 	}
 	buf.astPrintf(node, " %s", node.Type.ToString())
 }
@@ -2864,6 +2885,67 @@ func (node *LinestrPropertyFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Linestring)
 	if node.PropertyDefArg != nil {
 		buf.astPrintf(node, ", %v", node.PropertyDefArg)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *PolygonPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Polygon)
+	if node.PropertyDefArg != nil {
+		buf.astPrintf(node, ", %v", node.PropertyDefArg)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomCollPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.GeomColl)
+	if node.PropertyDefArg != nil {
+		buf.astPrintf(node, ", %v", node.PropertyDefArg)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFromGeoHashExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.GeomType.ToString(), node.GeoHash)
+	if node.SridOpt != nil {
+		buf.astPrintf(node, ", %v", node.SridOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeoHashFromLatLongExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_geohash(%v, %v, %v)", node.Longitude, node.Latitude, node.MaxLength)
+}
+
+// Format formats the node
+func (node *GeoHashFromPointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_geohash(%v, %v)", node.Point, node.MaxLength)
+}
+
+// Format formats the node
+func (node *GeoJSONFromGeomExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_asgeojson(%v", node.Geom)
+	if node.MaxDecimalDigits != nil {
+		buf.astPrintf(node, ", %v", node.MaxDecimalDigits)
+	}
+	if node.Bitmask != nil {
+		buf.astPrintf(node, ", %v", node.Bitmask)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFromGeoJSONExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_geomfromgeojson(%v", node.GeoJSON)
+	if node.HigherDimHandlerOpt != nil {
+		buf.astPrintf(node, ", %v", node.HigherDimHandlerOpt)
+	}
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
 	}
 	buf.WriteByte(')')
 }

@@ -101,7 +101,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Version string "majorVersion.minorVersion.patchRelease"
-	version := tm.MysqlDaemon.GetVersionString()
+	version := tm.MysqlDaemon.GetVersionString(ctx)
 
 	// Version comment "select @@global.version_comment"
 	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)

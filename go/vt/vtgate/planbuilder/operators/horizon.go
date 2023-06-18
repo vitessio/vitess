@@ -36,7 +36,7 @@ type Horizon struct {
 	QP     *QueryProjection
 }
 
-func (h *Horizon) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (h *Horizon) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the Horizon operator cannot accept new columns")
 }
 
@@ -107,12 +107,6 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, err
 
 func (h *Horizon) setQP(qp *QueryProjection) {
 	h.QP = qp
-}
-
-func (h *Horizon) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Horizon",
-	}
 }
 
 func (h *Horizon) ShortDescription() string {

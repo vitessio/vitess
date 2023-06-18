@@ -17,6 +17,8 @@ limitations under the License.
 package rewrite
 
 import (
+	"fmt"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,7 +32,7 @@ type (
 		op ops.Operator, // op is the operator being visited
 		lhsTables semantics.TableSet, // lhsTables contains the TableSet for all table on the LHS of our parent
 		isRoot bool, // isRoot will be true for the root of the operator tree
-	) (ops.Operator, ApplyResult, error)
+	) (ops.Operator, *ApplyResult, error)
 
 	// ShouldVisit is used when we want to control which nodes and ancestors to visit and which to skip
 	ShouldVisit func(ops.Operator) VisitRule
@@ -38,23 +40,52 @@ type (
 	// ApplyResult tracks modifications to node and expression trees.
 	// Only return SameTree when it is acceptable to return the original
 	// input and discard the returned result as a performance improvement.
-	ApplyResult bool
+	ApplyResult struct {
+		Transformations []Rewrite
+	}
+
+	Rewrite struct {
+		Message string
+		Op      ops.Operator
+	}
 
 	// VisitRule signals to the rewriter if the children of this operator should be visited or not
 	VisitRule bool
 )
 
-const (
-	SameTree ApplyResult = false
-	NewTree  ApplyResult = true
+var (
+	SameTree *ApplyResult = nil
+)
 
+const (
 	VisitChildren VisitRule = true
 	SkipChildren  VisitRule = false
 )
 
+func NewTree(message string, op ops.Operator) *ApplyResult {
+	if DebugOperatorTree {
+		fmt.Println(">>>>>>>> " + message)
+	}
+	return &ApplyResult{Transformations: []Rewrite{{Message: message, Op: op}}}
+}
+
+func (ar *ApplyResult) Merge(other *ApplyResult) *ApplyResult {
+	if ar == nil {
+		return other
+	}
+	if other == nil {
+		return ar
+	}
+	return &ApplyResult{Transformations: append(ar.Transformations, other.Transformations...)}
+}
+
+func (ar *ApplyResult) Changed() bool {
+	return ar != nil
+}
+
 // Visit allows for the walking of the operator tree. If any error is returned, the walk is aborted
 func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
-	_, _, err := breakableTopDown(root, func(op ops.Operator) (ops.Operator, ApplyResult, VisitRule, error) {
+	_, _, err := breakableTopDown(root, func(op ops.Operator) (ops.Operator, *ApplyResult, VisitRule, error) {
 		err := visitor(op)
 		if err != nil {
 			return nil, SameTree, SkipChildren, err
@@ -80,6 +111,8 @@ func BottomUp(
 	return op, nil
 }
 
+var DebugOperatorTree = false
+
 // FixedPointBottomUp rewrites an operator tree much like BottomUp does,
 // but does the rewriting repeatedly, until a tree walk is done with no changes to the tree.
 func FixedPointBottomUp(
@@ -88,15 +121,20 @@ func FixedPointBottomUp(
 	visit VisitF,
 	shouldVisit ShouldVisit,
 ) (op ops.Operator, err error) {
-	id := NewTree
+	var id *ApplyResult
 	op = root
-	for id == NewTree {
+	// will loop while the rewriting changes anything
+	for ok := true; ok; ok = id != SameTree {
+		if DebugOperatorTree {
+			fmt.Println(ops.ToTree(op))
+		}
 		// Continue the top-down rewriting process as long as changes were made during the last traversal
 		op, id, err = bottomUp(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return op, nil
 }
 
@@ -141,29 +179,29 @@ func TopDown(
 }
 
 // Swap takes a tree like a->b->c and swaps `a` and `b`, so we end up with b->a->c
-func Swap(a, b ops.Operator) (ops.Operator, error) {
-	c := b.Inputs()
+func Swap(parent, child ops.Operator, message string) (ops.Operator, *ApplyResult, error) {
+	c := child.Inputs()
 	if len(c) != 1 {
-		return nil, vterrors.VT13001("Swap can only be used on single input operators")
+		return nil, nil, vterrors.VT13001("Swap can only be used on single input operators")
 	}
 
-	aInputs := slices.Clone(a.Inputs())
+	aInputs := slices.Clone(parent.Inputs())
 	var tmp ops.Operator
 	for i, in := range aInputs {
-		if in == b {
+		if in == child {
 			tmp = aInputs[i]
 			aInputs[i] = c[0]
 			break
 		}
 	}
 	if tmp == nil {
-		return nil, vterrors.VT13001("Swap can only be used when the second argument is an input to the first")
+		return nil, nil, vterrors.VT13001("Swap can only be used when the second argument is an input to the first")
 	}
 
-	b.SetInputs([]ops.Operator{a})
-	a.SetInputs(aInputs)
+	child.SetInputs([]ops.Operator{parent})
+	parent.SetInputs(aInputs)
 
-	return b, nil
+	return child, NewTree(message, parent), nil
 }
 
 func bottomUp(
@@ -173,13 +211,13 @@ func bottomUp(
 	rewriter VisitF,
 	shouldVisit ShouldVisit,
 	isRoot bool,
-) (ops.Operator, ApplyResult, error) {
+) (ops.Operator, *ApplyResult, error) {
 	if !shouldVisit(root) {
 		return root, SameTree, nil
 	}
 
 	oldInputs := root.Inputs()
-	anythingChanged := false
+	var anythingChanged *ApplyResult
 	newInputs := make([]ops.Operator, len(oldInputs))
 	childID := rootID
 
@@ -198,54 +236,50 @@ func bottomUp(
 		}
 		in, changed, err := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
 		if err != nil {
-			return nil, SameTree, err
+			return nil, nil, err
 		}
-		if changed == NewTree {
-			anythingChanged = true
-		}
+		anythingChanged = anythingChanged.Merge(changed)
 		newInputs[i] = in
 	}
 
-	if anythingChanged {
+	if anythingChanged.Changed() {
 		root = root.Clone(newInputs)
 	}
 
 	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
 	if err != nil {
-		return nil, SameTree, err
+		return nil, nil, err
 	}
-	if anythingChanged {
-		treeIdentity = NewTree
-	}
-	return newOp, treeIdentity, nil
+	anythingChanged = anythingChanged.Merge(treeIdentity)
+	return newOp, anythingChanged, nil
 }
 
 func breakableTopDown(
 	in ops.Operator,
-	rewriter func(ops.Operator) (ops.Operator, ApplyResult, VisitRule, error),
-) (ops.Operator, ApplyResult, error) {
+	rewriter func(ops.Operator) (ops.Operator, *ApplyResult, VisitRule, error),
+) (ops.Operator, *ApplyResult, error) {
 	newOp, identity, visit, err := rewriter(in)
 	if err != nil || visit == SkipChildren {
 		return newOp, identity, err
 	}
 
-	anythingChanged := identity == NewTree
+	var anythingChanged *ApplyResult
 
 	oldInputs := newOp.Inputs()
 	newInputs := make([]ops.Operator, len(oldInputs))
 	for i, oldInput := range oldInputs {
 		newInputs[i], identity, err = breakableTopDown(oldInput, rewriter)
-		anythingChanged = anythingChanged || identity == NewTree
+		anythingChanged = anythingChanged.Merge(identity)
 		if err != nil {
 			return nil, SameTree, err
 		}
 	}
 
-	if anythingChanged {
-		return newOp.Clone(newInputs), NewTree, nil
+	if anythingChanged.Changed() {
+		return newOp, SameTree, nil
 	}
 
-	return newOp, SameTree, nil
+	return newOp.Clone(newInputs), anythingChanged, nil
 }
 
 // topDown is a helper function that recursively traverses the operator tree from the
@@ -258,22 +292,21 @@ func topDown(
 	rewriter VisitF,
 	shouldVisit ShouldVisit,
 	isRoot bool,
-) (ops.Operator, ApplyResult, error) {
-	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
+) (ops.Operator, *ApplyResult, error) {
+	newOp, anythingChanged, err := rewriter(root, rootID, isRoot)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	if !shouldVisit(root) {
-		return newOp, treeIdentity, nil
+		return newOp, anythingChanged, nil
 	}
 
-	if treeIdentity == NewTree {
+	if anythingChanged.Changed() {
 		root = newOp
 	}
 
 	oldInputs := root.Inputs()
-	anythingChanged := treeIdentity == NewTree
 	newInputs := make([]ops.Operator, len(oldInputs))
 	childID := rootID
 
@@ -285,16 +318,14 @@ func topDown(
 		}
 		in, changed, err := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
 		if err != nil {
-			return nil, false, err
+			return nil, nil, err
 		}
-		if changed == NewTree {
-			anythingChanged = true
-		}
+		anythingChanged = anythingChanged.Merge(changed)
 		newInputs[i] = in
 	}
 
-	if anythingChanged {
-		return root.Clone(newInputs), NewTree, nil
+	if anythingChanged != SameTree {
+		return root.Clone(newInputs), anythingChanged, nil
 	}
 
 	return root, SameTree, nil

@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -51,9 +52,7 @@ const (
 	copyStateTableName         = "copy_state"
 	postCopyActionTableName    = "post_copy_action"
 
-	maxRows                      = 10000
-	throttlerVReplicationAppName = "vreplication"
-	throttlerOnlineDDLAppName    = "online-ddl"
+	maxRows = 10000
 )
 
 const (
@@ -136,7 +135,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
 		ec:              newExternalConnector(config.ExternalConnections),
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerVReplicationAppName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
 	}
 
 	return vre
@@ -319,7 +318,6 @@ func (vre *Engine) Close() {
 	// Wait for long-running functions to exit.
 	vre.wg.Wait()
 
-	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
 
 	vre.updateStats()

@@ -8018,5 +8018,147 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Query with non-plannable lookup vindex",
+    "query": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from user_metadata where 1 != 1",
+        "Query": "select * from user_metadata where user_metadata.non_planable = 'foo'",
+        "Table": "user_metadata",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "non_planable_user_map"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from user_metadata where 1 != 1",
+        "Query": "select * from user_metadata where user_metadata.non_planable = 'foo'",
+        "Table": "user_metadata",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "non_planable_user_map"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    }
+  },
+  {
+    "comment": "join query with lookup and join on different vindex column",
+    "query": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_id": 0
+        },
+        "TableName": "`user`_user_metadata",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id from `user` as u where 1 != 1",
+            "Query": "select u.id from `user` as u where u.`name` = 'foo'",
+            "Table": "`user`",
+            "Values": [
+              "VARCHAR(\"foo\")"
+            ],
+            "Vindex": "name_user_map"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_metadata as um where 1 != 1",
+            "Query": "select 1 from user_metadata as um where um.user_id = :u_id",
+            "Table": "user_metadata",
+            "Values": [
+              ":u_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "name_user_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+            "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+            "Table": "name_user_vdx",
+            "Values": [
+              "::name"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id from `user` as u, user_metadata as um where 1 != 1",
+            "Query": "select u.id from `user` as u, user_metadata as um where u.`name` = 'foo' and u.id = um.user_id",
+            "Table": "`user`, user_metadata"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_metadata"
+      ]
+    }
   }
 ]

@@ -201,7 +201,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
 	if hostname == "" {
 		var err error
@@ -262,7 +262,6 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		Type:                 tabletType,
 		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
-		DbServerVersion:      dbServerVersion,
 		DefaultConnCollation: uint32(charset),
 	}, nil
 }
@@ -745,8 +744,10 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 		// instance of a startup timeout). Upon running this code
 		// again, we want to fix ShardReplication.
 		if updateErr := topo.UpdateTabletReplicationData(ctx, tm.TopoServer, tablet); updateErr != nil {
+			log.Errorf("UpdateTabletReplicationData failed for tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), updateErr)
 			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
 		}
+		log.Infof("Successfully updated tablet replication data for alias: %v", topoproto.TabletAliasString(tablet.Alias))
 
 		// Then overwrite everything, ignoring version mismatch.
 		if err := tm.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {

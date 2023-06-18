@@ -16,7 +16,10 @@ limitations under the License.
 
 package sqlparser
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/sqltypes"
+)
 
 /*
 This is the Vitess AST. This file should only contain pure struct declarations,
@@ -322,10 +325,12 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action     InsertAction
-		Comments   *ParsedComments
-		Ignore     Ignore
-		Table      TableName
+		Action   InsertAction
+		Comments *ParsedComments
+		Ignore   Ignore
+		// The Insert as syntax still take TableName.
+		// The change is made for semantic analyzer as it takes AliasedTableExpr to provide TableInfo
+		Table      *AliasedTableExpr
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
@@ -673,9 +678,6 @@ type (
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// IntervalTypes is an enum to get types of intervals
-	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -2154,6 +2156,7 @@ type (
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FramePoint struct {
 		Type FramePointType
+		Unit IntervalType
 		Expr Expr
 	}
 
@@ -2340,24 +2343,17 @@ type (
 		Expr         Expr
 	}
 
-	// IntervalExpr represents a date-time INTERVAL expression.
-	IntervalExpr struct {
-		Expr Expr
-		Unit string
-	}
-
-	// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
-	TimestampFuncExpr struct {
-		Name  string
+	// TimestampDiffExpr represents the function and arguments for TIMESTAMPDIFF functions.
+	TimestampDiffExpr struct {
 		Expr1 Expr
 		Expr2 Expr
-		Unit  string
+		Unit  IntervalType
 	}
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		IntervalTypes IntervalTypes
-		Expr          Expr
+		IntervalType IntervalType
+		Expr         Expr
 	}
 
 	// CollateExpr represents dynamic collate operator.
@@ -2758,7 +2754,7 @@ type (
 		AxisOrderOpt Expr
 	}
 
-	// GeomFromWkbType is an enum to get the types of wkt functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	// GeomFromWkbType is an enum to get the types of wkb functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
 	GeomFromWkbType int8
 
 	GeomFromWKBExpr struct {
@@ -2777,7 +2773,7 @@ type (
 		AxisOrderOpt Expr
 	}
 
-	// GeomPropertyType is an enum to get the types of geom format functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
+	// GeomPropertyType is an enum to get the types of geom property functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
 	GeomPropertyType int8
 
 	GeomPropertyFuncExpr struct {
@@ -2785,7 +2781,7 @@ type (
 		Geom     Expr
 	}
 
-	// PointPropertyType is an enum to get the types of geom format functions with possible values: XCordinate YCordinate Latitude Longitude
+	// PointPropertyType is an that enumerates the kind of point property functions: XCordinate YCordinate Latitude Longitude
 	PointPropertyType int8
 
 	PointPropertyFuncExpr struct {
@@ -2794,13 +2790,63 @@ type (
 		ValueToSet Expr
 	}
 
-	// Linestring is an enum to get the types of geom format functions with possible values: EndPoint IsClosed Length NumPoints PointN StartPoint
+	// LinestrPropType is an enum that enumerates the kind of line string property functions: EndPoint IsClosed Length NumPoints PointN StartPoint
 	LinestrPropType int8
 
 	LinestrPropertyFuncExpr struct {
 		Property       LinestrPropType
 		Linestring     Expr
 		PropertyDefArg Expr
+	}
+
+	// PolygonPropType is an enum that enumerates the kind of polygon property functions: Area Centroid ExteriorRing InteriorRingN NumInteriorRing
+	PolygonPropType int8
+
+	PolygonPropertyFuncExpr struct {
+		Property       PolygonPropType
+		Polygon        Expr
+		PropertyDefArg Expr
+	}
+
+	// GeomCollPropType is an enumthat enumerates the kind of geom coll property functions with possible values: GeometryN NumGeometries
+	GeomCollPropType int8
+
+	GeomCollPropertyFuncExpr struct {
+		Property       GeomCollPropType
+		GeomColl       Expr
+		PropertyDefArg Expr
+	}
+
+	GeoHashFromLatLongExpr struct {
+		Latitude  Expr
+		Longitude Expr
+		MaxLength Expr
+	}
+
+	GeoHashFromPointExpr struct {
+		Point     Expr
+		MaxLength Expr
+	}
+
+	// GeomFromHashType is an enum that determines what kind geom being retireived from hash
+	GeomFromHashType int8
+
+	GeomFromGeoHashExpr struct {
+		GeomType GeomFromHashType
+		GeoHash  Expr
+		SridOpt  Expr
+	}
+
+	GeoJSONFromGeomExpr struct {
+		Geom             Expr
+		MaxDecimalDigits Expr
+		Bitmask          Expr
+	}
+
+	GeomFromGeoJSONExpr struct {
+		GeoJSON             Expr
+		HigherDimHandlerOpt Expr // This value determine how the higher dimensions are handled while converting json to geometry
+		Srid                Expr
 	}
 
 	AggrFunc interface {
@@ -2817,6 +2863,33 @@ type (
 	}
 
 	CountStar struct {
+		_ bool
+		// TL;DR; This makes sure that reference equality checks works as expected
+		//
+		// You're correct that this might seem a bit strange at first glance.
+		// It's a quirk of Go's handling of empty structs. In Go, two instances of an empty struct are considered
+		// identical, which can be problematic when using these as keys in maps.
+		// They would be treated as the same key and potentially lead to incorrect map behavior.
+		//
+		// Here's a brief example:
+		//
+		// ```golang
+		// func TestWeirdGo(t *testing.T) {
+		// 	type CountStar struct{}
+		//
+		// 	cs1 := &CountStar{}
+		// 	cs2 := &CountStar{}
+		//  if cs1 == cs2 {
+		// 	  panic("what the what!?")
+		//  }
+		// }
+		// ```
+		//
+		// In the above code, cs1 and cs2, despite being distinct variables, would be treated as the same object.
+		//
+		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
+		// This ensures that each instance of `CountStar` is treated as a separate object,
+		// even in the context of out semantic state which uses these objects as map keys.
 	}
 
 	Avg struct {
@@ -2889,7 +2962,7 @@ type (
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
 		Expr         Expr
 		Pattern      Expr
@@ -2900,7 +2973,7 @@ type (
 	}
 
 	// RegexpLikeExpr represents REGEXP_LIKE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
 		Expr      Expr
 		Pattern   Expr
@@ -2908,7 +2981,7 @@ type (
 	}
 
 	// RegexpReplaceExpr represents REGEXP_REPLACE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
 	RegexpReplaceExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2919,13 +2992,23 @@ type (
 	}
 
 	// RegexpSubstrExpr represents REGEXP_SUBSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
 	RegexpSubstrExpr struct {
 		Expr       Expr
 		Pattern    Expr
 		Occurrence Expr
 		Position   Expr
 		MatchType  Expr
+	}
+
+	IntervalType = datetime.IntervalType
+
+	// IntervalDateExpr represents ADDDATE(), DATE_ADD()
+	IntervalDateExpr struct {
+		Syntax   IntervalExprSyntax
+		Date     Expr
+		Interval Expr
+		Unit     IntervalType
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
@@ -3054,10 +3137,9 @@ func (ListArg) iExpr()                             {}
 func (*BinaryExpr) iExpr()                         {}
 func (*UnaryExpr) iExpr()                          {}
 func (*IntroducerExpr) iExpr()                     {}
-func (*IntervalExpr) iExpr()                       {}
 func (*CollateExpr) iExpr()                        {}
 func (*FuncExpr) iExpr()                           {}
-func (*TimestampFuncExpr) iExpr()                  {}
+func (*TimestampDiffExpr) iExpr()                  {}
 func (*ExtractFuncExpr) iExpr()                    {}
 func (*WeightStringFuncExpr) iExpr()               {}
 func (*CurTimeFuncExpr) iExpr()                    {}
@@ -3101,6 +3183,7 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
+func (*IntervalDateExpr) iExpr()                   {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
@@ -3142,10 +3225,17 @@ func (*GeomFormatExpr) iExpr()                     {}
 func (*GeomPropertyFuncExpr) iExpr()               {}
 func (*PointPropertyFuncExpr) iExpr()              {}
 func (*LinestrPropertyFuncExpr) iExpr()            {}
+func (*PolygonPropertyFuncExpr) iExpr()            {}
+func (*GeomCollPropertyFuncExpr) iExpr()           {}
+func (*GeoHashFromLatLongExpr) iExpr()             {}
+func (*GeoHashFromPointExpr) iExpr()               {}
+func (*GeomFromGeoHashExpr) iExpr()                {}
+func (*GeoJSONFromGeomExpr) iExpr()                {}
+func (*GeomFromGeoJSONExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
-func (*TimestampFuncExpr) iCallable()                  {}
+func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
@@ -3185,6 +3275,7 @@ func (*RegexpInstrExpr) iCallable()                    {}
 func (*RegexpLikeExpr) iCallable()                     {}
 func (*RegexpReplaceExpr) iCallable()                  {}
 func (*RegexpSubstrExpr) iCallable()                   {}
+func (*IntervalDateExpr) iCallable()                   {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}
@@ -3207,6 +3298,13 @@ func (*GeomFormatExpr) iCallable()                     {}
 func (*GeomPropertyFuncExpr) iCallable()               {}
 func (*PointPropertyFuncExpr) iCallable()              {}
 func (*LinestrPropertyFuncExpr) iCallable()            {}
+func (*PolygonPropertyFuncExpr) iCallable()            {}
+func (*GeomCollPropertyFuncExpr) iCallable()           {}
+func (*GeoHashFromLatLongExpr) iCallable()             {}
+func (*GeoHashFromPointExpr) iCallable()               {}
+func (*GeomFromGeoHashExpr) iCallable()                {}
+func (*GeoJSONFromGeomExpr) iCallable()                {}
+func (*GeomFromGeoJSONExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

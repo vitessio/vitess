@@ -72,6 +72,7 @@ var (
 	VT09011 = errorWithState("VT09011", vtrpcpb.Code_FAILED_PRECONDITION, UnknownStmtHandler, "Unknown prepared statement handler (%s) given to %s", "The prepared statement is not available")
 	VT09012 = errorWithoutState("VT09012", vtrpcpb.Code_FAILED_PRECONDITION, "%s statement with %s tablet not allowed", "This type of statement is not allowed on the given tablet.")
 	VT09013 = errorWithoutState("VT09013", vtrpcpb.Code_FAILED_PRECONDITION, "semi-sync plugins are not loaded", "Durability policy wants Vitess to use semi-sync, but the MySQL instances don't have the semi-sync plugin loaded.")
+	VT09014 = errorWithoutState("VT09014", vtrpcpb.Code_FAILED_PRECONDITION, "vindex cannot be modified", "The vindex cannot be used as table in DML statement")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
@@ -134,6 +135,7 @@ var (
 		VT09011,
 		VT09012,
 		VT09013,
+		VT09014,
 		VT10001,
 		VT12001,
 		VT13001,

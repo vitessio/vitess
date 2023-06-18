@@ -153,9 +153,9 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 	}
 }
 
-func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	var newSources []ops.Operator
-	anythingChanged := false
+	var anythingChanged *rewrite.ApplyResult
 	for _, source := range u.Sources {
 		var other *Union
 		horizon, ok := source.(*Horizon)
@@ -169,7 +169,7 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.App
 			newSources = append(newSources, source)
 			continue
 		}
-		anythingChanged = true
+		anythingChanged = anythingChanged.Merge(rewrite.NewTree("merged UNIONs", other))
 		switch {
 		case len(other.Ordering) == 0 && !other.Distinct:
 			fallthrough
@@ -181,24 +181,14 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.App
 			newSources = append(newSources, other)
 		}
 	}
-	if anythingChanged {
+	if anythingChanged != rewrite.SameTree {
 		u.Sources = newSources
 	}
-	identity := rewrite.SameTree
-	if anythingChanged {
-		identity = rewrite.NewTree
-	}
 
-	return u, identity, nil
+	return u, anythingChanged, nil
 }
 
 func (u *Union) NoLHSTableSet() {}
-
-func (u *Union) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Union",
-	}
-}
 
 func (u *Union) ShortDescription() string {
 	return ""

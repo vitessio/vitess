@@ -182,8 +182,20 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeoHashFromLatLongExpr:
+		return a.rewriteRefOfGeoHashFromLatLongExpr(parent, node, replacer)
+	case *GeoHashFromPointExpr:
+		return a.rewriteRefOfGeoHashFromPointExpr(parent, node, replacer)
+	case *GeoJSONFromGeomExpr:
+		return a.rewriteRefOfGeoJSONFromGeomExpr(parent, node, replacer)
+	case *GeomCollPropertyFuncExpr:
+		return a.rewriteRefOfGeomCollPropertyFuncExpr(parent, node, replacer)
 	case *GeomFormatExpr:
 		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
+	case *GeomFromGeoHashExpr:
+		return a.rewriteRefOfGeomFromGeoHashExpr(parent, node, replacer)
+	case *GeomFromGeoJSONExpr:
+		return a.rewriteRefOfGeomFromGeoJSONExpr(parent, node, replacer)
 	case *GeomFromTextExpr:
 		return a.rewriteRefOfGeomFromTextExpr(parent, node, replacer)
 	case *GeomFromWKBExpr:
@@ -210,8 +222,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
-	case *IntervalExpr:
-		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -374,6 +386,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
+	case *PolygonPropertyFuncExpr:
+		return a.rewriteRefOfPolygonPropertyFuncExpr(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case *PurgeBinaryLogs:
@@ -476,8 +490,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfTableSpec(parent, node, replacer)
 	case *TablespaceOperation:
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
-	case *TimestampFuncExpr:
-		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TimestampDiffExpr:
+		return a.rewriteRefOfTimestampDiffExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *TruncateTable:
@@ -3039,6 +3053,144 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	}
 	return true
 }
+func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *GeoHashFromLatLongExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Latitude, func(newNode, parent SQLNode) {
+		parent.(*GeoHashFromLatLongExpr).Latitude = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Longitude, func(newNode, parent SQLNode) {
+		parent.(*GeoHashFromLatLongExpr).Longitude = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MaxLength, func(newNode, parent SQLNode) {
+		parent.(*GeoHashFromLatLongExpr).MaxLength = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *GeoHashFromPointExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Point, func(newNode, parent SQLNode) {
+		parent.(*GeoHashFromPointExpr).Point = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MaxLength, func(newNode, parent SQLNode) {
+		parent.(*GeoHashFromPointExpr).MaxLength = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJSONFromGeomExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
+		parent.(*GeoJSONFromGeomExpr).Geom = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MaxDecimalDigits, func(newNode, parent SQLNode) {
+		parent.(*GeoJSONFromGeomExpr).MaxDecimalDigits = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Bitmask, func(newNode, parent SQLNode) {
+		parent.(*GeoJSONFromGeomExpr).Bitmask = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node *GeomCollPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.GeomColl, func(newNode, parent SQLNode) {
+		parent.(*GeomCollPropertyFuncExpr).GeomColl = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
+		parent.(*GeomCollPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomFormatExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3058,6 +3210,75 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 	}
 	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
 		parent.(*GeomFormatExpr).AxisOrderOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *GeomFromGeoHashExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.GeoHash, func(newNode, parent SQLNode) {
+		parent.(*GeomFromGeoHashExpr).GeoHash = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.SridOpt, func(newNode, parent SQLNode) {
+		parent.(*GeomFromGeoHashExpr).SridOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *GeomFromGeoJSONExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.GeoJSON, func(newNode, parent SQLNode) {
+		parent.(*GeomFromGeoJSONExpr).GeoJSON = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.HigherDimHandlerOpt, func(newNode, parent SQLNode) {
+		parent.(*GeomFromGeoJSONExpr).HigherDimHandlerOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Srid, func(newNode, parent SQLNode) {
+		parent.(*GeomFromGeoJSONExpr).Srid = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3432,8 +3653,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*Insert).Table = newNode.(TableName)
+	if !a.rewriteRefOfAliasedTableExpr(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*Insert).Table = newNode.(*AliasedTableExpr)
 	}) {
 		return false
 	}
@@ -3509,7 +3730,7 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}
 	return true
 }
-func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *IntervalDateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -3521,8 +3742,13 @@ func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExp
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*IntervalExpr).Expr = newNode.(Expr)
+	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
+		parent.(*IntervalDateExpr).Date = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Interval, func(newNode, parent SQLNode) {
+		parent.(*IntervalDateExpr).Interval = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6023,6 +6249,38 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 	}
 	return true
 }
+func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *PolygonPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Polygon, func(newNode, parent SQLNode) {
+		parent.(*PolygonPropertyFuncExpr).Polygon = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
+		parent.(*PolygonPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7672,7 +7930,7 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 	}
 	return true
 }
-func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *TimestampDiffExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -7685,12 +7943,12 @@ func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *Timest
 		}
 	}
 	if !a.rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
-		parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
+		parent.(*TimestampDiffExpr).Expr1 = newNode.(Expr)
 	}) {
 		return false
 	}
 	if !a.rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
-		parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
+		parent.(*TimestampDiffExpr).Expr2 = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -8827,8 +9085,20 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeoHashFromLatLongExpr:
+		return a.rewriteRefOfGeoHashFromLatLongExpr(parent, node, replacer)
+	case *GeoHashFromPointExpr:
+		return a.rewriteRefOfGeoHashFromPointExpr(parent, node, replacer)
+	case *GeoJSONFromGeomExpr:
+		return a.rewriteRefOfGeoJSONFromGeomExpr(parent, node, replacer)
+	case *GeomCollPropertyFuncExpr:
+		return a.rewriteRefOfGeomCollPropertyFuncExpr(parent, node, replacer)
 	case *GeomFormatExpr:
 		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
+	case *GeomFromGeoHashExpr:
+		return a.rewriteRefOfGeomFromGeoHashExpr(parent, node, replacer)
+	case *GeomFromGeoJSONExpr:
+		return a.rewriteRefOfGeomFromGeoJSONExpr(parent, node, replacer)
 	case *GeomFromTextExpr:
 		return a.rewriteRefOfGeomFromTextExpr(parent, node, replacer)
 	case *GeomFromWKBExpr:
@@ -8839,6 +9109,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *JSONArrayExpr:
@@ -8917,6 +9189,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
+	case *PolygonPropertyFuncExpr:
+		return a.rewriteRefOfPolygonPropertyFuncExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -8929,8 +9203,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
-	case *TimestampFuncExpr:
-		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TimestampDiffExpr:
+		return a.rewriteRefOfTimestampDiffExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UpdateXMLExpr:
@@ -9095,8 +9369,20 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeoHashFromLatLongExpr:
+		return a.rewriteRefOfGeoHashFromLatLongExpr(parent, node, replacer)
+	case *GeoHashFromPointExpr:
+		return a.rewriteRefOfGeoHashFromPointExpr(parent, node, replacer)
+	case *GeoJSONFromGeomExpr:
+		return a.rewriteRefOfGeoJSONFromGeomExpr(parent, node, replacer)
+	case *GeomCollPropertyFuncExpr:
+		return a.rewriteRefOfGeomCollPropertyFuncExpr(parent, node, replacer)
 	case *GeomFormatExpr:
 		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
+	case *GeomFromGeoHashExpr:
+		return a.rewriteRefOfGeomFromGeoHashExpr(parent, node, replacer)
+	case *GeomFromGeoJSONExpr:
+		return a.rewriteRefOfGeomFromGeoJSONExpr(parent, node, replacer)
 	case *GeomFromTextExpr:
 		return a.rewriteRefOfGeomFromTextExpr(parent, node, replacer)
 	case *GeomFromWKBExpr:
@@ -9107,8 +9393,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
-	case *IntervalExpr:
-		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -9205,6 +9491,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
+	case *PolygonPropertyFuncExpr:
+		return a.rewriteRefOfPolygonPropertyFuncExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -9227,8 +9515,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
-	case *TimestampFuncExpr:
-		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TimestampDiffExpr:
+		return a.rewriteRefOfTimestampDiffExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
