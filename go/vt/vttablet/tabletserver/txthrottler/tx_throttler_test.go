@@ -127,15 +127,15 @@ func TestEnabledThrottler(t *testing.T) {
 
 	assert.Nil(t, throttlerImpl.Open())
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
-  assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttler.topoWatchers.Counts())
+	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttlerImpl.topoWatchers.Counts())
 
 	assert.False(t, throttlerImpl.Throttle(100))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Get())
 	assert.Zero(t, throttlerImpl.requestsThrottled.Get())
 
 	throttlerImpl.state.StatsUpdate(tabletStats) // This calls replication lag thing
-  assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttler.healthChecksReadTotal.Counts())
-	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttlerImpl.healthChecksReadTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttlerImpl.healthChecksRecordedTotal.Counts())
 	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			Cell:       "cell2",
@@ -144,8 +144,8 @@ func TestEnabledThrottler(t *testing.T) {
 	}
 	// This call should not be forwarded to the go/vt/throttlerImpl.Throttler object.
 	throttlerImpl.state.StatsUpdate(rdonlyTabletStats)
-	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1, "cell2.RDONLY": 1}, throttler.healthChecksReadTotal.Counts())
-	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1, "cell2.RDONLY": 1}, throttlerImpl.healthChecksReadTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttlerImpl.healthChecksRecordedTotal.Counts())
 
 	// The second throttle call should reject.
 	assert.True(t, throttlerImpl.Throttle(100))
@@ -158,7 +158,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Get())
 	throttlerImpl.Close()
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
-  assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
+	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
 }
 
 func TestNewTxThrottler(t *testing.T) {

@@ -195,9 +195,14 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		// is immutable.
 		healthCheckCells := env.Config().TxThrottlerHealthCheckCells
 
+		tabletTypes := make(map[topodatapb.TabletType]bool, len(*env.Config().TxThrottlerTabletTypes))
+		for _, tabletType := range *env.Config().TxThrottlerTabletTypes {
+			tabletTypes[tabletType] = true
+		}
+
 		throttlerConfig = &txThrottlerConfig{
 			enabled:          true,
-			tabletTypes:      env.Config().TxThrottlerTabletTypes,
+			tabletTypes:      tabletTypes,
 			throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
 			healthCheckCells: healthCheckCells,
 		}
@@ -206,7 +211,7 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	}
 
 	return &txThrottler{
-		config:           config,
+		config:           throttlerConfig,
 		topoServer:       topoServer,
 		throttlerRunning: env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
 		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel("TransactionThrottlerTopoWatchers", "transaction throttler topology watchers", "cell"),
