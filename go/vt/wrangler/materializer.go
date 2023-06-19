@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -821,7 +820,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 			if err != nil {
 				return err
 			}
-			state := row[1].ToString()
+			state := binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row[1].ToString()])
 			message := row[2].ToString()
 			var bls binlogdatapb.BinlogSource
 			sourceBytes, err := row[3].ToBytes()
@@ -834,12 +833,12 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 			if sourceVindex.Owner == "" || !bls.StopAfterCopy {
 				// If there's no owner or we've requested that the workflow NOT be stopped
 				// after the copy phase completes, then all streams need to be running.
-				if state != binlogplayer.BlpRunning {
+				if state != binlogdatapb.VReplicationWorkflowState_Running {
 					return fmt.Errorf("stream %d for %v.%v is not in Running state: %v", id, targetShard.Keyspace(), targetShard.ShardName(), state)
 				}
 			} else {
 				// If there is an owner, all streams need to be stopped after copy.
-				if state != binlogplayer.BlpStopped || !strings.Contains(message, "Stopped after copy") {
+				if state != binlogdatapb.VReplicationWorkflowState_Stopped || !strings.Contains(message, "Stopped after copy") {
 					return fmt.Errorf("stream %d for %v.%v is not in Stopped after copy state: %v, %v", id, targetShard.Keyspace(), targetShard.ShardName(), state, message)
 				}
 			}
@@ -1247,7 +1246,7 @@ func stripTableConstraints(ddl string) (string, error) {
 }
 
 func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
-	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{.dbname}}")
+	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "{{.dbname}}")
 
 	for _, sourceShard := range mz.sourceShards {
 		// Don't create streams from sources which won't contain data for the target shard.

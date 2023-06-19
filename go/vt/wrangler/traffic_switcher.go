@@ -1328,7 +1328,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias,
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
-				binlogplayer.BlpStopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
+				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {
 			return err
 		}

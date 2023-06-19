@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -35,7 +36,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -66,7 +66,7 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 		if len(req.Cells) == 0 || strings.TrimSpace(req.Cells[0]) == "" {
 			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
 		}
-		wfState := "Stopped"
+		wfState := binlogdatapb.VReplicationWorkflowState_Stopped.String()
 		tabletTypesStr := topoprotopb.MakeStringTypeCSV(req.TabletTypes)
 		if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
 			tabletTypesStr = discovery.InOrderHint + tabletTypesStr

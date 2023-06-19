@@ -28728,12 +28728,13 @@ export namespace binlogdata {
 
     /** VReplicationWorkflowState enum. */
     enum VReplicationWorkflowState {
-        Init = 0,
-        Stopped = 1,
-        Copying = 2,
-        Running = 3,
-        Error = 4,
-        Lagging = 5
+        Unknown = 0,
+        Init = 1,
+        Stopped = 2,
+        Copying = 3,
+        Running = 4,
+        Error = 5,
+        Lagging = 6
     }
 
     /** Properties of a BinlogSource. */

@@ -170,7 +170,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm workflow is still running fine
-	waitForWorkflowState(t, vc, ksWorkflow, "Running")
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	// Confirm new col does not exist on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
@@ -200,7 +200,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm that the worfklow stopped because of the DDL
-	waitForWorkflowState(t, vc, ksWorkflow, "Stopped", fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
@@ -215,7 +215,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 	// Confirm workflow is still running fine
-	waitForWorkflowState(t, vc, ksWorkflow, "Running")
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
@@ -264,7 +264,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// because of the InnoDB History List length.
 	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
 	// The initial copy phase should be blocking on the history list
 	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)

@@ -54,11 +54,11 @@ var (
 				sqltypes.NULL,                          // stop_pos
 				sqltypes.NewInt64(9223372036854775807), // max_tps
 				sqltypes.NewInt64(9223372036854775807), // max_replication_lag
-				sqltypes.NewVarBinary("Running"),       // state
-				sqltypes.NewInt64(1),                   // workflow_type
-				sqltypes.NewVarChar("wf"),              // workflow
-				sqltypes.NewInt64(0),                   // workflow_sub_type
-				sqltypes.NewInt64(0),                   // defer_secondary_keys
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),      // workflow_type
+				sqltypes.NewVarChar("wf"), // workflow
+				sqltypes.NewInt64(0),      // workflow_sub_type
+				sqltypes.NewInt64(0),      // defer_secondary_keys
 			},
 		},
 	}
@@ -171,15 +171,15 @@ func TestStopPosEqual(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -208,15 +208,15 @@ func TestStopPosLess(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1082"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1082"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -245,15 +245,15 @@ func TestStopPosGreater(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1085"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1085"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -286,15 +286,15 @@ func TestContextCancel(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1085"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1085"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}

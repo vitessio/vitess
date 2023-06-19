@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -139,7 +138,7 @@ func (mz *materializer) createMaterializerStreams() error {
 }
 
 func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
-	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{.dbname}}")
+	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "{{.dbname}}")
 
 	for _, sourceShard := range mz.sourceShards {
 		// Don't create streams from sources which won't contain data for the target shard.

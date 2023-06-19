@@ -109,7 +109,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
 		log.Infof("Stop position %v already reached: %v", vp.startPos, vp.stopPos)
 		if vp.saveStop {
-			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
 	}
@@ -251,7 +251,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	if posReached {
 		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
 			}
 		}
@@ -544,7 +544,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
 			if err := vp.vr.dbClient.Commit(); err != nil {
@@ -608,7 +608,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			switch {
 			case found && notFound:
 				// Some were found and some were not found. We can't handle this.
-				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+				if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "unable to handle journal event: tables were partially matched"); err != nil {
 					return err
 				}
 				return io.EOF
@@ -620,7 +620,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
 				return err
 			}
 			return io.EOF

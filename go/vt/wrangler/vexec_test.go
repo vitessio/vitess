@@ -173,11 +173,11 @@ func TestVExec(t *testing.T) {
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {
-	require.Equal(t, "Running", updateState("for vdiff", "Running", nil, int64(time.Now().Second())))
-	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
-	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
-	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
-	require.Equal(t, "Error", updateState("error: primary tablet not contactable", "Running", nil, 0))
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Running, updateState("for vdiff", binlogdatapb.VReplicationWorkflowState_Running, nil, int64(time.Now().Second())))
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Running, updateState("", binlogdatapb.VReplicationWorkflowState_Running, nil, int64(time.Now().Second())))
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Lagging, updateState("", binlogdatapb.VReplicationWorkflowState_Running, nil, int64(time.Now().Second())-100))
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying, updateState("", binlogdatapb.VReplicationWorkflowState_Running, []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Error, updateState("error: primary tablet not contactable", binlogdatapb.VReplicationWorkflowState_Running, nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {
@@ -426,12 +426,12 @@ func TestVExecValidations(t *testing.T) {
 	actions := []action{
 		{
 			name:          "start",
-			want:          fmt.Sprintf(updateSQL, encodeString("Running")),
+			want:          fmt.Sprintf(updateSQL, encodeString(binlogdatapb.VReplicationWorkflowState_Running.String())),
 			expectedError: nil,
 		},
 		{
 			name:          "stop",
-			want:          fmt.Sprintf(updateSQL, encodeString("Stopped")),
+			want:          fmt.Sprintf(updateSQL, encodeString(binlogdatapb.VReplicationWorkflowState_Stopped.String())),
 			expectedError: nil,
 		},
 		{
