@@ -150,28 +150,6 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
 
-func TestTryCreateTxThrottler(t *testing.T) {
-	allCells := []string{"cell1", "cell2", "cell3"}
-	ts := memorytopo.NewServer(allCells...)
-
-	config := tabletenv.NewDefaultConfig()
-	config.EnableTxThrottler = true
-
-	// Check tx throttler uses all known cells for healthchecks
-	// when TxThrottlerHealthCheckCells is empty/undef
-	{
-		txThrottler, err := tryCreateTxThrottler(config, ts)
-		assert.Nil(t, err)
-		assert.Equal(t, allCells, txThrottler.config.healthCheckCells)
-	}
-	// Check specified cells are used for healthchecks
-	{
-		config.TxThrottlerHealthCheckCells = []string{"cell1"}
-		txThrottler, err := tryCreateTxThrottler(config, ts)
-		assert.Nil(t, err)
-		assert.Equal(t, config.TxThrottlerHealthCheckCells, txThrottler.config.healthCheckCells)
-}
-
 func TestNewTxThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, t.Name())

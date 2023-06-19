@@ -32,10 +32,12 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // These vars store the functions used to create the topo server, healthcheck,
@@ -190,28 +192,15 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 		// is immutable.
 		healthCheckCells := env.Config().TxThrottlerHealthCheckCells
-    
-	  if len(healthCheckCells) == 0 {
-		  ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-		  defer cancel()
 
-		  var err error
-		  healthCheckCells, err = topoServer.GetKnownCells(ctx)
-		  if err != nil {
-        log.Errorf("BUG: unexpectedly got zero cells from topology via GetKnownCells: %v", err)
-		  }
-	  }
+		throttlerConfig = &txThrottlerConfig{
+			enabled:          true,
+			tabletTypes:      env.Config().TxThrottlerTabletTypes,
+			throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
+			healthCheckCells: healthCheckCells,
+		}
 
-    if len(healthCheckCells) > 0 {
-		  throttlerConfig = &txThrottlerConfig{
-			  enabled:          true,
-			  tabletTypes:      env.Config().TxThrottlerTabletTypes,
-			  throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
-			  healthCheckCells: healthCheckCells,
-		  }
-
-		  defer log.Infof("Initialized transaction throttler with config: %+v", throttlerConfig)
-    }
+		defer log.Infof("Initialized transaction throttler with config: %+v", throttlerConfig)
 	}
 
 	return &txThrottler{
@@ -237,6 +226,20 @@ func (t *txThrottler) Open() (err error) {
 		return nil
 	}
 	log.Info("txThrottler: opening")
+
+	// get cells from topo if none defined in tabletenv config
+	if len(t.config.healthCheckCells) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+
+		if t.config.healthCheckCells, err = t.topoServer.GetKnownCells(ctx); err != nil {
+			return err
+		} else if len(t.config.healthCheckCells) == 0 {
+			log.Error("txThrottler: failed to open due to no cells found.")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
+		}
+	}
+
 	t.throttlerRunning.Set(1)
 	t.state, err = newTxThrottlerState(t.topoServer, t.config, t.target)
 	return err
