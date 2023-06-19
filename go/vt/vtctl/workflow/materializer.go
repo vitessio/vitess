@@ -91,7 +91,7 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 		if err != nil {
 			return err
 		}
-		_, err = mz.tmc.CreateVRWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVRWorkflowRequest{
+		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 			Workflow:                  req.Workflow,
 			BinlogSource:              blses,
 			Cells:                     req.Cells,

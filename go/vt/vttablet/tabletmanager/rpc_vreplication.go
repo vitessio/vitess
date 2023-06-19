@@ -41,18 +41,18 @@ import (
 
 const (
 	// Create a new VReplication workflow record.
-	sqlCreateVRWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
+	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
 	// Read a VReplication workflow.
-	sqlReadVRWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
+	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
 	// Delete VReplication records for the given workflow.
-	sqlDeleteVRWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
+	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream.
-	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
+	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVRWorkflowConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVReplicationWorkflowConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
 )
 
-func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error) {
+func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	if req == nil || len(req.BinlogSource) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no binlog source specified")
 	}
@@ -82,7 +82,7 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 			"workflowSubType":    sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
 			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
 		}
-		parsed := sqlparser.BuildParsedQuery(sqlCreateVRWorkflow, sidecardb.GetIdentifier(),
+		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecardb.GetIdentifier(),
 			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType", ":deferSecondaryKeys",
 		)
 		stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -96,16 +96,16 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 		}
 		res.RowsAffected += streamres.RowsAffected
 	}
-	return &tabletmanagerdatapb.CreateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
-func (tm *TabletManager) DeleteVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVRWorkflowRequest) (*tabletmanagerdatapb.DeleteVRWorkflowResponse, error) {
+func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
 	res := &sqltypes.Result{}
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlDeleteVRWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
+	parsed := sqlparser.BuildParsedQuery(sqlDeleteVReplicationWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -117,15 +117,15 @@ func (tm *TabletManager) DeleteVRWorkflow(ctx context.Context, req *tabletmanage
 	}
 	res.RowsAffected += streamres.RowsAffected
 
-	return &tabletmanagerdatapb.DeleteVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
-func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVRWorkflowRequest) (*tabletmanagerdatapb.ReadVRWorkflowResponse, error) {
+func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlReadVRWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
+	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -138,8 +138,8 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 		return nil, nil
 	}
 	rows := res.Named().Rows
-	resp := &tabletmanagerdatapb.ReadVRWorkflowResponse{Workflow: req.Workflow}
-	streams := make([]*tabletmanagerdatapb.ReadVRWorkflowResponse_Stream, len(rows))
+	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{Workflow: req.Workflow}
+	streams := make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(rows))
 
 	// First the things that are common to all streams.
 	resp.Cells = rows[0]["cell"].ToString()
@@ -168,7 +168,7 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 
 	// Now the individual streams (there can be more than 1 with shard merges).
 	for i, row := range rows {
-		streams[i] = &tabletmanagerdatapb.ReadVRWorkflowResponse_Stream{}
+		streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{}
 		if streams[i].Id, err = row["id"].ToInt32(); err != nil {
 			return nil, vterrors.Wrap(err, "error parsing id field from vreplication table record")
 		}
@@ -222,7 +222,7 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 	return resp, nil
 }
 
-// UpdateVRWorkflow updates the sidecar databases's vreplication
+// UpdateVReplicationWorkflow updates the sidecar databases's vreplication
 // record for this tablet's vreplication workflow stream(s). If there
 // is no stream for the given workflow on the tablet then a nil result
 // is returned as this is expected e.g. on source tablets of a
@@ -231,11 +231,11 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 // Note: the VReplication engine creates a new controller for the
 // workflow stream when the record is updated, so we also in effect
 // restart the workflow stream via the update.
-func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVRWorkflowConfig, sidecardb.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecardb.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -249,7 +249,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		// expected e.g. on source tablets for Reshard
 		// workflows. If callers want to treat this
 		// scenario as an error they can.
-		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: nil}, nil
+		return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil}, nil
 	}
 
 	row := res.Named().Row()
@@ -264,7 +264,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	state := row.AsString("state", "")
 	message := row.AsString("message", "")
 	if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
-		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: nil},
+		return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
 			vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
 	}
 	// For the string based values, we use NULL to differentiate
@@ -303,7 +303,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		"tt": sqltypes.StringBindVariable(tabletTypesStr),
 		"id": sqltypes.Int64BindVariable(id),
 	}
-	parsed = sqlparser.BuildParsedQuery(sqlUpdateVRWorkflowConfig, sidecardb.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+	parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowConfig, sidecardb.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
 	stmt, err = parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -313,7 +313,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
 // VReplicationExec executes a vreplication command.

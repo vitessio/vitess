@@ -346,25 +346,25 @@ func (s *server) GetReplicas(ctx context.Context, request *tabletmanagerdatapb.G
 // VReplication related methods
 //
 
-func (s *server) CreateVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.CreateVRWorkflowRequest) (response *tabletmanagerdatapb.CreateVRWorkflowResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "CreateVRWorkflow", request, response, true /*verbose*/, &err)
+func (s *server) CreateVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (response *tabletmanagerdatapb.CreateVReplicationWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "CreateVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.CreateVRWorkflowResponse{}
-	return s.tm.CreateVRWorkflow(ctx, request)
+	response = &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{}
+	return s.tm.CreateVReplicationWorkflow(ctx, request)
 }
 
-func (s *server) DeleteVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.DeleteVRWorkflowRequest) (response *tabletmanagerdatapb.DeleteVRWorkflowResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "CreateVRWorkflow", request, response, true /*verbose*/, &err)
+func (s *server) DeleteVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "CreateVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.DeleteVRWorkflowResponse{}
-	return s.tm.DeleteVRWorkflow(ctx, request)
+	response = &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{}
+	return s.tm.DeleteVReplicationWorkflow(ctx, request)
 }
 
-func (s *server) ReadVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.ReadVRWorkflowRequest) (response *tabletmanagerdatapb.ReadVRWorkflowResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ReadVRWorkflow", request, response, true /*verbose*/, &err)
+func (s *server) ReadVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (response *tabletmanagerdatapb.ReadVReplicationWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.ReadVRWorkflowResponse{}
-	return s.tm.ReadVRWorkflow(ctx, request)
+	response = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{}
+	return s.tm.ReadVReplicationWorkflow(ctx, request)
 }
 
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
@@ -382,11 +382,11 @@ func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmana
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 
-func (s *server) UpdateVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (response *tabletmanagerdatapb.UpdateVRWorkflowResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "UpdateVRWorkflow", request, response, true /*verbose*/, &err)
+func (s *server) UpdateVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (response *tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.UpdateVRWorkflowResponse{}
-	return s.tm.UpdateVRWorkflow(ctx, request)
+	response = &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{}
+	return s.tm.UpdateVReplicationWorkflow(ctx, request)
 }
 
 func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {

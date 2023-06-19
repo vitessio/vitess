@@ -4166,7 +4166,7 @@ func (m *RestoreFromBackupResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 	return len(dAtA) - i, nil
 }
 
-func (m *CreateVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *CreateVReplicationWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4179,12 +4179,12 @@ func (m *CreateVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *CreateVRWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *CreateVReplicationWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *CreateVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *CreateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4293,7 +4293,7 @@ func (m *CreateVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *CreateVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *CreateVReplicationWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4306,12 +4306,12 @@ func (m *CreateVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *CreateVRWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *CreateVReplicationWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *CreateVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *CreateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4336,7 +4336,7 @@ func (m *CreateVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	return len(dAtA) - i, nil
 }
 
-func (m *DeleteVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *DeleteVReplicationWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4349,12 +4349,12 @@ func (m *DeleteVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *DeleteVRWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *DeleteVReplicationWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *DeleteVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *DeleteVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4376,7 +4376,7 @@ func (m *DeleteVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *DeleteVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *DeleteVReplicationWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4389,12 +4389,12 @@ func (m *DeleteVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *DeleteVRWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *DeleteVReplicationWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *DeleteVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *DeleteVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4419,7 +4419,7 @@ func (m *DeleteVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	return len(dAtA) - i, nil
 }
 
-func (m *ReadVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *ReadVReplicationWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4432,12 +4432,12 @@ func (m *ReadVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReadVRWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *ReadVReplicationWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReadVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *ReadVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4459,7 +4459,7 @@ func (m *ReadVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *ReadVRWorkflowResponse_Stream) MarshalVT() (dAtA []byte, err error) {
+func (m *ReadVReplicationWorkflowResponse_Stream) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4472,12 +4472,12 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReadVRWorkflowResponse_Stream) MarshalToVT(dAtA []byte) (int, error) {
+func (m *ReadVReplicationWorkflowResponse_Stream) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *ReadVReplicationWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4595,7 +4595,7 @@ func (m *ReadVRWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []byte) (int
 	return len(dAtA) - i, nil
 }
 
-func (m *ReadVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *ReadVReplicationWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4608,12 +4608,12 @@ func (m *ReadVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReadVRWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *ReadVReplicationWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReadVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *ReadVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5114,7 +5114,7 @@ func (m *VDiffOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *UpdateVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *UpdateVReplicationWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5127,12 +5127,12 @@ func (m *UpdateVRWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UpdateVRWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *UpdateVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5199,7 +5199,7 @@ func (m *UpdateVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *UpdateVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *UpdateVReplicationWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5212,12 +5212,12 @@ func (m *UpdateVRWorkflowResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UpdateVRWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *UpdateVRWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -6674,7 +6674,7 @@ func (m *RestoreFromBackupResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *CreateVRWorkflowRequest) SizeVT() (n int) {
+func (m *CreateVReplicationWorkflowRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6725,7 +6725,7 @@ func (m *CreateVRWorkflowRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *CreateVRWorkflowResponse) SizeVT() (n int) {
+func (m *CreateVReplicationWorkflowResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6739,7 +6739,7 @@ func (m *CreateVRWorkflowResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *DeleteVRWorkflowRequest) SizeVT() (n int) {
+func (m *DeleteVReplicationWorkflowRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6753,7 +6753,7 @@ func (m *DeleteVRWorkflowRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *DeleteVRWorkflowResponse) SizeVT() (n int) {
+func (m *DeleteVReplicationWorkflowResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6767,7 +6767,7 @@ func (m *DeleteVRWorkflowResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReadVRWorkflowRequest) SizeVT() (n int) {
+func (m *ReadVReplicationWorkflowRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6781,7 +6781,7 @@ func (m *ReadVRWorkflowRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReadVRWorkflowResponse_Stream) SizeVT() (n int) {
+func (m *ReadVReplicationWorkflowResponse_Stream) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6842,7 +6842,7 @@ func (m *ReadVRWorkflowResponse_Stream) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReadVRWorkflowResponse) SizeVT() (n int) {
+func (m *ReadVReplicationWorkflowResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -7047,7 +7047,7 @@ func (m *VDiffOptions) SizeVT() (n int) {
 	return n
 }
 
-func (m *UpdateVRWorkflowRequest) SizeVT() (n int) {
+func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -7083,7 +7083,7 @@ func (m *UpdateVRWorkflowRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *UpdateVRWorkflowResponse) SizeVT() (n int) {
+func (m *UpdateVReplicationWorkflowResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -15648,7 +15648,7 @@ func (m *RestoreFromBackupResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *CreateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
+func (m *CreateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -15671,10 +15671,10 @@ func (m *CreateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: CreateVRWorkflowRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: CreateVReplicationWorkflowRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CreateVRWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: CreateVReplicationWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -15983,7 +15983,7 @@ func (m *CreateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *CreateVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
+func (m *CreateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16006,10 +16006,10 @@ func (m *CreateVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: CreateVRWorkflowResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: CreateVReplicationWorkflowResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CreateVRWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: CreateVReplicationWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16070,7 +16070,7 @@ func (m *CreateVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DeleteVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
+func (m *DeleteVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16093,10 +16093,10 @@ func (m *DeleteVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: DeleteVRWorkflowRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: DeleteVReplicationWorkflowRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: DeleteVRWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: DeleteVReplicationWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16153,7 +16153,7 @@ func (m *DeleteVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DeleteVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
+func (m *DeleteVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16176,10 +16176,10 @@ func (m *DeleteVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: DeleteVRWorkflowResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: DeleteVReplicationWorkflowResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: DeleteVRWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: DeleteVReplicationWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16240,7 +16240,7 @@ func (m *DeleteVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReadVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
+func (m *ReadVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16263,10 +16263,10 @@ func (m *ReadVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReadVRWorkflowRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: ReadVReplicationWorkflowRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReadVRWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ReadVReplicationWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16323,7 +16323,7 @@ func (m *ReadVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
+func (m *ReadVReplicationWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16346,10 +16346,10 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReadVRWorkflowResponse_Stream: wiretype end group for non-group")
+			return fmt.Errorf("proto: ReadVReplicationWorkflowResponse_Stream: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReadVRWorkflowResponse_Stream: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ReadVReplicationWorkflowResponse_Stream: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16777,7 +16777,7 @@ func (m *ReadVRWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
+func (m *ReadVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16800,10 +16800,10 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReadVRWorkflowResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: ReadVReplicationWorkflowResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReadVRWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ReadVReplicationWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 2:
@@ -17109,7 +17109,7 @@ func (m *ReadVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Streams = append(m.Streams, &ReadVRWorkflowResponse_Stream{})
+			m.Streams = append(m.Streams, &ReadVReplicationWorkflowResponse_Stream{})
 			if err := m.Streams[len(m.Streams)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -18169,7 +18169,7 @@ func (m *VDiffOptions) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UpdateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
+func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -18192,10 +18192,10 @@ func (m *UpdateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateVRWorkflowRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateVRWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -18410,7 +18410,7 @@ func (m *UpdateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UpdateVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
+func (m *UpdateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -18433,10 +18433,10 @@ func (m *UpdateVRWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateVRWorkflowResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateVRWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

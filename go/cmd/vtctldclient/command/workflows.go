@@ -274,7 +274,7 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: workflowOptions.Keyspace,
-		TabletRequest: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow:                  workflowUpdateOptions.Workflow,
 			Cells:                     workflowUpdateOptions.Cells,
 			TabletTypes:               workflowUpdateOptions.TabletTypes,
@@ -319,7 +319,7 @@ func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 	// The only thing we're updating is the state.
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: workflowOptions.Keyspace,
-		TabletRequest: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow:    workflowUpdateOptions.Workflow,
 			Cells:       textutil.SimulatedNullStringSlice,
 			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},

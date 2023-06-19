@@ -33,7 +33,7 @@ import (
 )
 
 // TestMoveTables tests the the MoveTables client command
-// via the commandVRWorkflow() cmd handler.
+// via the commandVReplicationWorkflow() cmd handler.
 // This currently only tests the Progress action (which is
 // a parent of the Show action) but it can be used to test
 // other actions as well.
@@ -243,7 +243,7 @@ func TestMoveTables(t *testing.T) {
 			subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 			expectGlobalResults()
 			tt.expectResults()
-			err := commandVRWorkflow(ctx, env.wr, subFlags, tt.args, tt.workflowType)
+			err := commandVReplicationWorkflow(ctx, env.wr, subFlags, tt.args, tt.workflowType)
 			require.NoError(t, err)
 			if strings.HasPrefix(tt.want, "/") {
 				require.Regexp(t, tt.want[1:], env.cmdlog.String())

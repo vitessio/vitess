@@ -42,7 +42,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestUpdateVRWorkflow(t *testing.T) {
+func TestUpdateVReplicationWorkflow(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
@@ -75,7 +75,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		mysqld.Close()
 		db.Close()
 	}()
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVRWorkflowConfig, sidecardb.DefaultName, ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecardb.DefaultName, ":wf")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
 	}
@@ -103,12 +103,12 @@ func TestUpdateVRWorkflow(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		request *tabletmanagerdatapb.UpdateVRWorkflowRequest
+		request *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
 		query   string
 	}{
 		{
 			name: "update cells",
-			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
 				Cells:    []string{"zone2"},
 				// TabletTypes is an empty value, so the current value should be cleared
@@ -118,7 +118,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		},
 		{
 			name: "update cells, NULL tablet_types",
-			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
 				Cells:       []string{"zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
@@ -128,7 +128,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		},
 		{
 			name: "update tablet_types",
-			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:                  workflow,
 				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
@@ -138,7 +138,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		},
 		{
 			name: "update tablet_types, NULL cells",
-			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
 				Cells:       textutil.SimulatedNullStringSlice, // So keep the current value of zone1
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
@@ -148,7 +148,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		},
 		{
 			name: "update on_ddl",
-			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
 				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
 			},
@@ -157,7 +157,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		},
 		{
 			name: "update cell,tablet_types,on_ddl",
-			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
 				Cells:       []string{"zone1", "zone2", "zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY},
@@ -191,7 +191,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
 			dbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, shortCircuitErr)
-			_, err = tm.UpdateVRWorkflow(ctx, tt.request)
+			_, err = tm.UpdateVReplicationWorkflow(ctx, tt.request)
 			dbClient.Wait()
 			require.ErrorIs(t, err, shortCircuitErr)
 		})

@@ -392,7 +392,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 		return nil, err
 	}
 	if action == "update" {
-		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVRWorkflowRequest)
+		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest)
 		if !ok {
 			return nil, fmt.Errorf("invalid RPC request: %+v", rpcReq)
 		}
@@ -435,7 +435,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			return nil, nil
 		} else {
 			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, rpcReq)
+				res, err := wr.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, rpcReq)
 				if err != nil {
 					return nil, err
 				}

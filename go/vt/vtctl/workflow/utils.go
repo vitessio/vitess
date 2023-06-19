@@ -358,7 +358,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		wf, err := tmc.ReadVRWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVRWorkflowRequest{
+		wf, err := tmc.ReadVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
 			Workflow: workflow,
 		})
 		if err != nil {

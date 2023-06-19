@@ -517,7 +517,7 @@ func TestWorkflowUpdate(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.name, func(t *testing.T) {
-			rpcReq := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			rpcReq := &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Cells:       tcase.cells,
 				TabletTypes: tcase.tabletTypes,
 				OnDdl:       tcase.onDDL,

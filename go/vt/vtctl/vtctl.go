@@ -2028,11 +2028,11 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
+	return commandVReplicationWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
+	return commandVReplicationWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -2050,7 +2050,7 @@ const (
 )
 
 func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
+	return commandVReplicationWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
 }
 
 // getSourceKeyspace expects a keyspace of the form "externalClusterName.keyspaceName" and returns the components
@@ -2062,9 +2062,9 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 	return splits[0], splits[1], nil
 }
 
-// commandVRWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
+// commandVReplicationWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
 // FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
-func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
+func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
 	const defaultWaitTime = time.Duration(30 * time.Second)
@@ -3692,7 +3692,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			if inorder {
 				tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 			}
-			rpcReq = &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			rpcReq = &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:                  workflow,
 				Cells:                     *cells,
 				TabletTypes:               tabletTypes,

@@ -40713,7 +40713,7 @@ func (m *WorkflowUpdateRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.TabletRequest == nil {
-				m.TabletRequest = &tabletmanagerdata.UpdateVRWorkflowRequest{}
+				m.TabletRequest = &tabletmanagerdata.UpdateVReplicationWorkflowRequest{}
 			}
 			if err := m.TabletRequest.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

@@ -510,7 +510,7 @@ message RestoreFromBackupResponse {
 // VReplication related messages
 //
 
-message CreateVRWorkflowRequest {
+message CreateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated binlogdata.BinlogSource binlog_source = 2;
   // optional parameters.
@@ -529,23 +529,23 @@ message CreateVRWorkflowRequest {
   bool stop_after_copy = 10;
 }
 
-message CreateVRWorkflowResponse {
+message CreateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
-message DeleteVRWorkflowRequest {
+message DeleteVReplicationWorkflowRequest {
   string workflow = 1;
 }
 
-message DeleteVRWorkflowResponse {
+message DeleteVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
-message ReadVRWorkflowRequest {
+message ReadVReplicationWorkflowRequest {
   string workflow = 1;
 }
 
-message ReadVRWorkflowResponse {
+message ReadVReplicationWorkflowResponse {
   string workflow = 2;
   string cells = 3;
   repeated topodata.TabletType tablet_types = 4;
@@ -620,7 +620,7 @@ message VDiffOptions {
   VDiffReportOptions report_options = 3;
 }
 
-message UpdateVRWorkflowRequest {
+message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
   repeated topodata.TabletType tablet_types = 3;
@@ -629,6 +629,6 @@ message UpdateVRWorkflowRequest {
   binlogdata.VReplicationWorkflowState state = 6;
 }
 
-message UpdateVRWorkflowResponse {
+message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }

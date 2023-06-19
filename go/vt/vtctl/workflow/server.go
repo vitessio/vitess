@@ -1188,12 +1188,12 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		return nil, err
 	}
 
-	deleteReq := &tabletmanagerdatapb.DeleteVRWorkflowRequest{
+	deleteReq := &tabletmanagerdatapb.DeleteVReplicationWorkflowRequest{
 		Workflow: req.Workflow,
 	}
 	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-		res, err := s.tmc.DeleteVRWorkflow(ctx, tablet.Tablet, deleteReq)
+		res, err := s.tmc.DeleteVReplicationWorkflow(ctx, tablet.Tablet, deleteReq)
 		if err != nil {
 			return nil, err
 		}
@@ -1465,7 +1465,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-		res, err := s.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req.TabletRequest)
+		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
 			return nil, err
 		}
