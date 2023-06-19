@@ -23,9 +23,8 @@ import (
 	"io"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
@@ -42,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -800,39 +800,16 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	}
 
 	// Columns should be truncated to match those in tm.
-	fields = st.Fields[:len(tm.Types)]
-	extColInfos, err := vs.getExtColInfos(tm.Name, tm.Database)
+	fieldsCopy, err := getFields(vs.ctx, vs.cp, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
 	if err != nil {
 		return nil, err
 	}
-	for _, field := range fields {
-		// we want the MySQL column type info so that we can properly handle
-		// ambiguous binlog events and other cases where the internal types
-		// don't match the MySQL column type. One example being that in binlog
-		// events CHAR columns with a binary collation are indistinguishable
-		// from BINARY columns.
-		if extColInfo, ok := extColInfos[field.Name]; ok {
-			field.ColumnType = extColInfo.columnType
-		}
-	}
-	return fields, nil
+	return fieldsCopy, nil
 }
 
-// additional column attributes from information_schema.columns. Currently only column_type is used, but
-// we expect to add more in the future
-type extColInfo struct {
-	columnType string
-}
-
-func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
-}
-
-func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColInfo, error) {
+func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database string) (map[string]*extColInfo, error) {
 	extColInfos := make(map[string]*extColInfo)
-	conn, err := vs.cp.Connect(vs.ctx)
+	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -850,6 +827,37 @@ func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColI
 		extColInfos[row[0].ToString()] = extColInfo
 	}
 	return extColInfos, nil
+}
+
+func getFields(ctx context.Context, cp dbconfigs.Connector, table, database string, fields []*querypb.Field) ([]*querypb.Field, error) {
+	// Make a deep copy of the schema.Engine fields as they are pointers and
+	// will be modified by adding ColumnType below
+	fieldsCopy := make([]*querypb.Field, len(fields))
+	for i, field := range fields {
+		fieldsCopy[i] = proto.Clone(field).(*querypb.Field)
+	}
+	extColInfos, err := getExtColInfos(ctx, cp, table, database)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range fieldsCopy {
+		if colInfo, ok := extColInfos[field.Name]; ok {
+			field.ColumnType = colInfo.columnType
+		}
+	}
+	return fieldsCopy, nil
+}
+
+// additional column attributes from information_schema.columns. Currently only column_type is used, but
+// we expect to add more in the future
+type extColInfo struct {
+	columnType string
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
 
 func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {

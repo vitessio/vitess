@@ -221,14 +221,10 @@ func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error
 }
 
 func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, timestamp int64) error {
-	tables := tr.engine.GetSchema()
-	dbSchema := &binlogdatapb.MinimalSchema{
-		Tables: []*binlogdatapb.MinimalTable{},
+	blob, err := tr.engine.MarshalMinimalSchema()
+	if err != nil {
+		return err
 	}
-	for _, table := range tables {
-		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
-	}
-	blob, _ := dbSchema.MarshalVT()
 
 	conn, err := tr.engine.GetConnection(ctx)
 	if err != nil {
@@ -245,19 +241,6 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 		return err
 	}
 	return nil
-}
-
-func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
-	table := &binlogdatapb.MinimalTable{
-		Name:   st.Name.String(),
-		Fields: st.Fields,
-	}
-	var pkc []int64
-	for _, pk := range st.PKColumns {
-		pkc = append(pkc, int64(pk))
-	}
-	table.PKColumns = pkc
-	return table
 }
 
 func encodeString(in string) string {
