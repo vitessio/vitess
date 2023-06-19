@@ -437,3 +437,20 @@ func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
 	mcmp.AssertMatchesNoOrder("select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t11 where a = 100) A;",
 		`[[DECIMAL(100) DECIMAL(10) DECIMAL(10.0000)]]`)
 }
+
+func TestBuggyQueries(t *testing.T) {
+	// These queries have been found to be producing the wrong results by the query fuzzer
+	// Adding them as end2end tests to make sure we never get them wrong again
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null)")
+
+	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(t1.a) from t10 as t1, t10 as t2",
+		`[[DECIMAL(900)]]`)
+
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */t1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a",
+		"[[NULL NULL INT64(3) NULL NULL INT64(3)] "+
+			"[INT32(100) DECIMAL(300) INT64(3) INT32(100) DECIMAL(300) INT64(3)] "+
+			"[INT32(200) DECIMAL(600) INT64(3) INT32(200) DECIMAL(600) INT64(3)]]")
+}
