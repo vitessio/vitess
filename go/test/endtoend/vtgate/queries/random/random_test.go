@@ -77,21 +77,13 @@ func helperTest(t *testing.T, query string) {
 	})
 }
 
-func TestKnownFailures(t *testing.T) {
+func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
-	// logs more stuff
-	//clusterInstance.EnableGeneralLog()
-
-	// coercion should not try to coerce this value: DATE("1980-12-17")
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename")
-
-	// mismatched results (left join + odd on)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname")
-
-	// mismatched results (left join + odd where)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)")
+	// mismatched results
+	// previously failing, then succeeding query, now failing again
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3")
 
 	// mismatched results (group by + right join)
 	// left instead of right works
@@ -104,30 +96,27 @@ func TestKnownFailures(t *testing.T) {
 	// mismatched results (sum + right join)
 	// left instead of right works
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl0.mgr) from emp as tbl0 right join emp as tbl1 on tbl0.mgr = tbl1.empno")
+}
 
-	// the type of this expression cannot be statically computed
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
+func TestKnownFailures(t *testing.T) {
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
-	// Cannot convert value to desired type
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno")
+	// logs more stuff
+	//clusterInstance.EnableGeneralLog()
 
-	// sometimes fails if the following query is more complicated (?)
+	// coercion should not try to coerce this value: DATE("1980-12-17")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename")
+
 	// only_full_group_by enabled (vitess sometimes (?) produces the correct result assuming only_full_group_by is disabled)
 	// vitess error: nil
 	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
 
-	// only_full_group_by disabled
-	// unknown aggregation random
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno")
-
-	// unavoidable
-	// mismatched results (group by + limit no order by)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from emp as tbl0 group by tbl0.sal limit 7")
-
-	// unavoidable
-	// mismatched results (group by + select grouping + limit no order by)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.sal, count(*) from emp as tbl0 group by tbl0.sal limit 7")
+	// only_full_group_by enabled
+	// vitess error:  nil
+	// mysql error: Expression #1 of ORDER BY clause is not in SELECT list, references column 'ks_random.tbl2.DNAME' which is not in SELECT list; this is incompatible with DISTINCT
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr0 from dept as tbl2 group by tbl2.dname order by tbl2.dname asc")
 
 	// vttablet: rpc error: code = NotFound desc = Unknown column 'cgroup0' in 'field list' (errno 1054) (sqlstate 42S22) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.ename as cgroup0, max(tbl0.comm) as caggr0 from emp as tbl0, emp as tbl1 group by cgroup0")
@@ -370,7 +359,7 @@ func createAggregations(tables []tableT, sel *sqlparser.Select, maxAggrs int) (a
 	return aggregates
 }
 
-// returns the predicate as an Expr
+// returns the predicates as a sqlparser.Exprs (slice of sqlparser.Expr's)
 func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs) {
 	// if creating predicates for a join,
 	// then make sure predicates are created for the last two tables (which are being joined)
@@ -378,6 +367,7 @@ func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs)
 	if isJoin && len(tables) > 2 {
 		incr += len(tables) - 2
 	}
+
 	for idx1 := range tables {
 		for idx2 := range tables {
 			// fmt.Printf("predicate tables:\n%v\n idx1: %d idx2: %d, incr: %d", tables, idx1, idx2, incr)
@@ -396,7 +386,7 @@ func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs)
 				// prevent infinite loops
 				if i > 50 {
 					// cant do this because this minimizes
-					predicates = append(predicates, sqlparser.NewComparisonExpr(sqlparser.EqualOp, newColumn(col1), newColumn(col1), nil))
+					predicates = append(predicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), newColumn(col1), newColumn(col1), nil))
 					break
 				}
 
@@ -405,7 +395,7 @@ func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs)
 				}
 
 				// cant do this because this minimizes
-				predicates = append(predicates, sqlparser.NewComparisonExpr(sqlparser.EqualOp, newColumn(col1), newColumn(col2), nil))
+				predicates = append(predicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), newColumn(col1), newColumn(col2), nil))
 				noOfPredicates--
 			}
 		}
@@ -444,6 +434,11 @@ func newColumn(col column) *sqlparser.ColName {
 
 func newOrderColumn(col column) *sqlparser.Order {
 	return sqlparser.NewOrder(newColumn(col), sqlparser.AscOrder)
+}
+
+func getRandomComparisonExprOperator() sqlparser.ComparisonExprOperator {
+	// =, <, >, <=, >=, !=, <=>
+	return randomEl([]sqlparser.ComparisonExprOperator{0, 1, 2, 3, 4, 5, 6})
 }
 
 func randomEl[K any](in []K) K {
