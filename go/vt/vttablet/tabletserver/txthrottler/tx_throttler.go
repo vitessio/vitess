@@ -235,7 +235,7 @@ func (t *txThrottler) Open() (err error) {
 		if t.config.healthCheckCells, err = t.topoServer.GetKnownCells(ctx); err != nil {
 			return err
 		} else if len(t.config.healthCheckCells) == 0 {
-			log.Error("txThrottler: failed to open due to no cells found.")
+			log.Error("txThrottler: failed to open txThrottler due to no cells found.")
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
 		}
 	}
