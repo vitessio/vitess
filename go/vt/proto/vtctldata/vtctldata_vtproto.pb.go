@@ -667,10 +667,12 @@ func (m *Workflow_Stream_Log) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x2a
 	}
-	if m.State != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.State))
+	if len(m.State) > 0 {
+		i -= len(m.State)
+		copy(dAtA[i:], m.State)
+		i = encodeVarint(dAtA, i, uint64(len(m.State)))
 		i--
-		dAtA[i] = 0x20
+		dAtA[i] = 0x22
 	}
 	if len(m.Type) > 0 {
 		i -= len(m.Type)
@@ -796,10 +798,12 @@ func (m *Workflow_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x42
 	}
-	if m.State != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.State))
+	if len(m.State) > 0 {
+		i -= len(m.State)
+		copy(dAtA[i:], m.State)
+		i = encodeVarint(dAtA, i, uint64(len(m.State)))
 		i--
-		dAtA[i] = 0x38
+		dAtA[i] = 0x3a
 	}
 	if len(m.StopPosition) > 0 {
 		i -= len(m.StopPosition)
@@ -880,15 +884,19 @@ func (m *Workflow) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.WorkflowSubType != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.WorkflowSubType))
+	if len(m.WorkflowSubType) > 0 {
+		i -= len(m.WorkflowSubType)
+		copy(dAtA[i:], m.WorkflowSubType)
+		i = encodeVarint(dAtA, i, uint64(len(m.WorkflowSubType)))
 		i--
-		dAtA[i] = 0x38
+		dAtA[i] = 0x3a
 	}
-	if m.WorkflowType != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.WorkflowType))
+	if len(m.WorkflowType) > 0 {
+		i -= len(m.WorkflowType)
+		copy(dAtA[i:], m.WorkflowType)
+		i = encodeVarint(dAtA, i, uint64(len(m.WorkflowType)))
 		i--
-		dAtA[i] = 0x30
+		dAtA[i] = 0x32
 	}
 	if len(m.ShardStreams) > 0 {
 		for k := range m.ShardStreams {
@@ -11212,8 +11220,9 @@ func (m *Workflow_Stream_Log) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.State != 0 {
-		n += 1 + sov(uint64(m.State))
+	l = len(m.State)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	if m.CreatedAt != nil {
 		l = m.CreatedAt.SizeVT()
@@ -11263,8 +11272,9 @@ func (m *Workflow_Stream) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.State != 0 {
-		n += 1 + sov(uint64(m.State))
+	l = len(m.State)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.DbName)
 	if l > 0 {
@@ -11342,11 +11352,13 @@ func (m *Workflow) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
-	if m.WorkflowType != 0 {
-		n += 1 + sov(uint64(m.WorkflowType))
+	l = len(m.WorkflowType)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
-	if m.WorkflowSubType != 0 {
-		n += 1 + sov(uint64(m.WorkflowSubType))
+	l = len(m.WorkflowSubType)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -16628,10 +16640,10 @@ func (m *Workflow_Stream_Log) UnmarshalVT(dAtA []byte) error {
 			m.Type = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
-			if wireType != 0 {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
 			}
-			m.State = 0
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -16641,11 +16653,24 @@ func (m *Workflow_Stream_Log) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.State |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.State = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CreatedAt", wireType)
@@ -17008,10 +17033,10 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			m.StopPosition = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 7:
-			if wireType != 0 {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
 			}
-			m.State = 0
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -17021,11 +17046,24 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.State |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.State = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field DbName", wireType)
@@ -17598,10 +17636,10 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 			m.ShardStreams[mapkey] = mapvalue
 			iNdEx = postIndex
 		case 6:
-			if wireType != 0 {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowType", wireType)
 			}
-			m.WorkflowType = 0
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -17611,16 +17649,29 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.WorkflowType |= binlogdata.VReplicationWorkflowType(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.WorkflowType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		case 7:
-			if wireType != 0 {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowSubType", wireType)
 			}
-			m.WorkflowSubType = 0
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -17630,11 +17681,24 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.WorkflowSubType |= binlogdata.VReplicationWorkflowSubType(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.WorkflowSubType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -118,8 +118,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
-  binlogdata.VReplicationWorkflowType workflow_type = 6;
-  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 7;
+  string workflow_type = 6;
+  string workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -139,7 +139,7 @@ message Workflow {
     binlogdata.BinlogSource binlog_source = 4;
     string position = 5;
     string stop_position = 6;
-    binlogdata.VReplicationWorkflowState state = 7;
+    string state = 7;
     string db_name = 8;
     vttime.Time transaction_timestamp = 9;
     vttime.Time time_updated = 10;
@@ -166,7 +166,7 @@ message Workflow {
       int64 id = 1;
       int64 stream_id = 2;
       string type = 3;
-      binlogdata.VReplicationWorkflowState state = 4;
+      string state = 4;
       vttime.Time created_at = 5;
       vttime.Time updated_at = 6;
       string message = 7;

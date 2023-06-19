@@ -2161,7 +2161,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
 				msg := ""
-				if st.State == binlogdatapb.VReplicationWorkflowState_Error {
+				if st.State == binlogdatapb.VReplicationWorkflowState_Error.String() {
 					msg += fmt.Sprintf(": %s.", st.Message)
 				} else if st.Pos == "" {
 					msg += ". VStream has not started."

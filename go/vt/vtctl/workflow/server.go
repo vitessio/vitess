@@ -439,7 +439,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			BinlogSource: &bls,
 			Position:     pos,
 			StopPosition: stopPos,
-			State:        binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]),
+			State:        state,
 			DbName:       dbName,
 			TransactionTimestamp: &vttimepb.Time{
 				Seconds: transactionTimeSeconds,
@@ -450,8 +450,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 			Tags:    tagArray,
 		}
-		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType(workflowType)
-		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(workflowSubType)
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
@@ -461,11 +461,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		switch {
 		case strings.Contains(strings.ToLower(stream.Message), "error"):
-			stream.State = binlogdatapb.VReplicationWorkflowState_Error
-		case stream.State == binlogdatapb.VReplicationWorkflowState_Running && len(stream.CopyStates) > 0:
-			stream.State = binlogdatapb.VReplicationWorkflowState_Copying
-		case stream.State == binlogdatapb.VReplicationWorkflowState_Running && int64(time.Now().Second())-timeUpdatedSeconds > 10:
-			stream.State = binlogdatapb.VReplicationWorkflowState_Lagging
+			stream.State = binlogdatapb.VReplicationWorkflowState_Error.String()
+		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
+			stream.State = binlogdatapb.VReplicationWorkflowState_Copying.String()
+		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && int64(time.Now().Second())-timeUpdatedSeconds > 10:
+			stream.State = binlogdatapb.VReplicationWorkflowState_Lagging.String()
 		}
 
 		// At this point, we're going to start modifying the maps defined
@@ -675,7 +675,7 @@ ORDER BY
 					Id:       id,
 					StreamId: streamID,
 					Type:     typ,
-					State:    binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]),
+					State:    state,
 					CreatedAt: &vttimepb.Time{
 						Seconds: createdAt.Unix(),
 					},
@@ -1291,7 +1291,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		for i, st := range streams {
 			info := []string{}
 			ts := &vtctldatapb.WorkflowStatusResponse_ShardStreamState{}
-			if st.State == binlogdatapb.VReplicationWorkflowState_Error {
+			if st.State == binlogdatapb.VReplicationWorkflowState_Error.String() {
 				info = append(info, st.Message)
 			} else if st.Position == "" {
 				info = append(info, "VStream has not started")
@@ -1311,7 +1311,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			ts.Tablet = st.Tablet
 			ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
 			ts.Position = st.Position
-			ts.Status = binlogdatapb.VReplicationWorkflowState_name[int32(st.State)]
+			ts.Status = st.State
 			ts.Info = strings.Join(info, "; ")
 			resp.ShardStreams[ksShard].Streams[i] = ts
 		}
@@ -2546,9 +2546,9 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 				return fmt.Sprintf(cannotSwitchHighLag, vreplLag, maxAllowedReplLagSecs), nil
 			}
 			switch st.State {
-			case binlogdatapb.VReplicationWorkflowState_Copying:
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
 				return cannotSwitchCopyIncomplete, nil
-			case binlogdatapb.VReplicationWorkflowState_Error:
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
 			}
 		}

@@ -268,7 +268,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 			if st.Pos == "" {
 				continue
 			}
-			if st.State == binlogdatapb.VReplicationWorkflowState_Running || st.State == binlogdatapb.VReplicationWorkflowState_Copying {
+			if st.State == binlogdatapb.VReplicationWorkflowState_Running.String() || st.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
 				started++
 			}
 		}
@@ -526,9 +526,9 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		statuses := result.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
 			switch st.State {
-			case binlogdatapb.VReplicationWorkflowState_Copying:
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
 				return cannotSwitchCopyIncomplete, nil
-			case binlogdatapb.VReplicationWorkflowState_Error:
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
 			}
 		}

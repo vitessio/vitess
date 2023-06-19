@@ -41466,10 +41466,10 @@ export namespace vtctldata {
         shard_streams?: ({ [k: string]: vtctldata.Workflow.IShardStream }|null);
 
         /** Workflow workflow_type */
-        workflow_type?: (binlogdata.VReplicationWorkflowType|null);
+        workflow_type?: (string|null);
 
         /** Workflow workflow_sub_type */
-        workflow_sub_type?: (binlogdata.VReplicationWorkflowSubType|null);
+        workflow_sub_type?: (string|null);
     }
 
     /** Represents a Workflow. */
@@ -41497,10 +41497,10 @@ export namespace vtctldata {
         public shard_streams: { [k: string]: vtctldata.Workflow.IShardStream };
 
         /** Workflow workflow_type. */
-        public workflow_type: binlogdata.VReplicationWorkflowType;
+        public workflow_type: string;
 
         /** Workflow workflow_sub_type. */
-        public workflow_sub_type: binlogdata.VReplicationWorkflowSubType;
+        public workflow_sub_type: string;
 
         /**
          * Creates a new Workflow instance using the specified properties.
@@ -41816,7 +41816,7 @@ export namespace vtctldata {
             stop_position?: (string|null);
 
             /** Stream state */
-            state?: (binlogdata.VReplicationWorkflowState|null);
+            state?: (string|null);
 
             /** Stream db_name */
             db_name?: (string|null);
@@ -41871,7 +41871,7 @@ export namespace vtctldata {
             public stop_position: string;
 
             /** Stream state. */
-            public state: binlogdata.VReplicationWorkflowState;
+            public state: string;
 
             /** Stream db_name. */
             public db_name: string;
@@ -42093,7 +42093,7 @@ export namespace vtctldata {
                 type?: (string|null);
 
                 /** Log state */
-                state?: (binlogdata.VReplicationWorkflowState|null);
+                state?: (string|null);
 
                 /** Log created_at */
                 created_at?: (vttime.ITime|null);
@@ -42127,7 +42127,7 @@ export namespace vtctldata {
                 public type: string;
 
                 /** Log state. */
-                public state: binlogdata.VReplicationWorkflowState;
+                public state: string;
 
                 /** Log created_at. */
                 public created_at?: (vttime.ITime|null);

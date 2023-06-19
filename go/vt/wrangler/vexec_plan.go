@@ -96,7 +96,7 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 	for _, primary := range p.vx.primaries {
 		key := fmt.Sprintf("%s/%s", primary.Shard, primary.AliasString())
 		for _, stream := range rsr.ShardStatuses[key].PrimaryReplicationStatuses {
-			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State.String(), stream.DBName, stream.Pos})
+			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos})
 		}
 	}
 	table.SetAutoMergeCellsByColumnIndex([]int{0})

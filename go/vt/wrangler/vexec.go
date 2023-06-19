@@ -520,7 +520,7 @@ type ReplicationStatus struct {
 	// StopPos represents the stop_pos column from the _vt.vreplication table.
 	StopPos string
 	// State represents the state column from the _vt.vreplication table.
-	State binlogdatapb.VReplicationWorkflowState
+	State string
 	// DbName represents the db_name column from the _vt.vreplication table.
 	DBName string
 	// TransactionTimestamp represents the transaction_timestamp column from the _vt.vreplication table.
@@ -555,7 +555,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	var id int32
 	var timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var dbName, pos, stopPos, message, tags, componentThrottled string
-	var state binlogdatapb.VReplicationWorkflowState
+	var state string
 	var workflowType, workflowSubType int32
 	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
@@ -589,7 +589,10 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
-	state = binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row.AsString("state", "")])
+	state, err = row.ToString("state")
+	if err != nil {
+		return nil, "", err
+	}
 	dbName, err = row.ToString("db_name")
 	if err != nil {
 		return nil, "", err
@@ -658,7 +661,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		return nil, "", err
 	}
 
-	status.State = updateState(message, status.State, status.CopyState, timeUpdated)
+	status.State = updateState(message, binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]), status.CopyState, timeUpdated)
 	return status, bls.Keyspace, nil
 }
 
@@ -754,7 +757,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			// All timestamps are in seconds since epoch
 			lastTransactionTimestamp := status.TransactionTimestamp
 			lastHeartbeatTime := status.TimeHeartbeat
-			if status.State == binlogdatapb.VReplicationWorkflowState_Copying {
+			if status.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
 				rsr.MaxVReplicationTransactionLag = math.MaxInt64
 			} else {
 				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
@@ -838,7 +841,7 @@ func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string)
 	return replStatus, nil
 }
 
-func updateState(message string, state binlogdatapb.VReplicationWorkflowState, cs []copyState, timeUpdated int64) binlogdatapb.VReplicationWorkflowState {
+func updateState(message string, state binlogdatapb.VReplicationWorkflowState, cs []copyState, timeUpdated int64) string {
 	if strings.Contains(strings.ToLower(message), "error") {
 		state = binlogdatapb.VReplicationWorkflowState_Error
 	} else if state == binlogdatapb.VReplicationWorkflowState_Running && len(cs) > 0 {
@@ -846,7 +849,7 @@ func updateState(message string, state binlogdatapb.VReplicationWorkflowState, c
 	} else if state == binlogdatapb.VReplicationWorkflowState_Running && int64(time.Now().Second())-timeUpdated > 10 /* seconds */ {
 		state = binlogdatapb.VReplicationWorkflowState_Lagging
 	}
-	return state
+	return state.String()
 }
 
 func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) error {
