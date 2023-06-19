@@ -82,19 +82,28 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
+
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'")
+
+	// mismatched results
 	// previously failing, then succeeding query, now failing again
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3")
 
 	// mismatched results (group by + right join)
 	// left instead of right works
+	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
 
 	// mismatched results (count + right join)
 	// left instead of right works
+	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
 
 	// mismatched results (sum + right join)
 	// left instead of right works
+	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl0.mgr) from emp as tbl0 right join emp as tbl1 on tbl0.mgr = tbl1.empno")
 }
 
@@ -386,7 +395,7 @@ func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs)
 				// prevent infinite loops
 				if i > 50 {
 					// cant do this because this minimizes
-					predicates = append(predicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), newColumn(col1), newColumn(col1), nil))
+					predicates = append(predicates, newColumn(col1))
 					break
 				}
 
