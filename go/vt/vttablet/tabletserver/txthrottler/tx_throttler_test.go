@@ -111,7 +111,6 @@ func TestEnabledThrottler(t *testing.T) {
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
-	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
 	env := tabletenv.NewEnv(config, t.Name())
