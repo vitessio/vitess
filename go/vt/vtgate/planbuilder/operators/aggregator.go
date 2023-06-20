@@ -265,6 +265,11 @@ func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
 		return aggr.Original.Expr
 	case opcode.AggregateCountStar:
 		return sqlparser.NewIntLiteral("1")
+	case opcode.AggregateGroupConcat:
+		if len(aggr.Func.GetArgs()) > 1 {
+			panic("more than 1 column")
+		}
+		fallthrough
 	default:
 		return aggr.Func.GetArg()
 	}

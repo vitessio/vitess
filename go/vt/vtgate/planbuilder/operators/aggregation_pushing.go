@@ -457,10 +457,16 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 	case opcode.AggregateCountStar:
 		ab.handleCountStar(ctx, aggr)
 		return nil
-	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
-		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
+		return ab.handlePushThroughAggregation(ctx, aggr)
+	case opcode.AggregateGroupConcat:
+		f := aggr.Func.(*sqlparser.GroupConcatExpr)
+		if f.Distinct || len(f.OrderBy) > 0 || f.Separator != "" {
+			panic("fail here")
+		}
+		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateUnassigned:
 		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 	default:
