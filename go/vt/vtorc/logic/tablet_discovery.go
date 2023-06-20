@@ -195,8 +195,6 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 
 func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	// Discover new tablets.
-	// TODO(sougou): enhance this to work with multi-schema,
-	// where each instanceKey can have multiple tablets.
 	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
@@ -206,9 +204,6 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
-		if tablet.MysqlHostname == "" {
-			continue
-		}
 		old, err := inst.ReadTablet(tabletAliasString)
 		if err != nil && err != inst.ErrTabletAliasNil {
 			log.Error(err)

@@ -127,7 +127,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
 	// Make the current primary vttablet unavailable.
-	_ = curPrimary.VttabletProcess.Kill()
+	_ = curPrimary.VttabletProcess.TearDown()
 	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
