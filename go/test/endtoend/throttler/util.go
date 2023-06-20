@@ -18,6 +18,7 @@ package throttler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,12 +26,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -128,7 +131,7 @@ func throttleAppRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName str
 	if throttle {
 		args = append(args, "1h")
 	} else {
-		args = append(args, "0h")
+		args = append(args, "-1h")
 	}
 	args = append(args, keyspaceName)
 
@@ -181,6 +184,38 @@ func UnthrottleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp th
 	return throttleApp(clusterInstance, throttlerApp, false)
 }
 
+// ThrottleAppAndWaitUntilTabletsConfirm
+func ThrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name) (string, error) {
+	res, err := throttleApp(clusterInstance, throttlerApp, true)
+	if err != nil {
+		return res, err
+	}
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottledApp(t, tablet, throttlerApp, true, ConfigTimeout)
+			}
+		}
+	}
+	return res, nil
+}
+
+// UnthrottleAppAndWaitUntilTabletsConfirm
+func UnthrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name) (string, error) {
+	res, err := throttleApp(clusterInstance, throttlerApp, false)
+	if err != nil {
+		return res, err
+	}
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottledApp(t, tablet, throttlerApp, false, ConfigTimeout)
+			}
+		}
+	}
+	return res, nil
+}
+
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
 // enabled/disabled and have the provided config (if any) until the specified timeout.
 func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabled bool, config *Config, timeout time.Duration) {
@@ -221,6 +256,52 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 		case <-ctx.Done():
 			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen value: %s",
 				tablet.Alias, enabled, timeout, throttlerBody)
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
+// enabled/disabled and have the provided config (if any) until the specified timeout.
+func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp throttlerapp.Name, expectThrottled bool, timeout time.Duration) {
+	throttledAppsURL := fmt.Sprintf("http://localhost:%d/throttler/throttled-apps", tablet.HTTPPort)
+	tabletURL := fmt.Sprintf("http://localhost:%d/debug/status_details", tablet.HTTPPort)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		throttledAppsBody := getHTTPBody(throttledAppsURL)
+		var throttledApps []base.AppThrottle
+		err := json.Unmarshal([]byte(throttledAppsBody), &throttledApps)
+		assert.NoError(t, err)
+		require.NotEmpty(t, throttledApps) // "always-throttled-app" is always there.
+		appFoundThrottled := false
+		for _, throttledApp := range throttledApps {
+			if throttledApp.AppName == throttlerApp.String() && throttledApp.ExpireAt.After(time.Now()) {
+				appFoundThrottled = true
+				break
+			}
+		}
+		if appFoundThrottled == expectThrottled {
+			return
+		}
+		// If the tablet is Not Serving due to e.g. being involved in a
+		// Reshard where its QueryService is explicitly disabled, then
+		// we should not fail the test as the throttler will not be Open.
+		tabletBody := getHTTPBody(tabletURL)
+		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
+		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
+		if class == "unhappy" && strings.Contains(value, "not serving") {
+			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Errorf("timed out waiting for the %s tablet's throttled apps with the correct config (expecting %s to be %v) after %v; last seen value: %s",
+				tablet.Alias, throttlerApp.String(), expectThrottled, timeout, throttledAppsBody)
 			return
 		case <-ticker.C:
 		}

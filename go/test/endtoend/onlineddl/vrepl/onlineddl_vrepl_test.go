@@ -412,8 +412,8 @@ func TestSchemaChange(t *testing.T) {
 		var uuid string
 
 		func() {
-			_, err := throttler.ThrottleApp(clusterInstance, throttlerapp.VStreamerName)
-			defer throttler.UnthrottleApp(clusterInstance, throttlerapp.VStreamerName)
+			_, err := throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.VStreamerName)
+			defer throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.VStreamerName)
 			require.NoError(t, err)
 
 			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
@@ -511,9 +511,9 @@ func TestSchemaChange(t *testing.T) {
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
 
 			insertRows(t, 2)
-			_, err = throttler.ThrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
+			_, err = throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
-			defer throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
+			defer throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 
@@ -562,7 +562,7 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 			})
 			t.Run("unthrottle", func(t *testing.T) {
-				_, err = throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
+				_, err = throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 				assert.NoError(t, err)
 			})
 			t.Run("expect completion", func(t *testing.T) {
@@ -782,9 +782,9 @@ func TestSchemaChange(t *testing.T) {
 	// - tablet throttling
 	t.Run("Revert a migration completed on one shard and cancelled on another", func(t *testing.T) {
 		// shard 0 will run normally, shard 1 will be throttled
-		defer throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
+		defer throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 		t.Run("throttle", func(t *testing.T) {
-			_, err := throttler.ThrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
+			_, err := throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
 		})
 
@@ -806,7 +806,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 		})
 		t.Run("unthrottle", func(t *testing.T) {
-			_, err := throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
+			_, err := throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
 		})
 		var revertUUID string
