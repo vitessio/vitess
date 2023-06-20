@@ -43,22 +43,11 @@ var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 
 // executeSchemaCommands executes some SQL commands. It uses the dba connection parameters, with credentials.
 func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) error {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
-	_, more, err := conn.ExecuteFetchMulti(sql, 0, false)
-	if err != nil {
-		return err
-	}
-	for more {
-		_, more, _, err = conn.ReadQueryResult(0, false)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return mysqld.executeMysqlScript(ctx, params, sql)
 }
 
 func encodeEntityName(name string) string {
