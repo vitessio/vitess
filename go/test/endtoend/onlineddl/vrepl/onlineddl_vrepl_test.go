@@ -229,18 +229,6 @@ func throttleResponse(tablet *cluster.Vttablet, path string) (respBody string, e
 	return respBody, err
 }
 
-// throttle an app using vtctl command
-func throttleApp(throttlerApp throttlerapp.Name) error {
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("UpdateThrottlerConfig", "--", "--throttle-app", throttlerApp.String(), "--throttle-app-duration", "1h", keyspaceName)
-	return err
-}
-
-// unthrottle an app using vtctl command
-func unthrottleApp(throttlerApp throttlerapp.Name) error {
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("UpdateThrottlerConfig", "--", "--throttle-app", throttlerApp.String(), "--throttle-app-duration", "0", keyspaceName)
-	return err
-}
-
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
@@ -424,8 +412,8 @@ func TestSchemaChange(t *testing.T) {
 		var uuid string
 
 		func() {
-			err := throttleApp(throttlerapp.VStreamerName)
-			defer unthrottleApp(throttlerapp.VStreamerName)
+			_, err := throttler.ThrottleApp(clusterInstance, throttlerapp.VStreamerName)
+			defer throttler.UnthrottleApp(clusterInstance, throttlerapp.VStreamerName)
 			require.NoError(t, err)
 
 			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
@@ -523,9 +511,9 @@ func TestSchemaChange(t *testing.T) {
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
 
 			insertRows(t, 2)
-			err = throttleApp(throttlerapp.OnlineDDLName)
+			_, err = throttler.ThrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
-			defer unthrottleApp(throttlerapp.OnlineDDLName)
+			defer throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
 
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 
@@ -574,7 +562,7 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 			})
 			t.Run("unthrottle", func(t *testing.T) {
-				err = unthrottleApp(throttlerapp.OnlineDDLName)
+				_, err = throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
 				assert.NoError(t, err)
 			})
 			t.Run("expect completion", func(t *testing.T) {
@@ -794,9 +782,9 @@ func TestSchemaChange(t *testing.T) {
 	// - tablet throttling
 	t.Run("Revert a migration completed on one shard and cancelled on another", func(t *testing.T) {
 		// shard 0 will run normally, shard 1 will be throttled
-		defer unthrottleApp(throttlerapp.OnlineDDLName)
+		defer throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
 		t.Run("throttle", func(t *testing.T) {
-			err := throttleApp(throttlerapp.OnlineDDLName)
+			_, err := throttler.ThrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
 		})
 
@@ -818,7 +806,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 		})
 		t.Run("unthrottle", func(t *testing.T) {
-			err := unthrottleApp(throttlerapp.OnlineDDLName)
+			_, err := throttler.UnthrottleApp(clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
 		})
 		var revertUUID string

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 type Config struct {
@@ -113,6 +114,71 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 		err = rec.Error()
 	}
 	return res.String(), err
+}
+
+// throttleAppRaw runs vtctlclient UpdateThrottlerConfig with --throttle-app flags
+// This retries the command until it succeeds or times out as the
+// SrvKeyspace record may not yet exist for a newly created
+// Keyspace that is still initializing before it becomes serving.
+func throttleAppRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name, throttle bool) (result string, err error) {
+	args := []string{}
+	args = append(args, "UpdateThrottlerConfig")
+	args = append(args, "--throttle-app", throttlerApp.String())
+	args = append(args, "--throttle-app-duration")
+	if throttle {
+		args = append(args, "--throttle-app-duration", "1h")
+	} else {
+		args = append(args, "--throttle-app-duration", "0h")
+	}
+	args = append(args, keyspaceName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), ConfigTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		result, err = vtctldProcess.ExecuteCommandWithOutput(args...)
+		if err == nil {
+			return result, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("timed out waiting for UpdateThrottlerConfig to succeed after %v; last seen value: %+v, error: %v", ConfigTimeout, result, err)
+		case <-ticker.C:
+		}
+	}
+}
+
+// throttleApp throttles or unthrottles an app
+func throttleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name, throttle bool) (string, error) {
+	rec := concurrency.AllErrorRecorder{}
+	var (
+		err error
+		res strings.Builder
+	)
+	for _, ks := range clusterInstance.Keyspaces {
+		ires, err := throttleAppRaw(&clusterInstance.VtctldClientProcess, ks.Name, throttlerApp, throttle)
+		if err != nil {
+			rec.RecordError(err)
+		}
+		res.WriteString(ires)
+	}
+	if rec.HasErrors() {
+		err = rec.Error()
+	}
+	return res.String(), err
+}
+
+// ThrottleApp throttles given app name for the next hour
+func ThrottleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleApp(clusterInstance, throttlerApp, true)
+}
+
+// ThrottleApp unthrottles given app name
+func UnthrottleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleApp(clusterInstance, throttlerApp, false)
 }
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
