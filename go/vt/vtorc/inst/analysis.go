@@ -18,7 +18,6 @@ package inst
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -72,37 +71,13 @@ const (
 	NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisCode = "NotEnoughValidSemiSyncReplicasStructureWarning"
 )
 
-type InstanceAnalysis struct {
-	key      *InstanceKey
-	analysis AnalysisCode
-}
-
-func NewInstanceAnalysis(instanceKey *InstanceKey, analysis AnalysisCode) *InstanceAnalysis {
-	return &InstanceAnalysis{
-		key:      instanceKey,
-		analysis: analysis,
-	}
-}
-
-func (instanceAnalysis *InstanceAnalysis) String() string {
-	return fmt.Sprintf("%s/%s", instanceAnalysis.key.StringCode(), string(instanceAnalysis.analysis))
-}
-
 // PeerAnalysisMap indicates the number of peers agreeing on an analysis.
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
 
 type ReplicationAnalysisHints struct {
-	IncludeDowntimed bool
-	IncludeNoProblem bool
-	AuditAnalysis    bool
+	AuditAnalysis bool
 }
-
-const (
-	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
-	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
-	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
-)
 
 type AnalysisInstanceType string
 
@@ -114,9 +89,10 @@ const (
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceKey                       InstanceKey
-	AnalyzedInstanceAlias                     *topodatapb.TabletAlias
-	AnalyzedInstancePrimaryKey                InstanceKey
+	AnalyzedInstanceHostname                  string
+	AnalyzedInstancePort                      int
+	AnalyzedInstanceAlias                     string
+	AnalyzedInstancePrimaryAlias              string
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time
 	ClusterDetails                            ClusterInfo
@@ -135,17 +111,12 @@ type ReplicationAnalysis struct {
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
 	CountReplicasFailingToConnectToPrimary    uint
-	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
-	IsDowntimed                               bool
-	IsReplicasDowntimed                       bool // as good as downtimed because all replicas are downtimed AND analysis is all about the replicas (e.e. AllPrimaryReplicasNotReplicating)
-	DowntimeEndTimestamp                      string
-	DowntimeRemainingSeconds                  int
 	IsBinlogServer                            bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool
@@ -166,22 +137,12 @@ type ReplicationAnalysis struct {
 	IsActionableRecovery                      bool
 	ProcessingNodeHostname                    string
 	ProcessingNodeToken                       string
-	CountAdditionalAgreeingNodes              int
 	StartActivePeriod                         string
-	SkippableDueToDowntime                    bool
 	GTIDMode                                  string
 	MinReplicaGTIDMode                        string
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
-	CommandHint                               string
 	IsReadOnly                                bool
-}
-
-type AnalysisMap map[string](*ReplicationAnalysis)
-
-type ReplicationAnalysisChangelog struct {
-	AnalyzedInstanceKey InstanceKey
-	Changelog           []string
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
