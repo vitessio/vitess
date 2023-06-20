@@ -19,7 +19,6 @@ package vrepl
 import (
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"strings"
@@ -150,6 +149,12 @@ var (
 	`
 )
 
+const (
+	customThreshold         = 5
+	throttlerEnabledTimeout = 60 * time.Second
+	useDefaultQuery         = ""
+)
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -216,19 +221,6 @@ func TestMain(m *testing.M) {
 
 }
 
-// direct per-tablet throttler API instruction
-func throttleResponse(tablet *cluster.Vttablet, path string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.VttabletProcess.TabletHostname, tablet.HTTPPort, path)
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, err
-}
-
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
@@ -248,7 +240,7 @@ func TestSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("updating throttler config", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "")
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, useDefaultQuery)
 		require.NoError(t, err)
 	})
 
@@ -259,7 +251,7 @@ func TestSchemaChange(t *testing.T) {
 					t.Run(shard.Name, func(t *testing.T) {
 						for _, tablet := range shard.Vttablets {
 							t.Run(tablet.Alias, func(t *testing.T) {
-								throttler.WaitForThrottlerStatusEnabled(t, tablet, true, nil, extendedMigrationWait)
+								throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: customThreshold}, throttlerEnabledTimeout)
 							})
 						}
 					})
