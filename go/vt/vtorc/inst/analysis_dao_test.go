@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
@@ -807,6 +806,144 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Count())
 			}
+		})
+	}
+}
+
+// TestPostProcessAnalyses tests the functionality of the postProcessAnalyses function.
+func TestPostProcessAnalyses(t *testing.T) {
+	ks0 := ClusterInfo{
+		Keyspace:       "ks",
+		Shard:          "0",
+		CountInstances: 3,
+	}
+	ks80 := ClusterInfo{
+		Keyspace:       "ks",
+		Shard:          "80-",
+		CountInstances: 3,
+	}
+	clusters := map[string]*clusterAnalysis{
+		getKeyspaceShardName(ks0.Keyspace, ks0.Shard): {
+			totalTablets: int(ks0.CountInstances),
+		},
+		getKeyspaceShardName(ks80.Keyspace, ks80.Shard): {
+			totalTablets: int(ks80.CountInstances),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		analyses []*ReplicationAnalysis
+		want     []*ReplicationAnalysis
+	}{
+		{
+			name: "No processing needed",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:       ReplicationStopped,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				}, {
+					Analysis:       ReplicaSemiSyncMustBeSet,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				}, {
+					Analysis:       PrimaryHasPrimary,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				},
+			},
+		}, {
+			name: "Conversion of InvalidPrimary to DeadPrimary",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:              InvalidPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              ConnectedToWrongPrimary,
+					AnalyzedInstanceAlias: "zone1-101",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              ReplicationStopped,
+					AnalyzedInstanceAlias: "zone1-102",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+			want: []*ReplicationAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+		},
+		{
+			name: "Unable to convert InvalidPrimary to DeadPrimary",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:              InvalidPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-101",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              ReplicationStopped,
+					AnalyzedInstanceAlias: "zone1-102",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.want == nil {
+				tt.want = tt.analyses
+			}
+			result := postProcessAnalyses(tt.analyses, clusters)
+			require.ElementsMatch(t, tt.want, result)
 		})
 	}
 }
