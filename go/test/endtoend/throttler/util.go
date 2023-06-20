@@ -126,9 +126,9 @@ func throttleAppRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName str
 	args = append(args, "--throttle-app", throttlerApp.String())
 	args = append(args, "--throttle-app-duration")
 	if throttle {
-		args = append(args, "--throttle-app-duration", "1h")
+		args = append(args, "1h")
 	} else {
-		args = append(args, "--throttle-app-duration", "0h")
+		args = append(args, "0h")
 	}
 	args = append(args, keyspaceName)
 
