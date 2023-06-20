@@ -174,8 +174,9 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	if err != nil {
 		return nil, err
 	}
+	fields := convertFields(result.Fields, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
 	out := &sqltypes.Result{
-		Fields: convertFields(result.Fields, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine),
+		Fields: fields,
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 	}
 	// This code is similar to the one in StreamExecute.
@@ -183,7 +184,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if current == nil {
-			current, curDistincts = convertRow(row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
 			continue
 		}
 		equal, err := oa.keysEqual(current, row)
@@ -192,14 +193,14 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		}
 
 		if equal {
-			current, curDistincts, err = merge(result.Fields, current, row, curDistincts, oa.Aggregates)
+			current, curDistincts, err = merge(fields, current, row, curDistincts, oa.Aggregates)
 			if err != nil {
 				return nil, err
 			}
 			continue
 		}
 		out.Rows = append(out.Rows, current)
-		current, curDistincts = convertRow(row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+		current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
 	}
 
 	if current != nil {
@@ -232,7 +233,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+				current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
 				continue
 			}
 
@@ -251,7 +252,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
-			current, curDistincts = convertRow(row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
 		}
 		return nil
 	})
@@ -277,7 +278,7 @@ func convertFields(fields []*querypb.Field, preProcess bool, aggrs []*AggregateP
 		}
 		fields[aggr.Col] = &querypb.Field{
 			Name: aggr.Alias,
-			Type: OpcodeType[aggr.Opcode],
+			Type: aggr.Opcode.Type(fields[aggr.Col]),
 		}
 		if aggr.isDistinct() {
 			aggr.KeyCol = aggr.Col
@@ -286,7 +287,13 @@ func convertFields(fields []*querypb.Field, preProcess bool, aggrs []*AggregateP
 	return fields
 }
 
-func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregateParams, aggrOnEngine bool) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
+func convertRow(
+	fields []*querypb.Field,
+	row []sqltypes.Value,
+	preProcess bool,
+	aggregates []*AggregateParams,
+	aggrOnEngine bool,
+) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
 	if !preProcess {
 		return row, nil
 	}
@@ -341,7 +348,7 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 			newRow[aggr.Col] = val
 		case AggregateGroupConcat:
 			if !row[aggr.Col].IsNull() {
-				newRow[aggr.Col] = sqltypes.MakeTrusted(sqltypes.Blob, []byte(row[aggr.Col].ToString()))
+				newRow[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(row[aggr.Col].ToString()))
 			}
 		}
 	}
@@ -472,11 +479,11 @@ func merge(
 				break
 			}
 			if result[aggr.Col].IsNull() {
-				result[aggr.Col] = sqltypes.MakeTrusted(sqltypes.Blob, []byte(row2[aggr.Col].ToString()))
+				result[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(row2[aggr.Col].ToString()))
 				break
 			}
 			concat := row1[aggr.Col].ToString() + "," + row2[aggr.Col].ToString()
-			result[aggr.Col] = sqltypes.MakeTrusted(sqltypes.Blob, []byte(concat))
+			result[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(concat))
 		default:
 			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}

@@ -79,7 +79,6 @@ var (
 		AggregateSumDistinct:   sqltypes.Decimal,
 		AggregateSum:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
-		AggregateGroupConcat:   sqltypes.Blob,
 	}
 )
 
@@ -113,4 +112,17 @@ func (code AggregateOpcode) String() string {
 // It's used for testing and diagnostics.
 func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+}
+
+// Type returns the opcode return sql type.
+func (code AggregateOpcode) Type(field *querypb.Field) querypb.Type {
+	switch code {
+	case AggregateGroupConcat:
+		if sqltypes.IsBinary(field.Type) {
+			return sqltypes.Blob
+		}
+		return sqltypes.Text
+	default:
+		return OpcodeType[code]
+	}
 }
