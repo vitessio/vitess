@@ -679,7 +679,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 }
 
 // TestAuditInstanceAnalysisInChangelog tests the functionality of the auditInstanceAnalysisInChangelog function
-// and verifies that we write the correct amount of times to the database.
+// and verifies that we write the correct number of times to the database.
 func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 	tests := []struct {
 		name            string
