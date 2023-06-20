@@ -173,3 +173,90 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal("[[UINT64(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
+
+// TestGroupConcatOnVarchar tests group_concat aggregation.
+func TestScalarGroupConcatOnVarchar(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c2",
+		"varchar",
+	)
+
+	var tcases = []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "ending with null",
+		inputResult: sqltypes.MakeTestResult(
+			fields,
+			"a", "a", "b", "null", "null"),
+		expResult: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"group_concat(c2)",
+				"blob",
+			),
+			`a,a,b`),
+	}, {
+		name:        "empty result",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"group_concat(c2)",
+				"blob",
+			),
+			`null`),
+	}, {
+		name: "only null value for concat",
+		inputResult: sqltypes.MakeTestResult(
+			fields,
+			"null", "null", "null"),
+		expResult: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"group_concat(c2)",
+				"blob",
+			),
+			`null`),
+	}, {
+		name: "empty string value for concat",
+		inputResult: sqltypes.MakeTestResult(
+			fields,
+			"", "", ""),
+		expResult: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"group_concat(c2)",
+				"blob",
+			),
+			`,,`),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateGroupConcat,
+					Col:    0,
+					Alias:  "group_concat(c2)",
+				}},
+				Input:        fp,
+				AggrOnEngine: true,
+				PreProcess:   true,
+			}
+			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}
