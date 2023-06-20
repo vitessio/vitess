@@ -65,7 +65,7 @@ const (
 	AggregateCountDistinct
 	AggregateSumDistinct
 	AggregateGtid
-	AggregateRandom
+	AggregateAnyValue
 	AggregateCountStar
 )
 
@@ -94,8 +94,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum_distinct":   AggregateSumDistinct,
 	"vgtid":          AggregateGtid,
 	"count_star":     AggregateCountStar,
-	"random":         AggregateRandom,
-	"any_value":      AggregateRandom,
+	"any_value":      AggregateAnyValue,
 }
 
 var AggregateName = map[AggregateOpcode]string{
@@ -107,7 +106,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateSumDistinct:   "sum_distinct",
 	AggregateGtid:          "vgtid",
 	AggregateCountStar:     "count_star",
-	AggregateRandom:        "random",
+	AggregateAnyValue:      "any_value",
 }
 
 func (code AggregateOpcode) String() string {

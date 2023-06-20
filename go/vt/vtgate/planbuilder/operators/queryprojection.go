@@ -659,7 +659,7 @@ orderBy:
 				return nil, false, err
 			}
 			if !qp.isExprInGroupByExprs(ctx, getExpr) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
@@ -690,7 +690,7 @@ orderBy:
 				return true
 			}
 			if !qp.isExprInGroupByExprs(ctx, ex) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aeWrap(ex), "")
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}

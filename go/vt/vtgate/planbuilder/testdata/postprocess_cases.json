@@ -2568,7 +2568,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+        "Aggregates": "sum_count(0) AS count(id), any_value(1) AS num",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2634,7 +2634,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count(0) AS count(id), random(1) AS num, random(2)",
+            "Aggregates": "sum_count(0) AS count(id), any_value(1) AS num, any_value(2)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2869,7 +2869,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1, random(3)",
+            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS c1, any_value(3)",
             "GroupBy": "0",
             "Inputs": [
               {

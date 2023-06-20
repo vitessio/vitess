@@ -426,7 +426,7 @@ func isMinOrMax(in popcode.AggregateOpcode) bool {
 }
 
 func isAnyValue(in popcode.AggregateOpcode) bool {
-	return in == popcode.AggregateRandom
+	return in == popcode.AggregateAnyValue
 }
 
 func splitAggregationsToLeftAndRight(

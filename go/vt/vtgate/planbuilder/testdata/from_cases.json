@@ -6374,44 +6374,7 @@
   {
     "comment": "join predicate only depending on the RHS should not turn outer join into inner join",
     "query": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "LeftJoin",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "t1_t1",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "zlookup_unique",
-              "Sharded": true
-            },
-            "FieldQuery": "select t1.id1 from t1 where 1 != 1",
-            "Query": "select t1.id1 from t1",
-            "Table": "t1"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "zlookup_unique",
-              "Sharded": true
-            },
-            "FieldQuery": "select t2.id1 from t1 as t2 where 1 != 1",
-            "Query": "select t2.id1 from t1 as t2 where t2.id1 = t2.id2",
-            "Table": "t1"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "zlookup_unique.t1"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
       "Instructions": {

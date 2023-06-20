@@ -457,7 +457,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 	case opcode.AggregateCountStar:
 		ab.handleCountStar(ctx, aggr)
 		return nil
-	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
