@@ -651,7 +651,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		return err
 	}
 	if initDBSQLFile == "" { // default to built-in
-		if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {
+		if err := mysqld.executeMysqlScript(ctx, params, config.DefaultInitDB); err != nil {
 			return fmt.Errorf("failed to initialize mysqld: %v", err)
 		}
 		return nil
@@ -663,7 +663,11 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
-	if err := mysqld.executeMysqlScript(params, sqlFile); err != nil {
+	script, err := io.ReadAll(sqlFile)
+	if err != nil {
+		return fmt.Errorf("can't read init_db_sql_file (%v): %v", initDBSQLFile, err)
+	}
+	if err := mysqld.executeMysqlScript(ctx, params, string(script)); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	return nil
@@ -1006,34 +1010,25 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
-// executeMysqlScript executes a .sql script from an io.Reader with the mysql
-// command line tool. It uses the connParams as is, not adding credentials.
-func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Reader) error {
-	dir, err := vtenv.VtMysqlRoot()
+// executeMysqlScript executes the contents of an SQL script as a string.
+// It uses the connParams as is, not adding credentials.
+func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.ConnParams, sql string) error {
+	connector := dbconfigs.New(connParams)
+	conn, err := connector.Connect(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := binaryPath(dir, "mysql")
+	defer conn.Close()
+
+	_, more, err := conn.ExecuteFetchMulti(sql, -1, false)
 	if err != nil {
 		return err
 	}
-	cnf, err := mysqld.defaultsExtraFile(connParams)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(cnf)
-	args := []string{
-		"--defaults-extra-file=" + cnf,
-		"--batch",
-		"--default-character-set=utf8mb4",
-	}
-	env, err := buildLdPaths()
-	if err != nil {
-		return err
-	}
-	_, _, err = execCmd(name, args, env, dir, sql)
-	if err != nil {
-		return err
+	for more {
+		_, more, _, err = conn.ReadQueryResult(0, false)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
