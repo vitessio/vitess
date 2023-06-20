@@ -199,9 +199,6 @@ func (tw *TopologyWatcher) loadTablets() {
 				log.Errorf("cannot get tablet for alias %v: %v", alias, err)
 				return
 			}
-			if !(tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(tablet.Tablet)) {
-				return
-			}
 			tw.mu.Lock()
 			aliasStr := topoproto.TabletAliasString(alias)
 			newTablets[aliasStr] = &tabletInfo{
@@ -217,6 +214,10 @@ func (tw *TopologyWatcher) loadTablets() {
 	tw.mu.Lock()
 
 	for alias, newVal := range newTablets {
+		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(newVal.tablet) {
+			continue
+		}
+
 		// trust the alias from topo and add it if it doesn't exist
 		if val, ok := tw.tablets[alias]; ok {
 			// check if the host and port have changed. If yes, replace tablet.
@@ -236,6 +237,10 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for _, val := range tw.tablets {
+		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(val.tablet) {
+			continue
+		}
+
 		if _, ok := newTablets[val.alias]; !ok {
 			tw.healthcheck.RemoveTablet(val.tablet)
 			topologyWatcherOperations.Add(topologyWatcherOpRemoveTablet, 1)

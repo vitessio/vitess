@@ -2922,7 +2922,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
             ],
             "Inputs": [
               {
@@ -3041,7 +3041,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 0] as a",
-              "[COLUMN 2] * [COLUMN 3] as count(*)",
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(*)",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -3104,7 +3104,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 0] as a",
-              "[COLUMN 2] * [COLUMN 3] as count(user_extra.a)",
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(user_extra.a)",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -3166,8 +3166,8 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "([COLUMN 2] * [COLUMN 3]) * [COLUMN 4] as count(u.textcol1)",
-              "([COLUMN 5] * [COLUMN 6]) * [COLUMN 7] as count(ue.foo)",
+              "([COLUMN 2] * COALESCE([COLUMN 3], INT64(1))) * COALESCE([COLUMN 4], INT64(1)) as count(u.textcol1)",
+              "([COLUMN 5] * COALESCE([COLUMN 6], INT64(1))) * COALESCE([COLUMN 7], INT64(1)) as count(ue.foo)",
               "[COLUMN 0] as bar",
               "[COLUMN 1]"
             ],
@@ -3797,7 +3797,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 2] * [COLUMN 3] as sum(col)"
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as sum(col)"
             ],
             "Inputs": [
               {
@@ -4055,7 +4055,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as id",
-                      "[COLUMN 2] * [COLUMN 3] as count(u.`name`)",
+                      "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(u.`name`)",
                       "[COLUMN 1]"
                     ],
                     "Inputs": [
@@ -4181,7 +4181,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as id",
-                      "[COLUMN 2] * [COLUMN 3] as count(*)",
+                      "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(*)",
                       "[COLUMN 1]"
                     ],
                     "Inputs": [
@@ -4839,7 +4839,7 @@
             "Expressions": [
               "[COLUMN 0] as id",
               "[COLUMN 2] as name",
-              "[COLUMN 3] * [COLUMN 4] as count(m.predef1)",
+              "[COLUMN 3] * COALESCE([COLUMN 4], INT64(1)) as count(m.predef1)",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -4893,6 +4893,143 @@
       },
       "TablesUsed": [
         "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Aggregation in a left join query",
+    "query": "select count (u.id) from user u left join user_extra ue on u.col = ue.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count (u.id) from user u left join user_extra ue on u.col = ue.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count(u.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(u.id)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:1,R:1",
+                "JoinVars": {
+                  "u_col": 0
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col, count(u.id) from `user` as u where 1 != 1 group by u.col",
+                    "Query": "select u.col, count(u.id) from `user` as u group by u.col",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from user_extra as ue where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from user_extra as ue where ue.col = :u_col group by 1",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Aggregations from derived table used in arithmetic outside derived table",
+    "query": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
+    "v3-plan": "unsupported: expression on results of a cross-shard subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] as a",
+          "[COLUMN 1] as b",
+          "[COLUMN 0] / [COLUMN 1] as d"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS a, sum(1) AS b",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(a) as a, sum(b) as b from `user` where 1 != 1",
+                "Query": "select sum(a) as a, sum(b) as b from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "when pushing predicates into derived tables, make sure to put them in HAVING when they contain aggregations",
+    "query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where `count` >= :v2",
+        "Table": "user_extra"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId having count(*) >= :v2 order by null) as t1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
         "user.user_extra"
       ]
     }

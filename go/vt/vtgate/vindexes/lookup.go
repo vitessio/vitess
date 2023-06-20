@@ -58,6 +58,10 @@ func (ln *LookupNonUnique) AllowBatch() bool {
 	return ln.lkp.BatchLookup
 }
 
+func (ln *LookupNonUnique) AutoCommitEnabled() bool {
+	return ln.lkp.Autocommit
+}
+
 // String returns the name of the vindex.
 func (ln *LookupNonUnique) String() string {
 	return ln.name
@@ -231,6 +235,10 @@ func (lu *LookupUnique) GetCommitOrder() vtgatepb.CommitOrder {
 
 func (lu *LookupUnique) AllowBatch() bool {
 	return lu.lkp.BatchLookup
+}
+
+func (lu *LookupUnique) AutoCommitEnabled() bool {
+	return lu.lkp.Autocommit
 }
 
 // NewLookupUnique creates a LookupUnique vindex.

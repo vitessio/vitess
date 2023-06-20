@@ -82,7 +82,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
-	if durability == "semi_sync" {
+	// enable_semi_sync is removed in v16 and shouldn't be set on any release v16+
+	if durability == "semi_sync" && clusterInstance.VtTabletMajorVersion <= 15 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
 	}
 
@@ -113,6 +114,10 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard := &cluster.Shard{Name: shardName}
 	shard.Vttablets = tablets
 
+	disableReplicationFlag := "--disable_active_reparents"
+	if clusterInstance.VtTabletMajorVersion >= 15 {
+		disableReplicationFlag = "--disable-replication-manager"
+	}
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock_tables_timeout", "5s",
 		"--init_populate_metadata",
@@ -129,7 +134,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		"--disable_active_reparents")
+		disableReplicationFlag)
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})

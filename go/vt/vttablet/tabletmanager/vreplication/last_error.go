@@ -26,18 +26,20 @@ import (
 
 /*
  * lastError tracks the most recent error for any ongoing process and how long it has persisted.
- * The err field should be a vterror so as to ensure we have meaningful error codes, causes, stack
+ * The err field should be a vterror to ensure we have meaningful error codes, causes, stack
  * traces, etc.
  */
 type lastError struct {
 	name           string
 	err            error
 	firstSeen      time.Time
+	lastSeen       time.Time
 	mu             sync.Mutex
 	maxTimeInError time.Duration // if error persists for this long, shouldRetry() will return false
 }
 
 func newLastError(name string, maxTimeInError time.Duration) *lastError {
+	log.Infof("Created last error: %s, with maxTimeInError: %s", name, maxTimeInError)
 	return &lastError{
 		name:           name,
 		maxTimeInError: maxTimeInError,
@@ -48,15 +50,27 @@ func (le *lastError) record(err error) {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 	if err == nil {
+		log.Infof("Resetting last error: %s", le.name)
 		le.err = nil
 		le.firstSeen = time.Time{}
+		le.lastSeen = time.Time{}
 		return
 	}
 	if !vterrors.Equals(err, le.err) {
+		log.Infof("Got new last error %+v for %s, was %+v", err, le.name, le.err)
 		le.firstSeen = time.Now()
+		le.lastSeen = time.Now()
 		le.err = err
+	} else {
+		// same error seen
+		log.Infof("Got the same last error for %q: %+v ; first seen at %s and last seen %dms ago", le.name, le.err, le.firstSeen, int(time.Since(le.lastSeen).Milliseconds()))
+		if time.Since(le.lastSeen) > le.maxTimeInError {
+			// reset firstSeen, since it has been long enough since the last time we saw this error
+			log.Infof("Resetting firstSeen for %s, since it is too long since the last one", le.name)
+			le.firstSeen = time.Now()
+		}
+		le.lastSeen = time.Now()
 	}
-	// The error is unchanged so we don't need to do anything
 }
 
 func (le *lastError) shouldRetry() bool {

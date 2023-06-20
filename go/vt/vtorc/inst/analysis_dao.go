@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -34,8 +35,6 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
-
-	"github.com/openark/golib/sqlutils"
 )
 
 var analysisChangeWriteAttemptCounter = metrics.NewCounter()

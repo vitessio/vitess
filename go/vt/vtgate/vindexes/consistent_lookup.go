@@ -148,6 +148,10 @@ func (lu *ConsistentLookup) AllowBatch() bool {
 	return lu.lkp.BatchLookup
 }
 
+func (lu *ConsistentLookup) AutoCommitEnabled() bool {
+	return lu.lkp.Autocommit
+}
+
 //====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
@@ -238,6 +242,10 @@ func (lu *ConsistentLookupUnique) Query() (selQuery string, arguments []string) 
 // AllowBatch implements the LookupPlanable interface
 func (lu *ConsistentLookupUnique) AllowBatch() bool {
 	return lu.lkp.BatchLookup
+}
+
+func (lu *ConsistentLookupUnique) AutoCommitEnabled() bool {
+	return lu.lkp.Autocommit
 }
 
 //====================================================================

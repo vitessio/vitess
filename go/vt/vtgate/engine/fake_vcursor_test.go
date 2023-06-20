@@ -105,6 +105,10 @@ func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive,
 	return primitive.TryExecute(ctx, t, bindVars, wantfields)
 }
 
+func (t *noopVCursor) ExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(ctx, t, bindVars, wantfields)
+}
+
 func (t *noopVCursor) StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, t, bindVars, wantfields, callback)
 }
@@ -347,6 +351,10 @@ type tableRoutes struct {
 }
 
 func (f *loggingVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(ctx, f, bindVars, wantfields)
+}
+
+func (f *loggingVCursor) ExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return primitive.TryExecute(ctx, f, bindVars, wantfields)
 }
 

@@ -89,7 +89,7 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		sel.Limit = opQuery.Limit
 		sel.OrderBy = opQuery.OrderBy
 		sel.GroupBy = opQuery.GroupBy
-		sel.Having = opQuery.Having
+		sel.Having = mergeHaving(sel.Having, opQuery.Having)
 		sel.SelectExprs = opQuery.SelectExprs
 		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
@@ -161,12 +161,16 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 
 	sel := qb.sel.(*sqlparser.Select)
-	if sel.Where == nil {
-		sel.AddWhere(expr)
-		return
+	_, isSubQuery := expr.(*sqlparser.ExtractedSubquery)
+	var addPred func(sqlparser.Expr)
+
+	if sqlparser.ContainsAggregation(expr) && !isSubQuery {
+		addPred = sel.AddHaving
+	} else {
+		addPred = sel.AddWhere
 	}
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
-		sel.AddWhere(exp)
+		addPred(exp)
 	}
 }
 
@@ -287,4 +291,18 @@ func (ts *tableSorter) Less(i, j int) bool {
 // Swap implements the Sort interface
 func (ts *tableSorter) Swap(i, j int) {
 	ts.sel.From[i], ts.sel.From[j] = ts.sel.From[j], ts.sel.From[i]
+}
+
+func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {
+	switch {
+	case h1 == nil && h2 == nil:
+		return nil
+	case h1 == nil:
+		return h2
+	case h2 == nil:
+		return h1
+	default:
+		h1.Expr = sqlparser.AndExpressions(h1.Expr, h2.Expr)
+		return h1
+	}
 }

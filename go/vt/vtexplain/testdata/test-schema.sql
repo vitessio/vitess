@@ -4,6 +4,12 @@ create table t1 (
 	floatval float not null default 0,
 	primary key (id)
 );
+create table t2 (
+	id bigint(20) unsigned not null,
+	t1_id bigint(20) unsigned not null default 0,
+	c2 bigint(20) null,
+	primary key (id)
+);
 
 create table user (
 	id bigint,

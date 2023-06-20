@@ -19,12 +19,14 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
@@ -48,6 +50,7 @@ var (
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			logutil.PurgeLogs()
 			traceCloser = trace.StartTracing("vtctldclient")
 			if VtctldClientProtocol != "local" {
 				if err := ensureServerArg(); err != nil {
@@ -82,6 +85,26 @@ var (
 		// propagated).
 		SilenceErrors: true,
 		Version:       servenv.AppVersion.String(),
+		// If we've reached this function, it means that:
+		//
+		// (1) The user specified some positional arguments, which, for the way
+		// we've structured things can only be a subcommand name, **and**
+		//
+		// (2) Cobra was unable to find a subcommand with that name for which to
+		// call a Run or RunE function.
+		//
+		// From this we conclude that the user was trying to either run a
+		// command that doesn't exist (e.g. "vtctldclient delete-my-data") or
+		// has misspelled a legitimate command (e.g. "vtctldclient StapReplication").
+		// If we think this has happened, return an error, which will get
+		// displayed to the user in main.go along with the usage.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().NArg() > 0 {
+				return fmt.Errorf("unknown command: %s", cmd.Flags().Arg(0))
+			}
+
+			return nil
+		},
 	}
 )
 

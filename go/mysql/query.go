@@ -573,7 +573,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	}
 
 	if prepare.ParamsCount > 0 {
-		bitMap, pos, ok = readBytes(payload, pos, int((prepare.ParamsCount+7)/8))
+		bitMap, pos, ok = readBytes(payload, pos, (int(prepare.ParamsCount)+7)/8)
 		if !ok {
 			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading NULL-bitmap failed")
 		}

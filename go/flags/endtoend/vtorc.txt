@@ -29,7 +29,7 @@ Usage of vtorc:
       --log_err_stacks                               log stack traces for errors
       --log_rotate_max_size uint                     size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                  log to standard error instead of files
-      --onclose_timeout duration                     wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                     wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                      wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid_file string                              If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --port int                                     port for the server

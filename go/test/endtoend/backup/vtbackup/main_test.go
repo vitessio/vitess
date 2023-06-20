@@ -135,6 +135,16 @@ func TestMain(m *testing.M) {
 			}
 		}
 
+		if localCluster.VtTabletMajorVersion >= 16 {
+			// If vttablets are any lower than version 16, then they are running the replication manager.
+			// Running VTOrc and replication manager sometimes creates the situation where VTOrc has set up semi-sync on the primary,
+			// but the replication manager starts replication on the replica without setting semi-sync. This hangs the primary.
+			// Even if VTOrc fixes it, since there is no ongoing traffic, the state remains blocked.
+			if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+				return 1, err
+			}
+		}
+
 		return m.Run(), nil
 	}()
 

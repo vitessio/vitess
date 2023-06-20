@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -109,6 +110,15 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
 			if err != nil {
+				// There's a possible race condition: it could happen that a table was dropped in between reading
+				// the list of tables (collectBasicTableData(), earlier) and the point above where we investigate
+				// the table.
+				// This is fine. We identify the situation and keep the table without any fields/columns/key information
+				sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchTable {
+					return
+				}
+
 				allErrors.RecordError(err)
 				cancel()
 				return
@@ -121,6 +131,8 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	}
 
 	// Get primary columns concurrently.
+	// The below runs a single query on `INFORMATION_SCHEMA` and does not interact with the actual tables.
+	// It is therefore safe to run even if some tables are dropped in the interim.
 	colMap := map[string][]string{}
 	if len(tableNames) > 0 {
 		wg.Add(1)

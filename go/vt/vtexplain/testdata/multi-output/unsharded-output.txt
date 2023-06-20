@@ -45,3 +45,8 @@ select ID from t1
 1 ks_unsharded/-: select ID from t1 limit 10001
 
 ----------------------------------------------------------------------
+select t1.id, t2.c2 from t1 join t2 on t1.id = t2.t1_id where t2.c2 in (1)
+
+1 ks_unsharded/-: select t1.id, t2.c2 from t1 join t2 on t1.id = t2.t1_id where t2.c2 in (1) limit 10001
+
+----------------------------------------------------------------------

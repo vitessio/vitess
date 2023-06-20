@@ -106,16 +106,16 @@ func TestEmptyRows(outer *testing.T) {
 func TestScalarAggregateStreamExecute(t *testing.T) {
 	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
-		"count(*)",
-		"uint64",
+		"col|weight_string(col)",
+		"uint64|varbinary",
 	)
 	fp := &fakePrimitive{
 		allResultsInOneCall: true,
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(fields,
-				"1",
+				"1|null",
 			), sqltypes.MakeTestResult(fields,
-				"3",
+				"3|null",
 			)},
 	}
 
@@ -140,4 +140,35 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 
 	got := fmt.Sprintf("%v", results[1].Rows)
 	assert.Equal("[[UINT64(4)]]", got)
+}
+
+// TestScalarAggregateExecuteTruncate checks if truncate works
+func TestScalarAggregateExecuteTruncate(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|weight_string(col)",
+		"uint64|varbinary",
+	)
+
+	fp := &fakePrimitive{
+		allResultsInOneCall: true,
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(fields,
+				"1|null", "3|null",
+			)},
+	}
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateSum,
+			Col:    0,
+		}},
+		Input:               fp,
+		TruncateColumnCount: 1,
+		PreProcess:          true,
+	}
+
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	assert.NoError(err)
+	assert.Equal("[[UINT64(4)]]", fmt.Sprintf("%v", qr.Rows))
 }

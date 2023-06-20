@@ -187,10 +187,17 @@ func (vr *VindexLookup) executeNonBatch(ctx context.Context, vcursor VCursor, id
 		bindVars := map[string]*querypb.BindVariable{
 			vr.Arguments[0]: vars,
 		}
-		result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
+
+		var result *sqltypes.Result
+		if vr.Vindex.AutoCommitEnabled() {
+			result, err = vcursor.ExecutePrimitiveStandalone(ctx, vr.Lookup, bindVars, false)
+		} else {
+			result, err = vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
+		}
 		if err != nil {
 			return nil, err
 		}
+
 		rows := make([][]sqltypes.Value, 0, len(result.Rows))
 		for _, row := range result.Rows {
 			rows = append(rows, []sqltypes.Value{row[1]})
@@ -212,7 +219,17 @@ func (vr *VindexLookup) executeBatch(ctx context.Context, vcursor VCursor, ids [
 	bindVars := map[string]*querypb.BindVariable{
 		vr.Arguments[0]: vars,
 	}
-	result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
+
+	var result *sqltypes.Result
+	if vr.Vindex.AutoCommitEnabled() {
+		result, err = vcursor.ExecutePrimitiveStandalone(ctx, vr.Lookup, bindVars, false)
+	} else {
+		result, err = vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed while running the lookup query")
 	}

@@ -348,7 +348,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 	SUM(i.file_size),
 	SUM(i.allocated_size)
 FROM information_schema.tables t
-INNER JOIN information_schema.innodb_tablespaces i
+LEFT JOIN information_schema.innodb_tablespaces i
 	ON i.name LIKE CONCAT(database(), '/%') AND (i.name = CONCAT(t.table_schema, '/', t.table_name) OR i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%'))
 WHERE t.table_schema = database()
 GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`

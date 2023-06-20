@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -25,17 +27,18 @@ import (
 
 // DerivedTable contains the information about the projection, tables involved in derived table.
 type DerivedTable struct {
-	tableName   string
-	ASTNode     *sqlparser.AliasedTableExpr
-	columnNames []string
-	cols        []sqlparser.Expr
-	tables      TableSet
+	tableName       string
+	ASTNode         *sqlparser.AliasedTableExpr
+	columnNames     []string
+	cols            []sqlparser.Expr
+	tables          TableSet
+	isAuthoritative bool
 }
 
 var _ TableInfo = (*DerivedTable)(nil)
 
 func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *DerivedTable {
-	vTbl := &DerivedTable{}
+	vTbl := &DerivedTable{isAuthoritative: true}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
@@ -56,6 +59,9 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
 				vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
+				if !table.authoritative() {
+					vTbl.isAuthoritative = false
+				}
 			}
 		}
 	}
@@ -66,7 +72,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
 	directDeps := org.tableSetFor(dt.ASTNode)
 	for i, name := range dt.columnNames {
-		if name != colName {
+		if !strings.EqualFold(name, colName) {
 			continue
 		}
 		_, recursiveDeps, qt := org.depsForExpr(dt.cols[i])
@@ -91,7 +97,7 @@ func (dt *DerivedTable) matches(name sqlparser.TableName) bool {
 }
 
 func (dt *DerivedTable) authoritative() bool {
-	return true
+	return dt.isAuthoritative
 }
 
 // Name implements the TableInfo interface

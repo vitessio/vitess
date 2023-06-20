@@ -3,6 +3,7 @@
 		"sharded": false,
 		"tables": {
 			"t1": {},
+			"t2": {},
 			"table_not_in_schema": {}
 		}
 	},

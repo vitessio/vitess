@@ -75,7 +75,7 @@ Usage of vttestserver:
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize_with_random_data is true. Only applies to fields that can contain NULL values. (default 0.1)
       --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
-      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema_dir option) and seeding of random data (--initialize_with_random_data option) will only run during cluster startup if the data directory does not already exist. vschema migrations are run every time the cluster starts, since persistence for the topology server has not been implemented yet
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.

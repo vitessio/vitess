@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
+	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/grpccommon"
