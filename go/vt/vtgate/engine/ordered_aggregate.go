@@ -22,15 +22,12 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
-	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var (
@@ -122,7 +119,7 @@ func (ap *AggregateParams) isDistinct() bool {
 }
 
 func (ap *AggregateParams) preProcess() bool {
-	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid || ap.Opcode == AggregateCount
+	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid || ap.Opcode == AggregateCount || ap.Opcode == AggregateGroupConcat
 }
 
 func (ap *AggregateParams) String() string {
@@ -342,6 +339,10 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
+		case AggregateGroupConcat:
+			if !row[aggr.Col].IsNull() {
+				newRow[aggr.Col] = sqltypes.MakeTrusted(sqltypes.Blob, []byte(row[aggr.Col].ToString()))
+			}
 		}
 	}
 	return newRow, curDistincts
@@ -466,6 +467,16 @@ func merge(
 			result[aggr.Col] = val
 		case AggregateRandom:
 			// we just grab the first value per grouping. no need to do anything more complicated here
+		case AggregateGroupConcat:
+			if row2[aggr.Col].IsNull() {
+				break
+			}
+			if result[aggr.Col].IsNull() {
+				result[aggr.Col] = sqltypes.MakeTrusted(sqltypes.Blob, []byte(row2[aggr.Col].ToString()))
+				break
+			}
+			concat := row1[aggr.Col].ToString() + "," + row2[aggr.Col].ToString()
+			result[aggr.Col] = sqltypes.MakeTrusted(sqltypes.Blob, []byte(concat))
 		default:
 			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}

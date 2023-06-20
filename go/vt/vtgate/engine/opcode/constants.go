@@ -67,6 +67,7 @@ const (
 	AggregateGtid
 	AggregateRandom
 	AggregateCountStar
+	AggregateGroupConcat
 )
 
 var (
@@ -78,6 +79,7 @@ var (
 		AggregateSumDistinct:   sqltypes.Decimal,
 		AggregateSum:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
+		AggregateGroupConcat:   sqltypes.Blob,
 	}
 )
 
@@ -95,6 +97,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"vgtid":          AggregateGtid,
 	"count_star":     AggregateCountStar,
 	"random":         AggregateRandom,
+	"group_concat":   AggregateGroupConcat,
 }
 
 func (code AggregateOpcode) String() string {
