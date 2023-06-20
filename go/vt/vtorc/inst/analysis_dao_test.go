@@ -695,9 +695,10 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			},
 			// As long as we have the vitess record stating that this tablet is the primary
 			// It would be incorrect to run a PRS.
-			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
-			// So it is likely a new tablet.
-			codeWanted: NoProblem,
+			// We should still flag this tablet as Invalid.
+			codeWanted:     InvalidPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 		}, {
 			name: "Removing Replica Tablet's MySQL record",
 			sql: []string{
