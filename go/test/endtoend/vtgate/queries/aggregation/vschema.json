@@ -131,6 +131,22 @@
           "name": "hash"
         }
       ]
+    },
+    "emp": {
+      "column_vindexes": [
+        {
+          "column": "deptno",
+          "name": "hash"
+        }
+      ]
+    },
+    "dept": {
+      "column_vindexes": [
+        {
+          "column": "deptno",
+          "name": "hash"
+        }
+      ]
     }
   }
 }
