@@ -18,6 +18,7 @@ package vtctl
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"regexp"
 	"strings"
@@ -31,6 +32,14 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/wrangler"
+)
+
+var (
+	//go:embed testdata/unknown-params-logged-vschema.json
+	unknownParamsLoggedVSchema string
+
+	//go:embed testdata/unknown-params-logged-dry-run-vschema.json
+	unknownParamsLoggedDryRunVSchema string
 )
 
 // TestApplyVSchema tests the the MoveTables client command
@@ -56,13 +65,13 @@ func TestApplyVSchema(t *testing.T) {
 		},
 		{
 			name: "UnknownParamsLogged",
-			args: []string{"--vschema", "{\"sharded\":true,\"vindexes\":{\"hash_vdx\":{\"type\":\"hash\",\"params\":{\"foo\":\"bar\",\"hello\":\"world\"}},\"binary_vdx\":{\"type\":\"binary\",\"params\":{\"hello\":\"world\"}}}}", ks},
-			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: hello\nW0614 .* vtctl.go:.* Unknown param in vindex binary_vdx: hello",
+			args: []string{"--vschema", unknownParamsLoggedVSchema, ks},
+			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello",
 		},
 		{
 			name: "UnknownParamsLoggedWithDryRun",
-			args: []string{"--vschema", "{\"sharded\":true,\"vindexes\":{\"hash_vdx\":{\"type\":\"hash\",\"params\":{\"foo\":\"bar\",\"hello\":\"world\"}},\"binary_vdx\":{\"type\":\"binary\",\"params\":{\"hello\":\"world\"}}}}", "--dry-run", ks},
-			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: hello\nW0614 .* vtctl.go:.* Unknown param in vindex binary_vdx: hello\nDry run: Skipping update of VSchema",
+			args: []string{"--vschema", unknownParamsLoggedDryRunVSchema, "--dry-run", ks},
+			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello\nDry run: Skipping update of VSchema",
 		},
 	}
 	for _, tt := range tests {

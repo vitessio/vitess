@@ -211,7 +211,7 @@ func TestResharderOneRefTable(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -263,7 +263,7 @@ func TestReshardStopFlags(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -314,7 +314,7 @@ func TestResharderOneRefStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -391,7 +391,7 @@ func TestResharderNoRefStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -604,7 +604,7 @@ func TestResharderUnnamedStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -652,7 +652,7 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -768,7 +768,7 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -835,7 +835,7 @@ func TestResharderMixedTablesOrder2(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.ValidateAndSaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
 		t.Fatal(err)
 	}
 

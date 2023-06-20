@@ -446,7 +446,7 @@ func TestApplyVSchema(t *testing.T) {
 					},
 				},
 			}
-			err := ts.ValidateAndSaveVSchema(ctx, tt.req.Keyspace, origVSchema)
+			err := ts.SaveVSchema(ctx, tt.req.Keyspace, origVSchema)
 			require.NoError(t, err)
 
 			origSrvVSchema := &vschemapb.SrvVSchema{
@@ -1559,7 +1559,7 @@ func TestCreateKeyspace(t *testing.T) {
 			}
 
 			for name, vs := range tt.vschemas {
-				require.NoError(t, ts.ValidateAndSaveVSchema(ctx, name, vs), "error in SaveVSchema(%v, %+v)", name, vs)
+				require.NoError(t, ts.SaveVSchema(ctx, name, vs), "error in SaveVSchema(%v, %+v)", name, vs)
 			}
 
 			// Create the keyspace and make some assertions
@@ -6060,7 +6060,7 @@ func TestGetVSchema(t *testing.T) {
 	t.Run("found", func(t *testing.T) {
 		t.Parallel()
 
-		err := ts.ValidateAndSaveVSchema(ctx, "testkeyspace", &vschemapb.Keyspace{
+		err := ts.SaveVSchema(ctx, "testkeyspace", &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
 				"v1": {

@@ -46,7 +46,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 		t.Error(err)
 	}
 
-	err = ts.ValidateAndSaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
+	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"unsharded": {},
 		},
@@ -66,7 +66,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = ts.ValidateAndSaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
+	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
 		Sharded: true,
 	})
 	require.NoError(t, err)

@@ -30,10 +30,14 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// SaveVSchema saves the VSchema, without validating it.
-// Should only be used if the VSchema was already validated.
+// SaveVSchema first validates the VSchema, then saves it.
 // If the VSchema is empty, just remove it.
 func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+	_, err := vindexes.BuildKeyspace(vschema)
+	if err != nil {
+		return err
+	}
+
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	data, err := vschema.MarshalVT()
 	if err != nil {
@@ -47,17 +51,6 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 		log.Infof("successfully updated vschema for keyspace %s: %+v", keyspace, vschema)
 	}
 	return err
-}
-
-// ValidateAndSaveVSchema first validates the VSchema, then saves it.
-// If the VSchema is empty, just remove it.
-func (ts *Server) ValidateAndSaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
-	_, err := vindexes.BuildKeyspace(vschema)
-	if err != nil {
-		return err
-	}
-
-	return ts.SaveVSchema(ctx, keyspace, vschema)
 }
 
 // DeleteVSchema delete the keyspace if it exists
@@ -89,7 +82,7 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 		log.Infof("error in getting vschema for keyspace %s: %v", keyspace, err)
 	}
 	if vschema == nil || IsErrType(err, NoNode) {
-		err = ts.ValidateAndSaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
+		err = ts.SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
 			Sharded:  false,
 			Vindexes: make(map[string]*vschemapb.Vindex),
 			Tables:   make(map[string]*vschemapb.Table),

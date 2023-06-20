@@ -70,7 +70,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 	}
 
 	ks := vschema.Keyspaces[ksName]
-	err = topoServer.ValidateAndSaveVSchema(ctx, ksName, ks)
+	err = topoServer.SaveVSchema(ctx, ksName, ks)
 	if err != nil {
 		return err
 	}

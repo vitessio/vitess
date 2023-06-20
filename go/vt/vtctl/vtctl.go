@@ -1900,7 +1900,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			// SNAPSHOT keyspaces are excluded from global routing.
 			vs.RequireExplicitRouting = true
 		}
-		if err := wr.TopoServer().ValidateAndSaveVSchema(ctx, keyspace, vs); err != nil {
+		if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
 			wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)
 			return err
 		}
@@ -3343,7 +3343,13 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Log unknown Vindex params as warnings.
-	for name, vdx := range ksVs.Vindexes {
+	var vdxNames []string
+	for name := range ksVs.Vindexes {
+		vdxNames = append(vdxNames, name)
+	}
+	sort.Strings(vdxNames)
+	for _, name := range vdxNames {
+		vdx := ksVs.Vindexes[name]
 		if val, ok := vdx.(vindexes.ParamValidating); ok {
 			for _, param := range val.UnknownParams() {
 				wr.Logger().Warningf("Unknown param in vindex %s: %s", name, param)

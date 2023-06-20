@@ -777,20 +777,20 @@ func TestVSchemaVindexUnknownParams(t *testing.T) {
 	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
 	hcVTGateTest.Reset()
 
-	unknownParams := vschemaVindexUnknownParams.Get()
+	unknownParams := vindexUnknownParams.Get()
 	require.Equal(t, int64(0), unknownParams)
 
 	s.VSchema = shardedVSchemaUnknownParams
 	srvSchema = getSandboxSrvVSchema()
 	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
 
-	unknownParams = vschemaVindexUnknownParams.Get()
+	unknownParams = vindexUnknownParams.Get()
 	require.Equal(t, int64(3), unknownParams)
 
 	s.VSchema = shardedVSchema
 	srvSchema = getSandboxSrvVSchema()
 	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
 
-	unknownParams = vschemaVindexUnknownParams.Get()
+	unknownParams = vindexUnknownParams.Get()
 	require.Equal(t, int64(0), unknownParams)
 }

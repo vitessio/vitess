@@ -101,7 +101,7 @@ const (
     <th>Sharded</th>
     <th>Table Count</th>
     <th>Vindex Count</th>
-    <th>Vindex Unknown Params Count</th>
+    <th>Vindex Unknown Parameters Count</th>
     <th>Error</th>
   </tr>
 {{range $i, $ks := .Keyspaces}}  <tr>

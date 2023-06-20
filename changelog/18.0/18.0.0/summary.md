@@ -10,7 +10,7 @@
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
   - **[New stats](#new-stats)**
-    - [VTGate VSchema Vindex unknown params](#vtgate-vschema-vindex-unknown-params)
+    - [VTGate Vindex unknown params](#vtgate-vindex-unknown-params)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -36,6 +36,6 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 
 ### <a id="new-stats"/>New stats
 
-#### <a id="vtgate-vschema-vindex-unknown-params"/>VTGate VSchema Vindex unknown params
+#### <a id="vtgate-vindex-unknown-params"/>VTGate Vindex unknown params
 
-Gauges unknown Vindex params found in the latest VSchema pulled from the topology.
+The VTGate stat `VindexUnknownParams` gauges unknown Vindex params found in the latest VSchema pulled from the topology.

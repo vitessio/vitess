@@ -161,12 +161,12 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		},
 	}
 	if len(sourceShards) != 1 {
-		if err := tme.ts.ValidateAndSaveVSchema(ctx, "ks1", vs); err != nil {
+		if err := tme.ts.SaveVSchema(ctx, "ks1", vs); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if len(targetShards) != 1 {
-		if err := tme.ts.ValidateAndSaveVSchema(ctx, "ks2", vs); err != nil {
+		if err := tme.ts.SaveVSchema(ctx, "ks2", vs); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -329,7 +329,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			},
 		},
 	}
-	if err := tme.ts.ValidateAndSaveVSchema(ctx, "ks", vs); err != nil {
+	if err := tme.ts.SaveVSchema(ctx, "ks", vs); err != nil {
 		t.Fatal(err)
 	}
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {

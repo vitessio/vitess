@@ -947,12 +947,12 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 		vschemaCounters.Add("Reload", 1)
 	}
 
-	if vschemaVindexUnknownParams != nil {
+	if vindexUnknownParams != nil {
 		var unknownParams int
 		for _, ks := range stats.Keyspaces {
 			unknownParams += ks.VindexUnknownParamsCount
 		}
-		vschemaVindexUnknownParams.Set(int64(unknownParams))
+		vindexUnknownParams.Set(int64(unknownParams))
 	}
 }
 
