@@ -38,7 +38,7 @@ import (
 )
 
 func TestPersistConfig(t *testing.T) {
-	t.Skip("temporarily skipping this to unblock PRs since it's flaky")
+	// t.Skip("temporarily skipping this to unblock PRs since it's flaky")
 	type config struct {
 		Foo int `json:"foo"`
 	}
@@ -156,7 +156,26 @@ func TestWatchConfig(t *testing.T) {
 			return err
 		}
 
-		return os.WriteFile(tmp.Name(), data, stat.Mode())
+		err = os.WriteFile(tmp.Name(), data, stat.Mode())
+		if err != nil {
+			return err
+		}
+
+		data, err = os.ReadFile(tmp.Name())
+		if err != nil {
+			return err
+		}
+
+		var cfg config
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return err
+		}
+
+		if cfg.A != a || cfg.B != b {
+			return fmt.Errorf("config did not persist; want %+v got %+v", config{A: a, B: b}, cfg)
+		}
+
+		return nil
 	}
 	writeRandomConfig := func() error {
 		a, b := rand.Intn(100), rand.Intn(100)
