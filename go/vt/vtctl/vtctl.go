@@ -123,6 +123,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -3496,7 +3497,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
 	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
-
+	throttledApp := subFlags.String("throttle-app", "", "an app name to throttle")
+	throttledAppRatio := subFlags.Float64("throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
+	throttledAppDuration := subFlags.Duration("throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specififed in --throttled-app)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3511,9 +3514,16 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
+	if subFlags.Changed("throttle-app-ratio") && *throttledApp == "" {
+		return fmt.Errorf("--throttle-app-ratio requires --throttle-app")
+	}
+	if subFlags.Changed("throttle-app-duration") && *throttledApp == "" {
+		return fmt.Errorf("--throttle-app-duration requires --throttle-app")
+	}
+
 	keyspace := subFlags.Arg(0)
 
-	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, &vtctldatapb.UpdateThrottlerConfigRequest{
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{
 		Keyspace:          keyspace,
 		Enable:            *enable,
 		Disable:           *disable,
@@ -3522,7 +3532,15 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		Threshold:         *threshold,
 		CheckAsCheckSelf:  *checkAsCheckSelf,
 		CheckAsCheckShard: *checkAsCheckShard,
-	})
+	}
+	if *throttledApp != "" {
+		req.ThrottledApp = &topodatapb.ThrottledAppRule{
+			Name:      *throttledApp,
+			Ratio:     *throttledAppRatio,
+			ExpiresAt: logutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
+		}
+	}
+	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)
 	return err
 }
 

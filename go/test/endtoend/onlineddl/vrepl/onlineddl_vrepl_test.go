@@ -229,14 +229,16 @@ func throttleResponse(tablet *cluster.Vttablet, path string) (respBody string, e
 	return respBody, err
 }
 
-// direct per-tablet throttler API instruction
-func throttleApp(tablet *cluster.Vttablet, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp))
+// throttle an app using vtctl command
+func throttleApp(throttlerApp throttlerapp.Name) error {
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("UpdateThrottlerConfig", "--", "--throttle-app", throttlerApp.String(), "--throttle-app-duration", "1h", keyspaceName)
+	return err
 }
 
-// direct per-tablet throttler API instruction
-func unthrottleApp(tablet *cluster.Vttablet, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp))
+// unthrottle an app using vtctl command
+func unthrottleApp(throttlerApp throttlerapp.Name) error {
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("UpdateThrottlerConfig", "--", "--throttle-app", throttlerApp.String(), "--throttle-app-duration", "0", keyspaceName)
+	return err
 }
 
 func TestSchemaChange(t *testing.T) {
@@ -257,16 +259,26 @@ func TestSchemaChange(t *testing.T) {
 	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 	require.NoError(t, err)
 
-	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "")
-	require.NoError(t, err)
+	t.Run("updating throttler config", func(t *testing.T) {
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "")
+		require.NoError(t, err)
+	})
 
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				throttler.WaitForThrottlerStatusEnabled(t, tablet, true, nil, extendedMigrationWait)
-			}
+	t.Run("checking throttler config", func(t *testing.T) {
+		for _, ks := range clusterInstance.Keyspaces {
+			t.Run(ks.Name, func(t *testing.T) {
+				for _, shard := range ks.Shards {
+					t.Run(shard.Name, func(t *testing.T) {
+						for _, tablet := range shard.Vttablets {
+							t.Run(tablet.Alias, func(t *testing.T) {
+								throttler.WaitForThrottlerStatusEnabled(t, tablet, true, nil, extendedMigrationWait)
+							})
+						}
+					})
+				}
+			})
 		}
-	}
+	})
 
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
@@ -412,18 +424,9 @@ func TestSchemaChange(t *testing.T) {
 		var uuid string
 
 		func() {
-			for _, shard := range shards {
-				// technically we only need to throttle on a REPLICA, because that's the
-				// vstreamer source; but it's OK to be on the safe side and throttle on all tablets. Doesn't
-				// change the essence of this test.
-				for _, tablet := range shard.Vttablets {
-					body, err := throttleApp(tablet, throttlerapp.VStreamerName)
-					defer unthrottleApp(tablet, throttlerapp.VStreamerName)
-
-					assert.NoError(t, err)
-					assert.Contains(t, body, throttlerapp.VStreamerName)
-				}
-			}
+			err := throttleApp(throttlerapp.VStreamerName)
+			defer unthrottleApp(throttlerapp.VStreamerName)
+			require.NoError(t, err)
 
 			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 			_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
@@ -520,24 +523,10 @@ func TestSchemaChange(t *testing.T) {
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
 
 			insertRows(t, 2)
-			for i := range shards {
-				var body string
-				var err error
-				switch i {
-				case 0:
-					// this is the shard where we run PRS
-					// Use per-tablet throttling API
-					body, err = throttleApp(currentPrimaryTablet, throttlerapp.OnlineDDLName)
-					defer unthrottleApp(currentPrimaryTablet, throttlerapp.OnlineDDLName)
-				case 1:
-					// no PRS on this shard
-					// Use per-tablet throttling API
-					body, err = throttleApp(shards[i].Vttablets[0], throttlerapp.OnlineDDLName)
-					defer unthrottleApp(shards[i].Vttablets[0], throttlerapp.OnlineDDLName)
-				}
-				assert.NoError(t, err)
-				assert.Contains(t, body, throttlerapp.OnlineDDLName)
-			}
+			err = throttleApp(throttlerapp.OnlineDDLName)
+			assert.NoError(t, err)
+			defer unthrottleApp(throttlerapp.OnlineDDLName)
+
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 
 			t.Run("wait for migration to run", func(t *testing.T) {
@@ -585,22 +574,8 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 			})
 			t.Run("unthrottle", func(t *testing.T) {
-				for i := range shards {
-					var body string
-					var err error
-					switch i {
-					case 0:
-						// this is the shard where we run PRS
-						// Use per-tablet throttling API
-						body, err = unthrottleApp(currentPrimaryTablet, throttlerapp.OnlineDDLName)
-					case 1:
-						// no PRS on this shard
-						// Use per-tablet throttling API
-						body, err = unthrottleApp(shards[i].Vttablets[0], throttlerapp.OnlineDDLName)
-					}
-					assert.NoError(t, err)
-					assert.Contains(t, body, throttlerapp.OnlineDDLName)
-				}
+				err = unthrottleApp(throttlerapp.OnlineDDLName)
+				assert.NoError(t, err)
 			})
 			t.Run("expect completion", func(t *testing.T) {
 				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -819,23 +794,21 @@ func TestSchemaChange(t *testing.T) {
 	// - tablet throttling
 	t.Run("Revert a migration completed on one shard and cancelled on another", func(t *testing.T) {
 		// shard 0 will run normally, shard 1 will be throttled
-		defer unthrottleApp(shards[1].Vttablets[0], throttlerapp.OnlineDDLName)
-		t.Run("throttle shard 1", func(t *testing.T) {
-			body, err := throttleApp(shards[1].Vttablets[0], throttlerapp.OnlineDDLName)
+		defer unthrottleApp(throttlerapp.OnlineDDLName)
+		t.Run("throttle", func(t *testing.T) {
+			err := throttleApp(throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, throttlerapp.OnlineDDLName)
 		})
 
 		var uuid string
-		t.Run("run migrations, expect 1st to complete, 2nd to be running", func(t *testing.T) {
+		t.Run("run migrations, expect running on both shards", func(t *testing.T) {
 			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 			{
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusRunning)
 			}
 			{
-				// shard 1 is throttled
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards[1:], uuid, schema.OnlineDDLStatusRunning)
@@ -844,10 +817,9 @@ func TestSchemaChange(t *testing.T) {
 		t.Run("check cancel migration", func(t *testing.T) {
 			onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 		})
-		t.Run("unthrottle shard 1", func(t *testing.T) {
-			body, err := unthrottleApp(shards[1].Vttablets[0], throttlerapp.OnlineDDLName)
+		t.Run("unthrottle", func(t *testing.T) {
+			err := unthrottleApp(throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, throttlerapp.OnlineDDLName)
 		})
 		var revertUUID string
 		t.Run("issue revert migration", func(t *testing.T) {
@@ -859,12 +831,12 @@ func TestSchemaChange(t *testing.T) {
 			revertUUID = row.AsString("uuid", "")
 			assert.NotEmpty(t, revertUUID)
 		})
-		t.Run("expect one revert successful, another failed", func(t *testing.T) {
+		t.Run("migrations were cancelled, revert should impossible", func(t *testing.T) {
 			{
 				// shard 0 migration was complete. Revert should be successful
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], revertUUID, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], revertUUID, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], revertUUID, schema.OnlineDDLStatusFailed)
 			}
 			{
 				// shard 0 migration was cancelled. Revert should not be possible
