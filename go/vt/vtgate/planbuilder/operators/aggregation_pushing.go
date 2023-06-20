@@ -466,7 +466,10 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		if f.Distinct || len(f.OrderBy) > 0 || f.Separator != "" {
 			panic("fail here")
 		}
-		return ab.handlePushThroughAggregation(ctx, aggr)
+		// this needs special handling, currently aborting the push of function
+		// and later will try pushing the column instead.
+		// TODO: this should be handled better by pushing the function down.
+		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
 		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 	default:
