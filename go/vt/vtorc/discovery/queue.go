@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // QueueMetric contains the queue's active and queued sizes
@@ -46,9 +45,9 @@ type Queue struct {
 
 	name         string
 	done         chan struct{}
-	queue        chan inst.InstanceKey
-	queuedKeys   map[inst.InstanceKey]time.Time
-	consumedKeys map[inst.InstanceKey]time.Time
+	queue        chan string
+	queuedKeys   map[string]time.Time
+	consumedKeys map[string]time.Time
 	metrics      []QueueMetric
 }
 
@@ -62,13 +61,6 @@ func init() {
 	discoveryQueue = make(map[string](*Queue))
 }
 
-// StopMonitoring stops monitoring all the queues
-func StopMonitoring() {
-	for _, q := range discoveryQueue {
-		q.stopMonitoring()
-	}
-}
-
 // CreateOrReturnQueue allows for creation of a new discovery queue or
 // returning a pointer to an existing one given the name.
 func CreateOrReturnQueue(name string) *Queue {
@@ -80,9 +72,9 @@ func CreateOrReturnQueue(name string) *Queue {
 
 	q := &Queue{
 		name:         name,
-		queuedKeys:   make(map[inst.InstanceKey]time.Time),
-		consumedKeys: make(map[inst.InstanceKey]time.Time),
-		queue:        make(chan inst.InstanceKey, config.DiscoveryQueueCapacity),
+		queuedKeys:   make(map[string]time.Time),
+		consumedKeys: make(map[string]time.Time),
+		queue:        make(chan string, config.DiscoveryQueueCapacity),
 	}
 	go q.startMonitoring()
 
@@ -134,7 +126,7 @@ func (q *Queue) QueueLen() int {
 
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
-func (q *Queue) Push(key inst.InstanceKey) {
+func (q *Queue) Push(key string) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -154,7 +146,7 @@ func (q *Queue) Push(key inst.InstanceKey) {
 
 // Consume fetches a key to process; blocks if queue is empty.
 // Release must be called once after Consume.
-func (q *Queue) Consume() inst.InstanceKey {
+func (q *Queue) Consume() string {
 	q.Lock()
 	queue := q.queue
 	q.Unlock()
@@ -179,7 +171,7 @@ func (q *Queue) Consume() inst.InstanceKey {
 
 // Release removes a key from a list of being processed keys
 // which allows that key to be pushed into the queue again.
-func (q *Queue) Release(key inst.InstanceKey) {
+func (q *Queue) Release(key string) {
 	q.Lock()
 	defer q.Unlock()
 

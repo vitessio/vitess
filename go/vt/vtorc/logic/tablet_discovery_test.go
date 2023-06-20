@@ -27,11 +27,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -105,18 +104,14 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_tablet table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
+		db.ClearVTOrcDatabase()
 	}()
 
 	// Create a memory topo-server and create the keyspace and shard records
 	ts = memorytopo.NewServer(cell1)
-	_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Add tablets to the topo-server
@@ -233,22 +228,16 @@ func TestShardPrimary(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_tablet table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
-	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
-	}()
-
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			_, err = orcDb.Exec("delete from vitess_tablet")
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
 
 			// Create a memory topo-server and create the keyspace and shard records
 			ts = memorytopo.NewServer(cell1)
-			_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 			require.NoError(t, err)
 
 			// Add tablets to the topo-server
@@ -279,7 +268,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	var instancesRefreshed atomic.Int32
 	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
-	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
+	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(string) {
 		instancesRefreshed.Add(1)
 	}, forceRefresh, tabletsToIgnore)
 	// Verify that all the tablets are present in the database
@@ -295,16 +284,13 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 // is the same as the one provided or reading it gives the same error as expected
 func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString string) {
 	t.Helper()
-	tabletKey := inst.InstanceKey{
-		Hostname: hostname,
-		Port:     int(tabletWanted.MysqlPort),
-	}
-	tablet, err := inst.ReadTablet(tabletKey)
+	tabletAlias := topoproto.TabletAliasString(tabletWanted.Alias)
+	tablet, err := inst.ReadTablet(tabletAlias)
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
 		assert.NoError(t, err)
-		assert.EqualValues(t, tabletKey.Port, tablet.MysqlPort)
+		assert.EqualValues(t, tabletAlias, topoproto.TabletAliasString(tablet.Alias))
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
 		assert.Empty(t, diff)
 	}

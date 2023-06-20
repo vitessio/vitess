@@ -115,20 +115,20 @@ func TestAPIEndpoints(t *testing.T) {
 			return response == "[]"
 		})
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Verify that filtering by keyspace also works in the API as intended
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")

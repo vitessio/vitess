@@ -26,6 +26,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -117,13 +118,10 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
 	analysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceKey: inst.InstanceKey{
-			Hostname: tablet.MysqlHostname,
-			Port:     int(tablet.MysqlPort),
-		},
+		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ts = memorytopo.NewServer("zone1")
-	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, nil, false, false)
+	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry)
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
 }
@@ -167,18 +165,12 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
 	primaryAnalysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceKey: inst.InstanceKey{
-			Hostname: primary.MysqlHostname,
-			Port:     int(primary.MysqlPort),
-		},
-		Analysis: inst.ReplicationStopped,
+		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
+		Analysis:              inst.ReplicationStopped,
 	}
 	replicaAnalysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceKey: inst.InstanceKey{
-			Hostname: replica.MysqlHostname,
-			Port:     int(replica.MysqlPort),
-		},
-		Analysis: inst.DeadPrimary,
+		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
+		Analysis:              inst.DeadPrimary,
 	}
 	ts = memorytopo.NewServer("zone1")
 	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
@@ -195,26 +187,17 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		name                 string
 		ersEnabled           bool
 		analysisCode         inst.AnalysisCode
-		analyzedInstanceKey  *inst.InstanceKey
 		wantRecoveryFunction recoveryFunction
 	}{
 		{
-			name:         "DeadPrimary with ERS enabled",
-			ersEnabled:   true,
-			analysisCode: inst.DeadPrimary,
-			analyzedInstanceKey: &inst.InstanceKey{
-				Hostname: hostname,
-				Port:     1,
-			},
+			name:                 "DeadPrimary with ERS enabled",
+			ersEnabled:           true,
+			analysisCode:         inst.DeadPrimary,
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
-			name:         "DeadPrimary with ERS disabled",
-			ersEnabled:   false,
-			analysisCode: inst.DeadPrimary,
-			analyzedInstanceKey: &inst.InstanceKey{
-				Hostname: hostname,
-				Port:     1,
-			},
+			name:                 "DeadPrimary with ERS disabled",
+			ersEnabled:           false,
+			analysisCode:         inst.DeadPrimary,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryHasPrimary",
@@ -251,7 +234,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetERSEnabled(tt.ersEnabled)
 			defer config.SetERSEnabled(prevVal)
 
-			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, tt.analyzedInstanceKey)
+			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, "")
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
 		})
 	}
