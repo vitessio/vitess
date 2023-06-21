@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -89,8 +88,6 @@ const (
 
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
-	inst.PostponedFunctionsContainer
-
 	ID                     int64
 	UID                    string
 	AnalysisEntry          inst.ReplicationAnalysis
@@ -111,7 +108,6 @@ type TopologyRecovery struct {
 	LastDetectionID        int64
 	RelatedRecoveryID      int64
 	Type                   RecoveryType
-	RecoveryType           PrimaryRecoveryType
 }
 
 func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *TopologyRecovery {
@@ -119,7 +115,6 @@ func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *Topology
 	topologyRecovery.UID = util.PrettyUniqueToken()
 	topologyRecovery.AnalysisEntry = replicationAnalysis
 	topologyRecovery.AllErrors = []string{}
-	topologyRecovery.RecoveryType = NotPrimaryRecovery
 	return topologyRecovery
 }
 
@@ -149,15 +144,6 @@ func NewTopologyRecoveryStep(uid string, message string) *TopologyRecoveryStep {
 		Message:     message,
 	}
 }
-
-type PrimaryRecoveryType string
-
-const (
-	NotPrimaryRecovery          PrimaryRecoveryType = "NotPrimaryRecovery"
-	PrimaryRecoveryGTID         PrimaryRecoveryType = "PrimaryRecoveryGTID"
-	PrimaryRecoveryBinlogServer PrimaryRecoveryType = "PrimaryRecoveryBinlogServer"
-	PrimaryRecoveryUnknown      PrimaryRecoveryType = "PrimaryRecoveryUnknown"
-)
 
 var emergencyReadTopologyInstanceMap *cache.Cache
 var emergencyRestartReplicaTopologyInstanceMap *cache.Cache
@@ -691,12 +677,6 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis) (err
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
 		// that we just completed because we would be using stale data.
 		DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
-	}
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Waiting for %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
-	topologyRecovery.Wait()
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Executed %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
-	if topologyRecovery.PostponedFunctionsContainer.Len() > 0 {
-		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Executed postponed functions: %+v", strings.Join(topologyRecovery.PostponedFunctionsContainer.Descriptions(), ", ")))
 	}
 	return err
 }

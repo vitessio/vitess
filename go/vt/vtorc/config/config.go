@@ -36,10 +36,7 @@ var configurationLoaded = make(chan bool)
 const (
 	HealthPollSeconds                     = 1
 	ActiveNodeExpireSeconds               = 5
-	MaintenanceOwner                      = "vtorc"
 	AuditPageSize                         = 20
-	MaintenancePurgeDays                  = 7
-	MaintenanceExpireMinutes              = 10
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
 	DiscoveryMaxConcurrency               = 300 // Number of goroutines doing hosts discovery
@@ -47,7 +44,6 @@ const (
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
-	CandidateInstanceExpireMinutes        = 60  // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on primary failover) is expired.
 	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 )
 

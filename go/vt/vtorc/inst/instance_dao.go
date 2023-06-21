@@ -237,10 +237,10 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SemiSyncPrimaryStatus = fullStatus.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
 
-		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
-			// Stuff only supported on Oracle MySQL >= 5.6
+		if instance.IsOracleMySQL() || instance.IsPercona() {
+			// Stuff only supported on Oracle / Percona MySQL
 			// ...
-			// @@gtid_mode only available in Orcale MySQL >= 5.6
+			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
 			instance.GTIDMode = fullStatus.GtidMode
 			instance.ServerUUID = fullStatus.ServerUuid
 			if fullStatus.PrimaryStatus != nil {
@@ -964,7 +964,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) error {
 	writeInstances := [](*Instance){}
 	for _, instance := range instances {
-		if InstanceIsForgotten(instance.InstanceAlias) && !instance.IsSeed() {
+		if InstanceIsForgotten(instance.InstanceAlias) {
 			continue
 		}
 		writeInstances = append(writeInstances, instance)
