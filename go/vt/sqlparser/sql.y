@@ -525,6 +525,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <optVal> column_default on_update
 %type <str> charset_opt character_set collate_opt collate
 %type <boolean> default_keyword_opt
+//%type <boolean> lateral_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
 %type <boolVal> stored_opt
@@ -5588,9 +5589,25 @@ table_factor:
     case *ValuesStatement:
         n.Columns = $4
     }
-    $$ = &AliasedTableExpr{Expr:$1, As: $3}
+    $$ = &AliasedTableExpr{Lateral: false, Expr:$1, As: $3}
+  }
+| LATERAL subquery_or_values as_opt table_alias column_list_opt
+  {
+    switch n := $2.(type) {
+    case *Subquery:
+        n.Columns = $5
+    case *ValuesStatement:
+        n.Columns = $5
+    }
+    $$ = &AliasedTableExpr{Lateral: true, Expr:$2, As: $4}
   }
 | subquery_or_values
+  {
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
+  }
+| LATERAL subquery_or_values
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
@@ -5602,6 +5619,15 @@ table_factor:
   }
 | table_function
 | json_table
+
+//lateral_opt:
+//  {
+//    $$ = false
+//  }
+//| LATERAL
+//  {
+//    $$ = true
+//  }
 
 values_statement:
   VALUES row_list
@@ -5736,6 +5762,19 @@ join_table:
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
+//| table_reference inner_join LATERAL subquery_or_values as_opt table_alias column_list_opt join_condition_opt
+//  {
+//    switch n := $4.(type) {
+//    case *Subquery:
+//      n.Columns = $7
+//    case *ValuesStatement:
+//      n.Columns = $7
+//    }
+//
+//    tblFac := &AliasedTableExpr{Expr:$4, As: $6}
+//
+//    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: tblFac, Condition: $8}
+//  }
 
 join_condition:
   ON expression
@@ -5818,7 +5857,7 @@ outer_join:
   }
 
 natural_join:
- NATURAL JOIN
+  NATURAL JOIN
   {
     $$ = NaturalJoinStr
   }

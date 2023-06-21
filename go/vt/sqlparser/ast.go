@@ -4050,6 +4050,7 @@ type AliasedTableExpr struct {
 	As         TableIdent
 	Hints      *IndexHints
 	AsOf       *AsOf
+	Lateral    bool
 }
 
 type AsOf struct {
