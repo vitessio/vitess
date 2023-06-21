@@ -43,7 +43,8 @@ type (
 		Aggregations []Aggr
 
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
-		Pushed bool
+		Pushed        bool
+		offsetPlanned bool
 
 		// Original will only be true for the original aggregator created from the AST
 		Original      bool
@@ -63,6 +64,7 @@ func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 		Grouping:      slices.Clone(a.Grouping),
 		Aggregations:  slices.Clone(a.Aggregations),
 		Pushed:        a.Pushed,
+		offsetPlanned: a.offsetPlanned,
 		Original:      a.Original,
 		ResultColumns: a.ResultColumns,
 		QP:            a.QP,
@@ -119,6 +121,13 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	if addToGroupBy {
 		return nil, 0, vterrors.VT13001("did not expect to add group by here")
 	}
+	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
+	// So, before pushing anything from above the aggregator offset planning needs to be completed.
+	err := a.planOffsets(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	if offset, found := canReuseColumn(ctx, a.Columns, expr.Expr, extractExpr); found {
 		return a, offset, nil
 	}
@@ -209,26 +218,19 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 }
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
+	if a.offsetPlanned {
+		return nil
+	}
+	defer func() {
+		a.offsetPlanned = true
+	}()
 	if !a.Pushed {
 		return a.planOffsetsNotPushed(ctx)
 	}
 
-	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
-		if err != nil {
-			return 0, err
-		}
-		a.Source = newSrc
-		if offset == len(a.Columns) {
-			// if we get an offset at the end of our current column list, it means we added a new column
-			a.Columns = append(a.Columns, aliasedExpr)
-		}
-		return offset, nil
-	}
-
 	for idx, gb := range a.Grouping {
 		if gb.ColOffset == -1 {
-			offset, err := addColumn(aeWrap(gb.Inner), false)
+			offset, err := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			if err != nil {
 				return err
 			}
@@ -238,7 +240,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			continue
 		}
 
-		offset, err := addColumn(aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
+		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
 		if err != nil {
 			return err
 		}
@@ -249,7 +251,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		if !aggr.NeedWeightString(ctx) {
 			continue
 		}
-		offset, err := addColumn(aeWrap(weightStringFor(aggr.Func.GetArg())), true)
+		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
 		if err != nil {
 			return err
 		}
@@ -296,7 +298,7 @@ func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) erro
 		}
 	}
 
-	return a.pushRemainingGroupingColumns(ctx)
+	return a.pushRemainingGroupingColumnsAndWeightStrings(ctx)
 }
 
 func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, colIdx int) (int, error) {
@@ -327,7 +329,7 @@ func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colId
 
 		newSrc, offset, err := a.Source.AddColumn(ctx, a.Columns[colIdx], false, false)
 		if err != nil {
-			return 0, err
+			return -1, err
 		}
 
 		if gb.ColOffset != offset {
@@ -336,57 +338,61 @@ func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colId
 
 		a.Source = newSrc
 
-		if !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
-			return offset, nil
-		}
-
-		// TODO: add weight string column
 		return offset, nil
 	}
 	return -1, nil
 }
 
-// pushRemainingGroupingColumns pushes any grouping column that is not part of the columns list
-func (a *Aggregator) pushRemainingGroupingColumns(ctx *plancontext.PlanningContext) error {
-	addColumn := func(aliasedExpr *sqlparser.AliasedExpr) (int, error) {
-		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, false)
-		if err != nil {
-			return 0, err
-		}
-		a.Source = newSrc
-		if offset == len(a.Columns) {
-			// if we get an offset at the end of our current column list, it means we added a new column
-			a.Columns = append(a.Columns, aliasedExpr)
-		}
-		return offset, nil
-	}
-
+// pushRemainingGroupingColumnsAndWeightStrings pushes any grouping column that is not part of the columns list and weight strings needed for performing grouping aggregations.
+func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *plancontext.PlanningContext) error {
 	for idx, gb := range a.Grouping {
-		if gb.ColOffset != -1 {
-			// already pushed. nothing to do here.
-			continue
+		if gb.ColOffset == -1 {
+			offset, err := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
+			if err != nil {
+				return err
+			}
+			a.Grouping[idx].ColOffset = offset
 		}
-		offset, err := addColumn(aeWrap(gb.Inner))
-		if err != nil {
-			return err
-		}
-		a.Grouping[idx].ColOffset = offset
 
-		if !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
 			continue
 		}
 
-		offset, err = addColumn(aeWrap(weightStringFor(gb.SimplifiedExpr)))
+		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), false)
 		if err != nil {
 			return err
 		}
 		a.Grouping[idx].WSOffset = offset
+	}
+	for idx, aggr := range a.Aggregations {
+		if aggr.WSOffset != -1 || !aggr.NeedWeightString(ctx) {
+			continue
+		}
+
+		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), false)
+		if err != nil {
+			return err
+		}
+		a.Aggregations[idx].WSOffset = offset
 	}
 	return nil
 }
 
 func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
+}
+
+func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
+	if err != nil {
+		return 0, err
+	}
+	a.Source = newSrc
+	if offset == len(a.Columns) {
+		// if we get an offset at the end of our current column list, it means we added a new column
+		a.Columns = append(a.Columns, aliasedExpr)
+	}
+	return offset, nil
 }
 
 var _ ops.Operator = (*Aggregator)(nil)

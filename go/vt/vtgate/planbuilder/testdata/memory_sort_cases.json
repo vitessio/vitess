@@ -42,14 +42,14 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(1|3) ASC",
+        "OrderBy": "(1|4) ASC",
         "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS count(*), random(3)",
-            "GroupBy": "(0|4)",
+            "Aggregates": "random(1) AS b, sum_count_star(2) AS count(*), random(4)",
+            "GroupBy": "(0|3)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -58,9 +58,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|4) ASC",
-                "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+                "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by a asc",
                 "Table": "`user`"
               }
             ]
@@ -186,14 +186,14 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(1|3) ASC, (0|4) ASC, 2 ASC",
+        "OrderBy": "(1|4) ASC, (0|3) ASC, 2 ASC",
         "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS k, random(3)",
-            "GroupBy": "(0|4)",
+            "Aggregates": "random(1) AS b, sum_count_star(2) AS k, random(4)",
+            "GroupBy": "(0|3)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -202,9 +202,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|4) ASC",
-                "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+                "FieldQuery": "select a, b, count(*) as k, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select a, b, count(*) as k, weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by a asc",
                 "Table": "`user`"
               }
             ]
