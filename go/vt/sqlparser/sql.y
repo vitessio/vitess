@@ -2183,6 +2183,7 @@ trigger_body:
     $$ = $1
   }
 | set_statement
+| call_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -2809,6 +2810,10 @@ stored_opt:
 column_type_options:
   {
     $$ = ColumnType{}
+  }
+| column_type_options INVISIBLE
+  {
+    $$ = $1
   }
 | column_type_options NULL
   {
@@ -7011,6 +7016,14 @@ convert_type:
     $$ = &ConvertType{Type: string($1)}
   }
 | UNSIGNED INTEGER
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT_TYPE
   {
     $$ = &ConvertType{Type: string($1)}
   }

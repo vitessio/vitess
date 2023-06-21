@@ -386,6 +386,7 @@ var keywords = map[string]int{
 	"integer":                       INTEGER,
 	"interval":                      INTERVAL,
 	"into":                          INTO,
+	"invisible":                     INVISIBLE,
 	"invoker":                       INVOKER,
 	"io_after_gtids":                IO_AFTER_GTIDS,
 	"io_before_gtids":               IO_BEFORE_GTIDS,

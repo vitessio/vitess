@@ -40,6 +40,16 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			// INVISIBLE should parse, but be a no-op (for now)
+			input: "create table t (pk int primary key, c1 int INVISIBLE)",
+			output: "create table t (\n\tpk int primary key,\n\tc1 int\n)",
+		},
+		{
+			// INVISIBLE should parse, but be a no-op (for now)
+			input: "alter table t add column c1 int INVISIBLE",
+			output: "alter table t add column (\n\tc1 int\n)",
+		},
+		{
 			input: "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
 			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
 		},
@@ -1489,6 +1499,8 @@ var (
 			output: "create or replace view a as select current_timestamp()",
 		}, {
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
+		}, {
+			input: "create trigger t2 before update on foo for each row precedes bar call myStoredProc(foo)",
 		}, {
 			input: "create trigger dbName.trigger1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
@@ -4417,6 +4429,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select CONNECTION_ID() from dual",
 		"select CONV() from dual",
 		"select CONVERT('abc', binary) from dual",
+		"select CONVERT(foo, DOUBLE)",
+		"select CONVERT(foo, FLOAT)",
 		"select CONVERT_TZ() from dual",
 		"select COS() from dual",
 		"select COT() from dual",
@@ -4795,6 +4809,14 @@ func TestFunctionCalls(t *testing.T) {
 		{
 			input:  "select LOCALTIMESTAMP from dual",
 			output: "select LOCALTIMESTAMP()",
+		},
+		{
+			input: "SELECT CAST(foo AS DOUBLE)",
+			output: "select CAST(foo, DOUBLE)",
+		},
+		{
+			input: "SELECT CAST(foo AS FLOAT)",
+			output: "select CAST(foo, FLOAT)",
 		},
 	}
 
