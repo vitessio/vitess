@@ -565,7 +565,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     NoProblem,
+			codeWanted:     InvalidReplica,
 		}, {
 			name: "DeadPrimary when VTOrc is starting up",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -708,7 +708,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			// We should wait for the MySQL information to be refreshed once.
 			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
 			// So it is likely a new tablet.
-			codeWanted: NoProblem,
+			codeWanted:     InvalidReplica,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 		},
 	}
 
@@ -815,7 +817,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 	ks0 := ClusterInfo{
 		Keyspace:       "ks",
 		Shard:          "0",
-		CountInstances: 3,
+		CountInstances: 4,
 	}
 	ks80 := ClusterInfo{
 		Keyspace:       "ks",
@@ -842,13 +844,16 @@ func TestPostProcessAnalyses(t *testing.T) {
 				{
 					Analysis:       ReplicationStopped,
 					TabletType:     topodatapb.TabletType_REPLICA,
+					LastCheckValid: true,
 					ClusterDetails: ks0,
 				}, {
 					Analysis:       ReplicaSemiSyncMustBeSet,
+					LastCheckValid: true,
 					TabletType:     topodatapb.TabletType_REPLICA,
 					ClusterDetails: ks0,
 				}, {
 					Analysis:       PrimaryHasPrimary,
+					LastCheckValid: true,
 					TabletType:     topodatapb.TabletType_REPLICA,
 					ClusterDetails: ks0,
 				},
@@ -863,24 +868,34 @@ func TestPostProcessAnalyses(t *testing.T) {
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-202",
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ClusterDetails:        ks80,
 				}, {
 					Analysis:              ConnectedToWrongPrimary,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-101",
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ReplicationStopped:    true,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              ReplicationStopped,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-102",
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
 					ClusterDetails:        ks0,
 				}, {
+					Analysis:              InvalidReplica,
+					AnalyzedInstanceAlias: "zone1-108",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					LastCheckValid:        false,
+					ClusterDetails:        ks0,
+				}, {
 					Analysis:              NoProblem,
 					AnalyzedInstanceAlias: "zone1-302",
+					LastCheckValid:        true,
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks80,
 				},
@@ -893,11 +908,13 @@ func TestPostProcessAnalyses(t *testing.T) {
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-202",
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ClusterDetails:        ks80,
 				}, {
 					Analysis:              NoProblem,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-302",
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks80,
@@ -915,21 +932,25 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              NoProblem,
 					AnalyzedInstanceAlias: "zone1-202",
+					LastCheckValid:        true,
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ClusterDetails:        ks80,
 				}, {
 					Analysis:              NoProblem,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-101",
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              ReplicationStopped,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-102",
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
+					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-302",
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks80,

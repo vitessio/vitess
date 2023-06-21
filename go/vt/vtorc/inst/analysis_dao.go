@@ -269,6 +269,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		)
 		LEFT JOIN database_instance primary_instance ON (
 			vitess_tablet.alias = primary_instance.alias
+			AND vitess_tablet.hostname = primary_instance.hostname
+			AND vitess_tablet.port = primary_instance.port
 		)
 		LEFT JOIN vitess_tablet primary_tablet ON (
 			primary_tablet.hostname = primary_instance.source_host
@@ -426,9 +428,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		isInvalid := m.GetBool("is_invalid")
 		if a.IsClusterPrimary && isInvalid {
 			a.Analysis = InvalidPrimary
-			a.Description = "VTOrc hasn't been able to reach the primary even once"
+			a.Description = "VTOrc hasn't been able to reach the primary even once since restart/shutdown"
 		} else if isInvalid {
-			return nil
+			a.Analysis = InvalidReplica
+			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
@@ -594,6 +597,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		return nil
 	})
 
+	for _, analysis := range result {
+		log.Errorf("Analysis - Instance - %v, Code - %v, LastCheckValid - %v, ReplStopped - %v", analysis.AnalyzedInstanceAlias, analysis.Analysis, analysis.LastCheckValid, analysis.ReplicationStopped)
+	}
+
 	result = postProcessAnalyses(result, clusters)
 
 	if err != nil {
@@ -621,9 +628,11 @@ func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clu
 				var notReplicatingReplicas []int
 				for idx, replicaAnalysis := range result {
 					if replicaAnalysis.ClusterDetails.Keyspace == keyspaceName &&
-						replicaAnalysis.ClusterDetails.Shard == shardName &&
-						topo.IsReplicaType(replicaAnalysis.TabletType) && replicaAnalysis.ReplicationStopped {
-						notReplicatingReplicas = append(notReplicatingReplicas, idx)
+						replicaAnalysis.ClusterDetails.Shard == shardName && topo.IsReplicaType(replicaAnalysis.TabletType) {
+						// If the replica's last check is invalid or its replication is stopped, then we consider as not replicating.
+						if !replicaAnalysis.LastCheckValid || replicaAnalysis.ReplicationStopped {
+							notReplicatingReplicas = append(notReplicatingReplicas, idx)
+						}
 					}
 				}
 				// If none of the other tablets are able to replicate, then we conclude that this primary is not just Invalid, but also Dead.

@@ -32,6 +32,7 @@ const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
 	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
+	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
 	DeadPrimary                            AnalysisCode = "DeadPrimary"
 	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
