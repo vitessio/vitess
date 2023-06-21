@@ -18,10 +18,14 @@ package aggregation
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -474,4 +478,52 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
 	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
 	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
+}
+
+// TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
+func TestGroupConcatAggregation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493)")
+	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
+
+	mQr, vtQr := mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(name) FROM t1`)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.shardKey = t2.shardKey `)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.t1_id = t2.shardKey `)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.shardKey = t2.id `)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value), t1.name FROM t1, t2 group by t1.name`)
+	compareRow(t, mQr, vtQr, []int{1}, []int{0})
+}
+
+func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grpCols []int, fCols []int) {
+	require.Equal(t, len(mRes.Rows), len(vtRes.Rows), "mysql and vitess result count does not match")
+	for _, row := range vtRes.Rows {
+		var grpKey string
+		for _, col := range grpCols {
+			grpKey += row[col].String()
+		}
+		var foundKey bool
+		for _, mRow := range mRes.Rows {
+			var mKey string
+			for _, col := range grpCols {
+				mKey += mRow[col].String()
+			}
+			if grpKey != mKey {
+				continue
+			}
+			foundKey = true
+			for _, col := range fCols {
+				vtFValSplit := strings.Split(row[col].ToString(), ",")
+				sort.Strings(vtFValSplit)
+				mFValSplit := strings.Split(mRow[col].ToString(), ",")
+				sort.Strings(mFValSplit)
+				require.True(t, slices.Equal(vtFValSplit, mFValSplit), "mysql and vitess result are not same: vitess:%v, mysql:%v", vtRes.Rows, mRes.Rows)
+			}
+		}
+		require.True(t, foundKey, "mysql and vitess result does not same row: vitess:%v, mysql:%v", vtRes.Rows, mRes.Rows)
+	}
 }
