@@ -2183,6 +2183,7 @@ trigger_body:
     $$ = $1
   }
 | set_statement
+| call_statement
 | insert_statement
 | update_statement
 | delete_statement

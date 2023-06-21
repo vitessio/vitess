@@ -1500,6 +1500,8 @@ var (
 		}, {
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
+			input: "create trigger t2 before update on foo for each row precedes bar call myStoredProc(foo)",
+		}, {
 			input: "create trigger dbName.trigger1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
 			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
