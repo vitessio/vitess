@@ -40,6 +40,16 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			// INVISIBLE should parse, but be a no-op (for now)
+			input: "create table t (pk int primary key, c1 int INVISIBLE)",
+			output: "create table t (\n\tpk int primary key,\n\tc1 int\n)",
+		},
+		{
+			// INVISIBLE should parse, but be a no-op (for now)
+			input: "alter table t add column c1 int INVISIBLE",
+			output: "alter table t add column (\n\tc1 int\n)",
+		},
+		{
 			input: "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
 			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
 		},

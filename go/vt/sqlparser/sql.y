@@ -2810,6 +2810,10 @@ column_type_options:
   {
     $$ = ColumnType{}
   }
+| column_type_options INVISIBLE
+  {
+    $$ = $1
+  }
 | column_type_options NULL
   {
     opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
