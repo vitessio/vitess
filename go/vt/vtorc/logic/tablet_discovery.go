@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -252,14 +253,18 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	}
 }
 
+func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
+	return fmt.Sprintf("VTOrc Recovery for %v on %v", code, analysedInstance)
+}
+
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, tabletAlias string) (context.Context, func(*error), error) {
+func LockShard(ctx context.Context, tabletAlias string, lockAction string) (context.Context, func(*error), error) {
 	if tabletAlias == "" {
-		return nil, nil, errors.New("Can't lock shard: instance is unspecified")
+		return nil, nil, errors.New("can't lock shard: instance is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
-		return nil, nil, errors.New("Can't lock shard: SIGTERM received")
+		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
 	tablet, err := inst.ReadTablet(tabletAlias)
@@ -268,7 +273,7 @@ func LockShard(ctx context.Context, tabletAlias string) (context.Context, func(*
 	}
 
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, lockAction)
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err
