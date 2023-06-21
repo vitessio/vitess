@@ -525,7 +525,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <optVal> column_default on_update
 %type <str> charset_opt character_set collate_opt collate
 %type <boolean> default_keyword_opt
-//%type <boolean> lateral_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
 %type <boolVal> stored_opt
@@ -5620,14 +5619,6 @@ table_factor:
 | table_function
 | json_table
 
-//lateral_opt:
-//  {
-//    $$ = false
-//  }
-//| LATERAL
-//  {
-//    $$ = true
-//  }
 
 values_statement:
   VALUES row_list
