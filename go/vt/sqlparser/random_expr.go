@@ -23,64 +23,6 @@ import (
 
 // This file is used to generate random expressions to be used for testing
 
-type (
-	Col struct {
-		TableName string
-		Name      string
-		Typ       string
-		// add isDerived flag?
-	}
-	TableT struct {
-		// Name will be a TableName object if it is used, with Name: alias or name if no alias is provided
-		// Name will only be a DerivedTable for moving that data around
-		Name SimpleTableExpr
-		Cols []Col
-	}
-)
-
-// GetColumnName returns TableName.Name
-func (c *Col) GetColumnName() string {
-	return fmt.Sprintf("%s.%s", c.TableName, c.Name)
-}
-
-// SetName sets the alias for t, as well as setting the TableName for all columns in Cols
-func (t *TableT) SetName(newName string) {
-	t.Name = NewTableName(newName)
-	for i := range t.Cols {
-		t.Cols[i].TableName = newName
-	}
-}
-
-// SetColumns sets the columns of t, and automatically assigns TableName
-// this makes it unnatural (but still possible as Cols is exportable) to modify TableName
-func (t *TableT) SetColumns(col ...Col) {
-	t.Cols = make([]Col, len(col))
-	t.AddColumns(col...)
-}
-
-// AddColumns adds columns to t, and automatically assigns TableName
-// this makes it unnatural (but still possible as Cols is exportable) to modify TableName
-func (t *TableT) AddColumns(col ...Col) {
-	for i := range col {
-		// only change TableName if
-		if tName, ok := t.Name.(TableName); ok {
-			col[i].TableName = tName.Name.String()
-		}
-
-		t.Cols = append(t.Cols, col[i])
-	}
-}
-
-// copy returns a deep copy of t
-func (t *TableT) copy() *TableT {
-	newCols := make([]Col, len(t.Cols))
-	copy(newCols, t.Cols)
-	return &TableT{
-		Name: t.Name,
-		Cols: newCols,
-	}
-}
-
 func NewGenerator(seed int64, maxDepth int, tables ...TableT) *Generator {
 	g := Generator{
 		seed:     seed,
@@ -119,6 +61,7 @@ func (g *Generator) atMaxDepth() bool {
 	    - true/false
 	    - AND/OR/NOT
 	    - string literals, numeric literals (-/+ 1000)
+		- columns of types bigint and varchar
 	    - =, >, <, >=, <=, <=>, !=
 		- &, |, ^, +, -, *, /, div, %, <<, >>
 	    - IN, BETWEEN and CASE

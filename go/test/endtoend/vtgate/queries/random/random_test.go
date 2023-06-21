@@ -32,6 +32,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
+// this test uses the AST defined in the sqlparser package to randomly generate queries
+
 type tableT = sqlparser.TableT
 type column = sqlparser.Col
 
@@ -53,8 +55,10 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 	deleteAll()
 
+	// disable only_full_group_by
 	// mcmp.Exec("set sql_mode=''")
 
+	// insert data
 	mcmp.Exec("INSERT INTO emp(empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES (7369,'SMITH','CLERK',7902,'1980-12-17',800,NULL,20), (7499,'ALLEN','SALESMAN',7698,'1981-02-20',1600,300,30), (7521,'WARD','SALESMAN',7698,'1981-02-22',1250,500,30), (7566,'JONES','MANAGER',7839,'1981-04-02',2975,NULL,20), (7654,'MARTIN','SALESMAN',7698,'1981-09-28',1250,1400,30), (7698,'BLAKE','MANAGER',7839,'1981-05-01',2850,NULL,30), (7782,'CLARK','MANAGER',7839,'1981-06-09',2450,NULL,10), (7788,'SCOTT','ANALYST',7566,'1982-12-09',3000,NULL,20), (7839,'KING','PRESIDENT',NULL,'1981-11-17',5000,NULL,10), (7844,'TURNER','SALESMAN',7698,'1981-09-08',1500,0,30), (7876,'ADAMS','CLERK',7788,'1983-01-12',1100,NULL,20), (7900,'JAMES','CLERK',7698,'1981-12-03',950,NULL,30), (7902,'FORD','ANALYST',7566,'1981-12-03',3000,NULL,20), (7934,'MILLER','CLERK',7782,'1982-01-23',1300,NULL,10)")
 	mcmp.Exec("INSERT INTO dept(deptno, dname, loc) VALUES ('10','ACCOUNTING','NEW YORK'), ('20','RESEARCH','DALLAS'), ('30','SALES','CHICAGO'), ('40','OPERATIONS','BOSTON')")
 
@@ -80,6 +84,12 @@ func helperTest(t *testing.T, query string) {
 func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr1 from dept as tbl0, emp as tbl1 group by tbl1.sal having max(tbl1.comm) != true")
+
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1")
 
 	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
@@ -114,12 +124,19 @@ func TestKnownFailures(t *testing.T) {
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
 
+	// [BUG] unknown plan type for DISTINCT *planbuilder.filter
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having count(*) <=> tbl1.deptno")
+
+	// vitess error: <nil>
+	// mysql error: Unknown column 'tbl0.deptno' in 'having clause'
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0 from dept as tbl0 having tbl0.deptno")
+
 	// coercion should not try to coerce this value: DATE("1980-12-17")
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename")
 
 	// only_full_group_by enabled (vitess sometimes (?) produces the correct result assuming only_full_group_by is disabled)
 	// vitess error: nil
-	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'
+	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'; this is incompatible with sql_mode=only_full_group_by
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
 
 	// only_full_group_by enabled
@@ -133,12 +150,13 @@ func TestKnownFailures(t *testing.T) {
 	// vttablet: rpc error: code = InvalidArgument desc = Can't group on 'count(*)' (errno 1056) (sqlstate 42000) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.deptno")
 
+	// [BUG] push projection does not yet support: *planbuilder.memorySort (errno 1815) (sqlstate HY000)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl1 join (select count(*) from emp as tbl0, dept as tbl1 group by tbl1.loc) as tbl2")
+
 	// EOF (errno 2013) (sqlstate HY000)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ count(*) from emp as tbl0, emp as tbl1 limit 18) as tbl1")
 
-	// push projection does not yet support: *planbuilder.memorySort (errno 1815) (sqlstate HY000)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl1 join (select count(*) from emp as tbl0, dept as tbl1 group by tbl1.loc) as tbl2")
-
+	// unsupported
 	// unsupported: in scatter query: complex aggregate expression (errno 1235) (sqlstate 42000)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (select count(*) from emp as tbl0) from emp as tbl0")
 
@@ -155,7 +173,7 @@ func TestKnownFailures(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
 
 	// unsupported
-	// unsupported: in scatter query: aggregation function
+	// unsupported: in scatter query: aggregation function 'avg(tbl0.deptno)'
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ avg(tbl0.deptno) from dept as tbl0")
 }
 
@@ -166,6 +184,7 @@ func TestRandom(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
+	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
 		{Name: sqlparser.NewTableName("emp")},
 		{Name: sqlparser.NewTableName("dept")},
@@ -192,13 +211,13 @@ func TestRandom(t *testing.T) {
 	for time.Now().Before(endBy) && (!t.Failed() || TestFailingQueries) {
 		query := sqlparser.String(randomQuery(schemaTables, 3, 3))
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
-		fmt.Println(query)
-		// t.Failed() will become true once and subsequently print every query
-		// this instead assumes all queries are valid mysql queries
+		// this assumes all queries are valid mysql queries
 		if vtErr != nil {
+			fmt.Println(query)
 			fmt.Println(vtErr)
+			// restart the mysql and vitess connections in case something bad happened
 			closer()
-			mcmp, _ = start(t)
+			mcmp, closer = start(t)
 		}
 		queryCount++
 	}
@@ -210,18 +229,29 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	sel := &sqlparser.Select{}
 	sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
 
-	// also creates the join
-	tables, isJoin := createTablesAndJoin(schemaTables, sel)
-
-	grouping := createGroupBy(tables, sel, maxGroupBy)
-	aggregates := createAggregations(tables, sel, maxAggrs)
-	sel.AddWhere(sqlparser.AndExpressions(createPredicates(tables, false)...))
-
 	// select distinct (fails with group by bigint)
 	isDistinct := rand.Intn(2) < 1
 	if isDistinct {
 		sel.MakeDistinct()
 	}
+
+	// create both tables and join at the same time since both occupy the from clause
+	tables, isJoin := createTablesAndJoin(schemaTables, sel)
+
+	groupExprs, groupSelectExprs, grouping := createGroupBy(tables, maxGroupBy)
+	sel.AddSelectExprs(groupSelectExprs)
+	sel.GroupBy = groupExprs
+	aggrExprs, aggregates := createAggregations(tables, maxAggrs)
+	sel.AddSelectExprs(aggrExprs)
+
+	// can add both aggregate and grouping columns to order by
+	isOrdered := rand.Intn(2) < 1
+	if isOrdered && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
+		addOrderBy(sel)
+	}
+
+	// where
+	sel.AddWhere(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
 
 	// random predicate expression
 	if rand.Intn(2) < 1 {
@@ -229,10 +259,15 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 		sel.AddWhere(predRandomExpr)
 	}
 
-	// limit (fails with group by and no order by)
-	// TODO: numOrderBy needs to be > 0
-	if rand.Intn(2) < 1 /* numOrderBy > 0 */ {
-		createLimit(sel)
+	// having
+	sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
+	if rand.Intn(2) < 1 {
+		sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
+	}
+
+	// only add a limit if the grouping columns are ordered
+	if rand.Intn(2) < 1 && isOrdered {
+		sel.Limit = createLimit()
 	}
 
 	var newTable tableT
@@ -247,9 +282,19 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 		})
 	}
 
-	// add new table to schemaTables
+	// alias grouping and aggregate columns
+	for i := range grouping {
+		grouping[i].Name = fmt.Sprintf("cgroup%d", i)
+	}
+	for i := range aggregates {
+		aggregates[i].Name = fmt.Sprintf("cgroup%d", i)
+	}
+
+	// add them to newTable
 	newTable.AddColumns(grouping...)
 	newTable.AddColumns(aggregates...)
+
+	// add new table to schemaTables
 	newTable.Name = sqlparser.NewDerivedTable(false, sel)
 	schemaTables = append(schemaTables, newTable)
 
@@ -284,10 +329,11 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 		// create the join before aliasing
 		newJoinTableExpr := createJoin(tables, sel)
 
+		// alias
 		tables[numTables+1].SetName(fmt.Sprintf("tbl%d", numTables+1))
 
 		// create the condition after aliasing
-		newJoinTableExpr.Condition = sqlparser.NewJoinCondition(sqlparser.AndExpressions(createPredicates(tables, true)...), nil)
+		newJoinTableExpr.Condition = sqlparser.NewJoinCondition(sqlparser.AndExpressions(createWherePredicates(tables, true)...), nil)
 		sel.From[numTables] = newJoinTableExpr
 	}
 
@@ -307,33 +353,26 @@ func createJoin(tables []tableT, sel *sqlparser.Select) *sqlparser.JoinTableExpr
 
 // adds grouping columns to sel.GroupBy and optionally to sel.SelectExprs and sel.OrderBy
 // TODO: maybe change to return this stuff instead
-func createGroupBy(tables []tableT, sel *sqlparser.Select, maxGB int) (grouping []column) {
+func createGroupBy(tables []tableT, maxGB int) (groupBy sqlparser.GroupBy, groupSelectExprs sqlparser.SelectExprs, grouping []column) {
 	numGBs := rand.Intn(maxGB)
 	for i := 0; i < numGBs; i++ {
 		tblIdx := rand.Intn(len(tables))
 		col := randomEl(tables[tblIdx].Cols)
-		sel.GroupBy = append(sel.GroupBy, newColumn(col))
-
-		// add to order by (might have to change if there are no grouping columns and ordering is done on aggregation columns)
-		// (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries)
-		if rand.Intn(2) < 1 {
-			sel.AddOrder(newOrderColumn(col))
-		}
+		groupBy = append(groupBy, newColumn(col))
 
 		// add to select
 		if rand.Intn(2) < 1 {
-			sel.SelectExprs = append(sel.SelectExprs, newAliasedColumn(col, fmt.Sprintf("cgroup%d", i)))
-			col.Name = fmt.Sprintf("cgroup%d", i)
+			groupSelectExprs = append(groupSelectExprs, newAliasedColumn(col, fmt.Sprintf("cgroup%d", i)))
 			grouping = append(grouping, col)
 		}
 	}
 
-	return grouping
+	return groupBy, groupSelectExprs, grouping
 }
 
 // adds aggregation columns to sel.SelectExprs and optionally to sel.OrderBy
 // TODO: maybe change to return this stuff instead
-func createAggregations(tables []tableT, sel *sqlparser.Select, maxAggrs int) (aggregates []column) {
+func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.SelectExprs, aggregates []column) {
 	aggregations := []func(col column) sqlparser.Expr{
 		func(_ column) sqlparser.Expr { return &sqlparser.CountStar{} },
 		func(col column) sqlparser.Expr { return &sqlparser.Count{Args: sqlparser.Exprs{newColumn(col)}} },
@@ -348,13 +387,7 @@ func createAggregations(tables []tableT, sel *sqlparser.Select, maxAggrs int) (a
 		tblIdx, aggrIdx := rand.Intn(len(tables)), rand.Intn(len(aggregations))
 		col := randomEl(tables[tblIdx].Cols)
 		newAggregate := aggregations[aggrIdx](col)
-		sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(newAggregate, fmt.Sprintf("caggr%d", i)))
-
-		// add to order by (might have to change if there are no grouping columns and ordering is done on aggregation columns)
-		// (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries)
-		if rand.Intn(2) < 1 {
-			sel.AddOrder(sqlparser.NewOrder(newAggregate, sqlparser.AscOrder))
-		}
+		aggrExprs = append(aggrExprs, sqlparser.NewAliasedExpr(newAggregate, fmt.Sprintf("caggr%d", i)))
 
 		if aggrIdx <= 1 /* CountStar and Count */ {
 			col.Typ = "bigint"
@@ -362,14 +395,29 @@ func createAggregations(tables []tableT, sel *sqlparser.Select, maxAggrs int) (a
 			col.Typ = "decimal"
 		}
 
-		col.Name = fmt.Sprintf("caggr%d", i)
+		col.Name = sqlparser.String(newAggregate)
 		aggregates = append(aggregates, col)
 	}
-	return aggregates
+	return aggrExprs, aggregates
+}
+
+// orders on all non-aggregate SelectExprs and independently at random on all aggregate SelectExprs of sel
+func addOrderBy(sel *sqlparser.Select) {
+	for _, selExpr := range sel.SelectExprs {
+		if aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr); ok {
+			// if the SelectExpr is non-aggregate (the AliasedExpr has Expr of type ColName)
+			// then add to the order by
+			if colName, ok1 := aliasedExpr.Expr.(*sqlparser.ColName); ok1 {
+				sel.AddOrder(sqlparser.NewOrder(colName, getRandomOrderDirection()))
+			} else if rand.Intn(2) < 1 {
+				sel.AddOrder(sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection()))
+			}
+		}
+	}
 }
 
 // returns the predicates as a sqlparser.Exprs (slice of sqlparser.Expr's)
-func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs) {
+func createWherePredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs) {
 	// if creating predicates for a join,
 	// then make sure predicates are created for the last two tables (which are being joined)
 	incr := 0
@@ -394,8 +442,7 @@ func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs)
 
 				// prevent infinite loops
 				if i > 50 {
-					// cant do this because this minimizes
-					predicates = append(predicates, newColumn(col1))
+					predicates = append(predicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), newColumn(col1), newColumn(col2), nil))
 					break
 				}
 
@@ -403,26 +450,45 @@ func createPredicates(tables []tableT, isJoin bool) (predicates sqlparser.Exprs)
 					continue
 				}
 
-				// cant do this because this minimizes
 				predicates = append(predicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), newColumn(col1), newColumn(col2), nil))
 				noOfPredicates--
 			}
 		}
 	}
+
+	// make sure the join predicate is never empty
+	if len(predicates) == 0 && isJoin {
+		predRandomExpr, _ := getRandomExpr(tables)
+		predicates = append(predicates, predRandomExpr)
+	}
+
 	return predicates
 }
 
-func createLimit(sel *sqlparser.Select) {
+func createHavingPredicates(tables []tableT) (havingPredicates sqlparser.Exprs) {
+	aggrSelectExprs, _ := createAggregations(tables, 3)
+	for i := range aggrSelectExprs {
+		if aliasedExpr, ok := aggrSelectExprs[i].(*sqlparser.AliasedExpr); ok {
+			predRandomExpr, _ := getRandomExpr(tables)
+			havingPredicates = append(havingPredicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), aliasedExpr.Expr, predRandomExpr, nil))
+		}
+	}
+	return havingPredicates
+}
+
+// creates sel.Limit
+func createLimit() *sqlparser.Limit {
 	limitNum := rand.Intn(10)
 	if rand.Intn(2) < 1 {
 		offset := rand.Intn(10)
-		sel.Limit = sqlparser.NewLimit(offset, limitNum)
+		return sqlparser.NewLimit(offset, limitNum)
 	} else {
-		sel.Limit = sqlparser.NewLimitWithoutOffset(limitNum)
+		return sqlparser.NewLimitWithoutOffset(limitNum)
 	}
 
 }
 
+// returns a random expression and its type
 func getRandomExpr(tables []tableT) (sqlparser.Expr, string) {
 	seed := time.Now().UnixNano()
 	g := sqlparser.NewGenerator(seed, 2, tables...)
@@ -441,13 +507,14 @@ func newColumn(col column) *sqlparser.ColName {
 	return sqlparser.NewColNameWithQualifier(col.Name, sqlparser.NewTableName(col.TableName))
 }
 
-func newOrderColumn(col column) *sqlparser.Order {
-	return sqlparser.NewOrder(newColumn(col), sqlparser.AscOrder)
-}
-
 func getRandomComparisonExprOperator() sqlparser.ComparisonExprOperator {
 	// =, <, >, <=, >=, !=, <=>
 	return randomEl([]sqlparser.ComparisonExprOperator{0, 1, 2, 3, 4, 5, 6})
+}
+
+func getRandomOrderDirection() sqlparser.OrderDirection {
+	// asc, desc
+	return randomEl([]sqlparser.OrderDirection{0, 1})
 }
 
 func randomEl[K any](in []K) K {

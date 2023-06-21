@@ -1052,6 +1052,10 @@ func compliantName(in string) string {
 	return buf.String()
 }
 
+func (node *Select) AddSelectExprs(selectExprs SelectExprs) {
+	node.SelectExprs = selectExprs
+}
+
 // AddOrder adds an order by element
 func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
