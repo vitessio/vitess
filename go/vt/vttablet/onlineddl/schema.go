@@ -521,7 +521,7 @@ const (
 	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
-	sqlAnalyzeTable      = "ANALYZE TABLE `%a`"
+	sqlAnalyzeTable      = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
