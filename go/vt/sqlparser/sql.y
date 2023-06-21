@@ -7019,6 +7019,14 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT_TYPE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
 
 expression_opt:
   {

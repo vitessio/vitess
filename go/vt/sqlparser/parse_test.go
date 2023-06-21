@@ -4429,6 +4429,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select CONNECTION_ID() from dual",
 		"select CONV() from dual",
 		"select CONVERT('abc', binary) from dual",
+		"select CONVERT(foo, DOUBLE)",
+		"select CONVERT(foo, FLOAT)",
 		"select CONVERT_TZ() from dual",
 		"select COS() from dual",
 		"select COT() from dual",
@@ -4807,6 +4809,14 @@ func TestFunctionCalls(t *testing.T) {
 		{
 			input:  "select LOCALTIMESTAMP from dual",
 			output: "select LOCALTIMESTAMP()",
+		},
+		{
+			input: "SELECT CAST(foo AS DOUBLE)",
+			output: "select CAST(foo, DOUBLE)",
+		},
+		{
+			input: "SELECT CAST(foo AS FLOAT)",
+			output: "select CAST(foo, FLOAT)",
 		},
 	}
 
