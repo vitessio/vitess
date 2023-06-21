@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"io"
-
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -131,8 +129,7 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if !canBePushedDownIntoDerived(newExpr) {
-		// if we have an aggregation, we don't want to push it inside
+	if sqlparser.ContainsAggregation(newExpr) {
 		return &Filter{Source: d, Predicates: []sqlparser.Expr{expr}}, nil
 	}
 	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
@@ -140,21 +137,6 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		return nil, err
 	}
 	return d, nil
-}
-
-func canBePushedDownIntoDerived(expr sqlparser.Expr) (canBePushed bool) {
-	canBePushed = true
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
-		case *sqlparser.Max, *sqlparser.Min:
-			// empty by default
-		case sqlparser.AggrFunc:
-			canBePushed = false
-			return false, io.EOF
-		}
-		return true, nil
-	}, expr)
-	return
 }
 
 func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
