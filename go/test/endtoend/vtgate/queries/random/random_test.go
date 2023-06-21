@@ -110,11 +110,6 @@ func TestMustFix(t *testing.T) {
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
-
-	// mismatched results (sum + right join)
-	// left instead of right works
-	// swapping tables and predicates and changing to left fails
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl0.mgr) from emp as tbl0 right join emp as tbl1 on tbl0.mgr = tbl1.empno")
 }
 
 func TestKnownFailures(t *testing.T) {
