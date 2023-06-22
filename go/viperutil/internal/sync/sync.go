@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/spf13/afero"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -48,16 +49,28 @@ type Viper struct {
 	subscribers    []chan<- struct{}
 	watchingConfig bool
 
+	fs afero.Fs
+
 	setCh chan struct{}
+
+	// for testing purposes only
+	onConfigWrite func()
+}
+
+func (v *Viper) SetFs(fs afero.Fs) {
+	v.fs = fs
+	v.disk.SetFs(fs)
 }
 
 // New returns a new synced Viper.
 func New() *Viper {
 	return &Viper{
-		disk:  viper.New(),
-		live:  viper.New(),
-		keys:  map[string]*sync.RWMutex{},
-		setCh: make(chan struct{}, 1),
+		disk:          viper.New(),
+		live:          viper.New(),
+		keys:          map[string]*sync.RWMutex{},
+		fs:            afero.NewOsFs(), // default Fs used by viper, but we need this set so loadFromDisk doesn't accidentally nil-out the live fs
+		setCh:         make(chan struct{}, 1),
+		onConfigWrite: func() {},
 	}
 }
 
@@ -217,6 +230,8 @@ func (v *Viper) persistChanges(ctx context.Context, minWaitInterval time.Duratio
 
 // WriteConfig writes the live viper config back to disk.
 func (v *Viper) WriteConfig() error {
+	defer v.onConfigWrite()
+
 	for _, m := range v.keys {
 		m.Lock()
 		// This won't fire until after the config has been written.
@@ -263,6 +278,7 @@ func (v *Viper) loadFromDisk() {
 	// Reset v.live so explicit Set calls don't win over what's just changed on
 	// disk.
 	v.live = viper.New()
+	v.live.SetFs(v.fs)
 
 	// Fun fact! MergeConfigMap actually only ever returns nil. Maybe in an
 	// older version of viper it used to actually handle errors, but now it
