@@ -295,13 +295,33 @@ var (
 			input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
 		}, {
 			input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t (a, b)",
-		}, {
+		},
+		{
 			input: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
-		}, {
+		},
+		{
 			input: "select a from (values row(1, 2), row('a', 'b')) as t1 join (values row(3, 4), row('c', 'd')) as t2",
-		}, {
+		},
+		{
 			input: "select a from (values row(1, 2), row('a', 'b')) as t1 (w, x) join (values row(3, 4), row('c', 'd')) as t2 (y, z)",
-		}, {
+		},
+		{
+			input: "select a from (values row(1, 2), row('a', 'b')) as t1 (w, x) join lateral (values row(3, 4), row('c', 'd')) as t2 (y, z)",
+		},
+		{
+			input: "select a from t1, lateral (select b from t2) as sq",
+		},
+		{
+			input: "select a from t1 join lateral (select b from t2) as sq",
+		},
+		{
+			input: "select a from t1 natural join lateral (select b from t2) as sq",
+		},
+		{
+			input: "select a from t1 join lateral (select b from t2) sq",
+			output: "select a from t1 join lateral (select b from t2) as sq",
+		},
+		{
 			// TODO: These forms are not yet supported due to a grammar conflict
 			// 	input: "values row(1, 2), row('a', 'b')",
 			// }, {
@@ -1079,10 +1099,12 @@ var (
 		}, {
 			input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from a, b where a.id = b.id and b.`name` = 'test'",
-		}, {
+		},
+		{
 			input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 			output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
-		}, {
+		},
+		{
 			input: "savepoint abc",
 		}, {
 			input:  "savepoint `ab_cd`",
@@ -4042,6 +4064,14 @@ func TestInvalid(t *testing.T) {
 			"name 'name'\n" +
 			"name 'name'",
 		err: "multiple definitions of attribute name",
+	},
+	{
+		input: "select * from t join lateral t2",
+		err:   "syntax error",
+	},
+	{
+		input: "select * from t join lateral (select * from t2)",
+		err:   "Every derived table must have its own alias",
 	},
 	}
 

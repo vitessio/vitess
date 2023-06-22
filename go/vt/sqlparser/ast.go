@@ -4070,18 +4070,24 @@ func (node *AsOf) walkSubtree(visit Visit) error {
 
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
+	if node.Lateral {
+		buf.Myprintf("%s ", keywordStrings[LATERAL])
+	}
+
 	switch node.Expr.(type) {
 	case *ValuesStatement:
 		buf.Myprintf("(%v)", node.Expr)
 	default:
 		buf.Myprintf("%v%v", node.Expr, node.Partitions)
 	}
+
 	if node.AsOf != nil {
 		buf.Myprintf(" %v", node.AsOf)
 	}
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
+
 	switch node := node.Expr.(type) {
 	case *ValuesStatement:
 		if len(node.Columns) > 0 {
@@ -4092,6 +4098,7 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 			buf.Myprintf(" %v", node.Columns)
 		}
 	}
+
 	if node.Hints != nil {
 		// Hint node provides the space padding.
 		buf.Myprintf("%v", node.Hints)
