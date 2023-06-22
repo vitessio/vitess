@@ -11,8 +11,8 @@
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
     - [Compression CLI flags removed from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
-    - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
     - [VTTablet Restore Metrics](#vttablet-restore-metrics)
+    - [VtctldClient command RestoreFromBackup will now use the correct context](#vtctldclient-command-restorefrombackup-will-now-use-the-correct-context)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
     - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
