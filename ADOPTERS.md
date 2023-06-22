@@ -13,6 +13,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [opensooq.com](https://www.opensooq.com/)
 * [Peak Games](https://peak.com/)
 * [Pinterest](https://pinterest.com)
+* [PITS Globale Datenrettungsdienste](https://www.pitsdatenrettung.de/)
 * [Pixel Federation](https://pixelfederation.com)
 * [Quiz of Kings](https://quizofkings.com)
 * [Slack](https://slack.com)
