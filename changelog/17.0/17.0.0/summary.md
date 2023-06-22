@@ -184,7 +184,9 @@ Note that this flag overrides `--enable-lag-throttler` and `--throttle-threshold
 
 Metrics related to backup operations are available in both Vtbackup and VTTablet.
 
-**BackupBytes, BackupCount, BackupDurationNanoseconds**
+- `BackupBytes`
+- `BackupCount`
+- `BackupDurationNanosecond`
 
 Depending on the Backup Engine and Backup Storage in-use, a backup may be a complex pipeline of operations, including but not limited to:
 
@@ -196,9 +198,11 @@ These operations are counted and timed, and the number of bytes consumed or prod
 
 ##### Restore metrics
 
-Metrics related to restore operations are available in both Vtbackup and VTTablet.
+Metrics related to restore operations are available in both Vtbackup and VTTablet:
 
-**RestoreBytes, RestoreCount, RestoreDurationNanoseconds**
+- `RestoreBytes`
+- `RestoreCount`
+- `RestoreDurationNanoseconds`
 
 Depending on the Backup Engine and Backup Storage in-use, a restore may be a complex pipeline of operations, including but not limited to:
 
@@ -210,13 +214,13 @@ These operations are counted and timed, and the number of bytes consumed or prod
 
 ##### Vtbackup metrics
 
-Vtbackup exports some metrics which are not available elsewhere.
+Vtbackup exports some metrics which are not available elsewhere:
 
-**DurationByPhaseSeconds**
+- `DurationByPhaseSeconds`
 
 Vtbackup fetches the last backup, restores it to an empty mysql installation, replicates recent changes into that installation, and then takes a backup of that installation.
 
-_DurationByPhaseSeconds_ exports timings for these individual phases.
+`DurationByPhaseSeconds` exports timings for these individual phases.
 
 ##### Example
 
