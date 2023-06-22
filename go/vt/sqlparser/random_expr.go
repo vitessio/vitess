@@ -23,22 +23,29 @@ import (
 
 // This file is used to generate random expressions to be used for testing
 
-func NewGenerator(seed int64, maxDepth int, tables ...TableT) *Generator {
+type (
+	ExprGenerator interface {
+		IntExpr() Expr
+		StringExpr() Expr
+	}
+)
+
+func NewGenerator(seed int64, maxDepth int, exprGenerators ...ExprGenerator) *Generator {
 	g := Generator{
-		seed:     seed,
-		r:        rand.New(rand.NewSource(seed)),
-		maxDepth: maxDepth,
-		tables:   tables,
+		seed:          seed,
+		r:             rand.New(rand.NewSource(seed)),
+		maxDepth:      maxDepth,
+		exprGenerator: exprGenerators,
 	}
 	return &g
 }
 
 type Generator struct {
-	seed     int64
-	r        *rand.Rand
-	depth    int
-	maxDepth int
-	tables   []TableT
+	seed          int64
+	r             *rand.Rand
+	depth         int
+	maxDepth      int
+	exprGenerator []ExprGenerator
 }
 
 // enter should be called whenever we are producing an intermediate node. it should be followed by a `defer g.exit()`
@@ -124,8 +131,14 @@ func (g *Generator) intExpr() Expr {
 		func() Expr { return g.caseExpr(g.intExpr) },
 	}
 
-	if g.tables != nil {
-		options = append(options, func() Expr { return g.intColumn() })
+	for _, generator := range g.exprGenerator {
+		options = append(options, func() Expr {
+			expr := generator.IntExpr()
+			if expr == nil {
+				return g.intLiteral()
+			}
+			return expr
+		})
 	}
 
 	return g.randomOf(options)
@@ -161,8 +174,14 @@ func (g *Generator) stringExpr() Expr {
 		func() Expr { return g.caseExpr(g.stringExpr) },
 	}
 
-	if g.tables != nil {
-		options = append(options, func() Expr { return g.intColumn() })
+	for _, generator := range g.exprGenerator {
+		options = append(options, func() Expr {
+			expr := generator.StringExpr()
+			if expr == nil {
+				return g.stringLiteral()
+			}
+			return expr
+		})
 	}
 
 	return g.randomOf(options)
@@ -242,43 +261,6 @@ func (g *Generator) arithmetic() Expr {
 		Left:     g.intExpr(),
 		Right:    g.intExpr(),
 	}
-}
-
-func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
-	tblIdx := rand.Intn(len(g.tables))
-	table := g.tables[tblIdx]
-	tableCopy := table.copy()
-
-	for len(tableCopy.Cols) > 0 {
-		idx := rand.Intn(len(tableCopy.Cols))
-		randCol := tableCopy.Cols[idx]
-		if randCol.Typ == typ {
-			newTableName := NewIdentifierCS("")
-			if tName, ok := table.Name.(TableName); ok {
-				newTableName = tName.Name
-			}
-			return &ColName{
-				Metadata:  nil,
-				Name:      NewIdentifierCI(randCol.Name),
-				Qualifier: TableName{Name: newTableName},
-			}
-		} else {
-			// delete randCol from table.columns
-			tableCopy.Cols[idx] = tableCopy.Cols[len(tableCopy.Cols)-1]
-			tableCopy.Cols = tableCopy.Cols[:len(tableCopy.Cols)-1]
-		}
-	}
-
-	return typeLiteral()
-}
-
-func (g *Generator) intColumn() Expr {
-	// better way to check if int type?
-	return g.typeColumn("bigint", g.intLiteral)
-}
-
-func (g *Generator) stringColumn() Expr {
-	return g.typeColumn("varchar", g.stringLiteral)
 }
 
 type exprF func() Expr

@@ -1053,7 +1053,7 @@ func compliantName(in string) string {
 }
 
 func (node *Select) AddSelectExprs(selectExprs SelectExprs) {
-	node.SelectExprs = selectExprs
+	node.SelectExprs = append(node.SelectExprs, selectExprs...)
 }
 
 // AddOrder adds an order by element
