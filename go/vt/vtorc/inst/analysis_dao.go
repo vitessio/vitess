@@ -415,7 +415,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		// ca has clusterwide info
 		ca := clusters[keyspaceShard]
-		// Increment the total amount of tablets.
+		// Increment the total number of tablets.
 		ca.totalTablets += 1
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
@@ -616,7 +616,7 @@ func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clu
 		// Store whether we have changed the result of replication analysis or not.
 		resultChanged := false
 
-		// Go over all the analysis.
+		// Go over all the analyses.
 		for _, analysis := range result {
 			// If one of them is an InvalidPrimary, then we see if all the other tablets in this keyspace shard are
 			// unable to replicate or not.
