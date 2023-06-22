@@ -86,15 +86,16 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
+	fields := convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 	out := &sqltypes.Result{
-		Fields: convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine),
+		Fields: fields,
 	}
 
 	var resultRow []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if resultRow == nil {
-			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+			resultRow, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 			continue
 		}
 		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Aggregates)
@@ -149,7 +150,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+				current, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 				continue
 			}
 			var err error
@@ -210,7 +211,8 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 		AggregateSum,
 		AggregateMin,
 		AggregateMax,
-		AggregateRandom:
+		AggregateRandom,
+		AggregateGroupConcat:
 		return sqltypes.NULL, nil
 
 	}
