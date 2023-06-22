@@ -628,15 +628,11 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			inner = horizon.Source
 		}
 
-		selStmt := sqlparser.CloneSelectStatement(tbl.Select)
+		stmt := sqlparser.CloneSelectStatement(tbl.Select)
 		if onlyTable {
-			selStmt.SetOrderBy(nil)
+			stmt.SetOrderBy(nil)
 		}
-		sel, isSel := selStmt.(*sqlparser.Select)
-		if !isSel {
-			return nil, errHorizonNotPlanned()
-		}
-		qp, err := CreateQPFromSelect(ctx, sel)
+		qp, err := CreateQPFromSelectStatement(ctx, stmt)
 		if err != nil {
 			return nil, err
 		}
@@ -645,7 +641,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			TableId:       tableID,
 			Alias:         tableExpr.As.String(),
 			Source:        inner,
-			Query:         selStmt,
+			Query:         stmt,
 			ColumnAliases: tableExpr.Columns,
 			QP:            qp,
 		}, nil

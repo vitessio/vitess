@@ -208,8 +208,8 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	}
 }
 
-// CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
+// createQPFromSelect creates the QueryProjection for the input *sqlparser.Select
+func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
@@ -316,8 +316,8 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 	return nil
 }
 
-// CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func CreateQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
+// createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
+func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
@@ -880,4 +880,14 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
+}
+
+func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement) (*QueryProjection, error) {
+	switch sel := stmt.(type) {
+	case *sqlparser.Select:
+		return createQPFromSelect(ctx, sel)
+	case *sqlparser.Union:
+		return createQPFromUnion(ctx, sel)
+	}
+	return nil, vterrors.VT13001("Can only create query projection from Union and Select statements")
 }

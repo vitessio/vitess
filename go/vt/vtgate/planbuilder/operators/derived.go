@@ -228,7 +228,7 @@ func (d *Derived) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, err
 	if d.QP != nil {
 		return d.QP, nil
 	}
-	qp, err := CreateQPFromSelect(ctx, d.Query.(*sqlparser.Select))
+	qp, err := CreateQPFromSelectStatement(ctx, d.Query)
 	if err != nil {
 		return nil, err
 	}
