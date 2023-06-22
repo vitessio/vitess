@@ -523,7 +523,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt comment_keyword_opt
 %type <optVal> column_default on_update
-%type <str> charset_opt character_set collate_opt collate
+%type <str> charset_opt character_set collate_opt collate table_option_collate
 %type <boolean> default_keyword_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
@@ -4040,13 +4040,13 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
-| COLLATE equal_opt any_identifier
+| COLLATE equal_opt table_option_collate
   {
-    $$ = string($1) + " " + string($3)
+    $$ = string($1) + " " + $3
   }
-| DEFAULT COLLATE equal_opt any_identifier
+| DEFAULT COLLATE equal_opt table_option_collate
   {
-    $$ = string($1) + " "  + string($2) + " " + string($4)
+    $$ = string($1) + " "  + string($2) + " " + $4
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
@@ -4167,6 +4167,16 @@ table_option:
 | UNION equal_opt table_opt_value
   {
     $$ = string($1) + " " + $3
+  }
+
+table_option_collate:
+  any_identifier
+  {
+    $$ = string($1)
+  }
+| STRING
+  {
+    $$ = string($1)
   }
 
 table_opt_value:
