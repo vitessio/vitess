@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 
@@ -306,4 +307,27 @@ func verifyTabletCount(t *testing.T, countWanted int) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, countWanted, totalTablets)
+}
+
+func TestGetLockAction(t *testing.T) {
+	tests := []struct {
+		analysedInstance string
+		code             inst.AnalysisCode
+		want             string
+	}{
+		{
+			analysedInstance: "zone1-100",
+			code:             inst.DeadPrimary,
+			want:             "VTOrc Recovery for DeadPrimary on zone1-100",
+		}, {
+			analysedInstance: "zone1-200",
+			code:             inst.ReplicationStopped,
+			want:             "VTOrc Recovery for ReplicationStopped on zone1-200",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%v-%v", tt.analysedInstance, tt.code), func(t *testing.T) {
+			require.Equal(t, tt.want, getLockAction(tt.analysedInstance, tt.code))
+		})
+	}
 }
