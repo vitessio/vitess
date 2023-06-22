@@ -74,13 +74,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
 }
 
-func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
-	if _, isDerived := horizon.(*Derived); isDerived {
-		return errHorizonNotPlanned()
-	}
-	return nil
-}
-
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (out ops.Operator, err error) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
@@ -109,10 +102,6 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 
 	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := checkInvalid(aggregations, horizon); err != nil {
 		return nil, err
 	}
 

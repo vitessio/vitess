@@ -121,6 +121,19 @@ func (a *Aggregator) isDerived() bool {
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if a.TableID != nil {
+		// this is a derived table, and so we have to translate the column names to the internal expression
+		col, ok := expr.Expr.(*sqlparser.ColName)
+		if !ok {
+			panic(4)
+			// return nil, 0, vterrors.VT13001("don't know how to handle this")
+		}
+		for i, column := range a.Columns {
+			if col.Name.EqualString(column.ColumnName()) {
+				return a, i, nil
+			}
+		}
+	}
 	if addToGroupBy {
 		return nil, 0, vterrors.VT13001("did not expect to add group by here")
 	}
@@ -178,6 +191,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 }
 
 func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	if _, isSourceDerived := a.Source.(*Derived); isSourceDerived {
+		return a.Columns, nil
+	}
+
 	// we update the incoming columns, so we know about any new columns that have been added
 	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
 	// Aggregator should be made aware of these to truncate them in final result.
@@ -403,3 +420,7 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 }
 
 var _ ops.Operator = (*Aggregator)(nil)
+
+// func (a *Aggregator) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+//
+// }

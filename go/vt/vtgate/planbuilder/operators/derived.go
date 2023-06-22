@@ -52,6 +52,7 @@ func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 		Columns:       slices.Clone(d.Columns),
 		ColumnsOffset: slices.Clone(d.ColumnsOffset),
 		TableId:       d.TableId,
+		QP:            d.QP,
 	}
 }
 

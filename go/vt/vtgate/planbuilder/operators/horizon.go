@@ -116,3 +116,19 @@ func (h *Horizon) setQP(qp *QueryProjection) {
 func (h *Horizon) ShortDescription() string {
 	return ""
 }
+
+//func (h *Horizon) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+//	src, ok := h.Source.(*Derived)
+//	if !ok {
+//		return h, rewrite.SameTree, nil
+//	}
+//	qp, err := src.getQP(ctx)
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//
+//	src.Query.(*sqlparser.Select).OrderBy = nil
+//	qp.OrderExprs = nil
+//
+//	return h, rewrite.SameTree, nil
+//}
