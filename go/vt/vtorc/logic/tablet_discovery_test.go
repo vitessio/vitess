@@ -143,22 +143,28 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	})
 
 	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
+		startPort := tab100.MysqlPort
+		startHostname := tab100.MysqlHostname
 		defer func() {
+			tab100.MysqlPort = startPort
+			tab100.MysqlHostname = startHostname
 			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
-				tablet.MysqlHostname = hostname
-				tablet.MysqlPort = 100
+				tablet.MysqlHostname = startHostname
+				tablet.MysqlPort = startPort
 				return nil
 			})
 		}()
-		// Let's assume tab100 shutdown. This would clear its tablet hostname and port
+		// Let's assume tab100 shutdown. This would clear its tablet hostname and port.
+		tab100.MysqlPort = 0
+		tab100.MysqlHostname = ""
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.MysqlHostname = ""
 			tablet.MysqlPort = 0
 			return nil
 		})
 		require.NoError(t, err)
-		// We expect no tablets to be refreshed. Also, tab100 shouldn't be forgotten
-		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets, nil)
+		// tab100 shouldn't be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
 	})
 
 	t.Run("change a tablet and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {

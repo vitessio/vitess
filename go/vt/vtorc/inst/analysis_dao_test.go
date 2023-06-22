@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
@@ -566,7 +565,67 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     NoProblem,
+			codeWanted:     InvalidReplica,
+		}, {
+			name: "DeadPrimary when VTOrc is starting up",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy: "none",
+				IsInvalid:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid:     1,
+				ReplicationStopped: 1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 103},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+				},
+				LastCheckValid:     1,
+				ReplicationStopped: 1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		}, {
+			name: "Invalid Primary",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy: "none",
+				IsInvalid:        1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     InvalidPrimary,
 		},
 	}
 	for _, tt := range tests {
@@ -635,9 +694,10 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			},
 			// As long as we have the vitess record stating that this tablet is the primary
 			// It would be incorrect to run a PRS.
-			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
-			// So it is likely a new tablet.
-			codeWanted: NoProblem,
+			// We should still flag this tablet as Invalid.
+			codeWanted:     InvalidPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 		}, {
 			name: "Removing Replica Tablet's MySQL record",
 			sql: []string{
@@ -648,7 +708,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			// We should wait for the MySQL information to be refreshed once.
 			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
 			// So it is likely a new tablet.
-			codeWanted: NoProblem,
+			codeWanted:     InvalidReplica,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 		},
 	}
 
@@ -746,6 +808,163 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Count())
 			}
+		})
+	}
+}
+
+// TestPostProcessAnalyses tests the functionality of the postProcessAnalyses function.
+func TestPostProcessAnalyses(t *testing.T) {
+	ks0 := ClusterInfo{
+		Keyspace:       "ks",
+		Shard:          "0",
+		CountInstances: 4,
+	}
+	ks80 := ClusterInfo{
+		Keyspace:       "ks",
+		Shard:          "80-",
+		CountInstances: 3,
+	}
+	clusters := map[string]*clusterAnalysis{
+		getKeyspaceShardName(ks0.Keyspace, ks0.Shard): {
+			totalTablets: int(ks0.CountInstances),
+		},
+		getKeyspaceShardName(ks80.Keyspace, ks80.Shard): {
+			totalTablets: int(ks80.CountInstances),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		analyses []*ReplicationAnalysis
+		want     []*ReplicationAnalysis
+	}{
+		{
+			name: "No processing needed",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:       ReplicationStopped,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					LastCheckValid: true,
+					ClusterDetails: ks0,
+				}, {
+					Analysis:       ReplicaSemiSyncMustBeSet,
+					LastCheckValid: true,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				}, {
+					Analysis:       PrimaryHasPrimary,
+					LastCheckValid: true,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				},
+			},
+		}, {
+			name: "Conversion of InvalidPrimary to DeadPrimary",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:              InvalidPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              ConnectedToWrongPrimary,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-101",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              ReplicationStopped,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-102",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              InvalidReplica,
+					AnalyzedInstanceAlias: "zone1-108",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					LastCheckValid:        false,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-302",
+					LastCheckValid:        true,
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+			want: []*ReplicationAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+		},
+		{
+			name: "Unable to convert InvalidPrimary to DeadPrimary",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:              InvalidPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-202",
+					LastCheckValid:        true,
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-101",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              ReplicationStopped,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-102",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.want == nil {
+				tt.want = tt.analyses
+			}
+			result := postProcessAnalyses(tt.analyses, clusters)
+			require.ElementsMatch(t, tt.want, result)
 		})
 	}
 }

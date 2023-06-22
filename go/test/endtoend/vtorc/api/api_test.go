@@ -92,7 +92,7 @@ func TestAPIEndpoints(t *testing.T) {
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
 	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response != "[]"
+		return response != "null"
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
@@ -112,7 +112,7 @@ func TestAPIEndpoints(t *testing.T) {
 		// Wait until VTOrc picks up on this issue and verify
 		// that we see a not null result on the api/replication-analysis page
 		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-			return response == "[]"
+			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
@@ -134,7 +134,7 @@ func TestAPIEndpoints(t *testing.T) {
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Equal(t, "[]", resp)
+		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
