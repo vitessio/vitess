@@ -2770,6 +2770,18 @@ var (
 			input:  "CREATE DATABASE `somedb` CHARACTER SET binary CHARSET binary COLLATE binary collate binary encryption 'n' encryption 'n'",
 			output: "create database somedb character set binary charset binary collate binary collate binary encryption n encryption n",
 		}, {
+			input:  "create table test (pk varchar(255) collate 'utf8_unicode_ci')",
+			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
+		}, {
+			input:  "create table test (pk varchar(255) collate utf8_unicode_ci)",
+			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
+		}, {
+			input:  "create table test (pk varchar(255)) collate 'utf8_unicode_ci'",
+			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
+		}, {
+			input:  "create table test (pk varchar(255)) collate utf8_unicode_ci",
+			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
+		},{
 			input:  "select * from current",
 			output: "select * from `current`",
 		}, {
