@@ -72,6 +72,7 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 		result.Rows[i] = make([]Value, len(fields))
 		for j, col := range split(row) {
 			if col == "null" {
+				result.Rows[i][j] = NULL
 				continue
 			}
 			result.Rows[i][j] = MakeTrusted(fields[j].Type, []byte(col))

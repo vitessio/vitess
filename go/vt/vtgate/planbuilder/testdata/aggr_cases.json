@@ -6794,5 +6794,239 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Aggregate detection (group_concat)",
+    "query": "select group_concat(user.a) from user join user_extra",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(user.a) from user join user_extra",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "group_concat(0) AS group_concat(`user`.a)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.a from `user` where 1 != 1",
+                "Query": "select `user`.a from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "group_concat with group by without in select list",
+    "query": "select group_concat(user.id) from user, music where user.id = music.foo group by user.bar",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(user.id) from user, music where user.id = music.foo group by user.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "group_concat(0) AS group_concat(`user`.id)",
+        "GroupBy": "(1|2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|2) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0,R:1,R:2",
+                "JoinVars": {
+                  "music_foo": 0
+                },
+                "TableName": "music_`user`",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.foo from music where 1 != 1",
+                    "Query": "select music.foo from music",
+                    "Table": "music"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.id, `user`.bar, weight_string(`user`.bar) from `user` where 1 != 1",
+                    "Query": "select `user`.id, `user`.bar, weight_string(`user`.bar) from `user` where `user`.id = :music_foo",
+                    "Table": "`user`",
+                    "Values": [
+                      ":music_foo"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group_concat aggregation on top of route",
+    "query": "select intcol, group_concat(foo) from user group by intcol",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select intcol, group_concat(foo) from user group by intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "group_concat(1)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, group_concat(foo) from `user` where 1 != 1 group by intcol",
+            "OrderBy": "0 ASC",
+            "Query": "select intcol, group_concat(foo) from `user` group by intcol order by intcol asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select intcol, group_concat(foo) from user group by intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "group_concat(1) AS group_concat(foo)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, group_concat(foo) from `user` where 1 != 1 group by intcol",
+            "OrderBy": "0 ASC",
+            "Query": "select intcol, group_concat(foo) from `user` group by intcol order by intcol asc",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "ordering on top of aggregator without pushing the column down during the horizon phase",
+    "query": "select u.foo, group_concat(u.bar) from user u, music m where u.col = m.col group by u.foo order by u.baz",
+    "v3-plan" : "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.foo, group_concat(u.bar) from user u, music m where u.col = m.col group by u.foo order by u.baz",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(2|4) ASC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "group_concat(1) AS group_concat(u.bar), random(2) AS baz, random(4)",
+            "GroupBy": "(0|3)",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
+                "JoinVars": {
+                  "u_col": 5
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.foo, u.bar, u.baz, weight_string(u.foo), weight_string(u.baz), u.col from `user` as u where 1 != 1",
+                    "OrderBy": "(0|3) ASC",
+                    "Query": "select u.foo, u.bar, u.baz, weight_string(u.foo), weight_string(u.baz), u.col from `user` as u order by u.foo asc",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.col = :u_col",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]
