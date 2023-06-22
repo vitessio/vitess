@@ -120,6 +120,14 @@ func (p *Projection) isDerived() bool {
 }
 
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if p.TableID != nil {
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*p.TableID)
+		if err != nil {
+			return nil, 0, err
+		}
+		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, derivedTBL)
+	}
+
 	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, extractExpr); found {
 		return p, offset, nil
 	}

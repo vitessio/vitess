@@ -7620,24 +7620,24 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:1",
+        "JoinColumnIndexes": "R:0,L:0",
         "JoinVars": {
-          "t_id": 0
+          "t_id": 1
         },
         "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
             "Columns": [
-              0,
-              1
+              1,
+              0
             ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS b",
-                "GroupBy": "(0|3), (2|4)",
+                "GroupBy": "(2|3), (0|4)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -7646,9 +7646,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra where 1 != 1 group by id, weight_string(id), req, weight_string(req)",
-                    "OrderBy": "(0|3) ASC, (2|4) ASC",
-                    "Query": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra group by id, weight_string(id), req, weight_string(req) order by id asc, req asc",
+                    "FieldQuery": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra where 1 != 1 group by req, id",
+                    "OrderBy": "(2|3) ASC, (0|4) ASC",
+                    "Query": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra group by req, id order by req asc, id asc",
                     "Table": "user_extra"
                   }
                 ]

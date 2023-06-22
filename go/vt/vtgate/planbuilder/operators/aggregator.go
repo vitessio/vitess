@@ -58,17 +58,12 @@ type (
 )
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
-	return &Aggregator{
-		Source:        inputs[0],
-		Columns:       slices.Clone(a.Columns),
-		Grouping:      slices.Clone(a.Grouping),
-		Aggregations:  slices.Clone(a.Aggregations),
-		Pushed:        a.Pushed,
-		offsetPlanned: a.offsetPlanned,
-		Original:      a.Original,
-		ResultColumns: a.ResultColumns,
-		QP:            a.QP,
-	}
+	kopy := *a
+	kopy.Source = inputs[0]
+	kopy.Columns = slices.Clone(a.Columns)
+	kopy.Grouping = slices.Clone(a.Grouping)
+	kopy.Aggregations = slices.Clone(a.Aggregations)
+	return &kopy
 }
 
 func (a *Aggregator) Inputs() []ops.Operator {
@@ -119,21 +114,13 @@ func (a *Aggregator) isDerived() bool {
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	if a.TableID != nil {
-		// this is a derived table, and so we have to translate the column names to the internal expression
-		col, ok := expr.Expr.(*sqlparser.ColName)
-		if !ok {
-			panic(4)
-			// return nil, 0, vterrors.VT13001("don't know how to handle this")
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
+		if err != nil {
+			return nil, 0, err
 		}
-		for i, column := range a.Columns {
-			if col.Name.EqualString(column.ColumnName()) {
-				return a, i, nil
-			}
-		}
+		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, derivedTBL)
 	}
-	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("did not expect to add group by here")
-	}
+
 	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
 	err := a.planOffsets(ctx)
@@ -149,6 +136,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		if isColName && colName.Name.EqualString(col.As.String()) {
 			return a, i, nil
 		}
+	}
+
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("did not expect to add group by here")
 	}
 
 	// If weight string function is received from above operator. Then check if we have a group on the expression used.
@@ -413,7 +404,3 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 }
 
 var _ ops.Operator = (*Aggregator)(nil)
-
-// func (a *Aggregator) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
-//
-// }
