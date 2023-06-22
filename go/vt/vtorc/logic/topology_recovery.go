@@ -593,7 +593,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis) (err
 	}
 
 	// We lock the shard here and then refresh the tablets information
-	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceAlias)
+	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceAlias, getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis))
 	if err != nil {
 		return err
 	}
