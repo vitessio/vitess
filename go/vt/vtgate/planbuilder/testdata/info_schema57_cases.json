@@ -1147,7 +1147,22 @@
     "comment": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sum(found) from (select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)) as t where 1 != 1",
+        "Query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1)) as t",
+        "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"music\")]",
+        "Table": "information_schema.`tables`"
+      }
+    }
   },
   {
     "comment": "union as a derived table",
@@ -1193,7 +1208,22 @@
         ]
       }
     },
-    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select found from (select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)) as t where 1 != 1",
+        "Query": "select found from (select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1)) as t",
+        "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"music\")]",
+        "Table": "information_schema.`tables`"
+      }
+    }
   },
   {
     "comment": "merge system schema queries as long as they have any same table_schema",
@@ -1424,7 +1454,22 @@
         ]
       }
     },
-    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select dt.TABLE_NAME from (select TABLE_NAME from information_schema.`tables` as t where 1 != 1 union select TABLE_NAME from information_schema.`columns` where 1 != 1) as dt where 1 != 1",
+        "Query": "select dt.TABLE_NAME from (select TABLE_NAME from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ union select TABLE_NAME from information_schema.`columns`) as dt",
+        "SysTableTableSchema": "[VARCHAR(\"a\")]",
+        "Table": "information_schema.`tables`"
+      }
+    }
   },
   {
     "comment": "merge even one side have schema name in subquery",
