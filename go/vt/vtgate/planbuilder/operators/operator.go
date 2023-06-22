@@ -53,8 +53,12 @@ type (
 
 // PlanQuery creates a query plan for a given SQL statement
 func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
-	op, err := createLogicalOperatorFromAST(ctx, stmt)
+	op, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
+		return nil, err
+	}
+
+	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
 

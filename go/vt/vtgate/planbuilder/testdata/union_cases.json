@@ -348,25 +348,7 @@
         "Table": "`user`"
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select * from user union all select * from user_extra) as t",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from (select * from `user` where 1 != 1 union all select * from user_extra where 1 != 1) as t where 1 != 1",
-        "Query": "select * from (select * from `user` union all select * from user_extra) as t",
-        "Table": "`user`"
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "union operations in derived table, without star expression (FROM)¡",
@@ -386,25 +368,7 @@
         "Table": "`user`"
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col1, col2 from (select col1, col2 from `user` where 1 != 1 union all select col1, col2 from user_extra where 1 != 1) as t where 1 != 1",
-        "Query": "select col1, col2 from (select col1, col2 from `user` union all select col1, col2 from user_extra) as t",
-        "Table": "`user`"
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "union all between two scatter selects, with order by",
@@ -1747,41 +1711,7 @@
         ]
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union all select id + 1, weight_string(id + 1) from `user` where 1 != 1 union select user_id, weight_string(user_id) from user_extra where 1 != 1",
-                "Query": "select id, weight_string(id) from `user` union all select id + 1, weight_string(id + 1) from `user` union select user_id, weight_string(user_id) from user_extra",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "gen4 optimises away ORDER BY when it's safe to do",
@@ -2177,90 +2107,7 @@
         ]
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "tbl1_id": 0
-        },
-        "TableName": "`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Limit",
-                    "Count": "INT64(5)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                        "OrderBy": "(0|1) ASC",
-                        "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
-                        "ResultColumns": 1,
-                        "Table": "`user`"
-                      }
-                    ]
-                  },
-                  {
-                    "OperatorType": "Limit",
-                    "Count": "INT64(5)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                        "OrderBy": "(0|1) DESC",
-                        "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
-                        "ResultColumns": 1,
-                        "Table": "`user`"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select tbl2.id from `user` as tbl2 where 1 != 1",
-            "Query": "select tbl2.id from `user` as tbl2 where tbl2.id = :tbl1_id",
-            "Table": "`user`",
-            "Values": [
-              ":tbl1_id"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "ambiguous LIMIT",
@@ -2294,129 +2141,25 @@
     "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "query": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "v3-plan": "VT12001: unsupported: expression on results of a cross-shard subquery",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          2
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id + 42 as foo, weight_string(id + 42), 1 from `user` where 1 != 1",
-                    "Query": "select distinct id + 42 as foo, weight_string(id + 42), 1 from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 + id as foo, weight_string(1 + id), 1 from unsharded where 1 != 1",
-                    "Query": "select distinct 1 + id as foo, weight_string(1 + id), 1 from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.unsharded",
-        "user.user"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "systable union query in derived table with constraint on outside (without star projection)",
     "query": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
     "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "DBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
-        "Query": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */ and kcu.COLUMN_NAME = 'primary' union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */ and kcu.COLUMN_NAME = 'primary') as kcu",
-        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
-        "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
-        "Table": "information_schema.key_column_usage"
-      }
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "pushes predicate on both sides of UNION",
     "query": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
     "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select X.`name`, X.foo from (select `name`, id as foo from `user` where 1 != 1 union select 'extra', user_id from user_extra where 1 != 1) as X where 1 != 1",
-        "Query": "select X.`name`, X.foo from (select `name`, id as foo from `user` where id = 3 union select 'extra', user_id from user_extra where user_id = 3) as X",
-        "Table": "`user`",
-        "Values": [
-          "INT64(3)"
-        ],
-        "Vindex": "user_index"
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "systable union query in derived table with constraint on outside (star projection)",
     "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
     "v3-plan": "VT03019: column constraint_name not found",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "DBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
-        "Query": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */ and kcu.CONSTRAINT_NAME = 'primary' union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */ and kcu.CONSTRAINT_NAME = 'primary') as kcu",
-        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
-        "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
-        "Table": "information_schema.key_column_usage"
-      }
-    }
+    "gen4-plan": "VT12001: unsupported: query cannot be fully operator planned"
   },
   {
     "comment": "unknown columns are OK as long as the whole query is unsharded",

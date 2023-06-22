@@ -362,28 +362,20 @@
       "QueryType": "SELECT",
       "Original": "select a from (select count(*) as a from user) t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS a",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
           }
         ]
       },
@@ -1939,7 +1931,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
             "Table": "`user`, user_extra"
           }
         ]
@@ -1989,7 +1981,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
         "Table": "`user`, user_extra"
       },
       "TablesUsed": [
@@ -2020,7 +2012,7 @@
             },
             "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col order by col asc",
+            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc",
             "Table": "`user`, user_extra"
           }
         ]
@@ -4911,8 +4903,8 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select id, val1, weight_string(val1) from `user` where 1 != 1",
-                    "OrderBy": "(1|2) ASC, (1|2) ASC",
-                    "Query": "select id, val1, weight_string(val1) from `user` where val2 < 4 order by val1 asc, val1 asc limit :__upper_limit",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select id, val1, weight_string(val1) from `user` where val2 < 4 order by val1 asc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -4955,7 +4947,7 @@
         "Inputs": [
           {
             "OperatorType": "Filter",
-            "Predicate": ":1 = 1",
+            "Predicate": "count(*) = 1",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -5290,7 +5282,7 @@
           "Sharded": true
         },
         "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where `count` >= :v2",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2",
         "Table": "user_extra"
       },
       "TablesUsed": [

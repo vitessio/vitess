@@ -836,9 +836,8 @@ func (qp *QueryProjection) GetColumnCount() int {
 // We don't currently support planning for operators having derived tables.
 func checkAggregationSupported(op ops.Operator) error {
 	return rewrite.Visit(op, func(operator ops.Operator) error {
-		_, isDerived := operator.(*Derived)
 		projection, isProjection := operator.(*Projection)
-		if isDerived || (isProjection && projection.TableID != nil) {
+		if isProjection && projection.TableID != nil {
 			return errHorizonNotPlanned()
 		}
 		return nil
