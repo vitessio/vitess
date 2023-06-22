@@ -119,7 +119,12 @@ func (ap *AggregateParams) isDistinct() bool {
 }
 
 func (ap *AggregateParams) preProcess() bool {
-	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid || ap.Opcode == AggregateCount || ap.Opcode == AggregateGroupConcat
+	switch ap.Opcode {
+	case AggregateCountDistinct, AggregateSumDistinct, AggregateGtid, AggregateCount, AggregateGroupConcat:
+		return true
+	default:
+		return false
+	}
 }
 
 func (ap *AggregateParams) String() string {
