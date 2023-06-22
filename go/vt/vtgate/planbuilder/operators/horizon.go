@@ -101,7 +101,7 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, err
 	if h.QP != nil {
 		return h.QP, nil
 	}
-	qp, err := CreateQPFromSelect(ctx, h.Select.(*sqlparser.Select))
+	qp, err := CreateQPFromSelectStatement(ctx, h.Select)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (h *Horizon) ShortDescription() string {
 	return ""
 }
 
-//func (h *Horizon) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+// func (h *Horizon) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 //	src, ok := h.Source.(*Derived)
 //	if !ok {
 //		return h, rewrite.SameTree, nil
@@ -131,4 +131,4 @@ func (h *Horizon) ShortDescription() string {
 //	qp.OrderExprs = nil
 //
 //	return h, rewrite.SameTree, nil
-//}
+// }

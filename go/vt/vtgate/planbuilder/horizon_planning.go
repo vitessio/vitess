@@ -69,7 +69,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	var err error
-	hp.qp, err = operators.CreateQPFromSelect(ctx, hp.sel)
+	hp.qp, err = operators.CreateQPFromSelectStatement(ctx, hp.sel)
 	if err != nil {
 		return nil, err
 	}
