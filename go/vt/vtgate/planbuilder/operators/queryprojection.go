@@ -889,5 +889,5 @@ func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 	case *sqlparser.Union:
 		return createQPFromUnion(ctx, sel)
 	}
-	return nil, vterrors.VT13001("Can only create query projection from Union and Select statements")
+	return nil, vterrors.VT13001("can only create query projection from Union and Select statements")
 }
