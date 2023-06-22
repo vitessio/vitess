@@ -87,7 +87,7 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
@@ -117,7 +117,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := inst.ReplicationAnalysis{
+	analysisEntry := &inst.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ts = memorytopo.NewServer("zone1")

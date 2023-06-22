@@ -56,13 +56,20 @@ func initializeAnalysisDaoPostConfiguration() {
 
 type clusterAnalysis struct {
 	hasClusterwideAction bool
+	totalTablets         int
 	primaryAlias         string
 	durability           reparentutil.Durabler
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
-func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
-	result := []ReplicationAnalysis{}
+func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]*ReplicationAnalysis, error) {
+	var result []*ReplicationAnalysis
+	appendAnalysis := func(analysis *ReplicationAnalysis) {
+		if analysis.Analysis == NoProblem && len(analysis.StructureAnalysis) == 0 {
+			return
+		}
+		result = append(result, analysis)
+	}
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
 	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
@@ -262,6 +269,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		)
 		LEFT JOIN database_instance primary_instance ON (
 			vitess_tablet.alias = primary_instance.alias
+			AND vitess_tablet.hostname = primary_instance.hostname
+			AND vitess_tablet.port = primary_instance.port
 		)
 		LEFT JOIN vitess_tablet primary_tablet ON (
 			primary_tablet.hostname = primary_instance.source_host
@@ -286,7 +295,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		a := ReplicationAnalysis{
+		a := &ReplicationAnalysis{
 			Analysis:               NoProblem,
 			ProcessingNodeHostname: process.ThisHostname,
 			ProcessingNodeToken:    util.ProcessToken.Hash,
@@ -406,6 +415,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		// ca has clusterwide info
 		ca := clusters[keyspaceShard]
+		// Increment the total number of tablets.
+		ca.totalTablets += 1
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
 			return nil
@@ -415,10 +426,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
-		if isInvalid {
-			return nil
-		}
-		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
+		if a.IsClusterPrimary && isInvalid {
+			a.Analysis = InvalidPrimary
+			a.Description = "VTOrc hasn't been able to reach the primary even once since restart/shutdown"
+		} else if isInvalid {
+			a.Analysis = InvalidReplica
+			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
+		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasClusterwideAction = true
@@ -532,13 +546,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		//			a.Description = "Primary has no replicas"
 		//		}
 
-		appendAnalysis := func(analysis *ReplicationAnalysis) {
-			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 {
-				return
-			}
-			result = append(result, a)
-		}
-
 		{
 			// Moving on to structure analysis
 			// We also do structural checks. See if there's potential danger in promotions
@@ -579,7 +586,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.StructureAnalysis = append(a.StructureAnalysis, NotEnoughValidSemiSyncReplicasStructureWarning)
 			}
 		}
-		appendAnalysis(&a)
+		appendAnalysis(a)
 
 		if a.CountReplicas > 0 && hints.AuditAnalysis {
 			// Interesting enough for analysis
@@ -590,11 +597,62 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		return nil
 	})
 
+	for _, analysis := range result {
+		log.Errorf("Analysis - Instance - %v, Code - %v, LastCheckValid - %v, ReplStopped - %v", analysis.AnalyzedInstanceAlias, analysis.Analysis, analysis.LastCheckValid, analysis.ReplicationStopped)
+	}
+
+	result = postProcessAnalyses(result, clusters)
+
 	if err != nil {
 		log.Error(err)
 	}
 	// TODO: result, err = getConcensusReplicationAnalysis(result)
 	return result, err
+}
+
+// postProcessAnalyses is used to update different analyses based on the information gleaned from looking at all the analyses together instead of individual data.
+func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clusterAnalysis) []*ReplicationAnalysis {
+	for {
+		// Store whether we have changed the result of replication analysis or not.
+		resultChanged := false
+
+		// Go over all the analyses.
+		for _, analysis := range result {
+			// If one of them is an InvalidPrimary, then we see if all the other tablets in this keyspace shard are
+			// unable to replicate or not.
+			if analysis.Analysis == InvalidPrimary {
+				keyspaceName := analysis.ClusterDetails.Keyspace
+				shardName := analysis.ClusterDetails.Shard
+				keyspaceShard := getKeyspaceShardName(keyspaceName, shardName)
+				totalReplicas := clusters[keyspaceShard].totalTablets - 1
+				var notReplicatingReplicas []int
+				for idx, replicaAnalysis := range result {
+					if replicaAnalysis.ClusterDetails.Keyspace == keyspaceName &&
+						replicaAnalysis.ClusterDetails.Shard == shardName && topo.IsReplicaType(replicaAnalysis.TabletType) {
+						// If the replica's last check is invalid or its replication is stopped, then we consider as not replicating.
+						if !replicaAnalysis.LastCheckValid || replicaAnalysis.ReplicationStopped {
+							notReplicatingReplicas = append(notReplicatingReplicas, idx)
+						}
+					}
+				}
+				// If none of the other tablets are able to replicate, then we conclude that this primary is not just Invalid, but also Dead.
+				// In this case, we update the analysis for the primary tablet and remove all the analyses of the replicas.
+				if totalReplicas > 0 && len(notReplicatingReplicas) == totalReplicas {
+					resultChanged = true
+					analysis.Analysis = DeadPrimary
+					for i := len(notReplicatingReplicas) - 1; i >= 0; i-- {
+						idxToRemove := notReplicatingReplicas[i]
+						result = append(result[0:idxToRemove], result[idxToRemove+1:]...)
+					}
+					break
+				}
+			}
+		}
+		if !resultChanged {
+			break
+		}
+	}
+	return result
 }
 
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.
