@@ -180,13 +180,13 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 
 	// having
 	sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
-	if rand.Intn(2) < 1 {
+	if rand.Intn(2) < 1 && TestFailingQueries {
 		// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
 		sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
 	}
 
 	// only add a limit if the grouping columns are ordered
-	if rand.Intn(2) < 1 && isOrdered {
+	if rand.Intn(2) < 1 && (isOrdered || len(grouping) == 0) {
 		sel.Limit = createLimit()
 	}
 
