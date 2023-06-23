@@ -30,18 +30,28 @@ const TopologyRecoveriesTemplate = `
 </style>
 <table>
   <tr>
-    <th colspan="4">Recent Recoveries Performed</th>
+    <th colspan="8">Recent Recoveries Performed</th>
   </tr>
   <tr>
     <th>Recovery ID</th>
     <th>Failure Type</th>
     <th>Instance</th>
+	<th>Recovery Start</th>
+	<th>Recovery End</th>
+	<th>Is active?</th>
+	<th>Is successful?</th>
+	<th>Is acknowledged?</th>
   </tr>
   {{range $i, $recovery := .}}
   <tr>
     <td>{{$recovery.ID}}</td>
     <td>{{$recovery.AnalysisEntry.Analysis}}</td>
     <td>{{$recovery.AnalysisEntry.AnalyzedInstanceKey}}</td>
+	<td>{{$recovery.RecoveryStartTimestamp}}</td>
+	<td>{{$recovery.RecoveryEndTimestamp}}</td>
+	<td>{{$recovery.IsActive}}</td>
+	<td>{{$recovery.IsSuccessful}}</td>
+	<td>{{$recovery.Acknowledged}}</td>
   </tr>
   {{end}}
 </table>
