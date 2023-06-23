@@ -143,7 +143,6 @@ func TestRandomQuery(t *testing.T) {
 	fmt.Println(sqlparser.String(randomQuery(schemaTables, 3, 3)))
 }
 
-// TODO: bunch of TestFailingQueries checks were deleted by refactor to use AST
 func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Select {
 	sel := &sqlparser.Select{}
 	sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
