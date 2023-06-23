@@ -303,3 +303,13 @@ func TestPrepareStatements(t *testing.T) {
 	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }
+
+func TestBuggyOuterJoin(t *testing.T) {
+	// We found a couple of inconsistencies around outer joins, adding these tests to stop regressions
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+
+	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
+}

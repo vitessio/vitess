@@ -12,6 +12,7 @@
     - [Shard name validation in TopoServer](#shard-name-validation)
     - [Compression CLI flags removed from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
     - [VtctldClient command RestoreFromBackup will now use the correct context](#vtctldclient-command-restorefrombackup-will-now-use-the-correct-context)
+    - [VTTablet Restore Metrics](#vttablet-restore-metrics)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
     - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
@@ -131,6 +132,11 @@ The VtctldClient command RestoreFromBackup initiates an asynchronous process on 
 Prior to v17, this asynchronous process could run indefinitely in the background since it was called using the background context. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
 this behavior was changed to use a context with a timeout of `action_timeout`. If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough
 time for the restore process to complete. Otherwise, the restore will throw an error if the context expires before it completes.
+
+#### <a id="vttablet-restore-metrics">VTTablet Restore Metrics
+
+As part of the VTTablet Sidecar Schema Maintenance Refactor in v16.0.0, we dropped the `local_metadata` table from the sidecar database schema. This table was storing a couple of metrics related to restores from backup.
+They have now been re-introduced as metrics that can be accessed from `/debug/vars`.
 
 ### <a id="Vttablet-TxThrottler">Vttablet's transaction throttler now also throttles DML outside of `BEGIN; ...; COMMIT;` blocks
 
