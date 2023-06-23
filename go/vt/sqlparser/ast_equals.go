@@ -818,6 +818,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfKeyState(a, b)
+	case *Kill:
+		b, ok := inB.(*Kill)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfKill(a, b)
 	case *LagLeadExpr:
 		b, ok := inB.(*LagLeadExpr)
 		if !ok {
@@ -3291,6 +3297,18 @@ func (cmp *Comparator) RefOfKeyState(a, b *KeyState) bool {
 		return false
 	}
 	return a.Enable == b.Enable
+}
+
+// RefOfKill does deep equals between the two objects.
+func (cmp *Comparator) RefOfKill(a, b *Kill) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ProcesslistID == b.ProcesslistID &&
+		a.Type == b.Type
 }
 
 // RefOfLagLeadExpr does deep equals between the two objects.
@@ -6865,6 +6883,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfInsert(a, b)
+	case *Kill:
+		b, ok := inB.(*Kill)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfKill(a, b)
 	case *Load:
 		b, ok := inB.(*Load)
 		if !ok {
