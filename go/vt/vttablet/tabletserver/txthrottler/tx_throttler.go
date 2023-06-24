@@ -104,17 +104,16 @@ type TopologyWatcherInterface interface {
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
 
-// fetchKnownCells gathers a list of known cells from the topology. A ErrFoundNoCells error is
-// returned if the GetKnownCells call to topoServer succeeds but finds no cells.
+// fetchKnownCells gathers a list of known cells from the topology. An ErrFoundNoCells
+// error is returned if the GetKnownCells call to topoServer returns no cells.
 func fetchKnownCells(topoServer *topo.Server) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 
 	cells, err := topoServer.GetKnownCells(ctx)
 	if err == nil && len(cells) == 0 {
-		return nil, ErrFoundNoCells
+		err = ErrFoundNoCells
 	}
-
 	return cells, err
 }
 
@@ -241,7 +240,6 @@ func (t *txThrottler) Open() (err error) {
 		return nil
 	}
 	log.Info("txThrottler: opening")
-
 	t.throttlerRunning.Set(1)
 	t.state, err = newTxThrottlerState(t.topoServer, t.config, t.target)
 	return err

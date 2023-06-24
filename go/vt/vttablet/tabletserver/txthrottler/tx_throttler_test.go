@@ -149,6 +149,20 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
 
+func TestFetchKnownCells(t *testing.T) {
+	{
+		ts := memorytopo.NewServer("cell1", "cell2")
+		cells, err := fetchKnownCells(ts)
+		assert.Nil(t, err)
+		assert.Equal(t, []string{"cell1", "cell2"}, cells)
+	}
+	{
+		ts := memorytopo.NewServer()
+		_, err := fetchKnownCells(ts)
+		assert.NotNil(t, err)
+	}
+}
+
 func TestNewTxThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, t.Name())
