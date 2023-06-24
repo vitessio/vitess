@@ -51,6 +51,7 @@ var (
 	healthCheckFactory     healthCheckFactoryFunc
 	topologyWatcherFactory topologyWatcherFactoryFunc
 	throttlerFactory       throttlerFactoryFunc
+	ErrFoundNoCells        = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
 )
 
 func resetTxThrottlerFactories() {
@@ -102,6 +103,20 @@ type TopologyWatcherInterface interface {
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
+
+// fetchKnownCells gathers a list of known cells from the topology. A ErrFoundNoCells error is
+// returned if the GetKnownCells call to topoServer succeeds but finds no cells.
+func fetchKnownCells(topoServer *topo.Server) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+
+	cells, err := topoServer.GetKnownCells(ctx)
+	if err == nil && len(cells) == 0 {
+		return nil, ErrFoundNoCells
+	}
+
+	return cells, err
+}
 
 // txThrottler implements TxThrottle for throttling transactions based on replication lag.
 // It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
@@ -227,22 +242,6 @@ func (t *txThrottler) Open() (err error) {
 	}
 	log.Info("txThrottler: opening")
 
-	// get cells from topo if none defined in tabletenv config
-	if len(t.config.healthCheckCells) == 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-		defer cancel()
-
-		if t.config.healthCheckCells, err = t.topoServer.GetKnownCells(ctx); err != nil {
-			return err
-		}
-
-		// check that we found cells from topo
-		if len(t.config.healthCheckCells) == 0 {
-			log.Error("txThrottler: failed to open throttler due to no cells found.")
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
-		}
-	}
-
 	t.throttlerRunning.Set(1)
 	t.state, err = newTxThrottlerState(t.topoServer, t.config, t.target)
 	return err
@@ -289,6 +288,15 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 }
 
 func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
+	// get cells from topo if none defined in tabletenv config
+	if len(config.healthCheckCells) == 0 {
+		var err error
+		if config.healthCheckCells, err = fetchKnownCells(topoServer); err != nil {
+			log.Errorf("txThrottler: failed to open throttler: %+v", err)
+			return nil, err
+		}
+	}
+
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
 
 	t, err := throttlerFactory(
@@ -305,41 +313,41 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		t.Close()
 		return nil, err
 	}
-	result := &txThrottlerState{
+	state := &txThrottlerState{
 		config:    config,
 		throttler: t,
 	}
-	createTxThrottlerHealthCheck(topoServer, config, result, target.Cell)
+	state.createTxThrottlerHealthCheck(topoServer, config, target.Cell)
 
-	result.topologyWatchers = make(
+	state.topologyWatchers = make(
 		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
 	for _, cell := range config.healthCheckCells {
-		result.topologyWatchers = append(
-			result.topologyWatchers,
+		state.topologyWatchers = append(
+			state.topologyWatchers,
 			topologyWatcherFactory(
 				topoServer,
-				result.healthCheck,
+				state.healthCheck,
 				cell,
 				target.Keyspace,
 				target.Shard,
 				discovery.DefaultTopologyWatcherRefreshInterval,
 				discovery.DefaultTopoReadConcurrency))
 	}
-	return result, nil
+	return state, nil
 }
 
-func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerState, cell string) {
+func (ts *txThrottlerState) createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, cell string) {
 	ctx, cancel := context.WithCancel(context.Background())
-	result.stopHealthCheck = cancel
-	result.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
-	ch := result.healthCheck.Subscribe()
+	ts.stopHealthCheck = cancel
+	ts.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
+	ch := ts.healthCheck.Subscribe()
 	go func(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case th := <-ch:
-				result.StatsUpdate(th)
+				ts.StatsUpdate(th)
 			}
 		}
 	}(ctx)
