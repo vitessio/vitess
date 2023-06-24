@@ -19,6 +19,7 @@ package txthrottler
 import (
 	"context"
 	"math/rand"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -191,6 +192,7 @@ type txThrottlerState struct {
 	stopHealthCheck context.CancelFunc
 
 	healthCheck      discovery.HealthCheck
+	healthCheckChan  chan *discovery.TabletHealth
 	topologyWatchers []TopologyWatcherInterface
 }
 
@@ -287,12 +289,14 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 
 func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
 	// get cells from topo if none defined in tabletenv config
+	var cellsFromTopo bool
 	if len(config.healthCheckCells) == 0 {
 		var err error
 		if config.healthCheckCells, err = fetchKnownCells(topoServer); err != nil {
 			log.Errorf("txThrottler: failed to open throttler: %+v", err)
 			return nil, err
 		}
+		cellsFromTopo = true
 	}
 
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
@@ -315,40 +319,81 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		config:    config,
 		throttler: t,
 	}
-	state.createTxThrottlerHealthCheck(topoServer, config, target.Cell)
+	state.initHealthCheckStream(topoServer, target)
+	hcStreamProcessor := state.healthCheckStreamProcessorFactory(topoServer, target, cellsFromTopo)
+	ctx, cancel := context.WithCancel(context.Background())
+	state.stopHealthCheck = cancel
+	go hcStreamProcessor(ctx)
 
-	state.topologyWatchers = make(
-		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
-	for _, cell := range config.healthCheckCells {
-		state.topologyWatchers = append(
-			state.topologyWatchers,
+	return state, nil
+}
+
+func (ts *txThrottlerState) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
+	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.config.healthCheckCells)
+	ts.healthCheckChan = ts.healthCheck.Subscribe()
+	ts.topologyWatchers = make(
+		[]TopologyWatcherInterface, 0, len(ts.config.healthCheckCells))
+	for _, cell := range ts.config.healthCheckCells {
+		ts.topologyWatchers = append(
+			ts.topologyWatchers,
 			topologyWatcherFactory(
 				topoServer,
-				state.healthCheck,
+				ts.healthCheck,
 				cell,
 				target.Keyspace,
 				target.Shard,
 				discovery.DefaultTopologyWatcherRefreshInterval,
-				discovery.DefaultTopoReadConcurrency))
+				discovery.DefaultTopoReadConcurrency),
+		)
 	}
-	return state, nil
 }
 
-func (ts *txThrottlerState) createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, cell string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	ts.stopHealthCheck = cancel
-	ts.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
-	ch := ts.healthCheck.Subscribe()
-	go func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case th := <-ch:
-				ts.StatsUpdate(th)
+func (ts *txThrottlerState) closeHealthCheckStream() {
+	if ts.healthCheck == nil {
+		return
+	}
+	for _, topoWatcher := range ts.topologyWatchers {
+		topoWatcher.Stop()
+	}
+	ts.stopHealthCheck()
+	ts.healthCheck.Close()
+}
+
+func (ts *txThrottlerState) healthCheckStreamProcessorFactory(topoServer *topo.Server, target *querypb.Target, cellsFromTopo bool) func(ctx context.Context) {
+	if cellsFromTopo {
+		return func(ctx context.Context) {
+			for {
+				select {
+				case <-time.After(time.Minute):
+					knownCells, err := fetchKnownCells(topoServer)
+					if err != nil {
+						log.Fatalf("txThrottler: failed to fetch cells from topo: %+v", err)
+						continue
+					}
+					if !reflect.DeepEqual(knownCells, ts.config.healthCheckCells) {
+						log.Info("txThrottler: restarting healthcheck stream due to update to topology cells")
+						ts.closeHealthCheckStream()
+						ts.initHealthCheckStream(topoServer, target)
+					}
+				case <-ctx.Done():
+					return
+				case th := <-ts.healthCheckChan:
+					ts.StatsUpdate(th)
+				}
 			}
 		}
-	}(ctx)
+	} else {
+		return func(ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case th := <-ts.healthCheckChan:
+					ts.StatsUpdate(th)
+				}
+			}
+		}
+	}
 }
 
 func (ts *txThrottlerState) throttle() bool {
