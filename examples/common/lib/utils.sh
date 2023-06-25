@@ -83,7 +83,7 @@ function wait_for_writeable_shard_primary() {
 	fi
 
 	for _ in $(seq 1 ${wait_secs}); do
-		if vtctldclient --server=localhost:15999 GetFullStatus "$PRIMARY_TABLET" | grep "super_read_only" | grep "false" ; then
+		if vtctldclient --server=localhost:15999 GetFullStatus "$PRIMARY_TABLET" | grep "super_read_only" | grep --quiet "false" ; then
 			break
 		fi
 		sleep 1
