@@ -366,10 +366,10 @@ func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server
 	if cellsFromTopo {
 		return func(ctx context.Context) {
 			cellsUpdateTicker := time.NewTicker(topoCellsRefreshInterval)
+			defer cellsUpdateTicker.Stop()
 			for {
 				select {
 				case <-ctx.Done():
-					cellsUpdateTicker.Stop()
 					return
 				case <-cellsUpdateTicker.C:
 					cells, err := fetchKnownCells(topoServer)
