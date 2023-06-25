@@ -357,6 +357,7 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	for _, watcher := range ts.topologyWatchers {
 		watcher.Stop()
 	}
+	ts.topologyWatchers = nil
 	ts.stopHealthCheck()
 	ts.healthCheck.Close()
 }
@@ -367,6 +368,9 @@ func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server
 			cellsUpdateTicker := time.NewTicker(topoCellsRefreshInterval)
 			for {
 				select {
+				case <-ctx.Done():
+					cellsUpdateTicker.Stop()
+					return
 				case <-cellsUpdateTicker.C:
 					cells, err := fetchKnownCells(topoServer)
 					if err != nil {
@@ -379,8 +383,6 @@ func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server
 						ts.closeHealthCheckStream()
 						ts.initHealthCheckStream(topoServer, target)
 					}
-				case <-ctx.Done():
-					return
 				case th := <-ts.healthCheckChan:
 					ts.StatsUpdate(th)
 				}

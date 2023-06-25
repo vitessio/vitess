@@ -158,8 +158,9 @@ func TestFetchKnownCells(t *testing.T) {
 	}
 	{
 		ts := memorytopo.NewServer()
-		_, err := fetchKnownCells(ts)
+		cells, err := fetchKnownCells(ts)
 		assert.NotNil(t, err)
+		assert.Zero(t, cells)
 	}
 }
 
