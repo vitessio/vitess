@@ -370,7 +370,7 @@ func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server
 				case <-cellsUpdateTicker.C:
 					cells, err := fetchKnownCells(topoServer)
 					if err != nil {
-						log.Fatalf("txThrottler: failed to fetch cells from topo: %+v", err)
+						log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
 						continue
 					}
 					if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
