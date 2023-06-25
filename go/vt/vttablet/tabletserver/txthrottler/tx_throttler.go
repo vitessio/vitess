@@ -49,10 +49,11 @@ type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.Healt
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
 var (
-	healthCheckFactory     healthCheckFactoryFunc
-	topologyWatcherFactory topologyWatcherFactoryFunc
-	throttlerFactory       throttlerFactoryFunc
-	ErrFoundNoCells        = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
+	healthCheckFactory       healthCheckFactoryFunc
+	topologyWatcherFactory   topologyWatcherFactoryFunc
+	throttlerFactory         throttlerFactoryFunc
+	topoCellsRefreshInterval = time.Minute
+	ErrFoundNoCells          = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
 )
 
 func resetTxThrottlerFactories() {
@@ -319,11 +320,12 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		config:    config,
 		throttler: t,
 	}
-	state.initHealthCheckStream(topoServer, target)
-	hcStreamProcessor := state.healthCheckStreamProcessorFactory(topoServer, target, cellsFromTopo)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	state.stopHealthCheck = cancel
-	go hcStreamProcessor(ctx)
+	state.initHealthCheckStream(topoServer, target)
+	hcProcessor := state.healthChecksProcessorFactory(topoServer, target, cellsFromTopo)
+	go hcProcessor(ctx)
 
 	return state, nil
 }
@@ -352,26 +354,28 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	if ts.healthCheck == nil {
 		return
 	}
-	for _, topoWatcher := range ts.topologyWatchers {
-		topoWatcher.Stop()
+	for _, watcher := range ts.topologyWatchers {
+		watcher.Stop()
 	}
 	ts.stopHealthCheck()
 	ts.healthCheck.Close()
 }
 
-func (ts *txThrottlerState) healthCheckStreamProcessorFactory(topoServer *topo.Server, target *querypb.Target, cellsFromTopo bool) func(ctx context.Context) {
+func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server, target *querypb.Target, cellsFromTopo bool) func(ctx context.Context) {
 	if cellsFromTopo {
 		return func(ctx context.Context) {
+			cellsUpdateTicker := time.NewTicker(topoCellsRefreshInterval)
 			for {
 				select {
-				case <-time.After(time.Minute):
-					knownCells, err := fetchKnownCells(topoServer)
+				case <-cellsUpdateTicker.C:
+					cells, err := fetchKnownCells(topoServer)
 					if err != nil {
 						log.Fatalf("txThrottler: failed to fetch cells from topo: %+v", err)
 						continue
 					}
-					if !reflect.DeepEqual(knownCells, ts.config.healthCheckCells) {
-						log.Info("txThrottler: restarting healthcheck stream due to update to topology cells")
+					if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
+						log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
+						ts.config.healthCheckCells = cells
 						ts.closeHealthCheckStream()
 						ts.initHealthCheckStream(topoServer, target)
 					}
@@ -408,15 +412,8 @@ func (ts *txThrottlerState) throttle() bool {
 }
 
 func (ts *txThrottlerState) deallocateResources() {
-	// We don't really need to nil out the fields here
-	// as deallocateResources is not expected to be called
-	// more than once, but it doesn't hurt to do so.
-	for _, watcher := range ts.topologyWatchers {
-		watcher.Stop()
-	}
-	ts.topologyWatchers = nil
-
-	ts.healthCheck.Close()
+	// Close healthcheck and topo watchers
+	ts.closeHealthCheckStream()
 	ts.healthCheck = nil
 
 	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
