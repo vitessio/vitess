@@ -1545,7 +1545,7 @@ func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 	return db
 }
 
-const baseShowTablesPattern = `SELECT t\.table_name.*`
+const baseShowTablesPattern = `[\s]*SELECT[\s]+(t|t1)[.]table_name.*`
 
 func initQueryExecutorTestDB(db *fakesqldb.DB) {
 	addQueryExecutorSupportedQueries(db)
