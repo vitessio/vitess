@@ -363,34 +363,32 @@ GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 //   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
 //   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
 //     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
-const TablesWithSize80 = `
-SELECT
-		t1.table_name,
-		t1.table_type,
-		UNIX_TIMESTAMP(t1.create_time),
-		t1.table_comment,
-		i1.file_size,
-		i1.allocated_size
-	FROM information_schema.tables t1
-	LEFT JOIN information_schema.innodb_tablespaces i1
-	ON i1.name = CONCAT(t1.table_schema, '/', t1.table_name) COLLATE utf8_general_ci
+const TablesWithSize80 = `SELECT t.table_name,
+		t.table_type,
+		UNIX_TIMESTAMP(t.create_time),
+		t.table_comment,
+		i.file_size,
+		i.allocated_size
+	FROM information_schema.tables t
+		LEFT JOIN information_schema.innodb_tablespaces i
+	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8_general_ci
 	WHERE
-		t1.table_schema = database() AND t1.create_options != 'partitioned'
+		t.table_schema = database() AND t.create_options != 'partitioned'
 UNION ALL
-SELECT
-		t2.table_name,
-		t2.table_type,
-		UNIX_TIMESTAMP(t2.create_time),
-		t2.table_comment,
-		SUM(i2.file_size),
-		SUM(i2.allocated_size)
-		FROM information_schema.tables t2
-		LEFT JOIN information_schema.innodb_tablespaces i2
-	ON i2.name LIKE (CONCAT(t2.table_schema, '/', t2.table_name, '#p#%') COLLATE utf8_general_ci )
+	SELECT
+		t.table_name,
+		t.table_type,
+		UNIX_TIMESTAMP(t.create_time),
+		t.table_comment,
+		SUM(i.file_size),
+		SUM(i.allocated_size)
+	FROM information_schema.tables t
+		LEFT JOIN information_schema.innodb_tablespaces i
+	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8_general_ci )
 	WHERE
-		t2.table_schema = database() AND t2.create_options = 'partitioned'
+		t.table_schema = database() AND t.create_options = 'partitioned'
 	GROUP BY
-		t2.table_name, t2.table_type, t2.create_time, t2.table_comment
+		t.table_name, t.table_type, t.create_time, t.table_comment
 `
 
 // baseShowTablesWithSizes is part of the Flavor interface.
