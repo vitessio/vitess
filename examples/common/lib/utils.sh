@@ -87,7 +87,10 @@ function wait_for_writeable_shard_primary() {
 			break
 		fi
 		sleep 1
-	done;
+	done
+	if vtctldclient --server=localhost:15999 GetFullStatus "$PRIMARY_TABLET" | grep "super_read_only" | grep --quiet "true" ; then
+		fail "Timed out after ${wait_secs} seconds waiting for a primary tablet $PRIMARY_TABLET to be writeable in ${keyspace}/${shard}"
+	fi
 }
 
 # Wait for the shard primary tablet's VReplication engine to open.
