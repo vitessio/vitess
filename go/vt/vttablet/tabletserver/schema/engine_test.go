@@ -43,7 +43,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-const baseShowTablesPattern = `SELECT t\.table_name.*`
+const baseShowTablesPattern = `[\s]*SELECT[\s]+(t|t1)[.]table_name.*`
 
 var mustMatch = utils.MustMatchFn(".Mutex")
 
