@@ -20,13 +20,11 @@ func TestKeywordTable(t *testing.T) {
 }
 
 var vitessReserved = map[string]bool{
-	"ESCAPE":        true,
-	"NEXT":          true,
-	"OFF":           true,
-	"SAVEPOINT":     true,
-	"SQL_NO_CACHE":  true,
-	"TIMESTAMPADD":  true,
-	"TIMESTAMPDIFF": true,
+	"ESCAPE":       true,
+	"NEXT":         true,
+	"OFF":          true,
+	"SAVEPOINT":    true,
+	"SQL_NO_CACHE": true,
 }
 
 func TestCompatibility(t *testing.T) {

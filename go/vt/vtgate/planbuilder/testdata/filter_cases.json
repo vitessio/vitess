@@ -6598,7 +6598,7 @@
         "Inputs": [
           {
             "OperatorType": "Filter",
-            "Predicate": "repeat(a.textcol1, :1) like 'And%res'",
+            "Predicate": "repeat(a.textcol1, sum(a.id)) like 'And%res'",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -6609,16 +6609,16 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] as textcol1",
-                      "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as sum(a.id)"
+                      "[COLUMN 2] as textcol1",
+                      "[COLUMN 0] * [COLUMN 1] as sum(a.id)"
                     ],
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,L:1,R:1",
+                        "JoinColumnIndexes": "L:0,R:0,L:1",
                         "JoinVars": {
-                          "a_textcol1": 0
+                          "a_textcol1": 1
                         },
                         "TableName": "`user`_`user`",
                         "Inputs": [
@@ -6629,9 +6629,9 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select a.textcol1, sum(a.id) from `user` as a where 1 != 1 group by a.textcol1",
-                            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-                            "Query": "select a.textcol1, sum(a.id) from `user` as a group by a.textcol1 order by a.textcol1 asc",
+                            "FieldQuery": "select sum(a.id), a.textcol1 from `user` as a where 1 != 1 group by a.textcol1",
+                            "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
+                            "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc",
                             "Table": "`user`"
                           },
                           {
@@ -6641,8 +6641,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select 1, count(*) from `user` as b where 1 != 1 group by 1",
-                            "Query": "select 1, count(*) from `user` as b where b.textcol2 = :a_textcol1 group by 1",
+                            "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
+                            "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 group by .0",
                             "Table": "`user`"
                           }
                         ]

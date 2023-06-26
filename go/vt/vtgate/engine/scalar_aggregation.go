@@ -20,7 +20,6 @@ import (
 	"context"
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -45,10 +44,6 @@ type ScalarAggregate struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
-
-	// Collations stores the collation ID per column offset.
-	// It is used for grouping keys and distinct aggregate functions
-	Collations map[int]collations.ID
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
@@ -91,18 +86,19 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
+	fields := convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 	out := &sqltypes.Result{
-		Fields: convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine),
+		Fields: fields,
 	}
 
 	var resultRow []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if resultRow == nil {
-			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+			resultRow, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 			continue
 		}
-		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Collations, sa.Aggregates)
+		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Aggregates)
 		if err != nil {
 			return nil, err
 		}
@@ -154,11 +150,11 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+				current, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 				continue
 			}
 			var err error
-			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Collations, sa.Aggregates)
+			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Aggregates)
 			if err != nil {
 				return err
 			}
@@ -214,7 +210,9 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 		AggregateSumDistinct,
 		AggregateSum,
 		AggregateMin,
-		AggregateMax:
+		AggregateMax,
+		AggregateRandom,
+		AggregateGroupConcat:
 		return sqltypes.NULL, nil
 
 	}

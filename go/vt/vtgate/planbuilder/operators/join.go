@@ -159,15 +159,6 @@ func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return nil
 }
 
-func (j *Join) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Join",
-		Other: map[string]any{
-			"Predicate": sqlparser.String(j.Predicate),
-		},
-	}
-}
-
 func (j *Join) ShortDescription() string {
 	return sqlparser.String(j.Predicate)
 }

@@ -173,3 +173,166 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal("[[UINT64(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
+
+// TestScalarGroupConcatWithAggrOnEngine tests group_concat with full aggregation on engine.
+func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c2",
+		"varchar",
+	)
+
+	varbinaryFields := sqltypes.MakeTestFields(
+		"c2",
+		"varbinary",
+	)
+
+	textOutFields := sqltypes.MakeTestFields(
+		"group_concat(c2)",
+		"text",
+	)
+
+	var tcases = []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "ending with null",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"a", "a", "b", "null", "null"),
+		expResult: sqltypes.MakeTestResult(textOutFields,
+			`a,a,b`),
+	}, {
+		name:        "empty result",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult: sqltypes.MakeTestResult(textOutFields,
+			`null`),
+	}, {
+		name: "only null value for concat",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"null", "null", "null"),
+		expResult: sqltypes.MakeTestResult(textOutFields,
+			`null`),
+	}, {
+		name: "empty string value for concat",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"", "", ""),
+		expResult: sqltypes.MakeTestResult(textOutFields,
+			`,,`),
+	}, {
+		name: "varbinary column",
+		inputResult: sqltypes.MakeTestResult(varbinaryFields,
+			"foo", "null", "bar"),
+		expResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"group_concat(c2)",
+			"blob",
+		),
+			`foo,bar`),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateGroupConcat,
+					Col:    0,
+					Alias:  "group_concat(c2)",
+				}},
+				Input:        fp,
+				AggrOnEngine: true,
+				PreProcess:   true,
+			}
+			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}
+
+// TestScalarGroupConcat tests group_concat with partial aggregation on engine.
+func TestScalarGroupConcat(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"group_concat(c2)",
+		"text",
+	)
+
+	varbinaryFields := sqltypes.MakeTestFields(
+		"group_concat(c2)",
+		"blob",
+	)
+
+	var tcases = []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "ending with null",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"a", "a", "b", "null", "null"),
+		expResult: sqltypes.MakeTestResult(fields,
+			`a,a,b`),
+	}, {
+		name:        "empty result",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult: sqltypes.MakeTestResult(fields,
+			`null`),
+	}, {
+		name: "only null value for concat",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"null", "null", "null"),
+		expResult: sqltypes.MakeTestResult(fields,
+			`null`),
+	}, {
+		name: "empty string value for concat",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"", "", ""),
+		expResult: sqltypes.MakeTestResult(fields,
+			`,,`),
+	}, {
+		name: "varbinary column",
+		inputResult: sqltypes.MakeTestResult(varbinaryFields,
+			"foo", "null", "bar"),
+		expResult: sqltypes.MakeTestResult(varbinaryFields,
+			`foo,bar`),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateGroupConcat,
+					Col:    0,
+				}},
+				Input: fp,
+			}
+			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}

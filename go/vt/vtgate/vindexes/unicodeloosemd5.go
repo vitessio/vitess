@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	_ SingleColumn = (*UnicodeLooseMD5)(nil)
-	_ Hashing      = (*UnicodeLooseMD5)(nil)
+	_ SingleColumn    = (*UnicodeLooseMD5)(nil)
+	_ Hashing         = (*UnicodeLooseMD5)(nil)
+	_ ParamValidating = (*UnicodeLooseMD5)(nil)
 )
 
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
@@ -36,12 +37,16 @@ var (
 // Ref: http://www.unicode.org/reports/tr10/#Multi_Level_Comparison.
 // This is compatible with MySQL's utf8_unicode_ci collation.
 type UnicodeLooseMD5 struct {
-	name string
+	name          string
+	unknownParams []string
 }
 
-// NewUnicodeLooseMD5 creates a new UnicodeLooseMD5.
-func NewUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
-	return &UnicodeLooseMD5{name: name}, nil
+// newUnicodeLooseMD5 creates a new UnicodeLooseMD5.
+func newUnicodeLooseMD5(name string, m map[string]string) (Vindex, error) {
+	return &UnicodeLooseMD5{
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -94,6 +99,11 @@ func (vind *UnicodeLooseMD5) Hash(id sqltypes.Value) ([]byte, error) {
 	return unicodeHash(vMD5Hash, id)
 }
 
+// UnknownParams implements the ParamValidating interface.
+func (vind *UnicodeLooseMD5) UnknownParams() []string {
+	return vind.unknownParams
+}
+
 func init() {
-	Register("unicode_loose_md5", NewUnicodeLooseMD5)
+	Register("unicode_loose_md5", newUnicodeLooseMD5)
 }

@@ -31,8 +31,6 @@ SIDECAR_DB_NAME=${SIDECAR_DB_NAME:-"_vt"}
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ../common/scripts/zk-up.sh
-elif [ "${TOPO}" = "k8s" ]; then
-	CELL=zone1 ../common/scripts/k3s-up.sh
 elif [ "${TOPO}" = "consul" ]; then
 	CELL=zone1 ../common/scripts/consul-up.sh
 else

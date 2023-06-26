@@ -70,13 +70,6 @@ func (s *SubQueryOp) SetInputs(ops []ops.Operator) {
 	s.Outer, s.Inner = ops[0], ops[1]
 }
 
-func (s *SubQueryOp) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "SubQuery",
-		Variant:      "Apply",
-	}
-}
-
 func (s *SubQueryOp) ShortDescription() string {
 	return ""
 }
@@ -112,13 +105,6 @@ func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
 // SetInputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) SetInputs(ops []ops.Operator) {
 	c.Outer, c.Inner = ops[0], ops[1]
-}
-
-func (c *CorrelatedSubQueryOp) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "SubQuery",
-		Variant:      "Correlated",
-	}
 }
 
 func (c *CorrelatedSubQueryOp) ShortDescription() string {

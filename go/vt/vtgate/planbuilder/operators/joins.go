@@ -54,7 +54,7 @@ func AddPredicate(
 	case deps.IsSolvedBy(TableID(join.GetRHS())):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
+		if !joinPredicates && !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
 			join.MakeInner()
 		}
 

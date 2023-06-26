@@ -20,6 +20,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -63,7 +64,7 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
 		routing.RouteOpCode = engine.EqualUnique
-		vindex, _ := vindexes.NewBinary("binary", nil)
+		vindex, _ := vindexes.CreateVindex("binary", "binary", nil)
 		routing.Selected = &VindexOption{
 			Ready:       true,
 			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.TypedCollation{})},
@@ -150,7 +151,11 @@ func (tr *ShardedRouting) Clone() Routing {
 		selected = &t
 	}
 	return &ShardedRouting{
-		VindexPreds:    slices.Clone(tr.VindexPreds),
+		VindexPreds: slices2.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
+			// we do this to create a copy of the struct
+			p := *from
+			return &p
+		}),
 		Selected:       selected,
 		keyspace:       tr.keyspace,
 		RouteOpCode:    tr.RouteOpCode,

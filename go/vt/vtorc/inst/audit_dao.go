@@ -50,14 +50,11 @@ func EnableAuditSyslog() (err error) {
 }
 
 // AuditOperation creates and writes a new audit entry by given params
-func AuditOperation(auditType string, instanceKey *InstanceKey, message string) error {
-	if instanceKey == nil {
-		instanceKey = &InstanceKey{}
-	}
+func AuditOperation(auditType string, tabletAlias string, message string) error {
 	keyspace := ""
 	shard := ""
-	if instanceKey.Hostname != "" {
-		keyspace, shard, _ = GetKeyspaceShardName(instanceKey)
+	if tabletAlias != "" {
+		keyspace, shard, _ = GetKeyspaceShardName(tabletAlias)
 	}
 
 	auditWrittenToFile := false
@@ -71,7 +68,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 			}
 
 			defer f.Close()
-			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, instanceKey.Hostname, instanceKey.Port, keyspace, shard, message)
+			text := fmt.Sprintf("%s\t%s\t%s\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, tabletAlias, keyspace, shard, message)
 			if _, err = f.WriteString(text); err != nil {
 				log.Error(err)
 			}
@@ -81,14 +78,13 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 		_, err := db.ExecVTOrc(`
 			insert
 				into audit (
-					audit_timestamp, audit_type, hostname, port, keyspace, shard, message
+					audit_timestamp, audit_type, alias, keyspace, shard, message
 				) VALUES (
-					NOW(), ?, ?, ?, ?, ?, ?
+					NOW(), ?, ?, ?, ?, ?
 				)
 			`,
 			auditType,
-			instanceKey.Hostname,
-			instanceKey.Port,
+			tabletAlias,
 			keyspace,
 			shard,
 			message,
@@ -98,7 +94,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 			return err
 		}
 	}
-	logMessage := fmt.Sprintf("auditType:%s instance:%s keyspace:%s shard:%s message:%s", auditType, instanceKey.DisplayString(), keyspace, shard, message)
+	logMessage := fmt.Sprintf("auditType:%s instance:%s keyspace:%s shard:%s message:%s", auditType, tabletAlias, keyspace, shard, message)
 	if syslogWriter != nil {
 		auditWrittenToFile = true
 		go func() {
@@ -114,21 +110,20 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 }
 
 // ReadRecentAudit returns a list of audit entries order chronologically descending, using page number.
-func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
+func ReadRecentAudit(tabletAlias string, page int) ([]Audit, error) {
 	res := []Audit{}
 	args := sqlutils.Args()
 	whereCondition := ``
-	if instanceKey != nil {
-		whereCondition = `where hostname=? and port=?`
-		args = append(args, instanceKey.Hostname, instanceKey.Port)
+	if tabletAlias != "" {
+		whereCondition = `where alias=?`
+		args = append(args, tabletAlias)
 	}
 	query := fmt.Sprintf(`
 		select
 			audit_id,
 			audit_timestamp,
 			audit_type,
-			hostname,
-			port,
+			alias,
 			message
 		from
 			audit
@@ -144,8 +139,7 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 		audit.AuditID = m.GetInt64("audit_id")
 		audit.AuditTimestamp = m.GetString("audit_timestamp")
 		audit.AuditType = m.GetString("audit_type")
-		audit.AuditInstanceKey.Hostname = m.GetString("hostname")
-		audit.AuditInstanceKey.Port = m.GetInt("port")
+		audit.AuditTabletAlias = m.GetString("alias")
 		audit.Message = m.GetString("message")
 
 		res = append(res, audit)

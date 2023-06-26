@@ -41,20 +41,18 @@ import (
 
 var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 
-// executeSchemaCommands executes some SQL commands, using the mysql
-// command line tool. It uses the dba connection parameters, with credentials.
-func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
+// executeSchemaCommands executes some SQL commands. It uses the dba connection parameters, with credentials.
+func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) error {
 	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	if err != nil {
 		return err
 	}
-
-	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
+	return mysqld.executeMysqlScript(ctx, params, sql)
 }
 
-func encodeTableName(tableName string) string {
+func encodeEntityName(name string) string {
 	var buf strings.Builder
-	sqltypes.NewVarChar(tableName).EncodeSQL(&buf)
+	sqltypes.NewVarChar(name).EncodeSQL(&buf)
 	return buf.String()
 }
 
@@ -66,7 +64,7 @@ func tableListSQL(tables []string) (string, error) {
 
 	encodedTables := make([]string, len(tables))
 	for i, tableName := range tables {
-		encodedTables[i] = encodeTableName(tableName)
+		encodedTables[i] = encodeEntityName(tableName)
 	}
 
 	return "(" + strings.Join(encodedTables, ", ") + ")", nil
@@ -280,7 +278,7 @@ func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, table
 const (
 	GetColumnNamesQuery = `SELECT COLUMN_NAME as column_name
 		FROM INFORMATION_SCHEMA.COLUMNS
-		WHERE TABLE_SCHEMA = %s AND TABLE_NAME = '%s'
+		WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
 		ORDER BY ORDINAL_POSITION`
 	GetFieldsQuery = "SELECT %s FROM %s WHERE 1 != 1"
 )
@@ -290,9 +288,9 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	if dbName == "" {
 		dbName2 = "database()"
 	} else {
-		dbName2 = fmt.Sprintf("'%s'", dbName)
+		dbName2 = encodeEntityName(dbName)
 	}
-	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, sqlescape.UnescapeID(tableName))
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, encodeEntityName(sqlescape.UnescapeID(tableName)))
 	qr, err := exec(query, -1, true)
 	if err != nil {
 		return "", err
@@ -377,9 +375,9 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	sql := `
             SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
             FROM information_schema.STATISTICS
-            WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
             ORDER BY table_name, SEQ_IN_INDEX`
-	sql = fmt.Sprintf(sql, dbName, tableList)
+	sql = fmt.Sprintf(sql, encodeEntityName(dbName), tableList)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
@@ -427,7 +425,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 			initialCopySQL += s + ";\n"
 		}
 	}
-	if err = mysqld.executeSchemaCommands(initialCopySQL); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, initialCopySQL); err != nil {
 		return nil, err
 	}
 
@@ -443,7 +441,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 		sql := "SET sql_log_bin = 0;\n"
 		sql += "USE _vt_preflight;\n"
 		sql += change
-		if err = mysqld.executeSchemaCommands(sql); err != nil {
+		if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
 			return nil, err
 		}
 
@@ -459,7 +457,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	// and clean up the extra database
 	dropSQL := "SET sql_log_bin = 0;\n"
 	dropSQL += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeSchemaCommands(dropSQL); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, dropSQL); err != nil {
 		return nil, err
 	}
 
@@ -519,7 +517,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.executeSchemaCommands(sql); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
 		return nil, err
 	}
 
@@ -599,16 +597,18 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
                                               END
                                             ) AS type_cost, COUNT(stats.COLUMN_NAME) AS col_count FROM information_schema.STATISTICS AS stats INNER JOIN
                   information_schema.COLUMNS AS cols ON stats.TABLE_SCHEMA = cols.TABLE_SCHEMA AND stats.TABLE_NAME = cols.TABLE_NAME AND stats.COLUMN_NAME = cols.COLUMN_NAME
-                WHERE stats.TABLE_SCHEMA = '%s' AND stats.TABLE_NAME = '%s' AND stats.INDEX_NAME NOT IN
+                WHERE stats.TABLE_SCHEMA = %s AND stats.TABLE_NAME = %s AND stats.INDEX_NAME NOT IN
                 (
                     SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
-                    WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND (NON_UNIQUE = 1 OR NULLABLE = 'YES')
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND (NON_UNIQUE = 1 OR NULLABLE = 'YES')
                 )
                 GROUP BY INDEX_NAME ORDER BY type_cost ASC, col_count ASC LIMIT 1
             ) AS pke ON index_cols.INDEX_NAME = pke.INDEX_NAME
-            WHERE index_cols.TABLE_SCHEMA = '%s' AND index_cols.TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
+            WHERE index_cols.TABLE_SCHEMA = %s AND index_cols.TABLE_NAME = %s AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
             ORDER BY SEQ_IN_INDEX ASC`
-	sql = fmt.Sprintf(sql, dbName, table, dbName, table, dbName, table)
+	encodedDbName := encodeEntityName(dbName)
+	encodedTable := encodeEntityName(table)
+	sql = fmt.Sprintf(sql, encodedDbName, encodedTable, encodedDbName, encodedTable, encodedDbName, encodedTable)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
 		return nil, err
