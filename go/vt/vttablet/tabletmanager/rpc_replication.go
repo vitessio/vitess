@@ -954,11 +954,17 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 	return nil
 }
 
+// handleRelayLogError resets replication of the instance.
+// This is required because sometimes MySQL gets stuck due to improper initialization of
+// master info structure or related failures and throws errors like
+// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
+// These errors can only be resolved by resetting the replication, otherwise START SLAVE fails.
 func (tm *TabletManager) handleRelayLogError(err error) error {
 	// attempt to fix this error:
 	// Slave failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START SLAVE
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
-	if strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository") {
+	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
+	if strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository") || strings.Contains(err.Error(), "Could not initialize master info structure") {
 		// Stop, reset and start replication again to resolve this error
 		if err := tm.MysqlDaemon.RestartReplication(tm.hookExtraEnv()); err != nil {
 			return err
