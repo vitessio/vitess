@@ -25,14 +25,14 @@
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "1 DESC, (2|4) ASC",
+            "OrderBy": "1 DESC, (2|5) ASC",
             "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS revenue",
-                "GroupBy": "(0|5), (2|4), (3|6)",
+                "GroupBy": "(0|4), (2|5), (3|6)",
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -41,20 +41,20 @@
                       "[COLUMN 0] * [COLUMN 1] as revenue",
                       "[COLUMN 3] as o_orderdate",
                       "[COLUMN 4] as o_shippriority",
-                      "[COLUMN 5] as weight_string(o_orderdate)",
-                      "[COLUMN 6] as weight_string(l_orderkey)",
+                      "[COLUMN 5] as weight_string(l_orderkey)",
+                      "[COLUMN 6] as weight_string(o_orderdate)",
                       "[COLUMN 7] as weight_string(o_shippriority)"
                     ],
                     "Inputs": [
                       {
                         "OperatorType": "Sort",
                         "Variant": "Memory",
-                        "OrderBy": "(2|6) ASC, (3|5) ASC, (4|7) ASC",
+                        "OrderBy": "(2|5) ASC, (3|6) ASC, (4|7) ASC",
                         "Inputs": [
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,R:3,L:2,R:4",
+                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,L:2,R:3,R:4",
                             "JoinVars": {
                               "l_orderkey": 1
                             },
@@ -970,7 +970,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(1) AS high_line_count, sum(2) AS low_line_count",
-        "GroupBy": "0",
+        "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
           {

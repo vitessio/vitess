@@ -421,7 +421,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	time.Sleep(30 * time.Second)
 
 	// Now set the correct durability policy
-	out, err := newCluster.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	out, err := newCluster.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
 	// VTOrc should promote a new primary after seeing the durability policy change

@@ -21,16 +21,13 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
-
-const ReasonableDiscoveryLatency = 500 * time.Millisecond
 
 // Instance represents a database instance, including its current configuration & status.
 // It presents important replication configuration and detailed replication status.
 type Instance struct {
-	Key                          InstanceKey
+	Hostname                     string
+	Port                         int
 	InstanceAlias                string
 	ServerID                     uint
 	ServerUUID                   string
@@ -43,10 +40,10 @@ type Instance struct {
 	LogBinEnabled                bool
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
-	SourceKey                    InstanceKey
+	SourceHost                   string
+	SourcePort                   int
 	SourceUUID                   string
 	AncestryUUID                 string
-	IsDetachedPrimary            bool
 
 	ReplicationSQLThreadRuning bool
 	ReplicationIOThreadRuning  bool
@@ -95,50 +92,20 @@ type Instance struct {
 	IsRecentlyChecked    bool
 	SecondsSinceLastSeen sql.NullInt64
 
-	// Careful. IsCandidate and PromotionRule are used together
-	// and probably need to be merged. IsCandidate's value may
-	// be picked up from daabase_candidate_instance's value when
-	// reading an instance from the db.
-	IsCandidate          bool
-	PromotionRule        promotionrule.CandidatePromotionRule
-	IsDowntimed          bool
-	DowntimeReason       string
-	DowntimeOwner        string
-	DowntimeEndTimestamp string
-	ElapsedDowntime      time.Duration
-	UnresolvedHostname   string
-	AllowTLS             bool
+	AllowTLS bool
 
 	Problems []string
 
 	LastDiscoveryLatency time.Duration
 
 	seed bool // Means we force this instance to be written to backend, even if it's invalid, empty or forgotten
-
-	/* All things Group Replication below */
-
-	// Group replication global variables
-	ReplicationGroupName            string
-	ReplicationGroupIsSinglePrimary bool
-
-	// Replication group members information. See
-	// https://dev.mysql.com/doc/refman/8.0/en/replication-group-members-table.html for details.
-	ReplicationGroupMemberState string
-	ReplicationGroupMemberRole  string
-
-	// List of all known members of the same group
-	ReplicationGroupMembers InstanceKeyMap
-
-	// Primary of the replication group
-	ReplicationGroupPrimaryInstanceKey InstanceKey
 }
 
 // NewInstance creates a new, empty instance
 
 func NewInstance() *Instance {
 	return &Instance{
-		ReplicationGroupMembers: make(map[InstanceKey]bool),
-		Problems:                []string{},
+		Problems: []string{},
 	}
 }
 
@@ -154,7 +121,7 @@ func (instance *Instance) MarshalJSON() ([]byte, error) {
 // Equals tests that this instance is the same instance as other. The function does not test
 // configuration or status.
 func (instance *Instance) Equals(other *Instance) bool {
-	return instance.Key == other.Key
+	return instance.InstanceAlias == other.InstanceAlias
 }
 
 // MajorVersion returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
@@ -219,21 +186,6 @@ func (instance *Instance) IsNDB() bool {
 	return strings.Contains(instance.Version, "-ndb-")
 }
 
-// IsReplicationGroup checks whether the host thinks it is part of a known replication group. Notice that this might
-// return True even if the group has decided to expel the member represented by this instance, as the instance might not
-// know that under certain circumstances
-func (instance *Instance) IsReplicationGroupMember() bool {
-	return instance.ReplicationGroupName != ""
-}
-
-func (instance *Instance) IsReplicationGroupPrimary() bool {
-	return instance.IsReplicationGroupMember() && instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
-}
-
-func (instance *Instance) IsReplicationGroupSecondary() bool {
-	return instance.IsReplicationGroupMember() && !instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
-}
-
 // IsBinlogServer checks whether this is any type of a binlog server
 func (instance *Instance) IsBinlogServer() bool {
 	return false
@@ -288,27 +240,13 @@ func (instance *Instance) FlavorNameAndMajorVersion() string {
 
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
 func (instance *Instance) IsReplica() bool {
-	return instance.SourceKey.Hostname != "" && instance.SourceKey.Hostname != "_" && instance.SourceKey.Port != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
+	return instance.SourceHost != "" && instance.SourceHost != "_" && instance.SourcePort != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
 }
 
 // IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
 // either via traditional async/semisync replication or group replication
 func (instance *Instance) IsPrimary() bool {
-	// If traditional replication is configured, it is for sure not a primary
-	if instance.IsReplica() {
-		return false
-	}
-	// If traditional replication is not configured, and it is also not part of a replication group, this host is
-	// a primary
-	if !instance.IsReplicationGroupMember() {
-		return true
-	}
-	// If traditional replication is not configured, and this host is part of a group, it is only considered a
-	// primary if it has the role of group Primary. Otherwise it is not a primary.
-	if instance.ReplicationGroupMemberRole == GroupReplicationMemberRolePrimary {
-		return true
-	}
-	return false
+	return !instance.IsReplica()
 }
 
 // ReplicaRunning returns true when this instance's status is of a replicating replica.
@@ -334,9 +272,4 @@ func (instance *Instance) SQLThreadUpToDate() bool {
 // UsingGTID returns true when this replica is currently replicating via GTID (either Oracle or MariaDB)
 func (instance *Instance) UsingGTID() bool {
 	return instance.UsingOracleGTID || instance.UsingMariaDBGTID
-}
-
-// AddGroupMemberKey adds a group member to the list of this instance's group members.
-func (instance *Instance) AddGroupMemberKey(groupMemberKey *InstanceKey) {
-	instance.ReplicationGroupMembers.AddKey(*groupMemberKey)
 }
