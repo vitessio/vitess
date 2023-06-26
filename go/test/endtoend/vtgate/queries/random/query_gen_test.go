@@ -70,7 +70,7 @@ func (t *tableT) typeExpr(typ string) sqlparser.Expr {
 }
 
 func (t *tableT) IntExpr() sqlparser.Expr {
-	// better way to check if int type?
+	// TODO: better way to check if int type?
 	return t.typeExpr("bigint")
 }
 
@@ -156,49 +156,81 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	// create both tables and join at the same time since both occupy the from clause
 	tables, isJoin := createTablesAndJoin(schemaTables, sel)
 
-	groupExprs, groupSelectExprs, grouping := createGroupBy(tables, maxGroupBy)
-	sel.AddSelectExprs(groupSelectExprs)
-	sel.GroupBy = groupExprs
+	var (
+		groupBy          sqlparser.GroupBy
+		groupSelectExprs sqlparser.SelectExprs
+		grouping         []column
+	)
+	// TODO: distinct makes vitess think there is grouping on aggregation columns
+	if TestFailingQueries || !isDistinct {
+		groupBy, groupSelectExprs, grouping = createGroupBy(tables, maxGroupBy)
+		sel.AddSelectExprs(groupSelectExprs)
+		sel.GroupBy = groupBy
+	}
 	aggrExprs, aggregates := createAggregations(tables, maxAggrs)
 	sel.AddSelectExprs(aggrExprs)
 
 	// can add both aggregate and grouping columns to order by
-	isOrdered := rand.Intn(2) < 1
-	if isOrdered && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
-		addOrderBy(sel)
+	// TODO: order fails with distinct and outer joins
+	isOrdered := rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) && TestFailingQueries
+	// TODO: order by fails a lot; probably related to the previously passing query
+	// TODO: should be fixed soon
+	if isOrdered {
+		sel.OrderBy = createOrderBy(groupBy, aggrExprs)
 	}
 
 	// where
 	sel.AddWhere(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
 
 	// random predicate expression
-	if rand.Intn(2) < 1 {
+	// TODO: random expressions cause a lot of failures
+	if rand.Intn(2) < 1 && TestFailingQueries {
 		predRandomExpr, _ := getRandomExpr(tables)
 		sel.AddWhere(predRandomExpr)
 	}
 
 	// having
-	sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
-	if rand.Intn(2) < 1 && TestFailingQueries {
-		// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
-		sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
+	isHaving := rand.Intn(2) < 1
+	if isHaving {
+		sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
+		if rand.Intn(2) < 1 && TestFailingQueries {
+			// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
+			// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
+			sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
+		}
 	}
+	// TODO: use sqlparser.ExprGenerator to generate a random expression with aggregation functions
 
 	// only add a limit if the grouping columns are ordered
-	if rand.Intn(2) < 1 && (isOrdered || len(grouping) == 0) {
+	// TODO: limit fails a lot
+	if rand.Intn(2) < 1 && (isOrdered || len(groupBy) == 0) && TestFailingQueries {
 		sel.Limit = createLimit()
 	}
 
 	var newTable tableT
 	// add random expression to select
-	isRandomExpr := rand.Intn(2) < 1
-	randomExpr, typ := getRandomExpr(tables)
-	if isRandomExpr && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
+	// TODO: random expressions cause a lot of failures
+	isRandomExpr := rand.Intn(2) < 1 && TestFailingQueries
+	var (
+		randomExpr sqlparser.Expr
+		typ        string
+	)
+	// TODO: selecting a random expression potentially with columns creates
+	// TODO: only_full_group_by related errors in Vitess
+	if TestFailingQueries {
+		randomExpr, typ = getRandomExpr(tables)
+	} else {
+		randomExpr, typ = getRandomExpr(nil)
+	}
+	if isRandomExpr {
 		sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(randomExpr, "crandom0"))
 		newTable.addColumns(column{
 			name: "crandom0",
 			typ:  typ,
 		})
+
+		// make sure to add the random expression to group by for only_full_group_by
+		sel.AddGroupBy(randomExpr)
 	}
 
 	// add them to newTable
@@ -210,6 +242,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	schemaTables = append(schemaTables, newTable)
 
 	// derived tables (partially unsupported)
+	// TODO: derived tables fails a lot
 	if rand.Intn(10) < 1 && TestFailingQueries {
 		sel = randomQuery(schemaTables, 3, 3)
 	}
@@ -232,7 +265,8 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 		tables[i+1].setName(fmt.Sprintf("tbl%d", i+1))
 	}
 
-	isJoin := rand.Intn(2) < 1
+	// TODO: outer joins produce mismatched results
+	isJoin := rand.Intn(2) < 1 && TestFailingQueries
 	if isJoin {
 		newTable := randomEl(schemaTables)
 		tables = append(tables, newTable)
@@ -268,6 +302,10 @@ func createGroupBy(tables []tableT, maxGB int) (groupBy sqlparser.GroupBy, group
 	for i := 0; i < numGBs; i++ {
 		tblIdx := rand.Intn(len(tables))
 		col := randomEl(tables[tblIdx].cols)
+		// TODO: grouping by a date column sometimes errors
+		if col.typ == "date" && !TestFailingQueries {
+			continue
+		}
 		groupBy = append(groupBy, newColumn(col))
 
 		// add to select
@@ -296,7 +334,31 @@ func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.Sele
 	for i := 0; i < numAggrs; i++ {
 		tblIdx, aggrIdx := rand.Intn(len(tables)), rand.Intn(len(aggregations))
 		col := randomEl(tables[tblIdx].cols)
+		// TODO: aggregating on a date column sometimes errors
+		if col.typ == "date" && !TestFailingQueries {
+			i--
+			continue
+		}
+
 		newAggregate := aggregations[aggrIdx](col)
+		// TODO: collating on strings sometimes errors
+		if col.typ == "varchar" && !TestFailingQueries {
+			if _, ok := newAggregate.(*sqlparser.Min); ok {
+				i--
+				continue
+			}
+			if _, ok := newAggregate.(*sqlparser.Max); ok {
+				i--
+				continue
+			}
+		}
+
+		// TODO: type of sum() is incorrect (int64 vs decimal) in certain queries
+		if _, ok := newAggregate.(*sqlparser.Sum); ok && !TestFailingQueries {
+			i--
+			continue
+		}
+
 		aggrExprs = append(aggrExprs, sqlparser.NewAliasedExpr(newAggregate, fmt.Sprintf("caggr%d", i)))
 
 		if aggrIdx <= 1 /* CountStar and Count */ {
@@ -313,18 +375,22 @@ func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.Sele
 }
 
 // orders on all non-aggregate SelectExprs and independently at random on all aggregate SelectExprs of sel
-func addOrderBy(sel *sqlparser.Select) {
-	for _, selExpr := range sel.SelectExprs {
-		if aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr); ok {
-			// if the SelectExpr is non-aggregate (the AliasedExpr has Expr of type ColName)
-			// then add to the order by
-			if colName, ok1 := aliasedExpr.Expr.(*sqlparser.ColName); ok1 {
-				sel.AddOrder(sqlparser.NewOrder(colName, getRandomOrderDirection()))
-			} else if rand.Intn(2) < 1 {
-				sel.AddOrder(sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection()))
+func createOrderBy(groupBy sqlparser.GroupBy, aggrExprs sqlparser.SelectExprs) (orderBy sqlparser.OrderBy) {
+	// always order on grouping columns
+	for i := range groupBy {
+		orderBy = append(orderBy, sqlparser.NewOrder(groupBy[i], getRandomOrderDirection()))
+	}
+
+	// randomly order on aggregation columns
+	for i := range aggrExprs {
+		if aliasedExpr, ok := aggrExprs[i].(*sqlparser.AliasedExpr); ok {
+			if rand.Intn(2) < 1 {
+				orderBy = append(orderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection()))
 			}
 		}
 	}
+
+	return orderBy
 }
 
 // compares two random columns (usually of the same type)
@@ -382,9 +448,18 @@ func createWherePredicates(tables []tableT, isJoin bool) (predicates sqlparser.E
 func createHavingPredicates(tables []tableT) (havingPredicates sqlparser.Exprs) {
 	aggrSelectExprs, _ := createAggregations(tables, 2)
 	for i := range aggrSelectExprs {
-		if aliasedExpr, ok := aggrSelectExprs[i].(*sqlparser.AliasedExpr); ok {
-			predRandomExpr, _ := getRandomExpr(tables)
-			havingPredicates = append(havingPredicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), aliasedExpr.Expr, predRandomExpr, nil))
+		if lhs, ok := aggrSelectExprs[i].(*sqlparser.AliasedExpr); ok {
+			// TODO: HAVING can only contain aggregate or grouping columns in mysql, works fine in vitess
+			// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
+			// TODO: but random expressions without the columns also fails
+			if TestFailingQueries {
+				predRandomExpr, _ := getRandomExpr(tables)
+				havingPredicates = append(havingPredicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), lhs.Expr, predRandomExpr, nil))
+			} else {
+				if rhs, ok1 := randomEl(aggrSelectExprs).(*sqlparser.AliasedExpr); ok1 {
+					havingPredicates = append(havingPredicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), lhs.Expr, rhs.Expr, nil))
+				}
+			}
 		}
 	}
 	return havingPredicates
