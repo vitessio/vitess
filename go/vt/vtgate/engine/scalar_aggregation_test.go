@@ -49,7 +49,7 @@ func TestEmptyRows(outer *testing.T) {
 	}, {
 		opcode:      AggregateSum,
 		expectedVal: "null",
-		expectedTyp: "int64",
+		expectedTyp: "decimal",
 	}, {
 		opcode:      AggregateSum,
 		expectedVal: "0",
@@ -140,7 +140,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 	require.EqualValues(t, 2, len(results), "number of results")
 
 	got := fmt.Sprintf("%v", results[1].Rows)
-	assert.Equal("[[UINT64(4)]]", got)
+	assert.Equal("[[DECIMAL(4)]]", got)
 }
 
 // TestScalarAggregateExecuteTruncate checks if truncate works
@@ -171,7 +171,7 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 	assert.NoError(err)
-	assert.Equal("[[UINT64(4)]]", fmt.Sprintf("%v", qr.Rows))
+	assert.Equal("[[DECIMAL(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestScalarGroupConcatWithAggrOnEngine tests group_concat with full aggregation on engine.
@@ -238,9 +238,8 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 					Col:    0,
 					Alias:  "group_concat(c2)",
 				}},
-				Input:        fp,
-				AggrOnEngine: true,
-				PreProcess:   true,
+				Input:      fp,
+				PreProcess: true,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)

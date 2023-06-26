@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"strings"
+	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -35,6 +36,7 @@ type typer struct {
 type Type struct {
 	Type      querypb.Type
 	Collation collations.ID
+	Known     bool
 }
 
 func newTyper() *typer {
@@ -53,12 +55,18 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[strings.ToLower(node.AggrName())]
-		if ok {
-			typ, ok := opcode.OpcodeType[code]
+		if !ok {
+			return nil
+		}
+		var inputType *sqltypes.Type
+		if arg := node.GetArg(); arg != nil {
+			t, ok := t.exprTypes[arg]
 			if ok {
-				t.exprTypes[node] = Type{Type: typ}
+				inputType = &t.Type
 			}
 		}
+		typ, known := code.Type(inputType)
+		t.exprTypes[node] = Type{Type: typ, Known: known}
 	}
 	return nil
 }

@@ -88,7 +88,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col|count(*)|weight_string(col)",
-				"varchar|decimal|varbinary",
+				"varchar|int64|varbinary",
 			),
 			"a|1|A",
 			"A|1|A",
@@ -100,8 +100,9 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateSum,
-			Col:    1,
+			OrigOpcode: AggregateCountStar,
+			Opcode:     AggregateSum,
+			Col:        1,
 		}},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 2}},
 		TruncateColumnCount: 2,
@@ -114,13 +115,13 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col|count(*)",
-			"varchar|decimal",
+			"varchar|int64",
 		),
 		"a|2",
 		"b|2",
 		"C|7",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestOrderedAggregateStreamExecute(t *testing.T) {
@@ -326,8 +327,9 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 			Alias:  "count(distinct col2)",
 		}, {
 			// Also add a count(*)
-			Opcode: AggregateSum,
-			Col:    2,
+			OrigOpcode: AggregateCountStar,
+			Opcode:     AggregateSum,
+			Col:        2,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
@@ -401,9 +403,9 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 			Col:    1,
 			Alias:  "count(distinct col2)",
 		}, {
-			// Also add a count(*)
-			Opcode: AggregateSum,
-			Col:    2,
+			Opcode:     AggregateSum,
+			OrigOpcode: AggregateCountStar,
+			Col:        2,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
@@ -490,7 +492,6 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 			Col:    1,
 			Alias:  "sum(distinct col2)",
 		}, {
-			// Also add a count(*)
 			Opcode: AggregateSum,
 			Col:    2,
 		}},
@@ -551,7 +552,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|sum(distinct col2)",
-			"varbinary|decimal",
+			"varbinary|float64",
 		),
 		"a|1",
 	)
@@ -893,7 +894,7 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 	want := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"c1|sum(distinct c2)",
-			"int64|decimal",
+			"int64|float64",
 		),
 		`null|0`,
 		`10|0`,
@@ -1188,10 +1189,9 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 					Col:    1,
 					Alias:  "group_concat(c2)",
 				}},
-				GroupByKeys:  []*GroupByParams{{KeyCol: 0}},
-				Input:        fp,
-				AggrOnEngine: true,
-				PreProcess:   true,
+				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+				Input:       fp,
+				PreProcess:  true,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)

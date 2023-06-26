@@ -52,8 +52,6 @@ type OrderedAggregate struct {
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
 
-	AggrOnEngine bool
-
 	// GroupByKeys specifies the input values that must be used for
 	// the aggregation key.
 	GroupByKeys []*GroupByParams
@@ -145,6 +143,16 @@ func (ap *AggregateParams) String() string {
 	return fmt.Sprintf("%s%s(%s)", ap.Opcode.String(), dispOrigOp, keyCol)
 }
 
+func (ap *AggregateParams) typ(inputType querypb.Type) querypb.Type {
+	opCode := ap.Opcode
+	if ap.OrigOpcode != AggregateUnassigned {
+		opCode = ap.OrigOpcode
+	}
+	typ, _ := opCode.Type(&inputType)
+	return typ
+
+}
+
 // RouteType returns a description of the query routing type used by the primitive
 func (oa *OrderedAggregate) RouteType() string {
 	return oa.Input.RouteType()
@@ -179,7 +187,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	if err != nil {
 		return nil, err
 	}
-	fields := convertFields(result.Fields, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+	fields := convertFields(result.Fields, oa.Aggregates)
 	out := &sqltypes.Result{
 		Fields: fields,
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
@@ -189,7 +197,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if current == nil {
-			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
 			continue
 		}
 		equal, err := oa.keysEqual(current, row)
@@ -205,7 +213,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 			continue
 		}
 		out.Rows = append(out.Rows, current)
-		current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+		current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
 	}
 
 	if current != nil {
@@ -230,7 +238,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 
 	err := vcursor.StreamExecutePrimitive(ctx, oa.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
-			fields = convertFields(qr.Fields, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+			fields = convertFields(qr.Fields, oa.Aggregates)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
@@ -238,7 +246,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+				current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
 				continue
 			}
 
@@ -257,7 +265,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
-			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
+			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
 		}
 		return nil
 	})
@@ -273,19 +281,14 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 	return nil
 }
 
-func convertFields(fields []*querypb.Field, preProcess bool, aggrs []*AggregateParams, aggrOnEngine bool) []*querypb.Field {
-	if !preProcess {
-		return fields
-	}
+func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb.Field {
 	for _, aggr := range aggrs {
-		if !aggr.preProcess() && !aggrOnEngine {
-			continue
-		}
-		fields[aggr.Col] = &querypb.Field{
-			Name: aggr.Alias,
-			Type: aggr.Opcode.Type(fields[aggr.Col]),
+		fields[aggr.Col].Type = aggr.typ(fields[aggr.Col].Type)
+		if aggr.Alias != "" {
+			fields[aggr.Col].Name = aggr.Alias
 		}
 		if aggr.isDistinct() {
+			// TODO: this should move to plan time
 			aggr.KeyCol = aggr.Col
 		}
 	}
@@ -297,7 +300,6 @@ func convertRow(
 	row []sqltypes.Value,
 	preProcess bool,
 	aggregates []*AggregateParams,
-	aggrOnEngine bool,
 ) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
 	if !preProcess {
 		return row, nil
@@ -323,21 +325,18 @@ func convertRow(
 				newRow[aggr.Col] = countOne
 			}
 		case AggregateSum:
-			if !aggrOnEngine {
-				break
-			}
 			if row[aggr.Col].IsNull() {
 				break
 			}
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], OpcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
 		case AggregateSumDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], OpcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
@@ -375,7 +374,7 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)}
+	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, oa.Aggregates)}
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
@@ -435,8 +434,7 @@ func merge(
 		var err error
 		switch aggr.Opcode {
 		case AggregateCountStar:
-			value := row1[aggr.Col]
-			result[aggr.Col], err = evalengine.NullSafeAdd(value, countOne, fields[aggr.Col].Type)
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
 		case AggregateCount:
 			val := countOne
 			if row2[aggr.Col].IsNull() {
@@ -456,9 +454,9 @@ func merge(
 		case AggregateMax:
 			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col], aggr.CollationID)
 		case AggregateCountDistinct:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, OpcodeType[aggr.Opcode])
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
 		case AggregateSumDistinct:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
 			rowBytes, err := row1[aggr.Col].ToBytes()

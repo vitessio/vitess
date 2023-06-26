@@ -91,11 +91,6 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		case opcode.AggregateGroupConcat:
 			oa.preProcess = true
-			fallthrough
-		case opcode.AggregateSum:
-			if !op.Pushed {
-				oa.aggrOnEngine = true
-			}
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode:      aggr.OpCode,

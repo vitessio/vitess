@@ -34,8 +34,6 @@ type ScalarAggregate struct {
 	// PreProcess is true if one of the aggregates needs preprocessing.
 	PreProcess bool `json:",omitempty"`
 
-	AggrOnEngine bool
-
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
@@ -71,7 +69,7 @@ func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindV
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)}
+	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.Aggregates)}
 	return qr.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -86,7 +84,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
-	fields := convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+	fields := convertFields(result.Fields, sa.Aggregates)
 	out := &sqltypes.Result{
 		Fields: fields,
 	}
@@ -95,7 +93,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if resultRow == nil {
-			resultRow, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+			resultRow, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates)
 			continue
 		}
 		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Aggregates)
@@ -140,7 +138,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		mu.Lock()
 		defer mu.Unlock()
 		if len(result.Fields) != 0 && !fieldsSent {
-			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+			fields = convertFields(result.Fields, sa.Aggregates)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
@@ -150,7 +148,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+				current, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates)
 				continue
 			}
 			var err error

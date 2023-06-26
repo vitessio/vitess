@@ -18,7 +18,6 @@ package opcode
 
 import (
 	"fmt"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -68,18 +67,7 @@ const (
 	AggregateRandom
 	AggregateCountStar
 	AggregateGroupConcat
-)
-
-var (
-	// OpcodeType keeps track of the known output types for different aggregate functions
-	OpcodeType = map[AggregateOpcode]querypb.Type{
-		AggregateCountDistinct: sqltypes.Int64,
-		AggregateCount:         sqltypes.Int64,
-		AggregateCountStar:     sqltypes.Int64,
-		AggregateSumDistinct:   sqltypes.Decimal,
-		AggregateSum:           sqltypes.Decimal,
-		AggregateGtid:          sqltypes.VarChar,
-	}
+	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -114,15 +102,37 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// Type returns the opcode return sql type.
-func (code AggregateOpcode) Type(field *querypb.Field) querypb.Type {
+// Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
+func (code AggregateOpcode) Type(typ *querypb.Type) (querypb.Type, bool) {
 	switch code {
+	case AggregateUnassigned:
+		return sqltypes.Null, false
 	case AggregateGroupConcat:
-		if sqltypes.IsBinary(field.Type) {
-			return sqltypes.Blob
+		if typ == nil {
+			return sqltypes.Text, false
 		}
-		return sqltypes.Text
+		if sqltypes.IsBinary(*typ) {
+			return sqltypes.Blob, true
+		}
+		return sqltypes.Text, true
+	case AggregateMax, AggregateMin, AggregateRandom:
+		if typ == nil {
+			return sqltypes.Null, false
+		}
+		return *typ, true
+	case AggregateSumDistinct, AggregateSum:
+		if typ == nil {
+			return sqltypes.Float64, false
+		}
+		if sqltypes.IsIntegral(*typ) || sqltypes.IsDecimal(*typ) {
+			return sqltypes.Decimal, true
+		}
+		return sqltypes.Float64, true
+	case AggregateCount, AggregateCountStar, AggregateCountDistinct:
+		return sqltypes.Int64, true
+	case AggregateGtid:
+		return sqltypes.VarChar, true
 	default:
-		return OpcodeType[code]
+		panic(code.String()) // we have a unit test checking we never reach here
 	}
 }
