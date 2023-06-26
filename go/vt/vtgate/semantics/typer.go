@@ -18,9 +18,9 @@ package semantics
 
 import (
 	"strings"
-	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -36,7 +36,6 @@ type typer struct {
 type Type struct {
 	Type      querypb.Type
 	Collation collations.ID
-	Known     bool
 }
 
 func newTyper() *typer {
@@ -65,8 +64,8 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 				inputType = &t.Type
 			}
 		}
-		typ, known := code.Type(inputType)
-		t.exprTypes[node] = Type{Type: typ, Known: known}
+		typ, _ := code.Type(inputType)
+		t.exprTypes[node] = Type{Type: typ}
 	}
 	return nil
 }

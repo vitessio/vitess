@@ -563,7 +563,6 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return nil, err
 	}
 	return &engine.OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*engine.AggregateParams{
 			{
 				Opcode: popcode.AggregateGtid,
