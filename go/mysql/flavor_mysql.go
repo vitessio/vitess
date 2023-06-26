@@ -377,7 +377,7 @@ UNION ALL
 	WHERE
 		t.table_schema = database() AND t.create_options = 'partitioned'
 	GROUP BY
-		t.table_name, t.table_type, t.create_time, t.table_comment
+		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 `
 
 // baseShowTablesWithSizes is part of the Flavor interface.
