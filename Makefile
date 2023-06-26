@@ -93,7 +93,7 @@ endif
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
-	BUILD_VTADMIN_NPM=1  ./web/vtadmin/build.sh
+	./web/vtadmin/build.sh
 endif
 
 # cross-build can be used to cross-compile Vitess client binaries

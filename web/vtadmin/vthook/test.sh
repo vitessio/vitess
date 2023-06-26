@@ -1,1 +1,0 @@
-/Users/florentpoinsard/Code/vitess/web/vtadmin/test/vthook-test.sh

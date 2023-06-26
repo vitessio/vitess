@@ -61,8 +61,7 @@ done
 # Check one last time
 [[ $(curl -s "http://${hostname}:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
 
-# Download NVM / Node and Re-build vtadmin if necessary
-BUILD_VTADMIN_NPM=1 ./${web_dir}/build.sh
+[[ ! -d "$web_dir/build" ]] && fail "Please make sure the VTAdmin files are built in $web_dir/build, using 'make build'"
 
 "${web_dir}/node_modules/.bin/serve" --no-clipboard -l $vtadmin_web_port -s "${web_dir}/build" \
   > "${log_dir}/vtadmin-web.out" 2>&1 &

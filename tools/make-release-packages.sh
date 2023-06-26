@@ -39,10 +39,6 @@ for binary in vttestserver mysqlctl mysqlctld query_analyzer topo2topo vtaclchec
  cp "bin/$binary" "${RELEASE_DIR}/bin/"
 done;
 
-# Replace the BUILD_VTADMIN_NPM variable to 0 in the vtadmin-up.sh file to optimize run time
-sed -i.bak -E "s/BUILD_VTADMIN_NPM=1/BUILD_VTADMIN_NPM=0/g" ./examples/common/scripts/vtadmin-up.sh
-rm -f ./examples/common/scripts/vtadmin-up.sh.bak
-
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
 cp -rpfL {web,examples} "${RELEASE_DIR}"
