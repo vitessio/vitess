@@ -31,9 +31,6 @@ var _ Primitive = (*ScalarAggregate)(nil)
 
 // ScalarAggregate is a primitive used to do aggregations without grouping keys
 type ScalarAggregate struct {
-	// PreProcess is true if one of the aggregates needs preprocessing.
-	PreProcess bool `json:",omitempty"`
-
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
@@ -93,7 +90,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if resultRow == nil {
-			resultRow, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates)
+			resultRow, curDistincts = convertRow(fields, row, sa.Aggregates)
 			continue
 		}
 		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Aggregates)
@@ -148,7 +145,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(fields, row, sa.PreProcess, sa.Aggregates)
+				current, curDistincts = convertRow(fields, row, sa.Aggregates)
 				continue
 			}
 			var err error

@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"strconv"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -45,9 +46,6 @@ var _ Primitive = (*OrderedAggregate)(nil)
 // is that the underlying primitive is a scatter select with pre-sorted
 // rows.
 type OrderedAggregate struct {
-	// PreProcess is true if one of the aggregates needs preprocessing.
-	PreProcess bool `json:",omitempty"`
-
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
@@ -174,16 +172,21 @@ func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute is a Primitive function.
-func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := oa.execute(ctx, vcursor, bindVars, wantfields)
+func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	qr, err := oa.execute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
-func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(ctx, oa.Input, bindVars, wantfields)
+func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	result, err := vcursor.ExecutePrimitive(
+		ctx,
+		oa.Input,
+		bindVars,
+		true, /*wantFields - we need the input fields types to correctly calculate the output types*/
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -192,28 +195,36 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		Fields: fields,
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 	}
+
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
+		// this is the first row. set up everything
 		if current == nil {
-			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
+			current, curDistincts = convertRow(fields, row, oa.Aggregates)
 			continue
 		}
+
+		// not the first row. are we still in the old group, or is this a new grouping?=
 		equal, err := oa.keysEqual(current, row)
 		if err != nil {
 			return nil, err
 		}
 
 		if equal {
+			// we are continuing to add values to the current grouping
 			current, curDistincts, err = merge(fields, current, row, curDistincts, oa.Aggregates)
 			if err != nil {
 				return nil, err
 			}
 			continue
 		}
+
+		// this is a new grouping. let's yield the old one, and start a new
 		out.Rows = append(out.Rows, current)
-		current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
+		current, curDistincts = convertRow(fields, row, oa.Aggregates)
+		continue
 	}
 
 	if current != nil {
@@ -227,7 +238,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 }
 
 // TryStreamExecute is a Primitive function.
-func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	var fields []*querypb.Field
@@ -236,7 +247,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
-	err := vcursor.StreamExecutePrimitive(ctx, oa.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	visitor := func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			fields = convertFields(qr.Fields, oa.Aggregates)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
@@ -245,30 +256,42 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		}
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
+			// this is the first row. set up everything
 			if current == nil {
-				current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
+				current, curDistincts = convertRow(fields, row, oa.Aggregates)
 				continue
 			}
 
+			// not the first row. are we still in the old group, or is this a new grouping?
 			equal, err := oa.keysEqual(current, row)
 			if err != nil {
 				return err
 			}
 
 			if equal {
+				// we are continuing to add values to the current grouping
 				current, curDistincts, err = merge(fields, current, row, curDistincts, oa.Aggregates)
 				if err != nil {
 					return err
 				}
 				continue
 			}
+
+			// this is a new grouping. let's yield the old one, and start a new
 			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
-			current, curDistincts = convertRow(fields, row, oa.PreProcess, oa.Aggregates)
+			current, curDistincts = convertRow(fields, row, oa.Aggregates)
+			continue
 		}
 		return nil
-	})
+	}
+
+	err := vcursor.StreamExecutePrimitive(ctx,
+		oa.Input,
+		bindVars,
+		true, /* we need the input fields types to correctly calculate the output types */
+		visitor)
 	if err != nil {
 		return err
 	}
@@ -298,12 +321,8 @@ func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb
 func convertRow(
 	fields []*querypb.Field,
 	row []sqltypes.Value,
-	preProcess bool,
 	aggregates []*AggregateParams,
 ) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
-	if !preProcess {
-		return row, nil
-	}
 	newRow = append(newRow, row...)
 	curDistincts = make([]sqltypes.Value, len(aggregates))
 	for index, aggr := range aggregates {

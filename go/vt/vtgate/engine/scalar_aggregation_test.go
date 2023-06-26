@@ -79,7 +79,6 @@ func TestEmptyRows(outer *testing.T) {
 			}
 
 			oa := &ScalarAggregate{
-				PreProcess: true,
 				Aggregates: []*AggregateParams{{
 					Opcode:     test.opcode,
 					Col:        0,
@@ -127,7 +126,6 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 		}},
 		Input:               fp,
 		TruncateColumnCount: 1,
-		PreProcess:          true,
 	}
 
 	var results []*sqltypes.Result
@@ -166,7 +164,6 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 		}},
 		Input:               fp,
 		TruncateColumnCount: 1,
-		PreProcess:          true,
 	}
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
@@ -238,8 +235,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 					Col:    0,
 					Alias:  "group_concat(c2)",
 				}},
-				Input:      fp,
-				PreProcess: true,
+				Input: fp,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)

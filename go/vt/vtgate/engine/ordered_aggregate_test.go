@@ -320,7 +320,6 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -397,7 +396,6 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -486,7 +484,6 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
@@ -536,7 +533,6 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
@@ -707,7 +703,6 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateGtid,
 			Col:    1,
@@ -746,7 +741,6 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode:    AggregateCountDistinct,
 			Col:       1,
@@ -811,7 +805,6 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode:    AggregateCountDistinct,
 			Col:       1,
@@ -878,7 +871,6 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode:    AggregateSumDistinct,
 			Col:       1,
@@ -947,7 +939,6 @@ func TestMultiDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		PreProcess: true,
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -1191,7 +1182,6 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 				}},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
-				PreProcess:  true,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
