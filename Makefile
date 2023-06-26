@@ -92,8 +92,8 @@ endif
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
-	echo "Building VTAdmin Web, disable VTAdmin build by using 'NOVTADMINBUILD'"
-	./web/vtadmin/build.sh
+	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
+	BUILD_VTADMIN_NPM=1  ./web/vtadmin/build.sh
 endif
 
 # cross-build can be used to cross-compile Vitess client binaries

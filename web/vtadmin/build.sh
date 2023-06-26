@@ -21,6 +21,8 @@ script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
 source "${script_dir}/../../build.env"
 web_dir="${script_dir}"
 
+vtadmin_api_port=14200
+
 # Download nvm and node
 if [[ -z ${NVM_DIR} ]]; then
     export NVM_DIR="$HOME/.nvm"
@@ -44,3 +46,11 @@ output "\nConfiguring Node.js $NODE_VERSION\n"
 nvm install "$NODE_VERSION" || fail "Could not install and use nvm $NODE_VERSION."
 
 npm --prefix "$web_dir" --silent install
+
+if [ "$BUILD_VTADMIN_NPM" == "1" ]; then
+  VITE_VTADMIN_API_ADDRESS="http://${hostname}:${vtadmin_api_port}" \
+    VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
+    npm run --prefix "$web_dir" build
+else
+  echo "Skipping npm run build of VTAdmin, please set BUILD_VTADMIN_NPM to 1 if you want to build."
+fi

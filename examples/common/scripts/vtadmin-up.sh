@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Copyright 2023 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
 source "${script_dir}/../env.sh"
 
@@ -48,11 +62,7 @@ done
 [[ $(curl -s "http://${hostname}:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
 
 # Download NVM / Node and Re-build vtadmin if necessary
-./${web_dir}/build.sh
-
-VITE_VTADMIN_API_ADDRESS="http://${hostname}:${vtadmin_api_port}" \
-  VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
-  npm run --prefix "$web_dir" build
+BUILD_VTADMIN_NPM=1 ./${web_dir}/build.sh
 
 "${web_dir}/node_modules/.bin/serve" --no-clipboard -l $vtadmin_web_port -s "${web_dir}/build" \
   > "${log_dir}/vtadmin-web.out" 2>&1 &
