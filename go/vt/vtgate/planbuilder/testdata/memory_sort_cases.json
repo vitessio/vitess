@@ -48,7 +48,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS count(*), random(4)",
+            "Aggregates": "any_value(1) AS b, sum_count_star(2) AS count(*), any_value(4)",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
@@ -119,7 +119,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+            "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
@@ -192,7 +192,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS k, random(4)",
+            "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k, any_value(4)",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
@@ -273,7 +273,7 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
-                "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+                "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
                 "GroupBy": "(0|3)",
                 "Inputs": [
                   {
@@ -348,7 +348,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+            "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
