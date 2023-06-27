@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
 )
@@ -34,7 +33,6 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // StartVTOrcDiscovery starts VTOrc discovery serving
 func StartVTOrcDiscovery() {
 	process.ContinuousRegistration(string(process.VTOrcExecutionHTTPMode), "")
-	inst.SetMaintenanceOwner(process.ThisHostname)
 
 	log.Info("Starting Discovery")
 	go logic.ContinuousDiscovery()

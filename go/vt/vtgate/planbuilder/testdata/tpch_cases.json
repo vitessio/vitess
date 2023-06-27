@@ -25,14 +25,14 @@
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "1 DESC, (2|4) ASC",
+            "OrderBy": "1 DESC, (2|5) ASC",
             "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS revenue",
-                "GroupBy": "(0|5), (2|4), (3|6)",
+                "GroupBy": "(0|4), (2|5), (3|6)",
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -41,20 +41,20 @@
                       "[COLUMN 0] * [COLUMN 1] as revenue",
                       "[COLUMN 3] as o_orderdate",
                       "[COLUMN 4] as o_shippriority",
-                      "[COLUMN 5] as weight_string(o_orderdate)",
-                      "[COLUMN 6] as weight_string(l_orderkey)",
+                      "[COLUMN 5] as weight_string(l_orderkey)",
+                      "[COLUMN 6] as weight_string(o_orderdate)",
                       "[COLUMN 7] as weight_string(o_shippriority)"
                     ],
                     "Inputs": [
                       {
                         "OperatorType": "Sort",
                         "Variant": "Memory",
-                        "OrderBy": "(2|6) ASC, (3|5) ASC, (4|7) ASC",
+                        "OrderBy": "(2|5) ASC, (3|6) ASC, (4|7) ASC",
                         "Inputs": [
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,R:3,L:2,R:4",
+                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,L:2,R:3,R:4",
                             "JoinVars": {
                               "l_orderkey": 1
                             },
@@ -970,7 +970,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(1) AS high_line_count, sum(2) AS low_line_count",
-        "GroupBy": "0",
+        "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
           {
@@ -1059,7 +1059,68 @@
     "comment": "TPC-H query 14",
     "query": "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) /  sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) /  sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "([COLUMN 0] * [COLUMN 1]) / [COLUMN 2] as promo_revenue"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0), sum(1) AS sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end), sum(2) AS sum(l_extendedprice * (1 - l_discount))",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:3",
+                "JoinVars": {
+                  "l_discount": 2,
+                  "l_extendedprice": 1,
+                  "l_partkey": 4
+                },
+                "TableName": "lineitem_part",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 100.00, l_extendedprice, l_discount, l_extendedprice * (1 - l_discount), l_partkey from lineitem where 1 != 1",
+                    "Query": "select 100.00, l_extendedprice, l_discount, l_extendedprice * (1 - l_discount), l_partkey from lineitem where l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month",
+                    "Table": "lineitem"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select case when p_type like 'PROMO%' then :l_extendedprice * (1 - :l_discount) else 0 end from part where 1 != 1",
+                    "Query": "select case when p_type like 'PROMO%' then :l_extendedprice * (1 - :l_discount) else 0 end from part where p_partkey = :l_partkey",
+                    "Table": "part",
+                    "Values": [
+                      ":l_partkey"
+                    ],
+                    "Vindex": "hash"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem",
+        "main.part"
+      ]
+    }
   },
   {
     "comment": "TPC-H query 15 view\n#\"with revenue0(supplier_no, total_revenue) as (select l_suppkey, sum(l_extendedprice * (1 - l_discount))  from lineitem where l_shipdate >= date('1996-01-01') and l_shipdate < date('1996-01-01') + interval '3' month group by l_suppkey )\"\n#\"syntax error at position 236\"\n#Gen4 plan same as above\n# TPC-H query 15",

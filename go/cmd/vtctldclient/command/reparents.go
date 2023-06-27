@@ -80,7 +80,7 @@ EmergencyReparentShard should be used instead.
 		Short: "Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.",
 		Long: `Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
 
-See the Reparenting guide for more information: https://vitess.io/docs/user-guides/reparenting/#external-reparenting.
+See the Reparenting guide for more information: https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
 `,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
