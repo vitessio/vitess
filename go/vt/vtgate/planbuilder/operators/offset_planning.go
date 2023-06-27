@@ -110,7 +110,12 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 	}
 
 	getColumns := func() []*sqlparser.AliasedExpr { return columns }
-	visitor := getVisitor2(ctx, getColumns, found, notFound)
+	findCol := func(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+		return slices.IndexFunc(getColumns(), func(expr *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+		}), nil
+	}
+	visitor := getVisitor(ctx, findCol, found, notFound)
 
 	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
 	up := func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -150,7 +155,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			addedColumns = true
 			return nil
 		}
-		visitor := getVisitor(ctx, proj, found, notFound)
+		visitor := getVisitor(ctx, proj.findCol, found, notFound)
 
 		for _, expr := range filter.Predicates {
 			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopyDependenciesOnSQLNodes)
@@ -167,7 +172,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 
 func getVisitor(
 	ctx *plancontext.PlanningContext,
-	proj selectExpressions,
+	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error),
 	found func(sqlparser.Expr, int),
 	notFound func(sqlparser.Expr) error,
 ) func(node, parent sqlparser.SQLNode) bool {
@@ -181,42 +186,10 @@ func getVisitor(
 			return true
 		}
 		var offset int
-		offset, err = proj.findCol(ctx, e)
+		offset, err = findCol(ctx, e)
 		if err != nil {
 			return false
 		}
-		if offset >= 0 {
-			found(e, offset)
-			return false
-		}
-
-		if fetchByOffset(e) {
-			err = notFound(e)
-			return false
-		}
-
-		return true
-	}
-}
-func getVisitor2(
-	ctx *plancontext.PlanningContext,
-	getColumns func() []*sqlparser.AliasedExpr,
-	found func(sqlparser.Expr, int),
-	notFound func(sqlparser.Expr) error,
-) func(node, parent sqlparser.SQLNode) bool {
-	var err error
-	return func(node, parent sqlparser.SQLNode) bool {
-		if err != nil {
-			return false
-		}
-		e, ok := node.(sqlparser.Expr)
-		if !ok {
-			return true
-		}
-		offset := slices.IndexFunc(getColumns(), func(expr *sqlparser.AliasedExpr) bool {
-			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
-		})
-
 		if offset >= 0 {
 			found(e, offset)
 			return false
