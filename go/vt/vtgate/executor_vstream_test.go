@@ -80,17 +80,10 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := executor.StreamExecute(
-			ctx,
-			"TestExecuteStream",
-			NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}),
-			sql,
-			nil,
-			func(qr *sqltypes.Result) error {
-				results <- qr
-				return nil
-			},
-		)
+		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
+			results <- qr
+			return nil
+		})
 		require.NoError(t, err)
 	}()
 	timer := time.NewTimer(5 * time.Second)

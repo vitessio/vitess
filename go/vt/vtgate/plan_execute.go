@@ -20,14 +20,14 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
@@ -35,6 +35,7 @@ type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 func (e *Executor) newExecute(
 	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
 	safeSession *SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
@@ -84,7 +85,7 @@ func (e *Executor) newExecute(
 		safeSession.RecordWarning(warning)
 	}
 
-	result, err := e.handleTransactions(ctx, safeSession, plan, logStats, vcursor, stmt)
+	result, err := e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 	if err != nil {
 		return err
 	}
@@ -112,6 +113,7 @@ func (e *Executor) newExecute(
 // handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management
 func (e *Executor) handleTransactions(
 	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
 	safeSession *SafeSession,
 	plan *engine.Plan,
 	logStats *logstats.LogStats,
@@ -148,6 +150,8 @@ func (e *Executor) handleTransactions(
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.ignoreMaxMemoryRows)
 		return qr, err
+	case sqlparser.StmtKill:
+		return e.handleKill(ctx, mysqlCtx, stmt, logStats)
 	}
 	return nil, nil
 }
@@ -245,7 +249,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 	rQuery := safeSession.rollbackOnPartialExec
 	if rQuery != txRollback {
 		safeSession.SavepointRollback()
-		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
+		_, _, err := e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
 		if err == nil {
 			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
 		}

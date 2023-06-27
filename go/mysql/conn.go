@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -29,11 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/sqlescape"
-
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -199,6 +198,13 @@ type Conn struct {
 	// enableQueryInfo controls whether we parse the INFO field in QUERY_OK packets
 	// See: ConnParams.EnableQueryInfo
 	enableQueryInfo bool
+
+	// cancel keep the cancel function for the current executing query.
+	// this is used by `kill [query|connection] ID` command from other connection.
+	cancel context.CancelFunc
+
+	// cancelMu protects the writing to cancel
+	cancelMu sync.Mutex
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -767,7 +773,7 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 
 	bytes, pos := c.startEphemeralPacketWithHeader(length)
 	data := &coder{data: bytes, pos: pos}
-	data.writeByte(headerType) //header - OK or EOF
+	data.writeByte(headerType) // header - OK or EOF
 	data.writeLenEncInt(packetOk.affectedRows)
 	data.writeLenEncInt(packetOk.lastInsertID)
 	data.writeUint16(packetOk.statusFlags)
@@ -1631,4 +1637,20 @@ func (c *Conn) IsUnixSocket() bool {
 // GetRawConn returns the raw net.Conn for nefarious purposes.
 func (c *Conn) GetRawConn() net.Conn {
 	return c.conn
+}
+
+// CancelCtx aborts an existing running query
+func (c *Conn) CancelCtx() {
+	c.cancelMu.Lock()
+	defer c.cancelMu.Unlock()
+	if c.cancel != nil {
+		c.cancel()
+	}
+}
+
+// UpdateCancelCtx updates the cancel function on the connection.
+func (c *Conn) UpdateCancelCtx(cancel context.CancelFunc) {
+	c.cancelMu.Lock()
+	defer c.cancelMu.Unlock()
+	c.cancel = cancel
 }
