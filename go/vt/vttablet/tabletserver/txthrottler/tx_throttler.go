@@ -388,15 +388,14 @@ func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server
 				}
 			}
 		}
-	} else {
-		return func(ctx context.Context) {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case th := <-ts.healthCheckChan:
-					ts.StatsUpdate(th)
-				}
+	}
+	return func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case th := <-ts.healthCheckChan:
+				ts.StatsUpdate(th)
 			}
 		}
 	}
