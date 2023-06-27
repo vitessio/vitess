@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/sqltypes"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
@@ -98,7 +100,7 @@ func TestEmptyRows(outer *testing.T) {
 				),
 				test.expectedVal,
 			)
-			assert.Equal(wantResult, result)
+			utils.MustMatch(t, wantResult, result)
 		})
 	}
 }
@@ -239,7 +241,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
-			assert.Equal(t, tcase.expResult, qr)
+			utils.MustMatch(t, tcase.expResult, qr)
 
 			fp.rewind()
 			results := &sqltypes.Result{}
@@ -251,7 +253,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
-			assert.Equal(t, tcase.expResult, results)
+			utils.MustMatch(t, tcase.expResult, results)
 		})
 	}
 }

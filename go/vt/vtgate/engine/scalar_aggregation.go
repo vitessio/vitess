@@ -93,7 +93,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 			resultRow, curDistincts = convertRow(fields, row, sa.Aggregates)
 			continue
 		}
-		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Aggregates)
+		resultRow, curDistincts, err = merge(fields, resultRow, row, curDistincts, sa.Aggregates)
 		if err != nil {
 			return nil, err
 		}
@@ -103,14 +103,11 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
 		// different aggregation functions
 		resultRow, err = sa.createEmptyRow()
-		if err != nil {
-			return nil, err
-		}
 	} else {
 		resultRow, err = convertFinal(resultRow, sa.Aggregates)
-		if err != nil {
-			return nil, err
-		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	out.Rows = [][]sqltypes.Value{resultRow}

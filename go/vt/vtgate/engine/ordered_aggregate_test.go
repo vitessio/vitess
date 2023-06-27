@@ -79,7 +79,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 		"b|2",
 		"c|7",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestOrderedAggregateExecuteTruncate(t *testing.T) {
@@ -165,7 +165,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 		"---",
 		"c|7",
 	)
-	assert.Equal(wantResults, results)
+	utils.MustMatch(t, wantResults, results)
 }
 
 func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
@@ -212,7 +212,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 		"---",
 		"C|7",
 	)
-	assert.Equal(wantResults, results)
+	utils.MustMatch(t, wantResults, results)
 }
 
 func TestOrderedAggregateGetFields(t *testing.T) {
@@ -255,7 +255,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 			"varchar|decimal",
 		),
 	)
-	assert.Equal(wantResult, got)
+	utils.MustMatch(t, wantResult, got)
 }
 
 func TestOrderedAggregateInputFail(t *testing.T) {
@@ -352,7 +352,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 		"h|3|4",
 		"i|2|2",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
@@ -439,7 +439,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 		"-----",
 		"i|2|2",
 	)
-	assert.Equal(wantResults, results)
+	utils.MustMatch(t, wantResults, results)
 }
 
 func TestOrderedAggregateSumDistinctGood(t *testing.T) {
@@ -722,7 +722,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		),
 		`ks|shard_gtids:{keyspace:"ks" shard:"-40" gtid:"a"} shard_gtids:{keyspace:"ks" shard:"40-80" gtid:"b"} shard_gtids:{keyspace:"ks" shard:"80-c0" gtid:"c"} shard_gtids:{keyspace:"ks" shard:"c0-" gtid:"d"}`,
 	)
-	assert.Equal(t, wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestCountDistinctOnVarchar(t *testing.T) {
@@ -764,7 +764,7 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
@@ -830,7 +830,7 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
@@ -896,7 +896,7 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
@@ -966,7 +966,7 @@ func TestMultiDistinct(t *testing.T) {
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
@@ -1022,7 +1022,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		"c|7",
 		"ß|13",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestOrderedAggregateCollateAS(t *testing.T) {
@@ -1065,7 +1065,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 		"c|7",
 		"Ç|4",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestOrderedAggregateCollateKS(t *testing.T) {
@@ -1111,7 +1111,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 		"\xE3\x83\x8F\xE3\x81\xAF|2",
 		"\xE3\x83\x8F\xE3\x83\x8F|1",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 // TestGroupConcatWithAggrOnEngine tests group_concat with full aggregation on engine.
@@ -1189,7 +1189,7 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 				qr.Rows = nil // just to make the expectation.
 				// empty slice or nil both are valid and will not cause any issue.
 			}
-			assert.Equal(t, tcase.expResult, qr)
+			utils.MustMatch(t, tcase.expResult, qr)
 
 			fp.rewind()
 			results := &sqltypes.Result{}
