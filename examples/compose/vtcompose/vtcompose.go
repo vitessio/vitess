@@ -533,7 +533,7 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
 - op: add
   path: /services/init_shard_primary%[2]d
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardPrimary -force %[4]s/%[3]s %[6]s-%[2]d "]
     %[1]s
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
@@ -565,7 +565,7 @@ func generateExternalPrimary(
 - op: add
   path: /services/vttablet%[1]d
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     ports:
       - "15%[1]d:%[3]d"
       - "%[4]d"
@@ -627,7 +627,7 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
 - op: add
   path: /services/vttablet%[1]d
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     ports:
     - "15%[1]d:%[4]d"
     - "%[5]d"
@@ -665,7 +665,7 @@ func generateVtctld(opts vtOptions) string {
 - op: add
   path: /services/vtctld
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     ports:
       - "15000:%[1]d"
       - "%[2]d"
@@ -696,7 +696,7 @@ func generateVtgate(opts vtOptions) string {
 - op: add
   path: /services/vtgate
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     ports:
       - "15099:%[1]d"
       - "%[2]d"
@@ -738,7 +738,7 @@ func generateVTOrc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInf
 - op: add
   path: /services/vtorc
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     volumes:
       - ".:/script"
     environment:
@@ -763,7 +763,7 @@ func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {
 - op: add
   path: /services/vreplication
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     volumes:
       - ".:/script"
     environment:
@@ -791,7 +791,7 @@ func generateSetKeyspaceDurabilityPolicy(
 - op: add
   path: /services/set_keyspace_durability_policy_%[3]s
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     volumes:
       - ".:/script"
     environment:
@@ -828,7 +828,7 @@ func generateSchemaload(
 - op: add
   path: /services/schemaload_%[7]s
   value:
-    image: vitess/lite:v17.0.0-rc2
+    image: vitess/lite:v17.0.0
     volumes:
       - ".:/script"
     environment:
