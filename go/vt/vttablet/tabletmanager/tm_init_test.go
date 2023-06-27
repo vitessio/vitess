@@ -383,7 +383,6 @@ func TestCheckPrimaryShip(t *testing.T) {
 	fakeMysql.SetReplicationSourceInputs = append(fakeMysql.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", otherTablet.MysqlHostname, otherTablet.MysqlPort))
 	fakeMysql.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
