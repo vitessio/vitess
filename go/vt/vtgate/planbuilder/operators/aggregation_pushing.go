@@ -99,9 +99,7 @@ func pushDownAggregationThroughRoute(
 	}
 
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := aggregator.Clone([]ops.Operator{route.Source}).(*Aggregator)
-	aggrBelowRoute.Pushed = false
-	aggrBelowRoute.Original = false
+	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
 	aggrBelowRoute.Aggregations = nil
 
 	for i, aggregation := range aggregator.Aggregations {

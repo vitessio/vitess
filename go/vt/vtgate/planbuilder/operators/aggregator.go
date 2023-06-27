@@ -115,8 +115,29 @@ func (a *Aggregator) isDerived() bool {
 	return a.TableID != nil
 }
 
+func (a *Aggregator) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	if a.isDerived() {
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
+		if err != nil {
+			return 0, err
+		}
+		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
+	}
+	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
+		return offset, nil
+	}
+	return -1, nil
+}
+
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if a.TableID != nil {
+	offset, err := a.findCol(ctx, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset >= 0 {
+		return a, offset, nil
+	}
+	if a.isDerived() {
 		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
 		if err != nil {
 			return nil, 0, err
@@ -126,7 +147,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 
 	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
-	err := a.planOffsets(ctx)
+	err = a.planOffsets(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -207,9 +228,12 @@ func (a *Aggregator) GetSelectExprs() (sqlparser.SelectExprs, error) {
 }
 
 func (a *Aggregator) ShortDescription() string {
-	columnns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
+	columns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
 		return sqlparser.String(from)
 	})
+	if a.Alias != "" {
+		columns = append([]string{"derived[" + a.Alias + "]"}, columns...)
+	}
 
 	org := ""
 	if a.Original {
@@ -217,7 +241,7 @@ func (a *Aggregator) ShortDescription() string {
 	}
 
 	if len(a.Grouping) == 0 {
-		return fmt.Sprintf("%s%s", org, strings.Join(columnns, ", "))
+		return fmt.Sprintf("%s%s", org, strings.Join(columns, ", "))
 	}
 
 	var grouping []string
@@ -225,7 +249,7 @@ func (a *Aggregator) ShortDescription() string {
 		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
 	}
 
-	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columnns, ", "), strings.Join(grouping, ","))
+	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
 }
 
 func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
@@ -408,6 +432,18 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 		a.Columns = append(a.Columns, aliasedExpr)
 	}
 	return offset, nil
+}
+
+// SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
+// This is used when we are splitting the aggregation so one part is done
+// at the mysql level and one part at the vtgate level
+func (a *Aggregator) SplitAggregatorBelowRoute(input []ops.Operator) *Aggregator {
+	newOp := a.Clone(input).(*Aggregator)
+	newOp.Pushed = false
+	newOp.Original = false
+	newOp.Alias = ""
+	newOp.TableID = nil
+	return newOp
 }
 
 var _ ops.Operator = (*Aggregator)(nil)

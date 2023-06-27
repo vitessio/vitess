@@ -5311,7 +5311,7 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "max(1) AS bazo",
-                "GroupBy": "(0|3), (2|4)",
+                "GroupBy": "(0|2)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5320,9 +5320,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select foo, max(baz) as bazo, bazo, weight_string(foo), weight_string(bazo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, bazo",
-                    "OrderBy": "(0|3) ASC, (2|4) ASC",
-                    "Query": "select foo, max(baz) as bazo, bazo, weight_string(foo), weight_string(bazo) from (select foo, baz from `user`) as f group by foo, bazo order by foo asc, bazo asc",
+                    "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
+                    "OrderBy": "(0|2) ASC",
+                    "Query": "select foo, max(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
                     "Table": "`user`"
                   }
                 ]
@@ -5357,7 +5357,7 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum_count(1) AS bazo",
-                "GroupBy": "(0|3), 2",
+                "GroupBy": "(0|2)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5366,9 +5366,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select foo, count(baz) as bazo, bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, bazo",
-                    "OrderBy": "(0|3) ASC, 2 ASC",
-                    "Query": "select foo, count(baz) as bazo, bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, bazo order by foo asc, bazo asc",
+                    "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
+                    "OrderBy": "(0|2) ASC",
+                    "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
                     "Table": "`user`"
                   }
                 ]
