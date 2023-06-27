@@ -42,6 +42,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -55,10 +56,12 @@ const (
 )
 
 var (
-	securityPolicy string
-	policies       = make(map[string]Policy)
-	once           sync.Once
-	currentPolicy  Policy
+	securityPolicy = viperutil.Configure("acl.security_policy", viperutil.Options[string]{
+		FlagName: "security_policy",
+	})
+	policies      = make(map[string]Policy)
+	once          sync.Once
+	currentPolicy Policy
 )
 
 // Policy defines the interface that needs to be satisfied by
@@ -73,7 +76,8 @@ type Policy interface {
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&securityPolicy, "security_policy", securityPolicy, "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
+	fs.String("security_policy", securityPolicy.Default(), "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
+	viperutil.BindFlags(fs, securityPolicy)
 }
 
 // RegisterPolicy registers a security policy. This function must be called
@@ -88,16 +92,16 @@ func RegisterPolicy(name string, policy Policy) {
 }
 
 func savePolicy() {
-	if securityPolicy == "" {
+	if securityPolicy.Get() == "" {
 		// Setting the policy to nil means Allow All from Anyone.
 		currentPolicy = nil
 		return
 	}
-	if policy, ok := policies[securityPolicy]; ok {
+	if policy, ok := policies[securityPolicy.Get()]; ok {
 		currentPolicy = policy
 		return
 	}
-	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", securityPolicy)
+	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", securityPolicy.Get())
 	currentPolicy = denyAllPolicy{}
 }
 
