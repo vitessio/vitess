@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -830,18 +829,6 @@ func (qp *QueryProjection) AddGroupBy(by GroupBy) {
 
 func (qp *QueryProjection) GetColumnCount() int {
 	return len(qp.SelectExprs) - qp.AddedColumn
-}
-
-// checkAggregationSupported checks if the aggregation is supported on the given operator tree or not.
-// We don't currently support planning for operators having derived tables.
-func checkAggregationSupported(op ops.Operator) error {
-	return rewrite.Visit(op, func(operator ops.Operator) error {
-		projection, isProjection := operator.(*Projection)
-		if isProjection && projection.TableID != nil {
-			return errHorizonNotPlanned()
-		}
-		return nil
-	})
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {

@@ -629,7 +629,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		}
 
 		stmt := sqlparser.CloneSelectStatement(tbl.Select)
-		if onlyTable {
+		if onlyTable && stmt.GetLimit() == nil {
 			stmt.SetOrderBy(nil)
 		}
 		qp, err := CreateQPFromSelectStatement(ctx, stmt)
