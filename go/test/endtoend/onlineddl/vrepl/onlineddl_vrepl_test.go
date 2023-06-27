@@ -197,7 +197,6 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1, err
 		}
-
 		vtgateInstance := clusterInstance.NewVtgateInstance()
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
@@ -239,6 +238,14 @@ func TestSchemaChange(t *testing.T) {
 	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 	require.NoError(t, err)
 
+	t.Run("WaitForSrvKeyspace", func(t *testing.T) {
+		for _, ks := range clusterInstance.Keyspaces {
+			t.Run(ks.Name, func(t *testing.T) {
+				err := throttler.WaitForSrvKeyspace(clusterInstance, cell, ks.Name)
+				require.NoError(t, err)
+			})
+		}
+	})
 	t.Run("updating throttler config", func(t *testing.T) {
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, useDefaultQuery)
 		require.NoError(t, err)

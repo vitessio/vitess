@@ -119,6 +119,32 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	return res.String(), err
 }
 
+// WaitForSrvKeyspace waits until the given srvkeyspace entry is found in the given cell
+func WaitForSrvKeyspace(clusterInstance *cluster.LocalProcessCluster, cell, keyspace string) error {
+	args := []string{"GetSrvKeyspaceNames", cell}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ConfigTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(result, `"`+keyspace+`"`) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for GetSrvKeyspaceNames to contain '%v'", keyspace)
+		case <-ticker.C:
+		}
+	}
+}
+
 // throttleAppRaw runs vtctlclient UpdateThrottlerConfig with --throttle-app flags
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
