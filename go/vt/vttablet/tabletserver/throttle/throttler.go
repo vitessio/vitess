@@ -484,6 +484,7 @@ func (throttler *Throttler) Open() error {
 					defer throttler.initMutex.Unlock()
 					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 					go throttler.watchSrvKeyspaceOnce.Do(func() {
+						// We start watching SrvKeyspace only after we know it's been created. Now is that time!
 						throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
 					})
 					return
