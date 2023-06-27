@@ -195,6 +195,7 @@ type txThrottlerState struct {
 	healthCheck      discovery.HealthCheck
 	healthCheckChan  chan *discovery.TabletHealth
 	topologyWatchers []TopologyWatcherInterface
+	cellsFromTopo    bool
 }
 
 // NewTxThrottler tries to construct a txThrottler from the
@@ -289,17 +290,6 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 }
 
 func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
-	// get cells from topo if none defined in tabletenv config
-	var cellsFromTopo bool
-	if len(config.healthCheckCells) == 0 {
-		var err error
-		if config.healthCheckCells, err = fetchKnownCells(topoServer); err != nil {
-			log.Errorf("txThrottler: failed to open throttler: %+v", err)
-			return nil, err
-		}
-		cellsFromTopo = true
-	}
-
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
 
 	t, err := throttlerFactory(
@@ -321,10 +311,20 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		throttler: t,
 	}
 
+	// get cells from topo if none defined in tabletenv config
+	if len(config.healthCheckCells) == 0 {
+		var err error
+		if config.healthCheckCells, err = fetchKnownCells(topoServer); err != nil {
+			log.Errorf("txThrottler: failed to open throttler: %+v", err)
+			return nil, err
+		}
+		state.cellsFromTopo = true
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	state.stopHealthCheck = cancel
 	state.initHealthCheckStream(topoServer, target)
-	hcProcessor := state.healthChecksProcessorFactory(topoServer, target, cellsFromTopo)
+	hcProcessor := state.healthChecksProcessorFactory(topoServer, target)
 	go hcProcessor(ctx)
 
 	return state, nil
@@ -362,8 +362,8 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	ts.healthCheck.Close()
 }
 
-func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server, target *querypb.Target, cellsFromTopo bool) func(ctx context.Context) {
-	if cellsFromTopo {
+func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server, target *querypb.Target) func(ctx context.Context) {
+	if ts.cellsFromTopo {
 		return func(ctx context.Context) {
 			cellsUpdateTicker := time.NewTicker(topoCellsRefreshInterval)
 			defer cellsUpdateTicker.Stop()
