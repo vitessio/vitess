@@ -119,18 +119,29 @@ func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
-func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if p.TableID != nil {
+func (p *Projection) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	if p.isDerived() {
 		derivedTBL, err := ctx.SemTable.TableInfoFor(*p.TableID)
 		if err != nil {
-			return nil, 0, err
+			return 0, err
 		}
-		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, derivedTBL)
+		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
 	}
+	if offset, found := canReuseColumn(ctx, p.Columns, expr, extractExpr); found {
+		return offset, nil
+	}
+	return -1, nil
+}
 
-	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, extractExpr); found {
+func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	offset, err := p.findCol(ctx, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset >= 0 {
 		return p, offset, nil
 	}
+
 	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
 	if err != nil {
 		return nil, 0, err

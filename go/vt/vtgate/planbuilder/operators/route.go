@@ -582,6 +582,7 @@ type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	isDerived() bool
+	findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 }
 
 func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {

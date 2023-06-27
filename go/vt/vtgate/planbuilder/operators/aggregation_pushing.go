@@ -92,9 +92,7 @@ func pushDownAggregationThroughRoute(
 	}
 
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := aggregator.Clone([]ops.Operator{route.Source}).(*Aggregator)
-	aggrBelowRoute.Pushed = false
-	aggrBelowRoute.Original = false
+	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
 
 	// Set the source of the route to the new aggregator placed below the route.
 	route.Source = aggrBelowRoute
