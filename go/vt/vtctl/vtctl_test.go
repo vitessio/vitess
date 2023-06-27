@@ -66,12 +66,59 @@ func TestApplyVSchema(t *testing.T) {
 		{
 			name: "UnknownParamsLogged",
 			args: []string{"--vschema", unknownParamsLoggedVSchema, ks},
-			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello",
+			want: `/New VSchema object:
+{
+  "sharded": true,
+  "vindexes": {
+    "binary_vdx": {
+      "type": "binary",
+      "params": {
+        "hello": "world"
+      }
+    },
+    "hash_vdx": {
+      "type": "hash",
+      "params": {
+        "foo": "bar",
+        "hello": "world"
+      }
+    }
+  }
+}
+If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
+
+.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello
+W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo
+W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello`,
 		},
 		{
 			name: "UnknownParamsLoggedWithDryRun",
 			args: []string{"--vschema", unknownParamsLoggedDryRunVSchema, "--dry-run", ks},
-			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello\nDry run: Skipping update of VSchema",
+			want: `/New VSchema object:
+{
+  "sharded": true,
+  "vindexes": {
+    "binary_vdx": {
+      "type": "binary",
+      "params": {
+        "hello": "world"
+      }
+    },
+    "hash_vdx": {
+      "type": "hash",
+      "params": {
+        "foo": "bar",
+        "hello": "world"
+      }
+    }
+  }
+}
+If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
+
+.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello
+W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo
+W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello
+Dry run: Skipping update of VSchema`,
 		},
 	}
 	for _, tt := range tests {
