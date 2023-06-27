@@ -104,11 +104,6 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		return out, nil
 	}
 
-	err = checkAggregationSupported(horizon)
-	if err != nil {
-		return nil, err
-	}
-
 	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
 		return nil, err
