@@ -780,23 +780,19 @@ func TestSchemaChange(t *testing.T) {
 	// - two shards as opposed to one
 	// - tablet throttling
 	t.Run("Revert a migration completed on one shard and cancelled on another", func(t *testing.T) {
-		// shard 0 will run normally, shard 1 will be throttled
-		defer throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
-		t.Run("throttle", func(t *testing.T) {
-			_, err := throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
-			assert.NoError(t, err)
-		})
+		// shard 0 will run normally, shard 1 will be postponed
 
 		var uuid string
 		t.Run("run migrations, expect running on both shards", func(t *testing.T) {
-			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
+			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess --postpone-launch", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards[0:1], uuid, "-80", true)
 			{
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusRunning)
 			}
 			{
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, normalMigrationWait, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards[1:], uuid, schema.OnlineDDLStatusRunning)
 			}
@@ -804,9 +800,8 @@ func TestSchemaChange(t *testing.T) {
 		t.Run("check cancel migration", func(t *testing.T) {
 			onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 		})
-		t.Run("unthrottle", func(t *testing.T) {
-			_, err := throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
-			assert.NoError(t, err)
+		t.Run("launch-all", func(t *testing.T) {
+			onlineddl.CheckLaunchAllMigrations(t, &vtParams, 0)
 		})
 		var revertUUID string
 		t.Run("issue revert migration", func(t *testing.T) {
