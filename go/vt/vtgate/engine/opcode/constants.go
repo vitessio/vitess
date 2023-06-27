@@ -18,6 +18,7 @@ package opcode
 
 import (
 	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
