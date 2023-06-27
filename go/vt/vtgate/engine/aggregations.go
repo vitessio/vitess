@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"strconv"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -259,6 +262,9 @@ func convertFinal(current []sqltypes.Value, aggregates []*AggregateParams) ([]sq
 }
 
 func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb.Field {
+	fields = slices2.Map(fields, func(from *querypb.Field) *querypb.Field {
+		return proto.Clone(from).(*querypb.Field)
+	})
 	for _, aggr := range aggrs {
 		fields[aggr.Col].Type = aggr.typ(fields[aggr.Col].Type)
 		if aggr.Alias != "" {
