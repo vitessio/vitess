@@ -65,8 +65,9 @@ const (
 	AggregateCountDistinct
 	AggregateSumDistinct
 	AggregateGtid
-	AggregateAnyValue
 	AggregateCountStar
+	AggregateGroupConcat
+	AggregateAnyValue
 )
 
 var (
@@ -95,6 +96,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"vgtid":          AggregateGtid,
 	"count_star":     AggregateCountStar,
 	"any_value":      AggregateAnyValue,
+	"group_concat":   AggregateGroupConcat,
 }
 
 var AggregateName = map[AggregateOpcode]string{
@@ -106,6 +108,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateSumDistinct:   "sum_distinct",
 	AggregateGtid:          "vgtid",
 	AggregateCountStar:     "count_star",
+	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
 }
 
@@ -121,4 +124,17 @@ func (code AggregateOpcode) String() string {
 // It's used for testing and diagnostics.
 func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+}
+
+// Type returns the opcode return sql type.
+func (code AggregateOpcode) Type(field *querypb.Field) querypb.Type {
+	switch code {
+	case AggregateGroupConcat:
+		if sqltypes.IsBinary(field.Type) {
+			return sqltypes.Blob
+		}
+		return sqltypes.Text
+	default:
+		return OpcodeType[code]
+	}
 }

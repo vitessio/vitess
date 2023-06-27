@@ -457,10 +457,19 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 	case opcode.AggregateCountStar:
 		ab.handleCountStar(ctx, aggr)
 		return nil
-	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
-		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
+		return ab.handlePushThroughAggregation(ctx, aggr)
+	case opcode.AggregateGroupConcat:
+		f := aggr.Func.(*sqlparser.GroupConcatExpr)
+		if f.Distinct || len(f.OrderBy) > 0 || f.Separator != "" {
+			panic("fail here")
+		}
+		// this needs special handling, currently aborting the push of function
+		// and later will try pushing the column instead.
+		// TODO: this should be handled better by pushing the function down.
+		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
 		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 	default:
@@ -506,11 +515,12 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	lhsAE := ab.leftCountStar(ctx)
 	rhsAE := ab.rightCountStar(ctx)
 
-	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr)
+	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, true)
 }
 
 func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.PlanningContext, aggr Aggr) error {
 	var lhsAE, rhsAE *sqlparser.AliasedExpr
+	var addCoalesce bool
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
@@ -518,6 +528,9 @@ func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.Plannin
 		ab.pushThroughLeft(aggr)
 		lhsAE = aggr.Original
 		rhsAE = ab.rightCountStar(ctx)
+		if ab.outerJoin {
+			addCoalesce = true
+		}
 
 	case deps.IsSolvedBy(ab.rhs.tableID):
 		ab.pushThroughRight(aggr)
@@ -528,11 +541,11 @@ func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.Plannin
 		return errAbortAggrPushing
 	}
 
-	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr)
+	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, addCoalesce)
 	return nil
 }
 
-func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE *sqlparser.AliasedExpr, aggr Aggr) {
+func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE *sqlparser.AliasedExpr, aggr Aggr, coalesce bool) {
 	// We expect the expressions to be different on each side of the join, otherwise it's an error.
 	if lhsAE.Expr == rhsAE.Expr {
 		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsAE, rhsAE))
@@ -542,7 +555,7 @@ func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE
 
 	// When dealing with outer joins, we don't want null values from the RHS to ruin the calculations we are doing,
 	// so we use the MySQL `coalesce` after the join is applied to multiply the count from LHS with 1.
-	if ab.outerJoin {
+	if ab.outerJoin && coalesce {
 		rhsExpr = coalesceFunc(rhsExpr)
 	}
 

@@ -756,6 +756,32 @@ func (se *Engine) GetSchema() map[string]*Table {
 	return tables
 }
 
+// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema
+func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	dbSchema := &binlogdatapb.MinimalSchema{
+		Tables: make([]*binlogdatapb.MinimalTable, 0, len(se.tables)),
+	}
+	for _, table := range se.tables {
+		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
+	}
+	return dbSchema.MarshalVT()
+}
+
+func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
+	table := &binlogdatapb.MinimalTable{
+		Name:   st.Name.String(),
+		Fields: st.Fields,
+	}
+	pkc := make([]int64, len(st.PKColumns))
+	for i, pk := range st.PKColumns {
+		pkc[i] = int64(pk)
+	}
+	table.PKColumns = pkc
+	return table
+}
+
 // GetConnection returns a connection from the pool
 func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
 	return se.conns.Get(ctx, nil)
