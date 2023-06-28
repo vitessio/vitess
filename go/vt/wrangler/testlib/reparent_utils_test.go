@@ -17,6 +17,8 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -24,8 +26,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -91,9 +91,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	replica.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -161,13 +160,11 @@ func TestReparentTablet(t *testing.T) {
 	replica.FakeMysqlDaemon.IOThreadRunning = true
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -177,6 +174,66 @@ func TestReparentTablet(t *testing.T) {
 	// run ReparentTablet
 	if err := wr.ReparentTablet(ctx, replica.Tablet.Alias); err != nil {
 		t.Fatalf("ReparentTablet failed: %v", err)
+	}
+
+	// check what was run
+	if err := replica.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("replica.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+	checkSemiSyncEnabled(t, false, true, replica)
+}
+
+// TestSetReplicationSourceRelayLogError tests that SetReplicationSource works as intended when we receive a relay log error while starting replication.
+func TestSetReplicationSourceRelayLogError(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
+	// create shard and tablets
+	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
+		t.Fatalf("CreateShard failed: %v", err)
+	}
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
+	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+
+	// mark the primary inside the shard
+	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primary.Tablet.Alias
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
+	}
+
+	// primary action loop (to initialize host and port)
+	primary.StartActionLoop(t, wr)
+	defer primary.StopActionLoop(t)
+
+	// replica loop
+	// We have to set the settings as replicating. Otherwise,
+	// the replication manager intervenes and tries to fix replication,
+	// which ends up making this test unpredictable.
+	replica.FakeMysqlDaemon.Replicating = true
+	replica.FakeMysqlDaemon.IOThreadRunning = true
+	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
+	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
+		// We stop and reset the replication parameters because of relay log issues.
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"START SLAVE",
+	}
+	replica.StartActionLoop(t, wr)
+	defer replica.StopActionLoop(t)
+
+	// Set the correct error message that indicates we have received a relay log error.
+	replica.FakeMysqlDaemon.SetReplicationSourceError = errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log")
+	// run ReparentTablet
+	if err := wr.SetReplicationSource(ctx, replica.Tablet); err != nil {
+		t.Fatalf("SetReplicationSource failed: %v", err)
 	}
 
 	// check what was run
