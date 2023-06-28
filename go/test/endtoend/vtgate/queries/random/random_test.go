@@ -99,7 +99,14 @@ func TestMustFix(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
 
 	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0")
+
+	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'")
+
+	// similar to previous two
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)")
 
 	// mismatched results
 	// previously failing, then succeeding query, now failing again
@@ -155,6 +162,9 @@ func TestKnownFailures(t *testing.T) {
 
 	// vttablet: rpc error: code = NotFound desc = Unknown column 'cgroup0' in 'field list' (errno 1054) (sqlstate 42S22) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.ename as cgroup0, max(tbl0.comm) as caggr0 from emp as tbl0, emp as tbl1 group by cgroup0")
+
+	// vttablet: rpc error: code = NotFound desc = Unknown column '347' in 'group statement'
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 347 as crandom0 from emp as tbl0")
 
 	// vttablet: rpc error: code = InvalidArgument desc = Can't group on 'count(*)' (errno 1056) (sqlstate 42000) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.deptno")

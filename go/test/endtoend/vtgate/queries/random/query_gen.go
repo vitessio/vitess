@@ -144,7 +144,9 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 		groupBy, groupSelectExprs, grouping = createGroupBy(tables, maxGroupBy)
 		sel.AddSelectExprs(groupSelectExprs)
 		sel.GroupBy = groupBy
+
 	}
+
 	aggrExprs, aggregates := createAggregations(tables, maxAggrs)
 	sel.AddSelectExprs(aggrExprs)
 
@@ -200,7 +202,12 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	} else {
 		randomExpr = getRandomExpr(nil)
 	}
-	if isRandomExpr {
+
+	// make sure we have at least one select expression
+	if isRandomExpr || len(sel.SelectExprs) == 0 {
+		// TODO: select distinct [literal] fails
+		sel.Distinct = false
+
 		sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(randomExpr, "crandom0"))
 		newTable.addColumns(column{
 			name: "crandom0",
@@ -309,7 +316,7 @@ func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.Sele
 		func(col column) sqlparser.Expr { return &sqlparser.Max{Arg: newColumn(col)} },
 	}
 
-	numAggrs := rand.Intn(maxAggrs) + 1
+	numAggrs := rand.Intn(maxAggrs)
 	for i := 0; i < numAggrs; i++ {
 		tblIdx, aggrIdx := rand.Intn(len(tables)), rand.Intn(len(aggregations))
 		col := randomEl(tables[tblIdx].cols)
