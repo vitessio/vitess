@@ -187,7 +187,7 @@ var (
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")
 
-	vindexUnknownParams = stats.NewGauge("VindexUnknownParams", "Number of params unrecognized by Vindexes")
+	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameterss unrecognized by Vindexes")
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
