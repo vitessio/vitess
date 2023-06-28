@@ -423,7 +423,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1316,7 +1316,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(3) AS d, sum_count_star(4) AS count(*)",
+        "Aggregates": "any_value(3) AS d, sum_count_star(4) AS count(*)",
         "GroupBy": "(0|5), (1|6), (2|7)",
         "ResultColumns": 5,
         "Inputs": [
@@ -1373,7 +1373,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(3) AS d, sum_count_star(4) AS count(*)",
+        "Aggregates": "any_value(3) AS d, sum_count_star(4) AS count(*)",
         "GroupBy": "(0|5), (1|6), (2|7)",
         "ResultColumns": 5,
         "Inputs": [
@@ -1798,7 +1798,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "random(0) AS a, sum_count_star(1) AS count(*)",
+        "Aggregates": "any_value(0) AS a, sum_count_star(1) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1890,7 +1890,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(0) AS id",
+        "Aggregates": "any_value(0) AS id",
         "GroupBy": "1",
         "ResultColumns": 1,
         "Inputs": [
@@ -3124,7 +3124,7 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "random(0) AS 1, sum_count(1) AS count(id)",
+                "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
                 "Inputs": [
                   {
                     "OperatorType": "VindexLookup",
@@ -3269,7 +3269,7 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "random(0) AS 1, sum_count(1) AS count(id)",
+                "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4488,7 +4488,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "random(0) AS 1, sum_count(1) AS count(ue.col)",
+                    "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(ue.col)",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -4536,7 +4536,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(0) AS col",
+        "Aggregates": "any_value(0) AS col",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -4598,7 +4598,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "random(0) AS id, random(1) AS id, sum_count_star(2) AS count(*), random(3)",
+            "Aggregates": "any_value(0) AS id, any_value(1) AS id, sum_count_star(2) AS count(*), any_value(3)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4651,7 +4651,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4960,7 +4960,7 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+                "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5025,7 +5025,7 @@
     }
   },
   {
-    "comment": "AggregateRandom in non full group by query",
+    "comment": "AggregateAnyValue in non full group by query",
     "query": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
@@ -5034,7 +5034,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(1) AS name, sum_count(2) AS count(m.predef1)",
+        "Aggregates": "any_value(1) AS name, sum_count(2) AS count(m.predef1)",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -5409,7 +5409,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*), random(2) AS col + 1, random(3)",
+            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS col + 1, any_value(3)",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -5468,7 +5468,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(0) AS a",
+        "Aggregates": "any_value(0) AS a",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -6703,7 +6703,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "random(0), sum_count_star(1) AS count(*)",
+            "Aggregates": "any_value(0), sum_count_star(1) AS count(*)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6846,6 +6846,69 @@
     }
   },
   {
+    "comment": "plan a query with any_value()",
+    "query": "select count(*), any_value(u.name), any_value(ue.title) from user u join user_extra ue on u.bar = ue.foo ",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), any_value(u.name), any_value(ue.title) from user u join user_extra ue on u.bar = ue.foo ",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*), any_value(1) AS any_value(u.`name`), any_value(2) AS any_value(ue.title)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * [COLUMN 1] as count(*)",
+              "[COLUMN 2] as any_value(u.`name`)",
+              "[COLUMN 3] as any_value(ue.title)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1,R:1",
+                "JoinVars": {
+                  "u_bar": 2
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), any_value(u.`name`), u.bar from `user` as u where 1 != 1 group by u.bar",
+                    "Query": "select count(*), any_value(u.`name`), u.bar from `user` as u group by u.bar",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), any_value(ue.title) from user_extra as ue where 1 != 1 group by .0",
+                    "Query": "select count(*), any_value(ue.title) from user_extra as ue where ue.foo = :u_bar group by .0",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "group_concat with group by without in select list",
     "query": "select group_concat(user.id) from user, music where user.id = music.foo group by user.bar",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
@@ -6969,7 +7032,7 @@
   {
     "comment": "ordering on top of aggregator without pushing the column down during the horizon phase",
     "query": "select u.foo, group_concat(u.bar) from user u, music m where u.col = m.col group by u.foo order by u.baz",
-    "v3-plan" : "VT12001: unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.foo, group_concat(u.bar) from user u, music m where u.col = m.col group by u.foo order by u.baz",
@@ -6982,7 +7045,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "group_concat(1) AS group_concat(u.bar), random(2) AS baz, random(4)",
+            "Aggregates": "group_concat(1) AS group_concat(u.bar), any_value(2) AS baz, any_value(4)",
             "GroupBy": "(0|3)",
             "Inputs": [
               {

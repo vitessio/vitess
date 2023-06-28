@@ -367,7 +367,7 @@ func TestOrderByCount(t *testing.T) {
 	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC", `[[VARCHAR("3")] [VARCHAR("2")] [VARCHAR("1")]]`)
 }
 
-func TestAggregateRandom(t *testing.T) {
+func TestAggregateAnyValue(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 

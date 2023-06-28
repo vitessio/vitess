@@ -477,7 +477,7 @@ func merge(
 			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
-		case AggregateRandom:
+		case AggregateAnyValue:
 			// we just grab the first value per grouping. no need to do anything more complicated here
 		case AggregateGroupConcat:
 			if row2[aggr.Col].IsNull() {
