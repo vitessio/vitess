@@ -352,6 +352,7 @@ GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 //   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
 //   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
 //     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
+//   - `create_options` is NULL for views, and therefore we need an additional UNION ALL to include views
 const TablesWithSize80 = `SELECT t.table_name,
 		t.table_type,
 		UNIX_TIMESTAMP(t.create_time),
@@ -362,7 +363,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 		LEFT JOIN information_schema.innodb_tablespaces i
 	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8_general_ci
 	WHERE
-		t.table_schema = database() AND t.create_options != 'partitioned'
+		t.table_schema = database() AND not t.create_options <=> 'partitioned'
 UNION ALL
 	SELECT
 		t.table_name,
@@ -375,7 +376,7 @@ UNION ALL
 		LEFT JOIN information_schema.innodb_tablespaces i
 	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8_general_ci )
 	WHERE
-		t.table_schema = database() AND t.create_options = 'partitioned'
+		t.table_schema = database() AND t.create_options <=> 'partitioned'
 	GROUP BY
 		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 `
