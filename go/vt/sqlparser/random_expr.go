@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -73,29 +73,23 @@ func (g *Generator) atMaxDepth() bool {
 		- &, |, ^, +, -, *, /, div, %, <<, >>
 	    - IN, BETWEEN and CASE
 		- IS NULL, IS NOT NULL, IS TRUE, IS NOT TRUE, IS FALSE, IS NOT FALSE
+	Returns the random expression (Expr) and its type (string)
 
 Note: It's important to update this method so that it produces all expressions that need precedence checking.
 It's currently missing function calls and string operators
 */
-func (g *Generator) Expression() (Expr, string) {
-	typ := "tinyint"
+func (g *Generator) Expression() Expr {
 	if g.randomBool() {
-		return g.booleanExpr(), typ
+		return g.booleanExpr()
 	}
+
 	options := []exprF{
 		func() Expr { return g.intExpr() },
 		func() Expr { return g.stringExpr() },
 		func() Expr { return g.booleanExpr() },
 	}
 
-	fn := g.randomOf(options)
-	if fn == g.intExpr() {
-		typ = "bigint"
-	} else if fn == g.stringExpr() {
-		typ = "varchar"
-	}
-
-	return fn, typ
+	return g.randomOf(options)
 }
 
 func (g *Generator) booleanExpr() Expr {
@@ -231,10 +225,10 @@ func (g *Generator) caseExpr(valueF func() Expr) Expr {
 		if exp == nil {
 			cond = g.booleanExpr()
 		} else {
-			cond, _ = g.Expression()
+			cond = g.Expression()
 		}
 
-		val, _ := g.Expression()
+		val := g.Expression()
 		whens = append(whens, &When{
 			Cond: cond,
 			Val:  val,

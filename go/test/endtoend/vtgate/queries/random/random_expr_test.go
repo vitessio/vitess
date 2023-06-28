@@ -17,7 +17,6 @@ limitations under the License.
 package random
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// This test tests that generating a random expression with a schema does not panic
 func TestRandomExprWithTables(t *testing.T) {
 	schemaTables := []tableT{
 		{name: sqlparser.NewTableName("emp")},
@@ -48,6 +48,5 @@ func TestRandomExprWithTables(t *testing.T) {
 
 	seed := time.Now().UnixNano()
 	g := sqlparser.NewGenerator(seed, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
-	randomExpr, _ := g.Expression()
-	fmt.Println(sqlparser.String(randomExpr))
+	g.Expression()
 }
