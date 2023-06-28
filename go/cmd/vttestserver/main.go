@@ -93,9 +93,9 @@ func registerFlags(fs *pflag.FlagSet) {
 			" vttestserver as a database container in local developer environments. Note"+
 			" that db migration files (--schema_dir option) and seeding of"+
 			" random data (--initialize_with_random_data option) will only run during"+
-			" cluster startup if the data directory does not already exist. vschema"+
-			" migrations are run every time the cluster starts, since persistence"+
-			" for the topology server has not been implemented yet")
+			" cluster startup if the data directory does not already exist. "+
+			" Changes to VSchema are persisted across cluster restarts using a simple"+
+			" watcher if the --data_dir argument is specified.")
 
 	fs.BoolVar(&doSeed, "initialize_with_random_data", false,
 		"If this flag is each table-shard will be initialized"+
