@@ -950,28 +950,31 @@ func TestHexAndBitBindVar(t *testing.T) {
 func TestShowTablesWithSizes(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	setupQueries := []string{
-		`drop view if exists v1`,
-		`drop table if exists t1`,
-		`drop table if exists employees`,
-		`create table t1 (id int primary key)`,
-		`create view v1 as select * from t1`,
-		`CREATE TABLE employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+		`drop view if exists show_tables_with_sizes_v1`,
+		`drop table if exists show_tables_with_sizes_t1`,
+		`drop table if exists show_tables_with_sizes_employees`,
+		`create table show_tables_with_sizes_t1 (id int primary key)`,
+		`create view show_tables_with_sizes_v1 as select * from show_tables_with_sizes_t1`,
+		`CREATE TABLE show_tables_with_sizes_employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
 	}
+
+	defer func() {
+		_, _ = conn.ExecuteFetch(`drop view if exists show_tables_with_sizes_v1`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_t1`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_employees`, 1, false)
+	}()
 	for _, query := range setupQueries {
 		_, err := conn.ExecuteFetch(query, 1, false)
 		require.NoError(t, err)
 	}
 	expectTables := map[string]([]string){ // TABLE_TYPE, TABLE_COMMENT
-		"t1":        []string{"BASE TABLE", ""},
-		"v1":        []string{"VIEW", "VIEW"},
-		"employees": []string{"BASE TABLE", ""},
+		"show_tables_with_sizes_t1":        {"BASE TABLE", ""},
+		"show_tables_with_sizes_v1":        {"VIEW", "VIEW"},
+		"show_tables_with_sizes_employees": {"BASE TABLE", ""},
 	}
 
 	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
@@ -989,5 +992,5 @@ func TestShowTablesWithSizes(t *testing.T) {
 			matchedTables[tableName] = true
 		}
 	}
-	assert.Equal(t, len(expectTables), len(matchedTables))
+	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
 }
