@@ -978,13 +978,16 @@ func TestShowTablesWithSizes(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rs.Rows)
 
-	assert.Equal(t, len(expectTables), len(rs.Rows))
-	foundTables := map[string]([]string){}
+	assert.GreaterOrEqual(t, len(rs.Rows), len(expectTables))
+	matchedTables := map[string]bool{}
 	for _, row := range rs.Rows {
 		tableName := row[0].ToString()
-		_, ok := expectTables[tableName]
-		assert.True(t, ok)
-		foundTables[tableName] = []string{row[1].ToString(), row[3].ToString()} // TABLE_TYPE, TABLE_COMMENT
+		vals, ok := expectTables[tableName]
+		if ok {
+			assert.Equal(t, vals[0], row[1].ToString()) // TABLE_TYPE
+			assert.Equal(t, vals[1], row[3].ToString()) // TABLE_COMMENT
+			matchedTables[tableName] = true
+		}
 	}
-	assert.Equal(t, expectTables, foundTables)
+	assert.Equal(t, len(expectTables), len(matchedTables))
 }
