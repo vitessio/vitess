@@ -674,6 +674,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	host := parent.Tablet.MysqlHostname
 	port := int(parent.Tablet.MysqlPort)
+	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
+	if host == "" {
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
+	}
 	if status.SourceHost != host || status.SourcePort != port {
 		// This handles both changing the address and starting replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, wasReplicating, shouldbeReplicating); err != nil {
