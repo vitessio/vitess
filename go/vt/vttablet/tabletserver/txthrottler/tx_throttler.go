@@ -108,10 +108,7 @@ const TxThrottlerName = "TransactionThrottler"
 
 // fetchKnownCells gathers a list of known cells from the topology. An ErrFoundNoCells
 // error is returned if the GetKnownCells call to topoServer returns no cells.
-func fetchKnownCells(topoServer *topo.Server) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer cancel()
-
+func fetchKnownCells(ctx context.Context, topoServer *topo.Server) ([]string, error) {
 	cells, err := topoServer.GetKnownCells(ctx)
 	if err == nil && len(cells) == 0 {
 		err = ErrFoundNoCells
@@ -313,8 +310,10 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 
 	// get cells from topo if none defined in tabletenv config
 	if len(config.healthCheckCells) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
 		var err error
-		if config.healthCheckCells, err = fetchKnownCells(topoServer); err != nil {
+		if config.healthCheckCells, err = fetchKnownCells(ctx, topoServer); err != nil {
 			log.Errorf("txThrottler: failed to open throttler: %+v", err)
 			return nil, err
 		}
@@ -372,7 +371,10 @@ func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server
 				case <-ctx.Done():
 					return
 				case <-cellsUpdateTicker.C:
-					cells, err := fetchKnownCells(topoServer)
+					ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+					defer cancel()
+
+					cells, err := fetchKnownCells(ctx, topoServer)
 					if err != nil {
 						log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
 						continue

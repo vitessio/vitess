@@ -22,6 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
+	context "context"
 	"testing"
 	"time"
 
@@ -152,13 +153,13 @@ func TestEnabledThrottler(t *testing.T) {
 func TestFetchKnownCells(t *testing.T) {
 	{
 		ts := memorytopo.NewServer("cell1", "cell2")
-		cells, err := fetchKnownCells(ts)
+		cells, err := fetchKnownCells(context.Background(), ts)
 		assert.Nil(t, err)
 		assert.Equal(t, []string{"cell1", "cell2"}, cells)
 	}
 	{
 		ts := memorytopo.NewServer()
-		cells, err := fetchKnownCells(ts)
+		cells, err := fetchKnownCells(context.Background(), ts)
 		assert.NotNil(t, err)
 		assert.Zero(t, cells)
 	}
