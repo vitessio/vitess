@@ -980,7 +980,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 		"show_tables_with_sizes_employees": {"BASE TABLE", ""},
 	}
 
-	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
+	rs, err := conn.ExecuteFetch(conn.BaseShowTables(), math.MaxInt, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, rs.Rows)
 
