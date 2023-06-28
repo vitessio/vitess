@@ -29,6 +29,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -38,18 +39,35 @@ import (
 )
 
 var (
-	mysqlAuthServerStaticFile           string
-	mysqlAuthServerStaticString         string
-	mysqlAuthServerStaticReloadInterval time.Duration
-	mysqlServerFlushDelay               = 100 * time.Millisecond
+	configPrefix              = viperutil.KeyPrefixFunc("mysql.auth_server.static")
+	mysqlAuthServerStaticFile = viperutil.Configure(configPrefix("file"), viperutil.Options[string]{
+		FlagName: "mysql_auth_server_static_file",
+	})
+	mysqlAuthServerStaticString = viperutil.Configure(configPrefix("string"), viperutil.Options[string]{
+		FlagName: "mysql_auth_server_static_string",
+	})
+	mysqlAuthServerStaticReloadInterval = viperutil.Configure(configPrefix("reload_interval"), viperutil.Options[time.Duration]{
+		FlagName: "mysql_auth_static_reload_interval",
+	})
+	mysqlServerFlushDelay = viperutil.Configure("mysql.server_flush_delay", viperutil.Options[time.Duration]{
+		FlagName: "mysql_server_flush_delay",
+		Default:  100 * time.Millisecond,
+	})
 )
 
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
-		fs.StringVar(&mysqlAuthServerStaticFile, "mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-		fs.StringVar(&mysqlAuthServerStaticString, "mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-		fs.DurationVar(&mysqlAuthServerStaticReloadInterval, "mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
-		fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
+		fs.String("mysql_auth_server_static_file", mysqlAuthServerStaticFile.Default(), "JSON File to read the users/passwords from.")
+		fs.String("mysql_auth_server_static_string", mysqlAuthServerStaticString.Default(), "JSON representation of the users/passwords config.")
+		fs.Duration("mysql_auth_static_reload_interval", mysqlAuthServerStaticReloadInterval.Default(), "Ticker to reload credentials")
+		fs.Duration("mysql_server_flush_delay", mysqlServerFlushDelay.Default(), "Delay after which buffered response will be flushed to the client.")
+
+		viperutil.BindFlags(fs,
+			mysqlAuthServerStaticFile,
+			mysqlAuthServerStaticString,
+			mysqlAuthServerStaticReloadInterval,
+			mysqlServerFlushDelay,
+		)
 	})
 }
 
@@ -94,18 +112,18 @@ type AuthServerStaticEntry struct {
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
 func InitAuthServerStatic() {
 	// Check parameters.
-	if mysqlAuthServerStaticFile == "" && mysqlAuthServerStaticString == "" {
+	if mysqlAuthServerStaticFile.Get() == "" && mysqlAuthServerStaticString.Get() == "" {
 		// Not configured, nothing to do.
 		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
 		return
 	}
-	if mysqlAuthServerStaticFile != "" && mysqlAuthServerStaticString != "" {
+	if mysqlAuthServerStaticFile.Get() != "" && mysqlAuthServerStaticString.Get() != "" {
 		// Both parameters specified, can only use one.
 		log.Exitf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
 	}
 
 	// Create and register auth server.
-	RegisterAuthServerStaticFromParams(mysqlAuthServerStaticFile, mysqlAuthServerStaticString, mysqlAuthServerStaticReloadInterval)
+	RegisterAuthServerStaticFromParams(mysqlAuthServerStaticFile.Get(), mysqlAuthServerStaticString.Get(), mysqlAuthServerStaticReloadInterval.Get())
 }
 
 // RegisterAuthServerStaticFromParams creates and registers a new

@@ -324,7 +324,7 @@ func (c *Conn) getWriter() (w io.Writer, unget func()) {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
+	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay.Get(), func() {
 		c.bufMu.Lock()
 		defer c.bufMu.Unlock()
 

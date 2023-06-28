@@ -31,33 +31,68 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	vaultAddr             string
-	vaultTimeout          time.Duration
-	vaultCACert           string
-	vaultPath             string
-	vaultCacheTTL         time.Duration
-	vaultTokenFile        string
-	vaultRoleID           string
-	vaultRoleSecretIDFile string
-	vaultRoleMountPoint   string
+	configPrefix = viperutil.KeyPrefixFunc("mysql.auth_server.vault")
+	vaultAddr    = viperutil.Configure(configPrefix("addr"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_addr",
+	})
+	vaultTimeout = viperutil.Configure(configPrefix("timeout"), viperutil.Options[time.Duration]{
+		FlagName: "mysql_auth_vault_timeout",
+		Default:  10 * time.Second,
+	})
+	vaultCACert = viperutil.Configure(configPrefix("ca"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_tls_ca",
+	})
+	vaultPath = viperutil.Configure(configPrefix("path"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_path",
+	})
+	vaultCacheTTL = viperutil.Configure(configPrefix("ttl"), viperutil.Options[time.Duration]{
+		FlagName: "mysql_auth_vault_ttl",
+		Default:  30 * time.Minute,
+	})
+	vaultTokenFile = viperutil.Configure(configPrefix("tokenfile"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_tokenfile",
+	})
+	vaultRoleID = viperutil.Configure(configPrefix("roleid"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_roleid",
+	})
+	vaultRoleSecretIDFile = viperutil.Configure(configPrefix("role_secretidfile"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_role_secretidfile",
+	})
+	vaultRoleMountPoint = viperutil.Configure(configPrefix("role_mountpoint"), viperutil.Options[string]{
+		FlagName: "mysql_auth_vault_role_mountpoint",
+		Default:  "approle",
+	})
 )
 
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
-		fs.StringVar(&vaultAddr, "mysql_auth_vault_addr", "", "URL to Vault server")
-		fs.DurationVar(&vaultTimeout, "mysql_auth_vault_timeout", 10*time.Second, "Timeout for vault API operations")
-		fs.StringVar(&vaultCACert, "mysql_auth_vault_tls_ca", "", "Path to CA PEM for validating Vault server certificate")
-		fs.StringVar(&vaultPath, "mysql_auth_vault_path", "", "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
-		fs.DurationVar(&vaultCacheTTL, "mysql_auth_vault_ttl", 30*time.Minute, "How long to cache vtgate credentials from the Vault server")
-		fs.StringVar(&vaultTokenFile, "mysql_auth_vault_tokenfile", "", "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
-		fs.StringVar(&vaultRoleID, "mysql_auth_vault_roleid", "", "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
-		fs.StringVar(&vaultRoleSecretIDFile, "mysql_auth_vault_role_secretidfile", "", "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
-		fs.StringVar(&vaultRoleMountPoint, "mysql_auth_vault_role_mountpoint", "approle", "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+		fs.String("mysql_auth_vault_addr", vaultAddr.Default(), "URL to Vault server")
+		fs.Duration("mysql_auth_vault_timeout", vaultTimeout.Default(), "Timeout for vault API operations")
+		fs.String("mysql_auth_vault_tls_ca", vaultCACert.Default(), "Path to CA PEM for validating Vault server certificate")
+		fs.String("mysql_auth_vault_path", vaultPath.Default(), "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
+		fs.Duration("mysql_auth_vault_ttl", vaultCacheTTL.Default(), "How long to cache vtgate credentials from the Vault server")
+		fs.String("mysql_auth_vault_tokenfile", vaultTokenFile.Default(), "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
+		fs.String("mysql_auth_vault_roleid", vaultRoleID.Default(), "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
+		fs.String("mysql_auth_vault_role_secretidfile", vaultRoleSecretIDFile.Default(), "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
+		fs.String("mysql_auth_vault_role_mountpoint", vaultRoleMountPoint.Default(), "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+
+		viperutil.BindFlags(fs,
+			vaultAddr,
+			vaultTimeout,
+			vaultCACert,
+			vaultPath,
+			vaultCacheTTL,
+			vaultTokenFile,
+			vaultRoleID,
+			vaultRoleSecretIDFile,
+			vaultRoleMountPoint,
+		)
 	})
 }
 
@@ -80,15 +115,15 @@ type AuthServerVault struct {
 // InitAuthServerVault - entrypoint for initialization of Vault AuthServer implementation
 func InitAuthServerVault() {
 	// Check critical parameters.
-	if vaultAddr == "" {
+	if vaultAddr.Get() == "" {
 		log.Infof("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
 		return
 	}
-	if vaultPath == "" {
+	if vaultPath.Get() == "" {
 		log.Exitf("If using Vault auth server, --mysql_auth_vault_path is required.")
 	}
 
-	registerAuthServerVault(vaultAddr, vaultTimeout, vaultCACert, vaultPath, vaultCacheTTL, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint)
+	registerAuthServerVault(vaultAddr.Get(), vaultTimeout.Get(), vaultCACert.Get(), vaultPath.Get(), vaultCacheTTL.Get(), vaultTokenFile.Get(), vaultRoleID.Get(), vaultRoleSecretIDFile.Get(), vaultRoleMountPoint.Get())
 }
 
 func registerAuthServerVault(addr string, timeout time.Duration, caCertPath string, path string, ttl time.Duration, tokenFilePath string, roleID string, secretIDPath string, roleMountPoint string) {

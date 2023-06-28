@@ -22,15 +22,20 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var clientcertAuthMethod string
+var clientcertAuthMethod = viperutil.Configure("mysql.clientcert.auth_method", viperutil.Options[string]{
+	FlagName: "mysql_clientcert_auth_method",
+	Default:  string(MysqlClearPassword),
+})
 
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
-		fs.StringVar(&clientcertAuthMethod, "mysql_clientcert_auth_method", string(MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
+		fs.String("mysql_clientcert_auth_method", clientcertAuthMethod.Default(), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
+		viperutil.BindFlags(fs, clientcertAuthMethod)
 	})
 }
 
@@ -46,7 +51,7 @@ func InitAuthServerClientCert() {
 		log.Info("Not configuring AuthServerClientCert because mysql_server_ssl_ca is empty")
 		return
 	}
-	if clientcertAuthMethod != string(MysqlClearPassword) && clientcertAuthMethod != string(MysqlDialog) {
+	if clientcertAuthMethod.Get() != string(MysqlClearPassword) && clientcertAuthMethod.Get() != string(MysqlDialog) {
 		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
 
@@ -56,11 +61,11 @@ func InitAuthServerClientCert() {
 
 func newAuthServerClientCert() *AuthServerClientCert {
 	ascc := &AuthServerClientCert{
-		Method: AuthMethodDescription(clientcertAuthMethod),
+		Method: AuthMethodDescription(clientcertAuthMethod.Get()),
 	}
 
 	var authMethod AuthMethod
-	switch AuthMethodDescription(clientcertAuthMethod) {
+	switch AuthMethodDescription(clientcertAuthMethod.Get()) {
 	case MysqlClearPassword:
 		authMethod = NewMysqlClearAuthMethod(ascc, ascc)
 	case MysqlDialog:

@@ -33,12 +33,6 @@ import (
 
 const clientCertUsername = "Client Cert"
 
-func init() {
-	// These tests do not invoke the servenv.Parse codepaths, so this default
-	// does not get set by the OnParseFor hook.
-	clientcertAuthMethod = string(MysqlClearPassword)
-}
-
 func TestValidCert(t *testing.T) {
 	th := &testHandler{}
 
