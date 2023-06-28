@@ -59,15 +59,15 @@ func NewPattern(flags RegexpFlag) *Pattern {
 	}
 }
 
-func MustCompile(in string, flags RegexpFlag) *Pattern {
-	pat, err := Compile(in, flags)
+func MustCompileString(in string, flags RegexpFlag) *Pattern {
+	pat, err := CompileString(in, flags)
 	if err != nil {
 		panic(err)
 	}
 	return pat
 }
 
-func Compile(in string, flags RegexpFlag) (*Pattern, error) {
+func CompileString(in string, flags RegexpFlag) (*Pattern, error) {
 	pat := NewPattern(flags)
 	cmp := NewCompiler(pat)
 	if err := cmp.compile(in); err != nil {
@@ -78,7 +78,7 @@ func Compile(in string, flags RegexpFlag) (*Pattern, error) {
 
 func (p *Pattern) Match(input string) *Matcher {
 	m := NewMatcher(p)
-	m.Reset(input)
+	m.ResetString(input)
 	return m
 }
 

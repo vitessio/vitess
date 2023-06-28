@@ -126,6 +126,38 @@ func Convert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]
 	}
 }
 
+func Expand(dst []rune, src []byte, srcCharset Charset) []rune {
+	switch srcCharset := srcCharset.(type) {
+	case Charset_utf8mb3, Charset_utf8mb4:
+		if dst == nil {
+			return []rune(string(src))
+		}
+		dst = make([]rune, 0, len(src))
+		for _, cp := range string(src) {
+			dst = append(dst, cp)
+		}
+		return dst
+	case Charset_binary:
+		if dst == nil {
+			dst = make([]rune, 0, len(src))
+		}
+		for _, c := range src {
+			dst = append(dst, rune(c))
+		}
+		return dst
+	default:
+		if dst == nil {
+			dst = make([]rune, 0, len(src))
+		}
+		for len(src) > 0 {
+			cp, width := srcCharset.DecodeRune(src)
+			src = src[width:]
+			dst = append(dst, cp)
+		}
+		return dst
+	}
+}
+
 func ConvertFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
 	return Convert(dst, dstCharset, src, Charset_utf8mb4{})
 }

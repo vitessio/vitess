@@ -96,8 +96,7 @@ type Compiler struct {
 	newModeFlags RegexpFlag
 	setModeFlag  bool
 
-	literalChars  []rune
-	patternLength int
+	literalChars []rune
 
 	parenStack      []int
 	matchOpenParen  int
@@ -316,7 +315,6 @@ func (c *Compiler) compile(pat string) error {
 
 	c.out.pattern = pat
 	c.p = pat
-	c.patternLength = utf8.RuneCountInString(pat)
 
 	var state uint16 = 1
 	var table []regexTableEl

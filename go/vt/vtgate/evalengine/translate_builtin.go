@@ -765,6 +765,32 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			collate:  ast.cfg.Collation,
 		}, nil
 
+	case *sqlparser.RegexpLikeExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpLike{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_LIKE"},
+			Negate:   false,
+		}, nil
+
 	default:
 		return nil, translateExprNotSupported(call)
 	}

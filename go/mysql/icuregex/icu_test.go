@@ -252,7 +252,7 @@ func (tp *TestPattern) Test(t testing.TB) bool {
 				err = fmt.Errorf("PANIC: %v", r)
 			}
 		}()
-		re, err = icuregex.Compile(tp.Pattern, tp.Flags)
+		re, err = icuregex.CompileString(tp.Pattern, tp.Flags)
 		return
 	}()
 	if err != nil {
@@ -396,7 +396,7 @@ func TestCornerCases(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.Pattern, func(t *testing.T) {
-			_, err := icuregex.Compile(tc.Pattern, tc.Flags)
+			_, err := icuregex.CompileString(tc.Pattern, tc.Flags)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -411,7 +411,7 @@ func TestOne(t *testing.T) {
 	const Input = "foo\u09BDbar"
 	const Flags = 0
 
-	re, err := icuregex.Compile(Pattern, Flags)
+	re, err := icuregex.CompileString(Pattern, Flags)
 	if err != nil {
 		t.Fatalf("compilation failed: %v", err)
 	}

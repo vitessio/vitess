@@ -38,13 +38,13 @@ func TestPerl(t *testing.T) {
 	}
 	defer f.Close()
 
-	flagPat := MustCompile(`('?)(.*)\1(.*)`, 0)
+	flagPat := MustCompileString(`('?)(.*)\1(.*)`, 0)
 	flagMat := flagPat.Matcher()
 
-	groupsPat := MustCompile(`\$([+\-])\[(\d+)\]`, 0)
+	groupsPat := MustCompileString(`\$([+\-])\[(\d+)\]`, 0)
 	groupsMat := groupsPat.Matcher()
 
-	cgPat := MustCompile(`\$(\d+)`, 0)
+	cgPat := MustCompileString(`\$(\d+)`, 0)
 	cgMat := cgPat.Matcher()
 
 	group := func(m *Matcher, idx int) string {
@@ -73,7 +73,7 @@ func TestPerl(t *testing.T) {
 		lineno++
 		fields := strings.Split(scanner.Text(), "\t")
 
-		flagMat.Reset(fields[0])
+		flagMat.ResetString(fields[0])
 		ok, _ := flagMat.Matches()
 		if !ok {
 			t.Fatalf("could not match pattern+flags (line %d)", lineno)
@@ -94,7 +94,7 @@ func TestPerl(t *testing.T) {
 			flags |= UREGEX_COMMENTS
 		}
 
-		testPat, err := Compile(pattern, flags)
+		testPat, err := CompileString(pattern, flags)
 		if err != nil {
 			if cerr, ok := err.(*CompileError); ok && cerr.Code == uerror.U_REGEX_UNIMPLEMENTED {
 				continue
@@ -134,8 +134,8 @@ func TestPerl(t *testing.T) {
 		var perlExpr = fields[3]
 
 		for len(perlExpr) > 0 {
-			groupsMat.Reset(perlExpr)
-			cgMat.Reset(perlExpr)
+			groupsMat.ResetString(perlExpr)
+			cgMat.ResetString(perlExpr)
 
 			switch {
 			case strings.HasPrefix(perlExpr, "$&"):

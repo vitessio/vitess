@@ -1600,8 +1600,12 @@ func (m *Matcher) followingGCBoundary(pos int) int {
 	panic("TODO")
 }
 
-func (m *Matcher) Reset(input string) {
-	m.input = []rune(input)
+func (m *Matcher) ResetString(input string) {
+	m.Reset([]rune(input))
+}
+
+func (m *Matcher) Reset(input []rune) {
+	m.input = input
 	m.reset()
 }
 

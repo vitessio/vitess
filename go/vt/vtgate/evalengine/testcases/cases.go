@@ -151,6 +151,7 @@ var Cases = []TestCase{
 	{Run: FnUUID},
 	{Run: FnUUIDToBin},
 	{Run: DateMath},
+	{Run: Regexp},
 }
 
 func JSONPathOperations(yield Query) {
@@ -1896,5 +1897,44 @@ func DateMath(yield Query) {
 				yield(fmt.Sprintf("TIMESTAMPADD(%v, %s, %s)", i, v, d), nil)
 			}
 		}
+	}
+}
+
+func Regexp(yield Query) {
+	mysqlDocSamples := []string{
+		`'Michael!' REGEXP '.*'`,
+		`'new*\n*line' REGEXP 'new\\*.\\*line'`,
+		`'a' REGEXP '^[a-d]'`,
+		`REGEXP_LIKE('CamelCase', 'CAMELCASE')`,
+		`REGEXP_LIKE('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_LIKE('abc', 'ABC'`,
+		`REGEXP_LIKE('abc', 'ABC', 'c')`,
+		`' '  REGEXP '[[:blank:]]'`,
+		`'\t' REGEXP '[[:blank:]]'`,
+		`' '  REGEXP '[[:space:]]'`,
+		`'\t' REGEXP '[[:space:]]'`,
+		`_latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`,
+		`_koi8r  0xFF regexp _koi8r  '[[:lower:]]' COLLATE koi8r_bin`,
+		`_latin1 0xFF regexp _latin1 '[[:upper:]]' COLLATE latin1_bin`,
+		`_koi8r  0xFF regexp _koi8r  '[[:upper:]]' COLLATE koi8r_bin`,
+		`_latin1 0xF7 regexp _latin1 '[[:alpha:]]'`,
+		`_koi8r  0xF7 regexp _koi8r  '[[:alpha:]]'`,
+		`_latin1'a' regexp _latin1'A' collate latin1_general_ci`,
+		`_latin1'a' regexp _latin1'A' collate latin1_bin`,
+		`'a' regexp '\\p{alphabetic}'`,
+		`'a' regexp '\\P{alphabetic}'`,
+		`'👌🏾regexp '\\p{Emoji}\\p{Emoji_modifier}'`,
+		`'a' regexp '\\p{Lowercase_letter}'`,
+		`'a' regexp '\\p{Uppercase_letter}'`,
+		`'A' regexp '\\p{Lowercase_letter}'`,
+		`'A' regexp '\\p{Uppercase_letter}'`,
+		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
+		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
+		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }
