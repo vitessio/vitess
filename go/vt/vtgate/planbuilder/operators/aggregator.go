@@ -105,7 +105,7 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 		case sqlparser.AggrFunc:
 			aggr = createAggrFromAggrFunc(e, expr)
 		default:
-			aggr = NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+			aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
 		}
 		aggr.ColOffset = offset
 		a.Aggregations = append(a.Aggregations, aggr)
@@ -157,7 +157,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	}
 
 	if !addToGroupBy {
-		aggr := NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		aggr := NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
 		aggr.ColOffset = len(a.Columns)
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
@@ -263,7 +263,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
 	switch aggr.OpCode {
-	case opcode.AggregateRandom:
+	case opcode.AggregateAnyValue:
 		return aggr.Original.Expr
 	case opcode.AggregateCountStar:
 		return sqlparser.NewIntLiteral("1")

@@ -17,8 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -53,7 +51,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			t.exprTypes[node] = Type{Type: node.Type}
 		}
 	case sqlparser.AggrFunc:
-		code, ok := opcode.SupportedAggregates[strings.ToLower(node.AggrName())]
+		code, ok := opcode.SupportedAggregates[node.AggrName()]
 		if !ok {
 			return nil
 		}

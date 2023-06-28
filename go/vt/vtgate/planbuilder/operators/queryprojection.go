@@ -659,7 +659,7 @@ orderBy:
 				return nil, false, err
 			}
 			if !qp.isExprInGroupByExprs(ctx, getExpr) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
@@ -690,7 +690,7 @@ orderBy:
 				return true
 			}
 			if !qp.isExprInGroupByExprs(ctx, ex) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aeWrap(ex), "")
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
@@ -701,7 +701,7 @@ orderBy:
 }
 
 func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
-	code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+	code := opcode.SupportedAggregates[fnc.AggrName()]
 
 	if code == opcode.AggregateCount {
 		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
@@ -709,7 +709,8 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 		}
 	}
 
-	if fnc.IsDistinct() {
+	distinct := sqlparser.IsDistinct(fnc)
+	if distinct {
 		switch code {
 		case opcode.AggregateCount:
 			code = opcode.AggregateCountDistinct
@@ -719,7 +720,7 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 	}
 
 	aggr := NewAggr(code, fnc, aliasedExpr, aliasedExpr.ColumnName())
-	aggr.Distinct = fnc.IsDistinct()
+	aggr.Distinct = distinct
 	return aggr
 }
 

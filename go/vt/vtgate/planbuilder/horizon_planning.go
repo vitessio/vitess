@@ -432,7 +432,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 
 		opcode := popcode.AggregateSum
 		switch aggr.OpCode {
-		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateRandom:
+		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateAnyValue:
 			opcode = aggr.OpCode
 		case popcode.AggregateCount, popcode.AggregateCountStar, popcode.AggregateCountDistinct, popcode.AggregateSumDistinct:
 			if !pushed {

@@ -65,10 +65,22 @@ const (
 	AggregateCountDistinct
 	AggregateSumDistinct
 	AggregateGtid
-	AggregateRandom
+	AggregateAnyValue
 	AggregateCountStar
 	AggregateGroupConcat
 	_NumOfOpCodes // This line must be last of the opcodes!
+)
+
+var (
+	// OpcodeType keeps track of the known output types for different aggregate functions
+	OpcodeType = map[AggregateOpcode]querypb.Type{
+		AggregateCountDistinct: sqltypes.Int64,
+		AggregateCount:         sqltypes.Int64,
+		AggregateCountStar:     sqltypes.Int64,
+		AggregateSumDistinct:   sqltypes.Decimal,
+		AggregateSum:           sqltypes.Decimal,
+		AggregateGtid:          sqltypes.VarChar,
+	}
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -84,17 +96,29 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum_distinct":   AggregateSumDistinct,
 	"vgtid":          AggregateGtid,
 	"count_star":     AggregateCountStar,
-	"random":         AggregateRandom,
+	"any_value":      AggregateAnyValue,
 	"group_concat":   AggregateGroupConcat,
 }
 
+var AggregateName = map[AggregateOpcode]string{
+	AggregateCount:         "count",
+	AggregateSum:           "sum",
+	AggregateMin:           "min",
+	AggregateMax:           "max",
+	AggregateCountDistinct: "count_distinct",
+	AggregateSumDistinct:   "sum_distinct",
+	AggregateGtid:          "vgtid",
+	AggregateCountStar:     "count_star",
+	AggregateGroupConcat:   "group_concat",
+	AggregateAnyValue:      "any_value",
+}
+
 func (code AggregateOpcode) String() string {
-	for k, v := range SupportedAggregates {
-		if v == code {
-			return k
-		}
+	name := AggregateName[code]
+	if name == "" {
+		name = "ERROR"
 	}
-	return "ERROR"
+	return name
 }
 
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
@@ -116,7 +140,7 @@ func (code AggregateOpcode) Type(typ *querypb.Type) (querypb.Type, bool) {
 			return sqltypes.Blob, true
 		}
 		return sqltypes.Text, true
-	case AggregateMax, AggregateMin, AggregateRandom:
+	case AggregateMax, AggregateMin, AggregateAnyValue:
 		if typ == nil {
 			return sqltypes.Null, false
 		}
