@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -943,4 +944,47 @@ func TestHexAndBitBindVar(t *testing.T) {
 	qr, err = client.Execute("select 1 + :vtg1, 1 + :vtg2, 1 + :vtg3, 1 + :vtg4", bv)
 	require.NoError(t, err)
 	assert.Equal(t, `[[INT64(10) UINT64(10) INT64(2480) UINT64(2480)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// Test will validate drop view ddls.
+func TestShowTablesWithSizes(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+
+	setupQueries := []string{
+		`drop view if exists v1`,
+		`drop table if exists t1`,
+		`drop table if exists employees`,
+		`create table t1 (id int primary key)`,
+		`create view v1 as select * from t1`,
+		`CREATE TABLE employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+	}
+	for _, query := range setupQueries {
+		_, err := conn.ExecuteFetch(query, 1, false)
+		require.NoError(t, err)
+	}
+	expectTables := map[string]([]string){ // TABLE_TYPE, TABLE_COMMENT
+		"t1":        []string{"BASE TABLE", ""},
+		"v1":        []string{"VIEW", "VIEW"},
+		"employees": []string{"BASE TABLE", ""},
+	}
+
+	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, rs.Rows)
+
+	assert.Equal(t, len(expectTables), len(rs.Rows))
+	foundTables := map[string]([]string){}
+	for _, row := range rs.Rows {
+		tableName := row[0].ToString()
+		_, ok := expectTables[tableName]
+		assert.True(t, ok)
+		foundTables[tableName] = []string{row[1].ToString(), row[3].ToString()} // TABLE_TYPE, TABLE_COMMENT
+	}
+	assert.Equal(t, expectTables, foundTables)
 }
