@@ -22,6 +22,8 @@ limitations under the License.
 package uset
 
 import (
+	"fmt"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
@@ -53,6 +55,7 @@ const (
 type UnicodeSet struct {
 	list   []rune
 	buffer []rune
+	frozen *frozen
 }
 
 func New() *UnicodeSet {
@@ -93,6 +96,9 @@ func (u *UnicodeSet) ensureBufferCapacity(c int) {
 }
 
 func (u *UnicodeSet) addbuffer(other []rune, polarity int8) {
+	if u.frozen != nil {
+		panic("UnicodeSet is frozen")
+	}
 	u.ensureBufferCapacity(len(u.list) + len(other))
 
 	i := 1
@@ -236,6 +242,10 @@ func pinCodePoint(c *rune) rune {
 }
 
 func (u *UnicodeSet) AddRune(c rune) {
+	if u.frozen != nil {
+		panic("UnicodeSet is frozen")
+	}
+
 	// find smallest i such that c < list[i]
 	// if odd, then it is IN the set
 	// if even, then it is OUT of the set
@@ -342,6 +352,9 @@ func (u *UnicodeSet) AddAll(u2 *UnicodeSet) {
 }
 
 func (u *UnicodeSet) Complement() {
+	if u.frozen != nil {
+		panic("UnicodeSet is frozen")
+	}
 	if u.list[0] == UNICODESET_LOW {
 		copy(u.list, u.list[1:])
 		u.list = u.list[:len(u.list)-1]
@@ -366,6 +379,10 @@ func (u *UnicodeSet) RetainAll(c *UnicodeSet) {
 }
 
 func (u *UnicodeSet) retain(other []rune, polarity int8) {
+	if u.frozen != nil {
+		panic("UnicodeSet is frozen")
+	}
+
 	u.ensureBufferCapacity(len(u.list) + len(other))
 
 	i := 1
@@ -481,6 +498,9 @@ loop_end:
 }
 
 func (u *UnicodeSet) Clear() {
+	if u.frozen != nil {
+		panic("UnicodeSet is frozen")
+	}
 	u.list = u.list[:1]
 	u.list[0] = UNICODESET_HIGH
 }
@@ -530,6 +550,32 @@ func (u *UnicodeSet) RuneAt(idx int) rune {
 }
 
 func (u *UnicodeSet) ContainsRune(c rune) bool {
+	if f := u.frozen; f != nil {
+		if c <= 0xff {
+			return f.latin1Contains[c] != 0
+		} else if c <= 0x7ff {
+			return (f.table7FF[c&0x3f] & (uint32(1) << (c >> 6))) != 0
+		} else if c < 0xd800 || (c >= 0xe000 && c <= 0xffff) {
+			lead := c >> 12
+			twoBits := (f.bmpBlockBits[(c>>6)&0x3f] >> lead) & 0x10001
+			if twoBits <= 1 {
+				// All 64 code points with the same bits 15..6
+				// are either in the set or not.
+				return twoBits != 0
+			} else {
+				// Look up the code point in its 4k block of code points.
+				return f.containsSlow(u.list, c, f.list4kStarts[lead], f.list4kStarts[lead+1])
+			}
+		} else if c <= 0x10ffff {
+			// surrogate or supplementary code point
+			return f.containsSlow(u.list, c, f.list4kStarts[0xd], f.list4kStarts[0x11])
+		} else {
+			// Out-of-range code points get FALSE, consistent with long-standing
+			// behavior of UnicodeSet::contains(c).
+			return false
+		}
+	}
+
 	if c >= UNICODESET_HIGH {
 		return false
 	}
@@ -645,9 +691,34 @@ func (u *UnicodeSet) IsEmpty() bool {
 }
 
 func (u *UnicodeSet) CopyFrom(set *UnicodeSet) {
+	if u.frozen != nil {
+		panic("UnicodeSet is frozen")
+	}
 	u.list = slices.Clone(set.list)
 }
 
 func (u *UnicodeSet) Equals(other *UnicodeSet) bool {
 	return slices.Equal(u.list, other.list)
+}
+
+func (u *UnicodeSet) Freeze() *UnicodeSet {
+	u.frozen = freeze(u.list)
+	return u
+}
+
+func (u *UnicodeSet) FreezeCheck_() error {
+	if u == nil {
+		return nil
+	}
+	if u.frozen == nil {
+		return fmt.Errorf("UnicodeSet is not frozen")
+	}
+	for r := rune(0); r <= 0x10ffff; r++ {
+		want := (u.findCodePoint(r) & 1) != 0
+		got := u.ContainsRune(r)
+		if want != got {
+			return fmt.Errorf("rune '%c' (U+%04X) did not freeze", r, r)
+		}
+	}
+	return nil
 }

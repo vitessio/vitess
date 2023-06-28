@@ -48,3 +48,19 @@ func TestStaticSetContents(t *testing.T) {
 		}
 	}
 }
+
+func TestStaticFreeze(t *testing.T) {
+	for _, s := range staticPropertySets {
+		if err := s.FreezeCheck_(); err != nil {
+			t.Error(err)
+		}
+	}
+	for _, s := range staticRuleSet {
+		if err := s.FreezeCheck_(); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := staticSetUnescape.FreezeCheck_(); err != nil {
+		t.Error(err)
+	}
+}
