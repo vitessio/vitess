@@ -40,8 +40,10 @@ type (
 		typ       string
 	}
 	tableT struct {
-		// name will be a tableName object if it is used, with name: alias or name if no alias is provided
-		// name will only be a DerivedTable for moving its data around
+		// the tableT struct can be used to represent the schema of a table or a derived table
+		// in the former case name will be a sqlparser.TableName, in the latter a sqlparser.DerivedTable
+		// in order to create a query with a derived table, its AST form is retrieved from name
+		// once the derived table is aliased, name is replaced by a sqlparser.TableName with that alias
 		name sqlparser.SimpleTableExpr
 		cols []column
 	}
@@ -330,10 +332,7 @@ func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.Sele
 		// TODO: collating on strings sometimes errors
 		if col.typ == "varchar" && !testFailingQueries {
 			switch newAggregate.(type) {
-			case *sqlparser.Min:
-				i--
-				continue
-			case *sqlparser.Max:
+			case *sqlparser.Min, *sqlparser.Max:
 				i--
 				continue
 			}
