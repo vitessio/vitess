@@ -6299,7 +6299,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(0) AS id",
+            "Aggregates": "any_value(0) AS id",
             "GroupBy": "(1|2)",
             "ResultColumns": 1,
             "Inputs": [

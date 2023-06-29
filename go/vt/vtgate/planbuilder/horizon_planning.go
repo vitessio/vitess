@@ -20,17 +20,14 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 type horizonPlanning struct {
@@ -297,7 +294,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		}
 	}
 
-	aggregationExprs, err := hp.qp.AggregationExpressions(ctx)
+	aggregationExprs, _, err := hp.qp.AggregationExpressions(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +311,10 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		// all the distinct grouping aggregates use the same expression, so it should be OK to just add it once
 		order = append(order, distinctGroupBy[0].AsOrderBy())
 		oa.preProcess = true
+	}
+
+	if err = unsupportedAggregations(aggrs); err != nil {
+		return nil, err
 	}
 
 	newPlan, groupingOffsets, aggrParamOffsets, pushed, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
@@ -367,6 +368,15 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	return hp.planHaving(ctx, oa)
+}
+
+func unsupportedAggregations(aggrs []operators.Aggr) error {
+	for _, aggr := range aggrs {
+		if aggr.OpCode == popcode.AggregateGroupConcat {
+			return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Func)))
+		}
+	}
+	return nil
 }
 
 func passGroupingColumns(proj *projection, groupings []offsets, grouping []operators.GroupBy) (projGrpOffsets []offsets, err error) {
@@ -427,7 +437,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 
 		opcode := popcode.AggregateSum
 		switch aggr.OpCode {
-		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateRandom:
+		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateAnyValue:
 			opcode = aggr.OpCode
 		case popcode.AggregateCount, popcode.AggregateCountStar, popcode.AggregateCountDistinct, popcode.AggregateSumDistinct:
 			if !pushed {

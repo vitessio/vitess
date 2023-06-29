@@ -319,6 +319,20 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *AnyValue) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Argument) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -54,6 +54,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfAlterVschema(n, parent)
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
+	case *AnyValue:
+		return c.copyOnRewriteRefOfAnyValue(n, parent)
 	case *Argument:
 		return c.copyOnRewriteRefOfArgument(n, parent)
 	case *ArgumentLessWindowExpr:
@@ -927,6 +929,28 @@ func (c *cow) copyOnRewriteRefOfAndExpr(n *AndExpr, parent SQLNode) (out SQLNode
 			res := *n
 			res.Left, _ = _Left.(Expr)
 			res.Right, _ = _Right.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfAnyValue(n *AnyValue, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
+		if changedArg {
+			res := *n
+			res.Arg, _ = _Arg.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6605,6 +6629,8 @@ func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, ch
 		return n, false
 	}
 	switch n := n.(type) {
+	case *AnyValue:
+		return c.copyOnRewriteRefOfAnyValue(n, parent)
 	case *Avg:
 		return c.copyOnRewriteRefOfAvg(n, parent)
 	case *BitAnd:
@@ -6703,6 +6729,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return n, false
 	}
 	switch n := n.(type) {
+	case *AnyValue:
+		return c.copyOnRewriteRefOfAnyValue(n, parent)
 	case *ArgumentLessWindowExpr:
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *Avg:
@@ -6955,6 +6983,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 	switch n := n.(type) {
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
+	case *AnyValue:
+		return c.copyOnRewriteRefOfAnyValue(n, parent)
 	case *Argument:
 		return c.copyOnRewriteRefOfArgument(n, parent)
 	case *ArgumentLessWindowExpr:

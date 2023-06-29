@@ -189,6 +189,17 @@ func DualFormatBoolVar(fs *pflag.FlagSet, p *bool, name string, value bool, usag
 	}
 }
 
+// DualFormatVar creates a flag which supports both dashes and underscores
+func DualFormatVar(fs *pflag.FlagSet, val pflag.Value, name string, usage string) {
+	dashes := strings.Replace(name, "_", "-", -1)
+	underscores := strings.Replace(name, "-", "_", -1)
+
+	fs.Var(val, underscores, usage)
+	if dashes != underscores {
+		fs.Var(val, dashes, fmt.Sprintf("Synonym to -%s", underscores))
+	}
+}
+
 type Value[T any] interface {
 	pflag.Value
 	Get() T

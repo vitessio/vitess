@@ -319,7 +319,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 		return false, nil, vterrors.VT03012(sqlparser.String(expr))
 	}
 
-	if !aggr.IsDistinct() {
+	if !sqlparser.IsDistinct(aggr) {
 		return false, nil, nil
 	}
 	if opcode != popcode.AggregateCount && opcode != popcode.AggregateSum && opcode != popcode.AggregateCountStar {

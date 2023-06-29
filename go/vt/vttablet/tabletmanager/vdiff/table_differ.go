@@ -442,7 +442,13 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 	// We need to continue were we left off when appropriate. This can be an
 	// auto-retry on error, or a manual retry via the resume command.
 	// Otherwise the existing state will be empty and we start from scratch.
-	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(td.wd.ct.id),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return nil, err
+	}
 	cs, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, err
@@ -663,9 +669,26 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 
-		query = fmt.Sprintf(sqlUpdateTableProgress, dr.ProcessedRows, encodeString(string(lastPK)), encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.StringBindVariable(string(lastPK)),
+			sqltypes.StringBindVariable(string(rpt)),
+			sqltypes.Int64BindVariable(td.wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
 	} else {
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, dr.ProcessedRows, encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.StringBindVariable(string(rpt)),
+			sqltypes.Int64BindVariable(td.wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -674,8 +697,15 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 }
 
 func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(td.table.Name))
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+	query, err := sqlparser.ParseAndBind(sqlUpdateTableState,
+		sqltypes.StringBindVariable(string(state)),
+		sqltypes.Int64BindVariable(td.wd.ct.id),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
@@ -694,8 +724,17 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	} else {
 		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+	query, err := sqlparser.ParseAndBind(sqlUpdateTableStateAndReport,
+		sqltypes.StringBindVariable(string(state)),
+		sqltypes.Int64BindVariable(dr.ProcessedRows),
+		sqltypes.StringBindVariable(report),
+		sqltypes.Int64BindVariable(td.wd.ct.id),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
@@ -704,8 +743,14 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 }
 
 func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
-	query := fmt.Sprintf(sqlUpdateTableMismatch, vdiffID, encodeString(table))
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
+		sqltypes.Int64BindVariable(vdiffID),
+		sqltypes.StringBindVariable(table),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	return nil
@@ -777,7 +822,10 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 // rows in the table) and saves them in the vdiff_table record.
 func (td *tableDiffer) updateTableStats(dbClient binlogplayer.DBClient) error {
 	// First update the stats.
-	stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, td.wd.ct.vde.dbName, td.table.Name)
+	stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable,
+		td.wd.ct.vde.dbName,
+		td.table.Name,
+	)
 	if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
 		return err
 	}

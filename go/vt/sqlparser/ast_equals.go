@@ -122,6 +122,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Argument:
 		b, ok := inB.(*Argument)
 		if !ok {
@@ -1822,6 +1828,17 @@ func (cmp *Comparator) RefOfAndExpr(a, b *AndExpr) bool {
 	}
 	return cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right)
+}
+
+// RefOfAnyValue does deep equals between the two objects.
+func (cmp *Comparator) RefOfAnyValue(a, b *AnyValue) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Arg, b.Arg)
 }
 
 // RefOfArgument does deep equals between the two objects.
@@ -4916,6 +4933,12 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Avg:
 		b, ok := inB.(*Avg)
 		if !ok {
@@ -5180,6 +5203,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -5846,6 +5875,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Argument:
 		b, ok := inB.(*Argument)
 		if !ok {
