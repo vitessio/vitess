@@ -114,12 +114,6 @@ func pushDownAggregationThroughFilter(
 	filter *Filter,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 
-	for _, predicate := range filter.Predicates {
-		if sqlparser.ContainsAggregation(predicate) {
-			return nil, nil, errHorizonNotPlanned()
-		}
-	}
-
 	columnsNeeded := collectColNamesNeeded(ctx, filter)
 
 	// Create a new aggregator to be placed below the route.
