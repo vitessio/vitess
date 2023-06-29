@@ -310,7 +310,6 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		grouping = append(grouping, distinctGroupBy...)
 		// all the distinct grouping aggregates use the same expression, so it should be OK to just add it once
 		order = append(order, distinctGroupBy[0].AsOrderBy())
-		oa.preProcess = true
 	}
 
 	if err = unsupportedAggregations(aggrs); err != nil {
@@ -320,10 +319,6 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	newPlan, groupingOffsets, aggrParamOffsets, pushed, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
 	if err != nil {
 		return nil, err
-	}
-	if !pushed {
-		oa.preProcess = true
-		oa.aggrOnEngine = true
 	}
 
 	plan = newPlan

@@ -2029,14 +2029,14 @@ func TestSelectScatterAggregate(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32},
-			{Name: "sum(foo)", Type: sqltypes.Int32},
+			{Name: "sum(foo)", Type: sqltypes.Decimal},
 		},
 		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewInt32(int32(i*2 + 4)),
+			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -2088,13 +2088,13 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32},
-			{Name: "sum(foo)", Type: sqltypes.Int32},
+			{Name: "sum(foo)", Type: sqltypes.Decimal},
 		},
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewInt32(int32(i*2 + 4)),
+			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -3823,21 +3823,21 @@ func TestSelectAggregationData(t *testing.T) {
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|2|a"),
 			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
-			expRow:      `[[VARCHAR("a") DECIMAL(8)]]`,
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expRow:      `[[VARCHAR("a") FLOAT64(8)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|x|a"),
 			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
-			expRow:      `[[VARCHAR("a") DECIMAL(0)]]`,
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expRow:      `[[VARCHAR("a") FLOAT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|null|a"),
 			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
 			expRow:      `[[VARCHAR("a") NULL]]`,
 		},
 	}
@@ -3889,7 +3889,7 @@ func TestSelectAggregationRandom(t *testing.T) {
 	rs, err := executor.Execute(context.Background(), "TestSelectCFC", session,
 		"select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
 	require.NoError(t, err)
-	assert.Equal(t, `[[INT64(10) INT64(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
+	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
 
 func TestSelectHexAndBit(t *testing.T) {
