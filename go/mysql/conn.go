@@ -1654,3 +1654,8 @@ func (c *Conn) UpdateCancelCtx(cancel context.CancelFunc) {
 	defer c.cancelMu.Unlock()
 	c.cancel = cancel
 }
+
+// GetTestConn returns a conn for testing purpose only.
+func GetTestConn() *Conn {
+	return newConn(testConn{})
+}

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/trace"
 
@@ -295,4 +296,43 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	if listener.TLSConfig.Load() == serverConfig {
 		t.Fatalf("init tls config should have been recreated after SIGHUP")
 	}
+}
+
+// TestKillMethods test the mysql plugin for kill method calls.
+func TestKillMethods(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	vh := newVtgateHandler(&VTGate{executor: executor})
+
+	// connection does not exist
+	err := vh.KillQuery(12345)
+	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+
+	err = vh.KillConnection(context.Background(), 12345)
+	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+
+	// add a connection
+	mysqlConn := mysql.GetTestConn()
+	mysqlConn.ConnectionID = 1
+	vh.connections[1] = mysqlConn
+
+	// connection exists
+
+	// updating context.
+	ctx, cancel := context.WithCancel(context.Background())
+	mysqlConn.UpdateCancelCtx(cancel)
+
+	// kill query
+	err = vh.KillQuery(1)
+	assert.NoError(t, err)
+	require.EqualError(t, ctx.Err(), "context canceled")
+
+	// updating context.
+	ctx, cancel = context.WithCancel(context.Background())
+	mysqlConn.UpdateCancelCtx(cancel)
+
+	// kill connection
+	err = vh.KillConnection(context.Background(), 1)
+	assert.NoError(t, err)
+	require.EqualError(t, ctx.Err(), "context canceled")
+	require.True(t, mysqlConn.IsClosed())
 }

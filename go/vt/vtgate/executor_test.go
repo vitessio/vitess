@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,35 +29,29 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/safehtml/template"
-
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	"vitess.io/vitess/go/vt/topo"
-
-	"github.com/google/go-cmp/cmp"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -2717,6 +2712,78 @@ func TestExecutorFlushStmt(t *testing.T) {
 		})
 	}
 }
+
+// TestExecutorKillStmt tests the kill statements on executor.
+func TestExecutorKillStmt(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	tcs := []struct {
+		errStr string
+		query  string
+
+		expectedLog string
+	}{{
+		query:       "kill 42",
+		expectedLog: "kill connection: 42",
+	}, {
+		query:       "kill query 42",
+		expectedLog: "kill query: 42",
+	}, {
+		query:  "kill 42",
+		errStr: "connection does not exists: 42",
+	}, {
+		query:  "kill query 24",
+		errStr: "connection does not exists: 24",
+	}}
+
+	for _, tc := range tcs {
+		t.Run("execute:"+tc.query+tc.errStr, func(t *testing.T) {
+			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
+			_, err := executor.Execute(context.Background(), mysqlCtx, "TestExecutorKillStmt", NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil)
+			if tc.errStr != "" {
+				require.ErrorContains(t, err, tc.errStr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, mysqlCtx.Log[0], tc.expectedLog)
+			}
+		})
+		t.Run("stream:"+tc.query+tc.errStr, func(t *testing.T) {
+			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
+			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
+				return nil
+			})
+			if tc.errStr != "" {
+				require.ErrorContains(t, err, tc.errStr)
+			} else {
+				require.NoError(t, err)
+				require.Contains(t, mysqlCtx.Log[0], tc.expectedLog)
+			}
+		})
+	}
+}
+
+type fakeMysqlConnection struct {
+	ErrMsg string
+	Log    []string
+}
+
+func (f *fakeMysqlConnection) KillQuery(connID uint32) error {
+	if f.ErrMsg != "" {
+		return errors.New(f.ErrMsg)
+	}
+	f.Log = append(f.Log, fmt.Sprintf("kill query: %d", connID))
+	return nil
+}
+
+func (f *fakeMysqlConnection) KillConnection(ctx context.Context, connID uint32) error {
+	if f.ErrMsg != "" {
+		return errors.New(f.ErrMsg)
+	}
+	f.Log = append(f.Log, fmt.Sprintf("kill connection: %d", connID))
+	return nil
+}
+
+var _ vtgateservice.MySQLConnection = (*fakeMysqlConnection)(nil)
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), nil, "TestExecute", session, sql, nil)

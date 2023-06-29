@@ -842,7 +842,7 @@ func TestMultiStatement(t *testing.T) {
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
 	handler := &testRun{t: t, err: NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")}
 	res := sConn.handleNextCommand(handler)
-	//The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
+	// The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
 	require.True(t, res, "we should not break the connection in case of no errors")
 	// Read the result of the query and assert that it is indeed what we want. This will contain the result of the first query.
 	data, more, _, err := cConn.ReadQueryResult(100, true)
@@ -991,67 +991,6 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
-
-var _ Handler = (*testRun)(nil)
-
-type testConn struct {
-	writeToPass []bool
-	pos         int
-	queryPacket []byte
-}
-
-func (t testConn) Read(b []byte) (n int, err error) {
-	copy(b, t.queryPacket)
-	return len(b), nil
-}
-
-func (t testConn) Write(b []byte) (n int, err error) {
-	t.pos = t.pos + 1
-	if t.writeToPass[t.pos] {
-		return 0, nil
-	}
-	return 0, fmt.Errorf("error in writing to connection")
-}
-
-func (t testConn) Close() error {
-	panic("implement me")
-}
-
-func (t testConn) LocalAddr() net.Addr {
-	panic("implement me")
-}
-
-func (t testConn) RemoteAddr() net.Addr {
-	return mockAddress{s: "a"}
-}
-
-func (t testConn) SetDeadline(t1 time.Time) error {
-	panic("implement me")
-}
-
-func (t testConn) SetReadDeadline(t1 time.Time) error {
-	panic("implement me")
-}
-
-func (t testConn) SetWriteDeadline(t1 time.Time) error {
-	panic("implement me")
-}
-
-var _ net.Conn = (*testConn)(nil)
-
-type mockAddress struct {
-	s string
-}
-
-func (m mockAddress) Network() string {
-	return m.s
-}
-
-func (m mockAddress) String() string {
-	return m.s
-}
-
-var _ net.Addr = (*mockAddress)(nil)
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
