@@ -46,6 +46,7 @@ vttablet \
  --init_shard $shard \
  --init_tablet_type $tablet_type \
  --health_check_interval 5s \
+ --enable_replication_reporter \
  --backup_storage_implementation file \
  --file_backup_storage_root $VTDATAROOT/backups \
  --restore_from_backup \
@@ -55,7 +56,6 @@ vttablet \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
  --vtctld_addr http://$hostname:$vtctld_web_port/ \
  --disable_active_reparents \
- --throttler-config-via-topo --heartbeat_enable --heartbeat_interval=250ms --heartbeat_on_demand_duration=5s \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening
