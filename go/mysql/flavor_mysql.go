@@ -341,17 +341,41 @@ GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 // We join with a subquery that materializes the data from `information_schema.innodb_sys_tablespaces`
 // early for performance reasons. This effectively causes only a single read of `information_schema.innodb_tablespaces`
 // per query.
+// Note the following:
+//   - We use UNION ALL to deal differently with partitioned tables vs. non-partitioned tables.
+//     Originally, the query handled both, but that introduced "WHERE ... OR" conditions that led to poor query
+//     optimization. By separating to UNION ALL we remove all "OR" conditions.
+//   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
+//   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
+//     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
+//   - `create_options` is NULL for views, and therefore we need an additional UNION ALL to include views
 const TablesWithSize80 = `SELECT t.table_name,
-	t.table_type,
-	UNIX_TIMESTAMP(t.create_time),
-	t.table_comment,
-	SUM(i.file_size),
-	SUM(i.allocated_size)
-FROM information_schema.tables t
-LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name LIKE CONCAT(database(), '/%') AND (i.name = CONCAT(t.table_schema, '/', t.table_name) OR i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%'))
-WHERE t.table_schema = database()
-GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
+		t.table_type,
+		UNIX_TIMESTAMP(t.create_time),
+		t.table_comment,
+		i.file_size,
+		i.allocated_size
+	FROM information_schema.tables t
+		LEFT JOIN information_schema.innodb_tablespaces i
+	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8_general_ci
+	WHERE
+		t.table_schema = database() AND not t.create_options <=> 'partitioned'
+UNION ALL
+	SELECT
+		t.table_name,
+		t.table_type,
+		UNIX_TIMESTAMP(t.create_time),
+		t.table_comment,
+		SUM(i.file_size),
+		SUM(i.allocated_size)
+	FROM information_schema.tables t
+		LEFT JOIN information_schema.innodb_tablespaces i
+	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8_general_ci )
+	WHERE
+		t.table_schema = database() AND t.create_options <=> 'partitioned'
+	GROUP BY
+		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
+`
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor56) baseShowTablesWithSizes() string {
