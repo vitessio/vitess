@@ -22,7 +22,6 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Stop writes on keyspace product, tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,reftable,vdiff_order]:",
 	"/       Keyspace product, Shard 0 at Position",
 	"Wait for VReplication on stopped streams to catchup for up to 30s",
-	"The sequence caches will be reset on the source since sequence tables are being moved",
 	"Create reverse replication workflow p2c_reverse",
 	"Create journal entries on source databases",
 	"Enable writes on keyspace customer tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,reftable,vdiff_order]",
