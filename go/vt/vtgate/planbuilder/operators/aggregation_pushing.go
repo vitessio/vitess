@@ -472,6 +472,9 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
 		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+	case opcode.AggregateGtid:
+		// this is only used for SHOW GTID queries that will never contain joins
+		return vterrors.VT13001("cannot do join with vgtid")
 	default:
 		return errHorizonNotPlanned()
 	}
