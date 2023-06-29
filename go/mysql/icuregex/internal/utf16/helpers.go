@@ -52,17 +52,6 @@ func IsSurrogateLead(c rune) bool {
 	return (uint32(c) & 0x400) == 0
 }
 
-/**
- * Assuming c is a surrogate code point (U_IS_SURROGATE(c)),
- * is it a trail surrogate?
- * @param c 32-bit code point
- * @return true or false
- * @stable ICU 4.2
- */
-func IsSurrogateTrail(c rune) bool {
-	return (uint32(c) & 0x400) != 0
-}
-
 func DecodeRune(a, b rune) rune {
 	return utf16.DecodeRune(a, b)
 }

@@ -21,9 +21,7 @@ limitations under the License.
 
 package uset
 
-import (
-	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
-)
+import "vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 
 type USet uint32
 
@@ -82,11 +80,11 @@ func (u *UnicodeSet) CloseOver(attribute USet) {
 	}
 
 	foldSet := u.Clone()
-	n := u.rangeCount()
+	n := u.RangeCount()
 
 	for i := 0; i < n; i++ {
-		start := u.rangeStart(i)
-		end := u.rangeEnd(i)
+		start := u.RangeStart(i)
+		end := u.RangeEnd(i)
 
 		// full case closure
 		for cp := start; cp <= end; cp++ {

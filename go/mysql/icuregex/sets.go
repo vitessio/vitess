@@ -22,6 +22,7 @@ limitations under the License.
 package icuregex
 
 import (
+	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uset"
 )
 
@@ -30,32 +31,32 @@ var staticPropertySets [13]*uset.UnicodeSet
 func init() {
 	staticPropertySets[URX_ISWORD_SET] = func() *uset.UnicodeSet {
 		s := uset.New()
-		s.AddAll(uset.MustParsePattern(`\p{Alphabetic}`, 0))
-		s.AddAll(uset.MustParsePattern(`\p{M}`, 0))
-		s.AddAll(uset.MustParsePattern(`\p{Nd}`, 0))
-		s.AddAll(uset.MustParsePattern(`\p{Pc}`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`\p{Alphabetic}`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`\p{M}`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`\p{Nd}`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`\p{Pc}`, 0))
 		s.AddRune(0x200c)
 		s.AddRune(0x200d)
 		return s.Freeze()
 	}()
 
-	staticPropertySets[URX_ISSPACE_SET] = uset.MustParsePattern(`\p{Whitespace}`, 0).Freeze()
+	staticPropertySets[URX_ISSPACE_SET] = uprops.MustNewUnicodeSetFomPattern(`\p{Whitespace}`, 0).Freeze()
 
-	staticPropertySets[URX_GC_EXTEND] = uset.MustParsePattern(`\p{Grapheme_Extend}`, 0).Freeze()
+	staticPropertySets[URX_GC_EXTEND] = uprops.MustNewUnicodeSetFomPattern(`\p{Grapheme_Extend}`, 0).Freeze()
 	staticPropertySets[URX_GC_CONTROL] = func() *uset.UnicodeSet {
 		s := uset.New()
-		s.AddAll(uset.MustParsePattern(`[:Zl:]`, 0))
-		s.AddAll(uset.MustParsePattern(`[:Zp:]`, 0))
-		s.AddAll(uset.MustParsePattern(`[:Cc:]`, 0))
-		s.AddAll(uset.MustParsePattern(`[:Cf:]`, 0))
-		s.RemoveAll(uset.MustParsePattern(`[:Grapheme_Extend:]`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`[:Zl:]`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`[:Zp:]`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`[:Cc:]`, 0))
+		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`[:Cf:]`, 0))
+		s.RemoveAll(uprops.MustNewUnicodeSetFomPattern(`[:Grapheme_Extend:]`, 0))
 		return s.Freeze()
 	}()
-	staticPropertySets[URX_GC_L] = uset.MustParsePattern(`\p{Hangul_Syllable_Type=L}`, 0).Freeze()
-	staticPropertySets[URX_GC_LV] = uset.MustParsePattern(`\p{Hangul_Syllable_Type=LV}`, 0).Freeze()
-	staticPropertySets[URX_GC_LVT] = uset.MustParsePattern(`\p{Hangul_Syllable_Type=LVT}`, 0).Freeze()
-	staticPropertySets[URX_GC_V] = uset.MustParsePattern(`\p{Hangul_Syllable_Type=V}`, 0).Freeze()
-	staticPropertySets[URX_GC_T] = uset.MustParsePattern(`\p{Hangul_Syllable_Type=T}`, 0).Freeze()
+	staticPropertySets[URX_GC_L] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=L}`, 0).Freeze()
+	staticPropertySets[URX_GC_LV] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=LV}`, 0).Freeze()
+	staticPropertySets[URX_GC_LVT] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=LVT}`, 0).Freeze()
+	staticPropertySets[URX_GC_V] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=V}`, 0).Freeze()
+	staticPropertySets[URX_GC_T] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=T}`, 0).Freeze()
 
 	staticPropertySets[URX_GC_NORMAL] = func() *uset.UnicodeSet {
 		s := uset.New()

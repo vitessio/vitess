@@ -91,25 +91,11 @@ const (
 	kMinThreeByteValueLead = kMinTwoByteValueLead + (kMaxTwoByteValue >> 8) + 1 // 0x6c
 	kFourByteValueLead     = 0x7e
 
-	// A little more than Unicode code points. (0x11ffff)
-	kMaxThreeByteValue = ((kFourByteValueLead - kMinThreeByteValueLead) << 16) - 1
-	kFiveByteValueLead = 0x7f
-
 	// Compact delta integers.
 	kMaxOneByteDelta       = 0xbf
 	kMinTwoByteDeltaLead   = kMaxOneByteDelta + 1 // 0xc0
 	kMinThreeByteDeltaLead = 0xf0
 	kFourByteDeltaLead     = 0xfe
-	kFiveByteDeltaLead     = 0xff
-	kMaxTwoByteDelta       = ((kMinThreeByteDeltaLead - kMinTwoByteDeltaLead) << 8) - 1 // 0x2fff
-	kMaxThreeByteDelta     = ((kFourByteDeltaLead - kMinThreeByteDeltaLead) << 16) - 1  // 0xdffff
-
-	// For getState64():
-	// The remainingMatchLength_ is -1..14=(kMaxLinearMatchLength=0x10)-2
-	// so we need at least 5 bits for that.
-	// We add 2 to store it as a positive value 1..16=kMaxLinearMatchLength.
-	kState64RemainingShift = 59
-	kState64PosMask        = (uint64(1) << kState64RemainingShift) - 1
 )
 
 func (bt *BytesTrie) ContainsName(name string) bool {

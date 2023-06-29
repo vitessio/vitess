@@ -33,7 +33,7 @@ type UcpTrie struct {
 	Data16 []uint16
 	Data32 []uint32
 
-	IndexLength, DataLength int
+	IndexLength, DataLength int32
 	/** Start of the last range which ends at U+10FFFF. @internal */
 	HighStart          rune
 	Shifted12HighStart uint16
@@ -290,8 +290,8 @@ func UcpTrieFromBytes(bytes *udata.Bytes) (*UcpTrie, error) {
 	actualValueWidth := UCPTrieValueWidth(valueWidthInt)
 
 	trie := &UcpTrie{
-		IndexLength:      int(header.indexLength),
-		DataLength:       int(((header.options & UCPTRIE_OPTIONS_DATA_LENGTH_MASK) << 4) | header.dataLength),
+		IndexLength:      int32(header.indexLength),
+		DataLength:       int32(((header.options & UCPTRIE_OPTIONS_DATA_LENGTH_MASK) << 4) | header.dataLength),
 		Index3NullOffset: header.index3NullOffset,
 		DataNullOffset:   int32(((header.options & UCPTRIE_OPTIONS_DATA_NULL_OFFSET_MASK) << 8) | header.dataNullOffset),
 		HighStart:        rune(header.shiftedHighStart) << UCPTRIE_SHIFT_2,
@@ -299,52 +299,52 @@ func UcpTrieFromBytes(bytes *udata.Bytes) (*UcpTrie, error) {
 		ValueWidth:       actualValueWidth,
 	}
 	nullValueOffset := trie.DataNullOffset
-	if nullValueOffset >= int32(trie.DataLength) {
-		nullValueOffset = int32(trie.DataLength) - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+	if nullValueOffset >= trie.DataLength {
+		nullValueOffset = trie.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
 	}
 
 	trie.Shifted12HighStart = uint16((trie.HighStart + 0xfff) >> 12)
 	trie.Index = bytes.Uint16Slice(int32(header.indexLength))
 	switch actualValueWidth {
 	case UCPTRIE_VALUE_BITS_16:
-		trie.Data16 = trie.Index[trie.IndexLength:]
-		trie.NullValue = uint32(trie.Index[nullValueOffset])
+		trie.Data16 = bytes.Uint16Slice(trie.DataLength)
+		trie.NullValue = uint32(trie.Data16[nullValueOffset])
 	case UCPTRIE_VALUE_BITS_32:
-		trie.Data32 = bytes.Uint32Slice(int32(trie.DataLength))
+		trie.Data32 = bytes.Uint32Slice(trie.DataLength)
 		trie.NullValue = trie.Data32[nullValueOffset]
 	case UCPTRIE_VALUE_BITS_8:
-		trie.Data8 = bytes.Uint8Slice(int32(trie.DataLength))
+		trie.Data8 = bytes.Uint8Slice(trie.DataLength)
 		trie.NullValue = uint32(trie.Data8[nullValueOffset])
 	}
 
 	return trie, nil
 }
 
-func (trie *UcpTrie) Get(c rune) uint32 {
+func (t *UcpTrie) Get(c rune) uint32 {
 	var dataIndex int32
 	if c <= 0x7f {
 		// linear ASCII
 		dataIndex = c
 	} else {
 		var fastMax rune
-		if trie.Type == UCPTRIE_TYPE_FAST {
+		if t.Type == UCPTRIE_TYPE_FAST {
 			fastMax = 0xffff
 		} else {
 			fastMax = UCPTRIE_SMALL_MAX
 		}
-		dataIndex = trie.cpIndex(fastMax, c)
+		dataIndex = t.cpIndex(fastMax, c)
 	}
-	return trie.getValue(dataIndex)
+	return t.getValue(dataIndex)
 }
 
-func (trie *UcpTrie) getValue(dataIndex int32) uint32 {
-	switch trie.ValueWidth {
+func (t *UcpTrie) getValue(dataIndex int32) uint32 {
+	switch t.ValueWidth {
 	case UCPTRIE_VALUE_BITS_16:
-		return uint32(trie.Data16[dataIndex])
+		return uint32(t.Data16[dataIndex])
 	case UCPTRIE_VALUE_BITS_32:
-		return trie.Data32[dataIndex]
+		return t.Data32[dataIndex]
 	case UCPTRIE_VALUE_BITS_8:
-		return uint32(trie.Data8[dataIndex])
+		return uint32(t.Data8[dataIndex])
 	default:
 		// Unreachable if the trie is properly initialized.
 		return 0xffffffff
@@ -352,38 +352,38 @@ func (trie *UcpTrie) getValue(dataIndex int32) uint32 {
 }
 
 /** Internal trie getter for a code point below the fast limit. Returns the data index. @internal */
-func (trie *UcpTrie) fastIndex(c rune) int32 {
-	return int32(trie.Index[c>>UCPTRIE_FAST_SHIFT]) + (c & UCPTRIE_FAST_DATA_MASK)
+func (t *UcpTrie) fastIndex(c rune) int32 {
+	return int32(t.Index[c>>UCPTRIE_FAST_SHIFT]) + (c & UCPTRIE_FAST_DATA_MASK)
 }
 
 /** Internal trie getter for a code point at or above the fast limit. Returns the data index. @internal */
-func (trie *UcpTrie) smallIndex(c rune) int32 {
-	if c >= trie.HighStart {
-		return int32(trie.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET)
+func (t *UcpTrie) smallIndex(c rune) int32 {
+	if c >= t.HighStart {
+		return t.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
 	}
-	return trie.internalSmallIndex(c)
+	return t.internalSmallIndex(c)
 }
 
-func (trie *UcpTrie) internalSmallIndex(c rune) int32 {
+func (t *UcpTrie) internalSmallIndex(c rune) int32 {
 	i1 := c >> UCPTRIE_SHIFT_1
-	if trie.Type == UCPTRIE_TYPE_FAST {
+	if t.Type == UCPTRIE_TYPE_FAST {
 		i1 += UCPTRIE_BMP_INDEX_LENGTH - UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH
 	} else {
 		i1 += UCPTRIE_SMALL_INDEX_LENGTH
 	}
-	i3Block := int32(trie.Index[int32(trie.Index[i1])+((c>>UCPTRIE_SHIFT_2)&UCPTRIE_INDEX_2_MASK)])
+	i3Block := int32(t.Index[int32(t.Index[i1])+((c>>UCPTRIE_SHIFT_2)&UCPTRIE_INDEX_2_MASK)])
 	i3 := (c >> UCPTRIE_SHIFT_3) & UCPTRIE_INDEX_3_MASK
 	var dataBlock int32
 	if (i3Block & 0x8000) == 0 {
 		// 16-bit indexes
-		dataBlock = int32(trie.Index[i3Block+i3])
+		dataBlock = int32(t.Index[i3Block+i3])
 	} else {
 		// 18-bit indexes stored in groups of 9 entries per 8 indexes.
 		i3Block = (i3Block & 0x7fff) + (i3 & ^7) + (i3 >> 3)
 		i3 &= 7
-		dataBlock = int32(trie.Index[i3Block]) << (2 + (2 * i3)) & 0x30000
+		dataBlock = int32(t.Index[i3Block]) << (2 + (2 * i3)) & 0x30000
 		i3Block++
-		dataBlock |= int32(trie.Index[i3Block+i3])
+		dataBlock |= int32(t.Index[i3Block+i3])
 	}
 	return dataBlock + (c & UCPTRIE_SMALL_DATA_MASK)
 }
@@ -393,14 +393,14 @@ func (trie *UcpTrie) internalSmallIndex(c rune) int32 {
  * Returns the data index.
  * @internal
  */
-func (trie *UcpTrie) cpIndex(fastMax, c rune) int32 {
+func (t *UcpTrie) cpIndex(fastMax, c rune) int32 {
 	if c <= fastMax {
-		return trie.fastIndex(c)
+		return t.fastIndex(c)
 	}
 	if c <= 0x10ffff {
-		return trie.smallIndex(c)
+		return t.smallIndex(c)
 	}
-	return int32(trie.DataLength) - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET
+	return t.DataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET
 }
 
 /**
@@ -507,9 +507,9 @@ type UCPMapValueFilter func(value uint32) uint32
  * @return the range end code point, or -1 if start is not a valid code point
  * @stable ICU 63
  */
-func (trie *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateValue uint32, filter UCPMapValueFilter) (rune, uint32) {
+func (t *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateValue uint32, filter UCPMapValueFilter) (rune, uint32) {
 	if option == UCPMAP_RANGE_NORMAL {
-		return trie.getRange(start, filter)
+		return t.getRange(start, filter)
 	}
 
 	var surrEnd rune
@@ -518,7 +518,7 @@ func (trie *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateVal
 	} else {
 		surrEnd = 0xdbff
 	}
-	end, value := trie.getRange(start, filter)
+	end, value := t.getRange(start, filter)
 	if end < 0xd7ff || start > surrEnd {
 		return end, value
 	}
@@ -541,7 +541,7 @@ func (trie *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateVal
 	}
 	// See if the surrogateValue surrogate range can be merged with
 	// an immediately following range.
-	end2, value2 := trie.getRange(surrEnd+1, filter)
+	end2, value2 := t.getRange(surrEnd+1, filter)
 	if value2 == surrogateValue {
 		return end2, value
 	}
@@ -550,25 +550,25 @@ func (trie *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateVal
 
 const MAX_UNICODE = 0x10ffff
 
-func (trie *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) {
+func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) {
 	if start > MAX_UNICODE {
 		return -1, 0
 	}
 
-	if start >= trie.HighStart {
-		di := int32(trie.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET)
-		value := trie.getValue(di)
+	if start >= t.HighStart {
+		di := t.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+		value := t.getValue(di)
 		if filter != nil {
 			value = filter(value)
 		}
 		return MAX_UNICODE, value
 	}
 
-	nullValue := trie.NullValue
+	nullValue := t.NullValue
 	if filter != nil {
 		nullValue = filter(nullValue)
 	}
-	index := trie.Index
+	index := t.Index
 
 	prevI3Block := int32(-1)
 	prevBlock := int32(-1)
@@ -578,10 +578,10 @@ func (trie *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint3
 	haveValue := false
 	for {
 		var i3Block, i3, i3BlockLength, dataBlockLength int32
-		if c <= 0xffff && (trie.Type == UCPTRIE_TYPE_FAST || c <= UCPTRIE_SMALL_MAX) {
+		if c <= 0xffff && (t.Type == UCPTRIE_TYPE_FAST || c <= UCPTRIE_SMALL_MAX) {
 			i3Block = 0
 			i3 = c >> UCPTRIE_FAST_SHIFT
-			if trie.Type == UCPTRIE_TYPE_FAST {
+			if t.Type == UCPTRIE_TYPE_FAST {
 				i3BlockLength = UCPTRIE_BMP_INDEX_LENGTH
 			} else {
 				i3BlockLength = UCPTRIE_SMALL_INDEX_LENGTH
@@ -590,32 +590,32 @@ func (trie *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint3
 		} else {
 			// Use the multi-stage index.
 			i1 := c >> UCPTRIE_SHIFT_1
-			if trie.Type == UCPTRIE_TYPE_FAST {
+			if t.Type == UCPTRIE_TYPE_FAST {
 				i1 += UCPTRIE_BMP_INDEX_LENGTH - UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH
 			} else {
 				i1 += UCPTRIE_SMALL_INDEX_LENGTH
 			}
-			shft := (c >> UCPTRIE_SHIFT_2)
-			idx := int32(trie.Index[i1]) + (shft & UCPTRIE_INDEX_2_MASK)
-			i3Block = int32(trie.Index[idx])
+			shft := c >> UCPTRIE_SHIFT_2
+			idx := int32(t.Index[i1]) + (shft & UCPTRIE_INDEX_2_MASK)
+			i3Block = int32(t.Index[idx])
 			if i3Block == prevI3Block && (c-start) >= UCPTRIE_CP_PER_INDEX_2_ENTRY {
 				// The index-3 block is the same as the previous one, and filled with value.
 				c += UCPTRIE_CP_PER_INDEX_2_ENTRY
 				continue
 			}
 			prevI3Block = i3Block
-			if i3Block == int32(trie.Index3NullOffset) {
+			if i3Block == int32(t.Index3NullOffset) {
 				// This is the index-3 null block.
 				if haveValue {
 					if nullValue != value {
 						return c - 1, value
 					}
 				} else {
-					trieValue = trie.NullValue
+					trieValue = t.NullValue
 					value = nullValue
 					haveValue = true
 				}
-				prevBlock = trie.DataNullOffset
+				prevBlock = t.DataNullOffset
 				c = (c + UCPTRIE_CP_PER_INDEX_2_ENTRY) & ^(UCPTRIE_CP_PER_INDEX_2_ENTRY - 1)
 				continue
 			}
@@ -643,31 +643,31 @@ func (trie *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint3
 			} else {
 				dataMask := dataBlockLength - 1
 				prevBlock = block
-				if block == trie.DataNullOffset {
+				if block == t.DataNullOffset {
 					// This is the data null block.
 					if haveValue {
 						if nullValue != value {
 							return c - 1, value
 						}
 					} else {
-						trieValue = trie.NullValue
+						trieValue = t.NullValue
 						value = nullValue
 						haveValue = true
 					}
 					c = (c + dataBlockLength) & ^dataMask
 				} else {
 					di := block + (c & dataMask)
-					trieValue2 := trie.getValue(di)
+					trieValue2 := t.getValue(di)
 					if haveValue {
 						if trieValue2 != trieValue {
-							if filter == nil || maybeFilterValue(trieValue2, trie.NullValue, nullValue, filter) != value {
+							if filter == nil || maybeFilterValue(trieValue2, t.NullValue, nullValue, filter) != value {
 								return c - 1, value
 							}
 							trieValue = trieValue2 // may or may not help
 						}
 					} else {
 						trieValue = trieValue2
-						value = maybeFilterValue(trieValue2, trie.NullValue, nullValue, filter)
+						value = maybeFilterValue(trieValue2, t.NullValue, nullValue, filter)
 						haveValue = true
 					}
 					for {
@@ -676,9 +676,9 @@ func (trie *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint3
 							break
 						}
 						di++
-						trieValue2 = trie.getValue(di)
+						trieValue2 = t.getValue(di)
 						if trieValue2 != trieValue {
-							if filter == nil || maybeFilterValue(trieValue2, trie.NullValue, nullValue, filter) != value {
+							if filter == nil || maybeFilterValue(trieValue2, t.NullValue, nullValue, filter) != value {
 								return c - 1, value
 							}
 							trieValue = trieValue2 // may or may not help
@@ -691,14 +691,14 @@ func (trie *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint3
 				break
 			}
 		}
-		if c >= trie.HighStart {
+		if c >= t.HighStart {
 			break
 		}
 	}
 
-	di := int32(trie.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET)
-	highValue := trie.getValue(di)
-	if maybeFilterValue(highValue, trie.NullValue, nullValue, filter) != value {
+	di := t.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+	highValue := t.getValue(di)
+	if maybeFilterValue(highValue, t.NullValue, nullValue, filter) != value {
 		return c - 1, value
 	} else {
 		return MAX_UNICODE, value

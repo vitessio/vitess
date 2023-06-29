@@ -48,7 +48,11 @@ func readData(bytes *udata.Bytes) error {
 	)
 
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.FormatVersion[0] == 4
+		return info.DataFormat[0] == 0x63 &&
+			info.DataFormat[1] == 0x41 &&
+			info.DataFormat[2] == 0x53 &&
+			info.DataFormat[3] == 0x45 &&
+			info.FormatVersion[0] == 4
 	})
 	if err != nil {
 		return err

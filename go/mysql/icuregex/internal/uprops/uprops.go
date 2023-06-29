@@ -45,7 +45,11 @@ func readData(bytes *udata.Bytes) error {
 	)
 
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.FormatVersion[0] == 2
+		return info.DataFormat[0] == 0x70 &&
+			info.DataFormat[1] == 0x6e &&
+			info.DataFormat[2] == 0x61 &&
+			info.DataFormat[3] == 0x6d &&
+			info.FormatVersion[0] == 2
 	})
 	if err != nil {
 		return err
@@ -234,6 +238,9 @@ func GetIntPropertyValue(c rune, which Property) int32 {
 	if which < UCHAR_INT_START {
 		if UCHAR_BINARY_START <= which && which < UCHAR_BINARY_LIMIT {
 			prop := binProps[which]
+			if prop.contains == nil {
+				return 0
+			}
 			if prop.contains(prop, c, which) {
 				return 1
 			}

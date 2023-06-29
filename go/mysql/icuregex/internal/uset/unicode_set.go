@@ -25,8 +25,6 @@ import (
 	"fmt"
 
 	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
 // HIGH_VALUE > all valid values. 110000 for codepoints
@@ -66,25 +64,6 @@ func New() *UnicodeSet {
 
 func FromRunes(list []rune) *UnicodeSet {
 	return &UnicodeSet{list: list}
-}
-
-func ParsePattern(pattern string, flags USet) (*UnicodeSet, error) {
-	u := New()
-	if err := u.ApplyPropertyPattern(pattern); err != nil {
-		return nil, err
-	}
-	if flags&USET_CASE_INSENSITIVE != 0 {
-		u.CloseOver(USET_CASE_INSENSITIVE)
-	}
-	return u, nil
-}
-
-func MustParsePattern(pattern string, flags USet) *UnicodeSet {
-	u, err := ParsePattern(pattern, flags)
-	if err != nil {
-		panic(err)
-	}
-	return u
 }
 
 func (u *UnicodeSet) ensureBufferCapacity(c int) {
@@ -506,22 +485,22 @@ func (u *UnicodeSet) Clear() {
 }
 
 func (u *UnicodeSet) Len() (n int) {
-	count := u.rangeCount()
+	count := u.RangeCount()
 	for i := 0; i < count; i++ {
-		n += int(u.rangeEnd(i)) - int(u.rangeStart(i)) + 1
+		n += int(u.RangeEnd(i)) - int(u.RangeStart(i)) + 1
 	}
 	return
 }
 
-func (u *UnicodeSet) rangeCount() int {
+func (u *UnicodeSet) RangeCount() int {
 	return len(u.list) / 2
 }
 
-func (u *UnicodeSet) rangeStart(idx int) rune {
+func (u *UnicodeSet) RangeStart(idx int) rune {
 	return u.list[idx*2]
 }
 
-func (u *UnicodeSet) rangeEnd(idx int) rune {
+func (u *UnicodeSet) RangeEnd(idx int) rune {
 	return u.list[idx*2+1] - 1
 }
 
@@ -551,7 +530,9 @@ func (u *UnicodeSet) RuneAt(idx int) rune {
 
 func (u *UnicodeSet) ContainsRune(c rune) bool {
 	if f := u.frozen; f != nil {
-		if c <= 0xff {
+		if c < 0 {
+			return false
+		} else if c <= 0xff {
 			return f.latin1Contains[c] != 0
 		} else if c <= 0x7ff {
 			return (f.table7FF[c&0x3f] & (uint32(1) << (c >> 6))) != 0
@@ -628,12 +609,6 @@ func (u *UnicodeSet) findCodePoint(c rune) int {
 	return hi
 }
 
-func (u *UnicodeSet) AddCategory(mask uint32) {
-	set := New()
-	set.ApplyIntPropertyValue(uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(mask))
-	u.AddAll(set)
-}
-
 func (u *UnicodeSet) AddString(chars string) {
 	for _, c := range chars {
 		u.AddRune(c)
@@ -642,7 +617,7 @@ func (u *UnicodeSet) AddString(chars string) {
 
 type Filter func(ch rune) bool
 
-func (u *UnicodeSet) applyFilter(inclusions *UnicodeSet, filter Filter) {
+func (u *UnicodeSet) ApplyFilter(inclusions *UnicodeSet, filter Filter) {
 	// Logically, walk through all Unicode characters, noting the start
 	// and end of each range for which filter.contain(c) is
 	// true.  Add each range to a set.
@@ -656,12 +631,12 @@ func (u *UnicodeSet) applyFilter(inclusions *UnicodeSet, filter Filter) {
 	u.Clear()
 
 	startHasProperty := rune(-1)
-	limitRange := inclusions.rangeCount()
+	limitRange := inclusions.RangeCount()
 
 	for j := 0; j < limitRange; j++ {
 		// get current range
-		start := inclusions.rangeStart(j)
-		end := inclusions.rangeEnd(j)
+		start := inclusions.RangeStart(j)
+		end := inclusions.RangeEnd(j)
 
 		// for all the code points in the range, process
 		for ch := start; ch <= end; ch++ {

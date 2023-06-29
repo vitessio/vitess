@@ -46,19 +46,19 @@ func (u *UnicodeSet) ToPattern(w *strings.Builder, escapeUnprintable bool) {
 	//      }
 	//  }
 
-	count := u.rangeCount()
+	count := u.RangeCount()
 
 	// If the set contains at least 2 intervals and includes both
 	// MIN_VALUE and MAX_VALUE, then the inverse representation will
 	// be more economical.
-	if count > 1 && u.rangeStart(0) == MIN_VALUE && u.rangeEnd(count-1) == MAX_VALUE {
+	if count > 1 && u.RangeStart(0) == MIN_VALUE && u.RangeEnd(count-1) == MAX_VALUE {
 
 		// Emit the inverse
 		w.WriteByte('^')
 
 		for i := 1; i < count; i++ {
-			start := u.rangeEnd(i-1) + 1
-			end := u.rangeStart(i) - 1
+			start := u.RangeEnd(i-1) + 1
+			end := u.RangeStart(i) - 1
 			u.appendToPattern(w, start, escapeUnprintable)
 			if start != end {
 				if (start + 1) != end {
@@ -70,8 +70,8 @@ func (u *UnicodeSet) ToPattern(w *strings.Builder, escapeUnprintable bool) {
 	} else {
 		// Default; emit the ranges as pairs
 		for i := 0; i < count; i++ {
-			start := u.rangeStart(i)
-			end := u.rangeEnd(i)
+			start := u.RangeStart(i)
+			end := u.RangeEnd(i)
 			u.appendToPattern(w, start, escapeUnprintable)
 			if start != end {
 				if (start + 1) != end {

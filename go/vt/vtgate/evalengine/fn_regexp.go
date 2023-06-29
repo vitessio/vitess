@@ -43,10 +43,6 @@ func evalRegexpFlags(env *ExpressionEnv, match Expr, flags icuregex.RegexpFlag) 
 	return flags, nil
 }
 
-func regexpMatcher(input, pat, flags eval) (*icuregex.Matcher, error) {
-
-}
-
 func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 	input, err := r.Arguments[0].eval(env)
 	if err != nil || input == nil {

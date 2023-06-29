@@ -212,7 +212,7 @@ func TestPerl(t *testing.T) {
 		}
 
 		if expectedS != string(result) {
-			t.Errorf("line %d: Incorrect Perl expression results\nwant: %s\ngot:  %s", lineno, expectedS, result)
+			t.Errorf("line %d: Incorrect Perl expression results for %s\nwant: %q\ngot: %q", lineno, pattern, expectedS, result)
 		}
 	}
 }

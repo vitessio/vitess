@@ -79,7 +79,11 @@ func loadLayouts() {
 
 func readData(bytes *udata.Bytes) error {
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.FormatVersion[0] == 1
+		return info.DataFormat[0] == 0x4c &&
+			info.DataFormat[1] == 0x61 &&
+			info.DataFormat[2] == 0x79 &&
+			info.DataFormat[3] == 0x6f &&
+			info.FormatVersion[0] == 1
 	})
 	if err != nil {
 		return err

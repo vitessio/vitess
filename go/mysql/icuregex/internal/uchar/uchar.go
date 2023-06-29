@@ -40,7 +40,11 @@ var uprops struct {
 
 func readData(bytes *udata.Bytes) error {
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.FormatVersion[0] == 7
+		return info.DataFormat[0] == 0x55 &&
+			info.DataFormat[1] == 0x50 &&
+			info.DataFormat[2] == 0x72 &&
+			info.DataFormat[3] == 0x6f &&
+			info.FormatVersion[0] == 7
 	})
 	if err != nil {
 		return err

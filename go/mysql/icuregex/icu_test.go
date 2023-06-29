@@ -156,7 +156,7 @@ func (tp *TestPattern) parseMatch(input string) error {
 		} else {
 			num, err := strconv.Atoi(groupNum)
 			if err != nil {
-				return fmt.Errorf("bad group number %q: %v", groupNum, err)
+				return fmt.Errorf("bad group number %q: %w", groupNum, err)
 			}
 
 			if num >= len(tp.Groups) {
@@ -407,8 +407,8 @@ func TestCornerCases(t *testing.T) {
 func TestOne(t *testing.T) {
 	icuregex.Dumper = os.Stderr
 
-	const Pattern = `\p{Indic_Syllabic_Category=Avagraha}`
-	const Input = "foo\u09BDbar"
+	const Pattern = `\p{CaseIgnorable}`
+	const Input = "foo.bar"
 	const Flags = 0
 
 	re, err := icuregex.CompileString(Pattern, Flags)

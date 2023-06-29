@@ -23,7 +23,9 @@ package uprops
 
 import (
 	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/mysql/icuregex/internal/normalizer"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ubidi"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
@@ -51,6 +53,8 @@ var binProps = [UCHAR_BINARY_LIMIT]*BinaryProperty{
 	 *
 	 * Properties with mask==0 are handled in code.
 	 * For them, column is the UPropertySource value.
+	 *
+	 * See also https://unicode-org.github.io/icu/userguide/strings/properties.html
 	 */
 	{1, U_MASK(UPROPS_ALPHABETIC), defaultContains},
 	{1, U_MASK(UPROPS_ASCII_HEX_DIGIT), defaultContains},
@@ -89,11 +93,11 @@ var binProps = [UCHAR_BINARY_LIMIT]*BinaryProperty{
 	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CASE_SENSITIVE
 	{1, U_MASK(UPROPS_S_TERM), defaultContains},
 	{1, U_MASK(UPROPS_VARIATION_SELECTOR), defaultContains},
-	{UPROPS_SRC_NFC, 0, isNormInert},  // UCHAR_NFD_INERT
-	{UPROPS_SRC_NFKC, 0, isNormInert}, // UCHAR_NFKD_INERT
-	{UPROPS_SRC_NFC, 0, isNormInert},  // UCHAR_NFC_INERT
-	{UPROPS_SRC_NFKC, 0, isNormInert}, // UCHAR_NFKC_INERT
-	{UPROPS_SRC_NFC_CANON_ITER, 0, isCanonSegmentStarter},
+	{UPROPS_SRC_NFC, 0, isNormInert},    // UCHAR_NFD_INERT
+	{UPROPS_SRC_NFKC, 0, isNormInert},   // UCHAR_NFKD_INERT
+	{UPROPS_SRC_NFC, 0, isNormInert},    // UCHAR_NFC_INERT
+	{UPROPS_SRC_NFKC, 0, isNormInert},   // UCHAR_NFKC_INERT
+	{UPROPS_SRC_NFC_CANON_ITER, 0, nil}, // Segment_Starter is currently unsupported
 	{1, U_MASK(UPROPS_PATTERN_SYNTAX), defaultContains},
 	{1, U_MASK(UPROPS_PATTERN_WHITE_SPACE), defaultContains},
 	{UPROPS_SRC_CHAR_AND_PROPSVEC, 0, isPOSIX_alnum},
@@ -108,7 +112,7 @@ var binProps = [UCHAR_BINARY_LIMIT]*BinaryProperty{
 	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_TITLECASED
 	{UPROPS_SRC_CASE_AND_NORM, 0, changesWhenCasefolded},
 	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_CASEMAPPED
-	{UPROPS_SRC_NFKC_CF, 0, changesWhenNFKC_Casefolded},
+	{UPROPS_SRC_NFKC_CF, 0, nil},                     // Changes_When_NFKC_Casefolded is currently unsupported
 	{2, U_MASK(UPROPS_2_EMOJI), defaultContains},
 	{2, U_MASK(UPROPS_2_EMOJI_PRESENTATION), defaultContains},
 	{2, U_MASK(UPROPS_2_EMOJI_MODIFIER), defaultContains},
@@ -131,12 +135,17 @@ func isRegionalIndicator(prop *BinaryProperty, c rune, which Property) bool {
 	return 0x1F1E6 <= c && c <= 0x1F1FF
 }
 
-func changesWhenNFKC_Casefolded(prop *BinaryProperty, c rune, which Property) bool {
-	panic("TODO")
-}
-
 func changesWhenCasefolded(prop *BinaryProperty, c rune, which Property) bool {
-	panic("TODO")
+	if c < 0 {
+		return false
+	}
+
+	nfd := normalizer.Nfc().Decompose(c)
+	if nfd == nil {
+		nfd = []rune{c}
+	}
+	folded := ucase.FoldRunes(nfd)
+	return !slices.Equal(nfd, folded)
 }
 
 func isPOSIX_xdigit(prop *BinaryProperty, c rune, which Property) bool {
@@ -159,16 +168,13 @@ func isPOSIX_alnum(prop *BinaryProperty, c rune, which Property) bool {
 	return (uchar.GetUnicodeProperties(c, 1)&U_MASK(UPROPS_ALPHABETIC)) != 0 || uchar.IsDigit(c)
 }
 
-func isCanonSegmentStarter(prop *BinaryProperty, c rune, which Property) bool {
-	panic("TODO")
-}
-
 func isJoinControl(prop *BinaryProperty, c rune, which Property) bool {
 	return ubidi.IsJoinControl(c)
 }
 
 func hasFullCompositionExclusion(prop *BinaryProperty, c rune, which Property) bool {
-	panic("TODO")
+	impl := normalizer.Nfc()
+	return impl.IsCompNo(impl.GetNorm16(c))
 }
 
 func caseBinaryPropertyContains(prop *BinaryProperty, c rune, which Property) bool {
@@ -217,7 +223,8 @@ func HasBinaryPropertyUcase(c rune, which Property) bool {
 }
 
 func isNormInert(prop *BinaryProperty, c rune, which Property) bool {
-	panic("TODO")
+	mode := normalizer.UNormalizationMode(int32(which) - int32(UCHAR_NFD_INERT) + int32(normalizer.UNORM_NFD))
+	return normalizer.IsInert(c, mode)
 }
 
 func HasBinaryProperty(c rune, which Property) bool {
@@ -225,5 +232,8 @@ func HasBinaryProperty(c rune, which Property) bool {
 		return false
 	}
 	prop := binProps[which]
+	if prop.contains == nil {
+		return false
+	}
 	return prop.contains(prop, c, which)
 }

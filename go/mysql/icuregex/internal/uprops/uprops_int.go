@@ -22,8 +22,9 @@ limitations under the License.
 package uprops
 
 import (
+	"vitess.io/vitess/go/mysql/icuregex/internal/normalizer"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ubidi"
-	uchar2 "vitess.io/vitess/go/mysql/icuregex/internal/uchar"
+	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ulayout"
 )
 
@@ -154,7 +155,7 @@ var intProps = [UCHAR_INT_LIMIT - UCHAR_INT_START]*IntProperty{
 	{UPROPS_SRC_NFC, 0, 0xff, getCombiningClass},
 	{2, UPROPS_DT_MASK, 0, defaultGetValue},
 	{0, UPROPS_EA_MASK, UPROPS_EA_SHIFT, defaultGetValue},
-	{UPROPS_SRC_CHAR, 0, uchar2.U_CHAR_CATEGORY_COUNT - 1, getGeneralCategory},
+	{UPROPS_SRC_CHAR, 0, uchar.U_CHAR_CATEGORY_COUNT - 1, getGeneralCategory},
 	{UPROPS_SRC_BIDI, 0, 0, getJoiningGroup},
 	{UPROPS_SRC_BIDI, 0, 0, getJoiningType},
 	{2, UPROPS_LB_MASK, UPROPS_LB_SHIFT, defaultGetValue},
@@ -197,15 +198,15 @@ func getBiDiPairedBracketType(prop *IntProperty, c rune, which Property) int32 {
 }
 
 func getTrailCombiningClass(prop *IntProperty, c rune, which Property) int32 {
-	panic("TODO")
+	return int32(normalizer.Nfc().GetFCD16(c) & 0xff)
 }
 
 func getLeadCombiningClass(prop *IntProperty, c rune, which Property) int32 {
-	panic("TODO")
+	return int32(normalizer.Nfc().GetFCD16(c) >> 8)
 }
 
 func getNormQuickCheck(prop *IntProperty, c rune, which Property) int32 {
-	panic("TODO")
+	return int32(normalizer.QuickCheck(c, normalizer.UNormalizationMode(int32(which)-int32(UCHAR_NFD_QUICK_CHECK)+int32(normalizer.UNORM_NFD))))
 }
 
 /*
@@ -231,7 +232,7 @@ var gcbToHst = []HangunSyllableType{
 
 func getHangulSyllableType(prop *IntProperty, c rune, which Property) int32 {
 	/* see comments on gcbToHst[] above */
-	gcb := (int32(uchar2.GetUnicodeProperties(c, 2)) & UPROPS_GCB_MASK) >> UPROPS_GCB_SHIFT
+	gcb := (int32(uchar.GetUnicodeProperties(c, 2)) & UPROPS_GCB_MASK) >> UPROPS_GCB_SHIFT
 
 	if gcb < int32(len(gcbToHst)) {
 		return int32(gcbToHst[gcb])
@@ -245,7 +246,7 @@ func getScript(_ *IntProperty, c rune, _ Property) int32 {
 }
 
 func getNumericType(prop *IntProperty, c rune, which Property) int32 {
-	ntv := uchar2.NumericTypeValue(c)
+	ntv := uchar.NumericTypeValue(c)
 	return int32(ntvGetType(ntv))
 }
 
@@ -258,15 +259,15 @@ func getJoiningGroup(prop *IntProperty, c rune, which Property) int32 {
 }
 
 func getGeneralCategory(prop *IntProperty, c rune, which Property) int32 {
-	return int32(uchar2.CharType(c))
+	return int32(uchar.CharType(c))
 }
 
 func getCombiningClass(prop *IntProperty, c rune, which Property) int32 {
-	panic("TODO")
+	return int32(normalizer.Nfc().CombiningClass(c))
 }
 
 func defaultGetValue(prop *IntProperty, c rune, which Property) int32 {
-	return int32(uchar2.GetUnicodeProperties(c, int(prop.column))&prop.mask) >> prop.shift
+	return int32(uchar.GetUnicodeProperties(c, int(prop.column))&prop.mask) >> prop.shift
 }
 
 func getBiDiClass(prop *IntProperty, c rune, which Property) int32 {
@@ -275,11 +276,11 @@ func getBiDiClass(prop *IntProperty, c rune, which Property) int32 {
 
 func ntvGetType(ntv uint16) NumericType {
 	switch {
-	case ntv == uchar2.UPROPS_NTV_NONE:
+	case ntv == uchar.UPROPS_NTV_NONE:
 		return U_NT_NONE
-	case ntv < uchar2.UPROPS_NTV_DIGIT_START:
+	case ntv < uchar.UPROPS_NTV_DIGIT_START:
 		return U_NT_DECIMAL
-	case ntv < uchar2.UPROPS_NTV_NUMERIC_START:
+	case ntv < uchar.UPROPS_NTV_NUMERIC_START:
 		return U_NT_DIGIT
 	default:
 		return U_NT_NUMERIC

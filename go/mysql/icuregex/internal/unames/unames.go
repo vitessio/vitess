@@ -23,7 +23,6 @@ package unames
 
 import (
 	"bytes"
-	_ "embed"
 	"math"
 	"strconv"
 	"strings"
@@ -38,20 +37,18 @@ var charNamesOnce sync.Once
 var charNames *UCharNames
 
 func loadCharNames() {
-	validCharNames := func(info *udata.DataInfo) bool {
-		return info.Size >= 20 &&
-			info.IsBigEndian == 0 &&
-			info.CharsetFamily == 0 &&
-			info.DataFormat[0] == 0x75 && /* dataFormat="unam" */
-			info.DataFormat[1] == 0x6e &&
-			info.DataFormat[2] == 0x61 &&
-			info.DataFormat[3] == 0x6d &&
-			info.FormatVersion[0] == 1
-	}
-
 	charNamesOnce.Do(func() {
 		b := udata.NewBytes(icudata.UNames)
-		if err := b.ReadHeader(validCharNames); err != nil {
+		if err := b.ReadHeader(func(info *udata.DataInfo) bool {
+			return info.Size >= 20 &&
+				info.IsBigEndian == 0 &&
+				info.CharsetFamily == 0 &&
+				info.DataFormat[0] == 0x75 && /* dataFormat="unam" */
+				info.DataFormat[1] == 0x6e &&
+				info.DataFormat[2] == 0x61 &&
+				info.DataFormat[3] == 0x6d &&
+				info.FormatVersion[0] == 1
+		}); err != nil {
 			panic(err)
 		}
 		charNames = (*UCharNames)(b.Pointer())

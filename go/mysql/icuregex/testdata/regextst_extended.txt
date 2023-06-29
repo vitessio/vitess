@@ -74,6 +74,7 @@
 "\p{Bidi_Class=LeftToRight}"  "<0>Goodbye</0>"
 "\p{Bidi_Class=RightToLeft}"  "Goodbye"
 "\p{Bidi_Class=LeftToRight}"  "؈"
+"\p{Bidi_Paired_Bracket_Type=Open}"  "Good<0>(</0>ye"
 
 "\p{Soft_Dotted}" "Good<0>i</0>ye"
 
@@ -82,7 +83,44 @@
 "\p{Changes_When_Uppercased}" "G<0>oodbye</0>"
 "\p{Changes_When_CaseMapped}" " <0>Goodbye</0>3"
 "\p{Cased}" " <0>G</0>oodbye3"
+"\p{CaseIgnorable}" "foo<0>.</0>bar"
 
 "\p{Indic_Syllabic_Category=Avagraha}" "foo<0>\u09BD</0>bar"
 "\p{IndicPositionalCategory=Top_And_Left_And_Right}" "foo<0>\u0B4C</0>bar"
 "\p{VerticalOrientation=U}" "foo<0>\uA015</0>bar"
+
+"\p{Canonical_Combining_Class=Nukta}" "foo<0>\u093C</0>bar"
+"\p{Lead_Canonical_Combining_Class=Above}" "foo<0>\u0300</0>bar"
+"\p{Trail_Canonical_Combining_Class=Above}" "foo<0>\u0300</0>bar"
+
+"\p{Changes_When_Casefolded}"   "<0>\uFB03</0>Goodbye"
+"\p{Changes_When_Casefolded}" 2 "\uFB03<0>G</0>oodbye"
+
+"\p{NFC_Inert}" "foo<0>\uFB03</0>bar"
+"\p{NFKC_Inert}" "foo<0>\uFB03</0>bar"
+"\P{NFD_Inert}" "foo<0>À</0>bar"
+"\P{NFKD_Inert}" "foo<0>À</0>bar"
+
+"\p{NFC_Quick_Check=No}" "foo<0>\u0340</0>bar"
+"\p{NFKC_Quick_Check=No}" "foo<0>\u0340</0>bar"
+"\p{NFD_Quick_Check=No}" "foo<0>\u00C0</0>bar"
+"\p{NFKD_Quick_Check=No}" "foo<0>\u00C0</0>bar"
+
+"\p{Full_Composition_Exclusion}" "foo<0>\u0374</0>bar"
+
+"\p{Numeric_Type=Decimal}" "foo<0>3</0>bar"
+"\p{Joining_Type=Dual_Joining}" "foo<0>\u0626</0>bar"
+"\p{Joining_Group=African_Feh}" "foo<0>\u08BB</0>bar"
+"\p{General_Category=Close_Punctuation}" "foo[bar"
+"\p{General_Category=Close_Punctuation}" "foo<0>]</0>]bar"
+"\p{General_Category=Close_Punctuation}" 2 "foo]<0>]</0>bar"
+
+"\p{Hangul_Syllable_Type=Not_Applicable}" "<0>f</0>"
+"\p{Hangul_Syllable_Type=Leading_Jamo}" "foo<0>\u1100</0>bar"
+
+"\p{Regional_Indicator=Yes}" "foo<0>\U0001F1E6</0>bar"
+
+# Currently unsupported property classes below. They require
+# significant additional code to support.
+"\p{Changes_When_NFKC_Casefolded}" E "foo<0>\uFB03</0>bar"
+"\p{Segment_Starter}" E "<0>\uFB03</0>Goodbye"

@@ -31,9 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
-type BreakIterator interface {
-}
-
 const TIMER_INITIAL_VALUE = 10000
 const DEFAULT_TIMEOUT = 3
 const DEFAULT_STACK_LIMIT = 0
@@ -88,9 +85,6 @@ type Matcher struct {
 	//   Kept separately from fTime to keep as much
 	//   code as possible out of the inline
 	//   StateSave function.
-
-	wordBreakItr BreakIterator
-	gcBreakItr   BreakIterator
 }
 
 func NewMatcher(pat *Pattern) *Matcher {
@@ -129,7 +123,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 	pat := m.pattern.compiledPat
 	inputText := m.input
-	inputLength := len(inputText)
 	litText := m.pattern.literalText
 	sets := m.pattern.sets
 
@@ -178,12 +171,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			nextOp := pat[*fp.patIdx()] // Fetch the second operand
 			*fp.patIdx()++
 			stringLen := nextOp.Value()
-			if nextOp.Type() != URX_STRING_LEN {
-				panic("URX_STRING_LEN expected")
-			}
-			if stringLen < 2 {
-				panic("stringLen < 2, would have expected URX_ONECHAR for a single character")
-			}
 
 			patternString := litText[stringStartIdx:]
 			var patternStringIndex int
@@ -227,23 +214,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 		//             opValue+2 - the start of a capture group whose end
 		//                          has not yet been reached (and might not ever be).
 		case URX_START_CAPTURE:
-			if !(op.Value() >= 0 && op.Value() < m.stack.frameSize-3) {
-				panic("failed assertion: opValue >= 0 && opValue < fFrameSize-3")
-			}
 			*fp.extra(op.Value() + 2) = *fp.inputIdx()
 		case URX_END_CAPTURE:
-			if !(op.Value() >= 0 && op.Value() < m.stack.frameSize-3) {
-				panic("failed assertion: opValue >= 0 && opValue < fFrameSize-3")
-			}
-			if *fp.extra(op.Value() + 2) < 0 {
-				panic("start pos for this group must be set")
-			}
-
 			*fp.extra(op.Value()) = *fp.extra(op.Value() + 2) // Tentative start becomes real.
 			*fp.extra(op.Value() + 1) = *fp.inputIdx()        // End position
-			if !(*fp.extra(op.Value()) <= *fp.extra(op.Value() + 1)) {
-				panic("failed assertion: fp->fExtra[opValue] <= fp->fExtra[opValue+1]")
-			}
 
 		case URX_DOLLAR: //  $, test for End of line
 			if *fp.inputIdx() < m.anchorLimit-2 {
@@ -346,16 +320,9 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// Not at the start of a line.  Fail.
 			fp = m.stack.popFrame()
 		case URX_CARET_M_UNIX: //  ^, test for start of line in mulit-line + Unix-line mode
-			if !(*fp.inputIdx() >= m.anchorStart) {
-				panic("failed assertion: *fp.inputIdx() >= m.anchorStart")
-			}
 			if *fp.inputIdx() <= m.anchorStart {
 				// We are at the start input.  Success.
 				break
-			}
-			// Check whether character just before the current pos is a new-line
-			if !(*fp.inputIdx() <= m.anchorLimit) {
-				panic("failed assertion: *fp.inputIdx() <= m.anchorLimit")
 			}
 
 			c := charAt(inputText, *fp.inputIdx()-1)
@@ -482,12 +449,8 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			success := (op.Value() & URX_NEG_SET) == URX_NEG_SET
 			negOp := op.Value() & ^URX_NEG_SET
 
-			if !(negOp > 0 && negOp < URX_LAST_SET) {
-				panic("assertion failed: negOp > 0 && negOp < URX_LAST_SET")
-			}
-
 			c := charAt(inputText, *fp.inputIdx())
-			s := staticPropertySets[op.Value()]
+			s := staticPropertySets[negOp]
 			if s.ContainsRune(c) {
 				success = !success
 			}
@@ -505,10 +468,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				m.hitEnd = true
 				fp = m.stack.popFrame()
 				break
-			}
-
-			if !(op.Value() > 0 && op.Value() < URX_LAST_SET) {
-				panic("assertion failed: op.Value() > 0 && op.Value() < URX_LAST_SET")
 			}
 
 			c := charAt(inputText, *fp.inputIdx())
@@ -530,9 +489,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// There is input left.  Pick up one char and test it for set membership.
 			c := charAt(inputText, *fp.inputIdx())
 
-			if !(op.Value() > 0 && op.Value() < len(m.pattern.sets)) {
-				panic("assertion failed: op.Value() > 0 && op.Value() < fSets->size()")
-			}
 			s := sets[op.Value()]
 			if s.ContainsRune(c) {
 				*fp.inputIdx()++
@@ -596,60 +552,41 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				*fp.inputIdx()++
 			}
 		case URX_JMP:
-			*fp.patIdx() = int(op.Value())
+			*fp.patIdx() = op.Value()
 
 		case URX_FAIL:
 			isMatch = false
 			goto breakFromLoop
 
 		case URX_JMP_SAV:
-			if !(op.Value() > 0 && int(op.Value()) < len(pat)) {
-				panic("assertion failed: op.Value() > 0 && op.Value() < fPattern->fCompiledPat->size()")
-			}
 			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()) // State save to loc following current
 			if err != nil {
 				return err
 			}
-			*fp.patIdx() = int(op.Value()) // Then JMP.
+			*fp.patIdx() = op.Value() // Then JMP.
 
 		case URX_JMP_SAV_X:
 			// This opcode is used with (x)+, when x can match a zero length string.
 			// Same as JMP_SAV, except conditional on the match having made forward progress.
 			// Destination of the JMP must be a URX_STO_INP_LOC, from which we get the
 			//   data address of the input position at the start of the loop.
-			if !(op.Value() > 0 && int(op.Value()) < len(pat)) {
-				panic("assertion failed: op.Value() > 0 && op.Value() < fPattern->fCompiledPat->size()")
-			}
 			stoOp := pat[op.Value()-1]
-			if !(stoOp.Type() == URX_STO_INP_LOC) {
-				panic("assertion failed: stoOp.Type() == URX_STO_INP_LOC")
-			}
-
-			frameLoc := int(stoOp.Value())
-			if !(frameLoc >= 0 && frameLoc < m.stack.frameSize) {
-				panic("assertion failed: frameLoc >= 0 && frameLoc < fFrameSize")
-			}
+			frameLoc := stoOp.Value()
 
 			prevInputIdx := *fp.extra(frameLoc)
-			if !(prevInputIdx <= *fp.inputIdx()) {
-				panic("assertion failed: prevInputIdx <= *fp.inputIdx()")
-			}
 			if prevInputIdx < *fp.inputIdx() {
 				// The match did make progress.  Repeat the loop.
 				fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()) // State save to loc following current
 				if err != nil {
 					return err
 				}
-				*fp.patIdx() = int(op.Value()) // Then JMP.
+				*fp.patIdx() = op.Value() // Then JMP.
 				*fp.extra(frameLoc) = *fp.inputIdx()
 			}
 			// If the input position did not advance, we do nothing here,
 			//   execution will fall out of the loop.
 
 		case URX_CTR_INIT:
-			if !(op.Value() >= 0 && int(op.Value()) < m.stack.frameSize-2) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fFrameSize-2")
-			}
 			*fp.extra(op.Value()) = 0 // Set the loop counter variable to zero
 
 			// Pick up the three extra operands that CTR_INIT has, and
@@ -660,13 +597,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			loopLoc := pat[instOperandLoc].Value()
 			minCount := int(pat[instOperandLoc+1])
 			maxCount := int(pat[instOperandLoc+2])
-
-			if !(minCount >= 0 && maxCount >= minCount || maxCount == -1) {
-				panic("assertion failed: minCount >= 0 && maxCount >= minCount || maxCount == -1")
-			}
-			if !(int(loopLoc) >= *fp.patIdx()) {
-				panic("assertion failed: loopLoc >= *fp.patIdx()")
-			}
 
 			if minCount == 0 {
 				fp, err = m.StateSave(*fp.inputIdx(), loopLoc+1)
@@ -681,22 +611,13 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 
 		case URX_CTR_LOOP:
-			if !(op.Value() >= 0 && op.Value() < *fp.patIdx()-2) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < *fp.patIdx()-2")
-			}
 			initOp := pat[op.Value()]
-			if !(initOp.Type() == URX_CTR_INIT) {
-				panic("assertion failed: initOp.Type() == URX_CTR_INIT")
-			}
 			opValue := initOp.Value()
 			pCounter := fp.extra(opValue)
 			minCount := int(pat[op.Value()+2])
 			maxCount := int(pat[op.Value()+3])
 			*pCounter++
 			if *pCounter >= maxCount && maxCount != -1 {
-				if !(*pCounter == maxCount) {
-					panic("assertion failed: *pCounter == maxCount")
-				}
 				break
 			}
 
@@ -728,9 +649,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			*fp.patIdx() = op.Value() + 4 // Loop back.
 
 		case URX_CTR_INIT_NG:
-			if !(op.Value() >= 0 && int(op.Value()) < m.stack.frameSize-2) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fFrameSize-2")
-			}
 			*fp.extra(op.Value()) = 0 // Set the loop counter variable to zero
 
 			// Pick up the three extra operands that CTR_INIT_NG has, and
@@ -740,10 +658,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			loopLoc := pat[instrOperandLoc].Value()
 			minCount := pat[instrOperandLoc+1].Value()
 			maxCount := pat[instrOperandLoc+2].Value()
-
-			if !(minCount >= 0 && maxCount >= minCount || maxCount == -1) {
-				panic("assertion failed: minCount >= 0 && maxCount >= minCount || maxCount == -1")
-			}
 
 			if maxCount == -1 {
 				*fp.extra(op.Value() + 1) = *fp.inputIdx() //  Save initial input index for loop breaking.
@@ -760,13 +674,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 
 		case URX_CTR_LOOP_NG:
-			if !(op.Value() >= 0 && int(op.Value()) < *fp.patIdx()-2) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < *fp.patIdx()-2")
-			}
 			initOp := pat[op.Value()]
-			if !(initOp.Type() == URX_CTR_INIT_NG) {
-				panic("assertion failed: initOp.Type() == URX_CTR_INIT_NG")
-			}
 			pCounter := fp.extra(initOp.Value())
 			minCount := int(pat[op.Value()+2])
 			maxCount := int(pat[op.Value()+3])
@@ -775,9 +683,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				// The loop has matched the maximum permitted number of times.
 				//   Break out of here with no action.  Matching will
 				//   continue with the following pattern.
-				if !(*pCounter == maxCount) {
-					panic("assertion failed: *pCounter == maxCount")
-				}
 				break
 			}
 
@@ -816,19 +721,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 
 		case URX_STO_SP:
-			if !(op.Value() >= 0 && op.Value() < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fPattern->fDataSize")
-			}
 			m.data[op.Value()] = m.stack.len()
 
 		case URX_LD_SP:
-			if !(op.Value() >= 0 && op.Value() < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fPattern->fDataSize")
-			}
 			newStackSize := m.data[op.Value()]
-			if !(newStackSize <= m.stack.len()) {
-				panic("assertion failed: newStackSize <= fStack->size()")
-			}
 			newFp := m.stack.offset(newStackSize)
 			if newFp.equals(fp) {
 				break
@@ -838,16 +734,8 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 			m.stack.setSize(newStackSize)
 		case URX_BACKREF:
-			if !(op.Value() < m.stack.frameSize) {
-				panic("assertion failed: op.Value() < fFrameSize")
-			}
-
 			groupStartIdx := *fp.extra(op.Value())
 			groupEndIdx := *fp.extra(op.Value() + 1)
-
-			if !(groupStartIdx <= groupEndIdx) {
-				panic("assertion failed: groupStartIdx <= groupEndIdx")
-			}
 
 			if groupStartIdx < 0 {
 				// This capture group has not participated in the match thus far,
@@ -882,18 +770,8 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				fp = m.stack.popFrame()
 			}
 		case URX_BACKREF_I:
-			if !(op.Value() < m.stack.frameSize) {
-				panic("assertion failed: op.Value() < fFrameSize")
-			}
-
 			groupStartIdx := *fp.extra(op.Value())
 			groupEndIdx := *fp.extra(op.Value() + 1)
-			if !(groupStartIdx <= groupEndIdx) {
-				panic("assertion failed: groupStartIdx <= groupEndIdx")
-			}
-			if !(groupStartIdx <= groupEndIdx) {
-				panic("assertion failed: groupStartIdx <= groupEndIdx")
-			}
 
 			if groupStartIdx < 0 {
 				// This capture group has not participated in the match thus far,
@@ -937,23 +815,14 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 
 		case URX_STO_INP_LOC:
-			if !(op.Value() >= 0 && op.Value() < m.stack.frameSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fFrameSize")
-			}
 			*fp.extra(op.Value()) = *fp.inputIdx()
 
 		case URX_JMPX:
 			instrOperandLoc := *fp.patIdx()
 			*fp.patIdx()++
 			dataLoc := pat[instrOperandLoc].Value()
-			if !(dataLoc >= 0 && dataLoc < m.stack.frameSize) {
-				panic("assertion failed: dataLoc >= 0 && dataLoc < fFrameSize")
-			}
 
 			saveInputIdx := *fp.extra(dataLoc)
-			if !(saveInputIdx <= *fp.inputIdx()) {
-				panic("assertion failed: saveInputIdx <= *fp.inputIdx()")
-			}
 
 			if saveInputIdx < *fp.inputIdx() {
 				*fp.patIdx() = op.Value() // JMP
@@ -962,9 +831,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 
 		case URX_LA_START:
-			if !(op.Value() >= 0 && op.Value()+3 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+3 < fDataSize")
-			}
 			m.data[op.Value()] = m.stack.len()
 			m.data[op.Value()+1] = *fp.inputIdx()
 			m.data[op.Value()+2] = m.activeStart
@@ -973,14 +839,8 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			m.activeLimit = m.lookLimit //   transparent bounds.
 
 		case URX_LA_END:
-			if !(op.Value() >= 0 && op.Value()+3 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+3 < fDataSize")
-			}
 			stackSize := m.stack.len()
 			newStackSize := m.data[op.Value()]
-			if !(stackSize >= newStackSize) {
-				panic("assertion failed: stackSize >= newStackSize")
-			}
 			if stackSize > newStackSize {
 				// Copy the current top frame back to the new (cut back) top frame.
 				//   This makes the capture groups from within the look-ahead
@@ -995,12 +855,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 			m.activeStart = m.data[op.Value()+2]
 			m.activeLimit = m.data[op.Value()+3]
-			if !(m.activeStart >= 0) {
-				panic("assertion failed: m.activeStart >= 0")
-			}
-			if !(m.activeLimit <= len(inputText)) {
-				panic("assertion failed: m.activeLimit <= len(inputText)")
-			}
 
 		case URX_ONECHAR_I:
 			// Case insensitive one char.  The char from the pattern is already case folded.
@@ -1027,9 +881,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			var patternStringIdx int
 			nextOp := pat[*fp.patIdx()]
 			*fp.patIdx()++
-			if !(nextOp.Type() == URX_STRING_LEN) {
-				panic("assertion failed: nextOp.Type() == URX_STRING_LEN")
-			}
 			patternStringLen := nextOp.Value()
 
 			success := true
@@ -1062,9 +913,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// Entering a look-behind block.
 			// Save Stack Ptr, Input Pos and active input region.
 			//   TODO:  implement transparent bounds.  Ticket #6067
-			if !(op.Value() >= 0 && op.Value()+4 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+4 < fDataSize")
-			}
 			m.data[op.Value()] = m.stack.len()
 			m.data[op.Value()+1] = *fp.inputIdx()
 			// Save input string length, then reset to pin any matches to end at
@@ -1085,16 +933,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			*fp.patIdx()++
 			maxML := pat[*fp.patIdx()]
 			*fp.patIdx()++
-			if !(minML <= maxML) {
-				panic("assertion failed: minML <= maxML")
-			}
-			if !(minML >= 0) {
-				panic("assertion failed: minML >= 0")
-			}
 
-			if !(op.Value() >= 0 && op.Value()+4 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+4 < fDataSize")
-			}
 			lbStartIdx := &m.data[op.Value()+4]
 			if *lbStartIdx < 0 {
 				// First time through loop.
@@ -1115,12 +954,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				fp = m.stack.popFrame()
 				m.activeStart = m.data[op.Value()+2]
 				m.activeLimit = m.data[op.Value()+3]
-				if !(m.activeStart >= 0) {
-					panic("assertion failed: fActiveStart >= 0")
-				}
-				if !(m.activeLimit <= inputLength) {
-					panic("assertion failed: fActiveLimit <= fInputLength")
-				}
 				break
 			}
 
@@ -1134,9 +967,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 		case URX_LB_END:
 			// End of a look-behind block, after a successful match.
-			if !(op.Value() >= 0 && op.Value()+4 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+4 < fDataSize")
-			}
 			if *fp.inputIdx() != m.activeLimit {
 				//  The look-behind expression matched, but the match did not
 				//    extend all the way to the point that we are looking behind from.
@@ -1152,12 +982,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   position being looked-behind.
 			m.activeStart = m.data[op.Value()+2]
 			m.activeLimit = m.data[op.Value()+3]
-			if !(m.activeStart >= 0) {
-				panic("assertion failed: fActiveStart >= 0")
-			}
-			if !(m.activeLimit <= inputLength) {
-				panic("assertion failed: fActiveLimit <= fInputLength")
-			}
 		case URX_LBN_CONT:
 			// Negative Look-Behind, at top of loop checking for matches of LB expression
 			//    at all possible input starting positions.
@@ -1170,21 +994,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 			continueLoc := pat[*fp.patIdx()].Value()
 			*fp.patIdx()++
-
-			if !(minML <= maxML) {
-				panic("assertion failed: minML <= maxML")
-			}
-			if !(minML >= 0) {
-				panic("assertion failed: minML >= 0")
-			}
-			if !(continueLoc > *fp.patIdx()) {
-				panic("assertion failed: continueLoc > *fp.patIdx()")
-			}
-
-			// Fetch (from data) the last input index where a match was attempted.
-			if !(op.Value() >= 0 && op.Value()+4 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+4 < fDataSize")
-			}
 
 			lbStartIdx := &m.data[op.Value()+4]
 
@@ -1207,12 +1016,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				//  a whole has succeeded.  Jump forward to the continue location
 				m.activeStart = m.data[op.Value()+2]
 				m.activeLimit = m.data[op.Value()+3]
-				if !(m.activeStart >= 0) {
-					panic("assertion failed: fActiveStart >= 0")
-				}
-				if !(m.activeLimit <= inputLength) {
-					panic("assertion failed: fActiveLimit <= fInputLength")
-				}
 				*fp.patIdx() = continueLoc
 				break
 			}
@@ -1226,9 +1029,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			*fp.inputIdx() = *lbStartIdx
 		case URX_LBN_END:
 			// End of a negative look-behind block, after a successful match.
-			if !(op.Value() >= 0 && op.Value()+4 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+4 < fDataSize")
-			}
 
 			if *fp.inputIdx() != m.activeLimit {
 				//  The look-behind expression matched, but the match did not
@@ -1248,22 +1048,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   to the position being looked-behind.
 			m.activeStart = m.data[op.Value()+2]
 			m.activeLimit = m.data[op.Value()+3]
-			if !(m.activeStart >= 0) {
-				panic("assertion failed: fActiveStart >= 0")
-			}
-			if !(m.activeLimit <= inputLength) {
-				panic("assertion failed: fActiveLimit <= fInputLength")
-			}
 
 			// Restore original stack position, discarding any state saved
 			//   by the successful pattern match.
-			if !(op.Value() >= 0 && op.Value()+1 < m.pattern.dataSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value()+1 < fDataSize")
-			}
 			newStackSize := m.data[op.Value()]
-			if !(m.stack.len() > newStackSize) {
-				panic("assertion failed: fStack.size() > newStackSize")
-			}
 			m.stack.setSize(newStackSize)
 
 			//  FAIL, which will take control back to someplace
@@ -1274,9 +1062,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//     [some character set]*
 			//   This op scans through all matching input.
 			//   The following LOOP_C op emulates stack unwinding if the following pattern fails.
-			if !(op.Value() >= 0 && op.Value() < len(sets)) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fSets.size()")
-			}
 			s := sets[op.Value()]
 
 			// Loop through input, until either the input is exhausted or
@@ -1306,13 +1091,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   must follow.  It's operand is the stack location
 			//   that holds the starting input index for the match of this [set]*
 			loopcOp := pat[*fp.patIdx()]
-			if !(loopcOp.Type() == URX_LOOP_C) {
-				panic("assertion failed: loopcOp.Type() == URX_LOOP_C")
-			}
 			stackLoc := loopcOp.Value()
-			if !(stackLoc >= 0 && stackLoc < m.stack.frameSize) {
-				panic("assertion failed: stackLoc >= 0 && stackLoc < fFrameSize")
-			}
 			*fp.extra(stackLoc) = *fp.inputIdx()
 			*fp.inputIdx() = ix
 
@@ -1369,13 +1148,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   must follow.  It's operand is the stack location
 			//   that holds the starting input index for the match of this .*
 			loopcOp := pat[*fp.patIdx()]
-			if !(loopcOp.Type() == URX_LOOP_C) {
-				panic("assertion failed: loopcOp.Type() == URX_LOOP_C")
-			}
 			stackLoc := loopcOp.Value()
-			if !(stackLoc >= 0 && stackLoc < m.stack.frameSize) {
-				panic("assertion failed: stackLoc >= 0 && stackLoc < fFrameSize")
-			}
 			*fp.extra(stackLoc) = *fp.inputIdx()
 			*fp.inputIdx() = ix
 
@@ -1389,13 +1162,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			*fp.patIdx()++
 
 		case URX_LOOP_C:
-			if !(op.Value() >= 0 && op.Value() < m.stack.frameSize) {
-				panic("assertion failed: op.Value() >= 0 && op.Value() < fFrameSize")
-			}
 			backSearchIndex := *fp.extra(op.Value())
-			if !(backSearchIndex <= *fp.inputIdx()) {
-				panic("assertion failed: backSearchIndex <= *fp.inputIdx()")
-			}
 
 			if backSearchIndex == *fp.inputIdx() {
 				// We've backed up the input idx to the point that the loop started.
@@ -1408,9 +1175,6 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   and a state save to this instruction in case the following code fails again.
 			//   (We're going backwards because this loop emulates stack unwinding, not
 			//    the initial scan forward.)
-			if !(*fp.inputIdx() > 0) {
-				panic("assertion failed: *fp.inputIdx() > 0")
-			}
 
 			prevC := charAt(inputText, *fp.inputIdx()-1)
 			*fp.inputIdx()--
@@ -1580,6 +1344,7 @@ func (m *Matcher) isHorizWS(c rune) bool {
 
 func (m *Matcher) followingGCBoundary(pos int) int {
 	// TODO: implement
+	return pos
 	/*
 		// Note: this point will never be reached if break iteration is configured out.
 		//       Regex patterns that would require this function will fail to compile.
@@ -1597,7 +1362,6 @@ func (m *Matcher) followingGCBoundary(pos int) int {
 			result = pos;
 		}
 	*/
-	panic("TODO")
 }
 
 func (m *Matcher) ResetString(input string) {
@@ -1655,10 +1419,6 @@ func (m *Matcher) Find() (bool, error) {
 		return false, nil
 	}
 
-	if !(startPos >= 0) {
-		panic("assertion failed: startPos >= 0")
-	}
-
 	switch m.pattern.startType {
 	case START_NO_INFO:
 		// No optimization was found.
@@ -1679,10 +1439,6 @@ func (m *Matcher) Find() (bool, error) {
 		}
 	case START_SET:
 		// Match may start on any char from a pre-computed set.
-		if !(m.pattern.minMatchLen > 0) {
-			panic("assertion failed: minMatchLen > 0")
-		}
-
 		for {
 			pos := startPos
 			c := charAt(m.input, startPos)
@@ -1775,10 +1531,6 @@ func (m *Matcher) Find() (bool, error) {
 		}
 	case START_CHAR, START_STRING:
 		// Match starts on exactly one char.
-		if !(m.pattern.minMatchLen > 0) {
-			panic("assertion failed: minMatchLen > 0")
-		}
-
 		theChar := m.pattern.initialChar
 		for {
 			pos := startPos

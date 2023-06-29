@@ -54,7 +54,11 @@ var ubidi struct {
 
 func readData(bytes *udata.Bytes) error {
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.FormatVersion[0] == 2
+		return info.DataFormat[0] == 0x42 &&
+			info.DataFormat[1] == 0x69 &&
+			info.DataFormat[2] == 0x44 &&
+			info.DataFormat[3] == 0x69 &&
+			info.FormatVersion[0] == 2
 	})
 	if err != nil {
 		return err

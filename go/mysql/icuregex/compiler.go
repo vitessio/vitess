@@ -1486,18 +1486,18 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 
 	case doSetBackslash_d:
 		set := c.setStack[len(c.setStack)-1]
-		set.AddCategory(uchar.U_GC_ND_MASK)
+		c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
 
 	case doSetBackslash_D:
 		digits := uset.New()
-		digits.ApplyIntPropertyValue(uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ND_MASK))
+		c.err = uprops.ApplyIntPropertyValue(digits, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ND_MASK))
 		digits.Complement()
 		set := c.setStack[len(c.setStack)-1]
 		set.AddAll(digits)
 
 	case doSetBackslash_h:
 		h := uset.New()
-		h.ApplyIntPropertyValue(uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
+		c.err = uprops.ApplyIntPropertyValue(h, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
 		h.AddRune(9) // Tab
 
 		set := c.setStack[len(c.setStack)-1]
@@ -1505,7 +1505,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 
 	case doSetBackslash_H:
 		h := uset.New()
-		h.ApplyIntPropertyValue(uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
+		c.err = uprops.ApplyIntPropertyValue(h, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
 		h.AddRune(9) // Tab
 		h.Complement()
 
@@ -1786,7 +1786,7 @@ func (c *Compiler) stripNOPs() {
 
 		case URX_BACKREF, URX_BACKREF_I:
 			where := op.Value()
-			if int(where) > len(c.out.groupMap) {
+			if where > len(c.out.groupMap) {
 				c.error(uerror.U_REGEX_INVALID_BACK_REF)
 				break
 			}
@@ -1996,7 +1996,7 @@ func (c *Compiler) matchStartType() {
 			// Digit Char
 			if currentLen == 0 {
 				s := uset.New()
-				s.ApplyIntPropertyValue(uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ND_MASK))
+				c.err = uprops.ApplyIntPropertyValue(s, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ND_MASK))
 				if op.Value() != 0 {
 					s.Complement()
 				}
@@ -2010,7 +2010,7 @@ func (c *Compiler) matchStartType() {
 			// Horiz white space
 			if currentLen == 0 {
 				s := uset.New()
-				s.ApplyIntPropertyValue(uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
+				c.err = uprops.ApplyIntPropertyValue(s, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
 				s.AddRune(9) // Tab
 				if op.Value() != 0 {
 					s.Complement()
@@ -2080,7 +2080,7 @@ func (c *Compiler) matchStartType() {
 
 		case URX_JMP:
 			jmpDest := op.Value()
-			if int(jmpDest) < loc {
+			if jmpDest < loc {
 				// Loop of some kind.  Can safely ignore, the worst that will happen
 				//  is that we understate the true minimum length
 				currentLen = forwardedLength[loc+1]
@@ -2228,7 +2228,7 @@ func (c *Compiler) matchStartType() {
 					// Need this because neg lookahead blocks will FAIL to outside
 					//   of the block.
 					jmpDest := op.Value()
-					if int(jmpDest) > loc {
+					if jmpDest > loc {
 						if currentLen < forwardedLength[jmpDest] {
 							forwardedLength[jmpDest] = (currentLen)
 						}
@@ -2574,7 +2574,7 @@ func (c *Compiler) insertOp(where int) {
 	for loc, op := range c.out.compiledPat {
 		switch op.Type() {
 		case URX_JMP, URX_JMPX, URX_STATE_SAVE, URX_CTR_LOOP, URX_CTR_LOOP_NG, URX_JMP_SAV, URX_JMP_SAV_X, URX_RELOC_OPRND:
-			if int(op.Value()) > where {
+			if op.Value() > where {
 				op = c.buildOp(op.Type(), op.Value()+1)
 				c.out.compiledPat[loc] = op
 			}
@@ -2930,7 +2930,7 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 
 		case URX_JMP:
 			jmpDest := op.Value()
-			if int(jmpDest) < loc {
+			if jmpDest < loc {
 				// Loop of some kind.  Can safely ignore, the worst that will happen
 				//  is that we understate the true minimum length
 				currentLen = forwardedLength[loc+1]
@@ -2951,7 +2951,7 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 			// State Save, for forward jumps, propagate the current minimum.
 			//             of the state save.
 			jmpDest := op.Value()
-			if int(jmpDest) > loc {
+			if jmpDest > loc {
 				if currentLen < forwardedLength[jmpDest] {
 					forwardedLength[jmpDest] = currentLen
 				}
@@ -2981,7 +2981,7 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 			loopEndLoc := loopEndOp.Value()
 			minLoopCount := c.out.compiledPat[loc+2]
 			if minLoopCount == 0 {
-				loc = int(loopEndLoc)
+				loc = loopEndLoc
 			} else {
 				loc += 3 // Skips over operands of CTR_INIT
 			}
@@ -3031,7 +3031,7 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 				if op.Type() == URX_STATE_SAVE {
 					// Need this because neg lookahead blocks will FAIL to outside of the block.
 					jmpDest := op.Value()
-					if int(jmpDest) > loc {
+					if jmpDest > loc {
 						if currentLen < forwardedLength[jmpDest] {
 							forwardedLength[jmpDest] = currentLen
 						}
@@ -3146,7 +3146,7 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 			// Jumps.
 			//
 		case URX_JMP, URX_JMPX, URX_JMP_SAV, URX_JMP_SAV_X:
-			jmpDest := int(op.Value())
+			jmpDest := op.Value()
 			if jmpDest < loc {
 				// Loop of some kind.  Max match length is unbounded.
 				currentLen = math.MaxInt32
@@ -3168,7 +3168,7 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 			//               of the state save.
 			//             For backwards jumps, they create a loop, maximum
 			//               match length is unbounded.
-			jmpDest := int(op.Value())
+			jmpDest := op.Value()
 			if jmpDest > loc {
 				if currentLen > forwardedLength[jmpDest] {
 					forwardedLength[jmpDest] = currentLen
@@ -3210,7 +3210,7 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 		case URX_CTR_INIT, URX_CTR_INIT_NG:
 			// For Loops, recursively call this function on the pattern for the loop body,
 			//   then multiply the result by the maximum loop count.
-			loopEndLoc := int(c.out.compiledPat[loc+1].Value())
+			loopEndLoc := c.out.compiledPat[loc+1].Value()
 			if loopEndLoc == loc+4 {
 				// Loop has an empty body. No affect on max match length.
 				// Continue processing with code after the loop end.
@@ -3381,7 +3381,7 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	}
 
 	var err error
-	set, err = uset.ParsePattern("\\p{"+propName+"}", usetFlags)
+	set, err = uprops.NewUnicodeSetFomPattern("\\p{"+propName+"}", usetFlags)
 	if err == nil {
 		goto done
 	}
@@ -3406,7 +3406,7 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	//
 	if strings.HasPrefix(propName, "In") && len(propName) >= 3 {
 		set = uset.New()
-		if set.ApplyPropertyAlias("Block", propName[2:]) != nil {
+		if uprops.ApplyPropertyAlias(set, "Block", propName[2:]) != nil {
 			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
 		}
 		goto done
@@ -3429,7 +3429,7 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			mPropName = "Titlecase_Letter"
 		}
 
-		set, err = uset.ParsePattern("\\p{"+mPropName+"}", 0)
+		set, err = uprops.NewUnicodeSetFomPattern("\\p{"+mPropName+"}", 0)
 		if err != nil {
 			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
 		} else if !set.IsEmpty() && (usetFlags&uset.USET_CASE_INSENSITIVE) != 0 {
@@ -3446,61 +3446,97 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 		//   These all begin with "java"
 		//
 		if propName == "javaDefined" {
-			set.AddCategory(uchar.U_GC_CN_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_CN_MASK)
 			set.Complement()
 		} else if propName == "javaDigit" {
-			set.AddCategory(uchar.U_GC_ND_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
 		} else if propName == "javaIdentifierIgnorable" {
-			addIdentifierIgnorable(set)
+			c.err = addIdentifierIgnorable(set)
 		} else if propName == "javaISOControl" {
 			set.AddRuneRange(0, 0x1F)
 			set.AddRuneRange(0x7F, 0x9F)
 		} else if propName == "javaJavaIdentifierPart" {
-			set.AddCategory(uchar.U_GC_L_MASK)
-			set.AddCategory(uchar.U_GC_SC_MASK)
-			set.AddCategory(uchar.U_GC_PC_MASK)
-			set.AddCategory(uchar.U_GC_ND_MASK)
-			set.AddCategory(uchar.U_GC_NL_MASK)
-			set.AddCategory(uchar.U_GC_MC_MASK)
-			set.AddCategory(uchar.U_GC_MN_MASK)
-			addIdentifierIgnorable(set)
+			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_SC_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_PC_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_MC_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_MN_MASK)
+			}
+			if c.err == nil {
+				c.err = addIdentifierIgnorable(set)
+			}
 		} else if propName == "javaJavaIdentifierStart" {
-			set.AddCategory(uchar.U_GC_L_MASK)
-			set.AddCategory(uchar.U_GC_NL_MASK)
-			set.AddCategory(uchar.U_GC_SC_MASK)
-			set.AddCategory(uchar.U_GC_PC_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_SC_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_PC_MASK)
+			}
 		} else if propName == "javaLetter" {
-			set.AddCategory(uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
 		} else if propName == "javaLetterOrDigit" {
-			set.AddCategory(uchar.U_GC_L_MASK)
-			set.AddCategory(uchar.U_GC_ND_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+			}
 		} else if propName == "javaLowerCase" {
-			set.AddCategory(uchar.U_GC_LL_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_LL_MASK)
 		} else if propName == "javaMirrored" {
-			set.ApplyIntPropertyValue(uprops.UCHAR_BIDI_MIRRORED, 1)
+			c.err = uprops.ApplyIntPropertyValue(set, uprops.UCHAR_BIDI_MIRRORED, 1)
 		} else if propName == "javaSpaceChar" {
-			set.AddCategory(uchar.U_GC_Z_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_Z_MASK)
 		} else if propName == "javaSupplementaryCodePoint" {
 			set.AddRuneRange(0x10000, uset.MAX_VALUE)
 		} else if propName == "javaTitleCase" {
-			set.AddCategory(uchar.U_GC_LT_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_LT_MASK)
 		} else if propName == "javaUnicodeIdentifierStart" {
-			set.AddCategory(uchar.U_GC_L_MASK)
-			set.AddCategory(uchar.U_GC_NL_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+			}
 		} else if propName == "javaUnicodeIdentifierPart" {
-			set.AddCategory(uchar.U_GC_L_MASK)
-			set.AddCategory(uchar.U_GC_PC_MASK)
-			set.AddCategory(uchar.U_GC_ND_MASK)
-			set.AddCategory(uchar.U_GC_NL_MASK)
-			set.AddCategory(uchar.U_GC_MC_MASK)
-			set.AddCategory(uchar.U_GC_MN_MASK)
-			addIdentifierIgnorable(set)
+			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_PC_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_MC_MASK)
+			}
+			if c.err == nil {
+				c.err = uprops.AddCategory(set, uchar.U_GC_MN_MASK)
+			}
+			if c.err == nil {
+				c.err = addIdentifierIgnorable(set)
+			}
 		} else if propName == "javaUpperCase" {
-			set.AddCategory(uchar.U_GC_LU_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_LU_MASK)
 		} else if propName == "javaValidCodePoint" {
 			set.AddRuneRange(0, uset.MAX_VALUE)
 		} else if propName == "javaWhitespace" {
-			set.AddCategory(uchar.U_GC_Z_MASK)
+			c.err = uprops.AddCategory(set, uchar.U_GC_Z_MASK)
 			excl := uset.New()
 			excl.AddRune(0x0a)
 			excl.AddRune(0x2007)
@@ -3532,12 +3568,12 @@ done:
 	return set
 }
 
-func addIdentifierIgnorable(set *uset.UnicodeSet) {
+func addIdentifierIgnorable(set *uset.UnicodeSet) error {
 	set.AddRuneRange(0, 8)
 	set.AddRuneRange(0x0e, 0x1b)
 	set.AddRuneRange(0x7f, 0x9f)
 
-	set.AddCategory(uchar.U_GC_CF_MASK)
+	return uprops.AddCategory(set, uchar.U_GC_CF_MASK)
 }
 
 func (c *Compiler) scanPosixProp() *uset.UnicodeSet {
