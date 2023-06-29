@@ -621,7 +621,7 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
 func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
-	cols, err := output.GetColumns()
+	cols, err := output.GetSelectExprs()
 	if err != nil {
 		return nil, err
 	}

@@ -173,6 +173,10 @@ func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return p.Columns, nil
 }
 
+func (p *Projection) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(p)
+}
+
 func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
 	return p.Source.GetOrdering()
 }

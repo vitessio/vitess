@@ -208,11 +208,15 @@ func (d *Derived) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, errHorizonNotPlanned()
+			return nil, vterrors.VT09015()
 		}
 		exprs = append(exprs, ae)
 	}
 	return
+}
+
+func (d *Derived) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return sqlparser.GetFirstSelect(d.Query).SelectExprs, nil
 }
 
 func (d *Derived) GetOrdering() ([]ops.OrderBy, error) {

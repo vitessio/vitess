@@ -79,6 +79,10 @@ func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(to.Columns, colNameToExpr), nil
 }
 
+func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(to)
+}
+
 func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
 }

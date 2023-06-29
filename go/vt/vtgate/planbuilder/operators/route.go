@@ -609,6 +609,10 @@ func (r *Route) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return r.Source.GetColumns()
 }
 
+func (r *Route) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return r.Source.GetSelectExprs()
+}
+
 func (r *Route) GetOrdering() ([]ops.OrderBy, error) {
 	return r.Source.GetOrdering()
 }

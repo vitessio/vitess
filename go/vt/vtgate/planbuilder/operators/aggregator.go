@@ -191,6 +191,10 @@ func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return a.Columns, nil
 }
 
+func (a *Aggregator) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(a)
+}
+
 func (a *Aggregator) ShortDescription() string {
 	columnns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
 		return sqlparser.String(from)

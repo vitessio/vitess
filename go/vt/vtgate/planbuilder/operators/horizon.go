@@ -44,11 +44,15 @@ func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, errHorizonNotPlanned()
+			return nil, vterrors.VT09015()
 		}
 		exprs = append(exprs, ae)
 	}
 	return
+}
+
+func (h *Horizon) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return sqlparser.GetFirstSelect(h.Select).SelectExprs, nil
 }
 
 var _ ops.Operator = (*Horizon)(nil)
