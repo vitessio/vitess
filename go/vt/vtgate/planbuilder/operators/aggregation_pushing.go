@@ -39,10 +39,16 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	case *ApplyJoin:
 		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+			if applyResult != rewrite.SameTree && aggregator.Original {
+				aggregator.aggregateTheAggregates()
+			}
 		}
 	case *Filter:
 		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+			if applyResult != rewrite.SameTree && aggregator.Original {
+				aggregator.aggregateTheAggregates()
+			}
 		}
 	default:
 		return aggregator, rewrite.SameTree, nil
@@ -57,23 +63,24 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	}
 
 	aggregator.Pushed = true
-	if applyResult != rewrite.SameTree && aggregator.Original {
-		aggregator.aggregateTheAggregates()
-	}
 
 	return
 }
 
 func (a *Aggregator) aggregateTheAggregates() {
-	for i, aggr := range a.Aggregations {
-		// Handle different aggregation operations when pushing down through a sharded route.
-		switch aggr.OpCode {
-		case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-			// All count variations turn into SUM above the Route.
-			// Think of it as we are SUMming together a bunch of distributed COUNTs.
-			aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
-			a.Aggregations[i] = aggr
-		}
+	for i := range a.Aggregations {
+		aggregateTheAggregate(a, i)
+	}
+}
+
+func aggregateTheAggregate(a *Aggregator, i int) {
+	aggr := a.Aggregations[i]
+	switch aggr.OpCode {
+	case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
+		// All count variations turn into SUM above the Route.
+		// Think of it as we are SUMming together a bunch of distributed COUNTs.
+		aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
+		a.Aggregations[i] = aggr
 	}
 }
 
@@ -95,6 +102,36 @@ func pushDownAggregationThroughRoute(
 	aggrBelowRoute := aggregator.Clone([]ops.Operator{route.Source}).(*Aggregator)
 	aggrBelowRoute.Pushed = false
 	aggrBelowRoute.Original = false
+	aggrBelowRoute.Aggregations = nil
+
+	for i, aggregation := range aggregator.Aggregations {
+		if !aggregation.Distinct || exprHasUniqueVindex(ctx, aggregation.Func.GetArg()) {
+			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggregation)
+			aggregateTheAggregate(aggregator, i)
+			continue
+		}
+		innerExpr := aggregation.Func.GetArg()
+
+		if aggregator.DistinctExpr != nil {
+			if ctx.SemTable.EqualsExpr(aggregator.DistinctExpr, innerExpr) {
+				// we can handle multiple distinct aggregations, as long as they are aggregating on the same expression
+				aggrBelowRoute.Columns[aggregation.ColOffset] = aeWrap(innerExpr)
+				continue
+			}
+			return nil, nil, vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(aggregation.Original)))
+		}
+
+		// We handle a distinct aggregation by turning it into a group by and
+		// doing the aggregating on the vtgate level instead
+		aggregator.DistinctExpr = innerExpr
+		aeDistinctExpr := aeWrap(aggregator.DistinctExpr)
+
+		aggrBelowRoute.Columns[aggregation.ColOffset] = aeDistinctExpr
+
+		groupBy := NewGroupBy(aggregator.DistinctExpr, aggregator.DistinctExpr, aeDistinctExpr)
+		groupBy.ColOffset = aggregation.ColOffset
+		aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
+	}
 
 	// Set the source of the route to the new aggregator placed below the route.
 	route.Source = aggrBelowRoute

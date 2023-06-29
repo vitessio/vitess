@@ -695,6 +695,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					aggregates = append(aggregates, &engine.AggregateParams{
 						Opcode: opcode.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
+						WCol:   -1,
 					})
 				}
 			}

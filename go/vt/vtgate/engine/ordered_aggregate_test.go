@@ -742,11 +742,10 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode:    AggregateCountDistinct,
-			Col:       1,
-			WCol:      2,
-			WAssigned: true,
-			Alias:     "count(distinct c2)",
+			Opcode: AggregateCountDistinct,
+			Col:    1,
+			WCol:   2,
+			Alias:  "count(distinct c2)",
 		}},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 0}},
 		Input:               fp,
@@ -806,11 +805,10 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode:    AggregateCountDistinct,
-			Col:       1,
-			WCol:      2,
-			WAssigned: true,
-			Alias:     "count(distinct c2)",
+			Opcode: AggregateCountDistinct,
+			Col:    1,
+			WCol:   2,
+			Alias:  "count(distinct c2)",
 		}},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 0}},
 		Input:               fp,
@@ -872,11 +870,10 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode:    AggregateSumDistinct,
-			Col:       1,
-			WCol:      2,
-			WAssigned: true,
-			Alias:     "sum(distinct c2)",
+			Opcode: AggregateSumDistinct,
+			Col:    1,
+			WCol:   2,
+			Alias:  "sum(distinct c2)",
 		}},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 0}},
 		Input:               fp,

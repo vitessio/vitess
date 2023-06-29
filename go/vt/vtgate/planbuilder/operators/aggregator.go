@@ -42,6 +42,9 @@ type (
 		Grouping     []GroupBy
 		Aggregations []Aggr
 
+		// We support a single distinct aggregation per aggregator. It is stored here
+		DistinctExpr sqlparser.Expr
+
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
 		Pushed        bool
 		offsetPlanned bool
@@ -331,7 +334,7 @@ func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colId
 			continue
 		}
 
-		newSrc, offset, err := a.Source.AddColumn(ctx, a.Columns[colIdx], false, false)
+		newSrc, offset, err := a.Source.AddColumn(ctx, a.Columns[colIdx], false, true)
 		if err != nil {
 			return -1, err
 		}

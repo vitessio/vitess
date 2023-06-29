@@ -144,6 +144,7 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		Alias:    expr.ColumnName(),
 		Expr:     expr.Expr,
 		Original: expr,
+		WCol:     -1,
 	})
 	return offset, true, nil
 }

@@ -41,7 +41,6 @@ type AggregateParams struct {
 	// These are used only for distinct opcodes.
 	KeyCol      int
 	WCol        int
-	WAssigned   bool
 	CollationID collations.ID
 
 	Alias    string `json:",omitempty"`
@@ -68,7 +67,7 @@ func (ap *AggregateParams) preProcess() bool {
 
 func (ap *AggregateParams) String() string {
 	keyCol := strconv.Itoa(ap.Col)
-	if ap.WAssigned {
+	if ap.WCol >= 0 {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if ap.CollationID != collations.Unknown {
@@ -280,7 +279,7 @@ func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb
 
 func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) sqltypes.Value {
 	curDistinct := row[aggr.KeyCol]
-	if aggr.WAssigned && !curDistinct.IsComparable() {
+	if aggr.WCol >= 0 && !curDistinct.IsComparable() {
 		aggr.KeyCol = aggr.WCol
 		curDistinct = row[aggr.KeyCol]
 	}

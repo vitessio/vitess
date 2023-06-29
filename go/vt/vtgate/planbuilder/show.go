@@ -568,6 +568,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 				Opcode: popcode.AggregateGtid,
 				Col:    1,
 				Alias:  "global vgtid_executed",
+				WCol:   -1,
 			},
 		},
 		TruncateColumnCount: 2,

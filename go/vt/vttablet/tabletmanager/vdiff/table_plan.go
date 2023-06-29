@@ -113,6 +113,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					aggregates = append(aggregates, &engine.AggregateParams{
 						Opcode: opcode.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
+						WCol:   -1,
 					})
 				}
 			}

@@ -75,11 +75,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 }
 
 func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
-	for _, aggregation := range aggregations {
-		if aggregation.Distinct {
-			return errHorizonNotPlanned()
-		}
-	}
 	if _, isDerived := horizon.(*Derived); isDerived {
 		return errHorizonNotPlanned()
 	}

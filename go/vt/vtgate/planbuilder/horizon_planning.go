@@ -443,6 +443,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 		aggrParams[idx] = &engine.AggregateParams{
 			Opcode:     opcode,
 			Col:        offset,
+			WCol:       -1,
 			Alias:      aggr.Alias,
 			Expr:       aggr.Original.Expr,
 			Original:   aggr.Original,
@@ -482,7 +483,6 @@ func addColumnsToOA(
 				Opcode:      a.OpCode,
 				Col:         o.col,
 				KeyCol:      o.col,
-				WAssigned:   o.wsCol >= 0,
 				WCol:        o.wsCol,
 				Alias:       a.Alias,
 				Original:    a.Original,

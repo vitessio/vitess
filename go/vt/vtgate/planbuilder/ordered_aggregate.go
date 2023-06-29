@@ -277,6 +277,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			Col:        innerCol,
 			Alias:      expr.ColumnName(),
 			OrigOpcode: origOpcode,
+			WCol:       -1,
 		})
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
@@ -288,6 +289,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			Opcode:     opcode,
 			Col:        innerCol,
 			OrigOpcode: origOpcode,
+			WCol:       -1,
 		})
 	}
 

@@ -440,9 +440,11 @@ func TestBuildPlanSuccess(t *testing.T) {
 			aggregates: []*engine.AggregateParams{{
 				Opcode: opcode.AggregateSum,
 				Col:    2,
+				WCol:   -1,
 			}, {
 				Opcode: opcode.AggregateSum,
 				Col:    3,
+				WCol:   -1,
 			}},
 		},
 	}, {
