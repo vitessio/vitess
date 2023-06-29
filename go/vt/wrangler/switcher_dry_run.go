@@ -372,8 +372,14 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
-	if dr.ts.mustResetSequences() {
-		dr.drLog.Log("The sequence caches will be reset on the source for all tables which use sequences")
+	var err error
+	mustReset := false
+	if mustReset, err = dr.ts.mustResetSequences(ctx); err != nil {
+		return err
 	}
+	if !mustReset {
+		return nil
+	}
+	dr.drLog.Log("The sequence caches will be reset on the source since sequence tables are being moved")
 	return nil
 }

@@ -845,7 +845,7 @@ func extractNamesFromTablesList(tables []*Table) []string {
 	return tableNames
 }
 
-func (se *Engine) ResetSequences(tables []string) {
+func (se *Engine) ResetSequences(tables []string) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	for _, tableName := range tables {
@@ -854,6 +854,9 @@ func (se *Engine) ResetSequences(tables []string) {
 				log.Infof("Resetting sequence info for table %v: %s", tableName, table.SequenceInfo)
 				table.SequenceInfo.Reset()
 			}
+		} else {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v not found in schema", tableName)
 		}
 	}
+	return nil
 }

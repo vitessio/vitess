@@ -19,10 +19,11 @@ package schema
 import (
 	"context"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -95,16 +96,12 @@ func TestLoadTableSequence(t *testing.T) {
 	}
 	table.Fields = nil
 	table.PKColumns = nil
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%#v, want\n%#v", table, want)
-	}
+	utils.MustMatch(t, want, table)
 
 	table.SequenceInfo.NextVal = 10
 	table.SequenceInfo.LastVal = 5
 	table.SequenceInfo.Reset()
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%#v, want\n%#v", table, want)
-	}
+	utils.MustMatch(t, want, table)
 }
 
 func TestLoadTableMessage(t *testing.T) {
