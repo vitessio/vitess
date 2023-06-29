@@ -440,15 +440,11 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 			}
 		}
 
-		aggrParams[idx] = &engine.AggregateParams{
-			Opcode:     opcode,
-			Col:        offset,
-			WCol:       -1,
-			Alias:      aggr.Alias,
-			Expr:       aggr.Original.Expr,
-			Original:   aggr.Original,
-			OrigOpcode: aggr.OpCode,
-		}
+		aggrParam := engine.NewAggregateParam(opcode, offset, aggr.Alias)
+		aggrParam.Expr = aggr.Original.Expr
+		aggrParam.Original = aggr.Original
+		aggrParam.OrigOpcode = aggr.OpCode
+		aggrParams[idx] = aggrParam
 	}
 	return aggrParams, nil
 }
@@ -479,15 +475,12 @@ func addColumnsToOA(
 			count++
 			a := aggregationExprs[offset]
 			collID := ctx.SemTable.CollationForExpr(a.Func.GetArg())
-			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-				Opcode:      a.OpCode,
-				Col:         o.col,
-				KeyCol:      o.col,
-				WCol:        o.wsCol,
-				Alias:       a.Alias,
-				Original:    a.Original,
-				CollationID: collID,
-			})
+			aggr := engine.NewAggregateParam(a.OpCode, o.col, a.Alias)
+			aggr.KeyCol = o.col
+			aggr.WCol = o.wsCol
+			aggr.Original = a.Original
+			aggr.CollationID = collID
+			oa.aggregates = append(oa.aggregates, aggr)
 		}
 		lastOffset := distinctOffsets[len(distinctOffsets)-1]
 		distinctIdx := 0

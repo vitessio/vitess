@@ -52,6 +52,19 @@ type AggregateParams struct {
 	OrigOpcode AggregateOpcode
 }
 
+func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *AggregateParams {
+	return &AggregateParams{
+		Opcode: opcode,
+		Col:    col,
+		Alias:  alias,
+		WCol:   -1,
+	}
+}
+
+func (ap *AggregateParams) WAssigned() bool {
+	return ap.WCol >= 0
+}
+
 func (ap *AggregateParams) isDistinct() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
 }
@@ -67,7 +80,7 @@ func (ap *AggregateParams) preProcess() bool {
 
 func (ap *AggregateParams) String() string {
 	keyCol := strconv.Itoa(ap.Col)
-	if ap.WCol >= 0 {
+	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if ap.CollationID != collations.Unknown {
@@ -279,7 +292,7 @@ func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb
 
 func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) sqltypes.Value {
 	curDistinct := row[aggr.KeyCol]
-	if aggr.WCol >= 0 && !curDistinct.IsComparable() {
+	if aggr.WAssigned() && !curDistinct.IsComparable() {
 		aggr.KeyCol = aggr.WCol
 		curDistinct = row[aggr.KeyCol]
 	}
