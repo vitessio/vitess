@@ -287,7 +287,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	for idx, aggr := range a.Aggregations {
-		if !aggr.NeedWeightString(ctx) {
+		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
 		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
@@ -407,7 +407,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
-		if aggr.WSOffset != -1 || !aggr.NeedWeightString(ctx) {
+		if aggr.WSOffset != -1 || !aggr.NeedsWeightString(ctx) {
 			continue
 		}
 

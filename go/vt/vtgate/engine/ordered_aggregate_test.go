@@ -120,6 +120,33 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 }
 
+func TestMinMaxFailsCorrectly(t *testing.T) {
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col|weight_string(col)",
+				"varchar|varbinary",
+			),
+			"a|A",
+			"A|A",
+			"b|B",
+			"C|C",
+			"c|C",
+		)},
+	}
+
+	aggr := NewAggregateParam(AggregateMax, 0, "")
+	aggr.WCol = 1
+	oa := &ScalarAggregate{
+		Aggregates:          []*AggregateParams{aggr},
+		TruncateColumnCount: 1,
+		Input:               fp,
+	}
+
+	_, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	assert.ErrorContains(t, err, "min/max on types that are not comparable is not supported")
+}
+
 func TestOrderedAggregateStreamExecute(t *testing.T) {
 	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(

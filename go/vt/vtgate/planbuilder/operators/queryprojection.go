@@ -109,13 +109,8 @@ type (
 	}
 )
 
-func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
-	switch aggr.OpCode {
-	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct, opcode.AggregateMin, opcode.AggregateMax:
-		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
-	default:
-		return false
-	}
+func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
+	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
 }
 
 func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
