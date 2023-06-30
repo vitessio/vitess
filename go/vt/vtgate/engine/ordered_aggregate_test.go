@@ -45,7 +45,6 @@ func init() {
 }
 
 func TestOrderedAggregateExecute(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varbinary|decimal",
@@ -68,7 +67,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
@@ -80,7 +79,6 @@ func TestOrderedAggregateExecute(t *testing.T) {
 }
 
 func TestOrderedAggregateExecuteTruncate(t *testing.T) {
-	assert := assert.New(t)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -106,7 +104,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -148,7 +146,6 @@ func TestMinMaxFailsCorrectly(t *testing.T) {
 }
 
 func TestOrderedAggregateStreamExecute(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varbinary|decimal",
@@ -175,7 +172,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResults := sqltypes.MakeTestStreamingResults(
 		fields,
@@ -189,7 +186,6 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 }
 
 func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
-	assert := assert.New(t)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -216,7 +212,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResults := sqltypes.MakeTestStreamingResults(
 		sqltypes.MakeTestFields(
@@ -233,7 +229,6 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 }
 
 func TestOrderedAggregateGetFields(t *testing.T) {
-	assert := assert.New(t)
 	input := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col|count(*)",
@@ -245,8 +240,8 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 	oa := &OrderedAggregate{Input: fp}
 
 	got, err := oa.GetFields(context.Background(), nil, nil)
-	assert.NoError(err)
-	assert.Equal(got, input)
+	assert.NoError(t, err)
+	assert.Equal(t, got, input)
 }
 
 func TestOrderedAggregateInputFail(t *testing.T) {
@@ -271,7 +266,6 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 }
 
 func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
-	assert := assert.New(t)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -320,7 +314,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -341,7 +335,6 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 }
 
 func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
-	assert := assert.New(t)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -396,7 +389,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResults := sqltypes.MakeTestStreamingResults(
 		sqltypes.MakeTestFields(
@@ -425,7 +418,6 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 }
 
 func TestOrderedAggregateSumDistinctGood(t *testing.T) {
-	assert := assert.New(t)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -475,7 +467,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -494,7 +486,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	)
 	want := fmt.Sprintf("%v", wantResult.Rows)
 	got := fmt.Sprintf("%v", result.Rows)
-	assert.Equal(want, got)
+	assert.Equal(t, want, got)
 }
 
 func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
@@ -608,7 +600,6 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	assert := assert.New(t)
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{
 			NewAggregateParam(AggregateSum, 1, ""),
@@ -626,14 +617,14 @@ func TestMerge(t *testing.T) {
 	)
 
 	merged, _, err := merge(fields, r.Rows[0], r.Rows[1], nil, oa.Aggregates)
-	assert.NoError(err)
+	assert.NoError(t, err)
 	want := sqltypes.MakeTestResult(fields, "1|5|6.0|2|bc").Rows[0]
-	assert.Equal(want, merged)
+	assert.Equal(t, want, merged)
 
 	// swap and retry
 	merged, _, err = merge(fields, r.Rows[1], r.Rows[0], nil, oa.Aggregates)
-	assert.NoError(err)
-	assert.Equal(want, merged)
+	assert.NoError(t, err)
+	assert.Equal(t, want, merged)
 }
 
 func TestOrderedAggregateExecuteGtid(t *testing.T) {
@@ -921,7 +912,6 @@ func TestMultiDistinct(t *testing.T) {
 }
 
 func TestOrderedAggregateCollate(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varchar|decimal",
@@ -949,7 +939,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
@@ -962,7 +952,6 @@ func TestOrderedAggregateCollate(t *testing.T) {
 }
 
 func TestOrderedAggregateCollateAS(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varchar|decimal",
@@ -988,7 +977,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
@@ -1002,7 +991,6 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 }
 
 func TestOrderedAggregateCollateKS(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varchar|decimal",
@@ -1029,7 +1017,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
