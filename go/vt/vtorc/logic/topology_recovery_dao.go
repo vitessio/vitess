@@ -514,7 +514,7 @@ func ReadInActivePeriodSuccessorInstanceRecovery(tabletAlias string) ([]*Topolog
 func ReadRecentRecoveries(unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
-	args := sqlutils.Args()
+	var args []any
 	if unacknowledgedOnly {
 		whereConditions = append(whereConditions, `acknowledged=0`)
 	}

@@ -97,13 +97,6 @@ func init() {
 	namedCollection = make(map[string](*Collection))
 }
 
-// StopMonitoring stops monitoring all the collections
-func StopMonitoring() {
-	for _, q := range namedCollection {
-		q.StopAutoExpiration()
-	}
-}
-
 // CreateOrReturnCollection allows for creation of a new collection or
 // returning a pointer to an existing one given the name. This allows access
 // to the data structure from the api interface (http/api.go) and also when writing (inst).

@@ -22,7 +22,6 @@ import (
 	"os"
 	"time"
 
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/rcrowley/go-metrics"
@@ -107,50 +106,6 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 	auditOperationCounter.Inc(1)
 
 	return nil
-}
-
-// ReadRecentAudit returns a list of audit entries order chronologically descending, using page number.
-func ReadRecentAudit(tabletAlias string, page int) ([]Audit, error) {
-	res := []Audit{}
-	args := sqlutils.Args()
-	whereCondition := ``
-	if tabletAlias != "" {
-		whereCondition = `where alias=?`
-		args = append(args, tabletAlias)
-	}
-	query := fmt.Sprintf(`
-		select
-			audit_id,
-			audit_timestamp,
-			audit_type,
-			alias,
-			message
-		from
-			audit
-		%s
-		order by
-			audit_timestamp desc
-		limit ?
-		offset ?
-		`, whereCondition)
-	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		audit := Audit{}
-		audit.AuditID = m.GetInt64("audit_id")
-		audit.AuditTimestamp = m.GetString("audit_timestamp")
-		audit.AuditType = m.GetString("audit_type")
-		audit.AuditTabletAlias = m.GetString("alias")
-		audit.Message = m.GetString("message")
-
-		res = append(res, audit)
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
-
 }
 
 // ExpireAudit removes old rows from the audit table
