@@ -32,18 +32,31 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	if aggregator.Pushed {
 		return aggregator, rewrite.SameTree, nil
 	}
-	aggregator.Pushed = true
 	switch src := aggregator.Source.(type) {
 	case *Route:
+		// if we have a single sharded route, we can push it down
 		output, applyResult, err = pushDownAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
-		output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+		if ctx.DelegateAggregation {
+			output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+		}
 	case *Filter:
-		output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+		if ctx.DelegateAggregation {
+			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+		}
 	default:
 		return aggregator, rewrite.SameTree, nil
 	}
 
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if output == nil {
+		return aggregator, rewrite.SameTree, nil
+	}
+
+	aggregator.Pushed = true
 	if applyResult != rewrite.SameTree && aggregator.Original {
 		aggregator.aggregateTheAggregates()
 	}
@@ -72,6 +85,10 @@ func pushDownAggregationThroughRoute(
 	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
 	if route.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
 		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
+	}
+
+	if !ctx.DelegateAggregation {
+		return nil, nil, nil
 	}
 
 	// Create a new aggregator to be placed below the route.
@@ -247,6 +264,10 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
+		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
+		if err == errAbortAggrPushing {
+			return nil, nil, nil
+		}
 		return nil, nil, err
 	}
 
@@ -275,6 +296,8 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	rootAggr.Source = output
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
+
+var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
@@ -323,8 +346,17 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 				Original: aeWrap(groupBy.Inner),
 				RHSExpr:  expr,
 			})
+		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
+			jc, err := BreakExpressionInLHSandRHS(ctx, groupBy.SimplifiedExpr, lhs.tableID)
+			if err != nil {
+				return nil, err
+			}
+			for _, lhsExpr := range jc.LHSExprs {
+				lhs.addGrouping(ctx, NewGroupBy(lhsExpr, lhsExpr, aeWrap(lhsExpr)))
+			}
+			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr, jc.RHSExpr, aeWrap(jc.RHSExpr)))
 		default:
-			return nil, vterrors.VT12001("grouping on columns from different sources")
+			return nil, vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr))
 		}
 	}
 	return groupingJCs, nil
@@ -425,10 +457,19 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 	case opcode.AggregateCountStar:
 		ab.handleCountStar(ctx, aggr)
 		return nil
-	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
-		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
+		return ab.handlePushThroughAggregation(ctx, aggr)
+	case opcode.AggregateGroupConcat:
+		f := aggr.Func.(*sqlparser.GroupConcatExpr)
+		if f.Distinct || len(f.OrderBy) > 0 || f.Separator != "" {
+			panic("fail here")
+		}
+		// this needs special handling, currently aborting the push of function
+		// and later will try pushing the column instead.
+		// TODO: this should be handled better by pushing the function down.
+		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
 		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 	default:
@@ -464,7 +505,7 @@ func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningCont
 	case deps.IsSolvedBy(ab.rhs.tableID):
 		ab.pushThroughRight(aggr)
 	default:
-		return vterrors.VT12001("aggregation on columns from different sources: " + sqlparser.String(aggr.Original.Expr))
+		return errAbortAggrPushing
 	}
 	return nil
 }
@@ -474,11 +515,12 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	lhsAE := ab.leftCountStar(ctx)
 	rhsAE := ab.rightCountStar(ctx)
 
-	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr)
+	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, true)
 }
 
 func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.PlanningContext, aggr Aggr) error {
 	var lhsAE, rhsAE *sqlparser.AliasedExpr
+	var addCoalesce bool
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
@@ -486,6 +528,9 @@ func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.Plannin
 		ab.pushThroughLeft(aggr)
 		lhsAE = aggr.Original
 		rhsAE = ab.rightCountStar(ctx)
+		if ab.outerJoin {
+			addCoalesce = true
+		}
 
 	case deps.IsSolvedBy(ab.rhs.tableID):
 		ab.pushThroughRight(aggr)
@@ -493,14 +538,14 @@ func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.Plannin
 		rhsAE = aggr.Original
 
 	default:
-		return errHorizonNotPlanned()
+		return errAbortAggrPushing
 	}
 
-	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr)
+	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, addCoalesce)
 	return nil
 }
 
-func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE *sqlparser.AliasedExpr, aggr Aggr) {
+func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE *sqlparser.AliasedExpr, aggr Aggr, coalesce bool) {
 	// We expect the expressions to be different on each side of the join, otherwise it's an error.
 	if lhsAE.Expr == rhsAE.Expr {
 		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsAE, rhsAE))
@@ -510,7 +555,7 @@ func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE
 
 	// When dealing with outer joins, we don't want null values from the RHS to ruin the calculations we are doing,
 	// so we use the MySQL `coalesce` after the join is applied to multiply the count from LHS with 1.
-	if ab.outerJoin {
+	if ab.outerJoin && coalesce {
 		rhsExpr = coalesceFunc(rhsExpr)
 	}
 

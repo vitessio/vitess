@@ -18,13 +18,11 @@ package txthrottler
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
@@ -186,64 +184,35 @@ type txThrottlerState struct {
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
 func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(env, topoServer)
-	if err != nil {
-		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
-			" be disabled. Error: %v", err)
-		// newTxThrottler with disabled config never returns an error
-		txThrottler, _ = newTxThrottler(env, topoServer, &txThrottlerConfig{enabled: false})
-	} else {
-		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
+	throttlerConfig := &txThrottlerConfig{enabled: false}
+
+	if env.Config().EnableTxThrottler {
+		// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
+		// is immutable.
+		healthCheckCells := env.Config().TxThrottlerHealthCheckCells
+
+		throttlerConfig = &txThrottlerConfig{
+			enabled:          true,
+			tabletTypes:      env.Config().TxThrottlerTabletTypes,
+			throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
+			healthCheckCells: healthCheckCells,
+		}
+
+		defer log.Infof("Initialized transaction throttler with config: %+v", throttlerConfig)
 	}
-	return txThrottler
+
+	return &txThrottler{
+		config:            throttlerConfig,
+		topoServer:        topoServer,
+		throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
+		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
+	}
 }
 
 // InitDBConfig initializes the target parameters for the throttler.
 func (t *txThrottler) InitDBConfig(target *querypb.Target) {
 	t.target = proto.Clone(target).(*querypb.Target)
-}
-
-func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*txThrottler, error) {
-	if !env.Config().EnableTxThrottler {
-		return newTxThrottler(env, topoServer, &txThrottlerConfig{enabled: false})
-	}
-
-	var throttlerConfig throttlerdatapb.Configuration
-	if err := prototext.Unmarshal([]byte(env.Config().TxThrottlerConfig), &throttlerConfig); err != nil {
-		return nil, err
-	}
-
-	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
-	// is immutable.
-	healthCheckCells := make([]string, len(env.Config().TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, env.Config().TxThrottlerHealthCheckCells)
-
-	return newTxThrottler(env, topoServer, &txThrottlerConfig{
-		enabled:          true,
-		tabletTypes:      env.Config().TxThrottlerTabletTypes,
-		throttlerConfig:  &throttlerConfig,
-		healthCheckCells: healthCheckCells,
-	})
-}
-
-func newTxThrottler(env tabletenv.Env, topoServer *topo.Server, config *txThrottlerConfig) (*txThrottler, error) {
-	if config.enabled {
-		// Verify config.
-		err := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}.Verify()
-		if err != nil {
-			return nil, err
-		}
-		if len(config.healthCheckCells) == 0 {
-			return nil, fmt.Errorf("empty healthCheckCells given. %+v", config)
-		}
-	}
-	return &txThrottler{
-		config:            config,
-		topoServer:        topoServer,
-		throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
-		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
-		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
-	}, nil
 }
 
 // Open opens the transaction throttler. It must be called prior to 'Throttle'.

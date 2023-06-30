@@ -91,8 +91,11 @@ type (
 		OriginalOpCode opcode.AggregateOpcode
 
 		Alias string
+
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
-		Index    *int
+		// Only used in the old Horizon Planner
+		Index *int
+
 		Distinct bool
 
 		// the offsets point to columns on the same aggregator
@@ -111,7 +114,7 @@ func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
 	switch aggr.OpCode {
 	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
 		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
-	case opcode.AggregateMin, opcode.AggregateMax:
+	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateGroupConcat:
 		// currently this returns false, as aggregation engine primitive does not support the usage of weight_string
 		// for comparison. If Min/Max column is non-comparable then it will fail at runtime.
 		return false
@@ -444,13 +447,9 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr SelectExpr) bool {
+func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
 	for _, groupByExpr := range qp.groupByExprs {
-		exp, err := expr.GetExpr()
-		if err != nil {
-			return false
-		}
-		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.SimplifiedExpr, exp) {
+		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.SimplifiedExpr, expr) {
 			return true
 		}
 	}
@@ -623,7 +622,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 	return true
 }
 
-func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext) (out []Aggr, err error) {
+func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext, allowComplexExpression bool) (out []Aggr, complex bool, err error) {
 orderBy:
 	for _, orderExpr := range qp.OrderExprs {
 		orderExpr := orderExpr.SimplifiedExpr
@@ -649,33 +648,60 @@ orderBy:
 	for idx, expr := range qp.SelectExprs {
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		idxCopy := idx
 
 		if !sqlparser.ContainsAggregation(expr.Col) {
-			if !qp.isExprInGroupByExprs(ctx, expr) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aliasedExpr, aliasedExpr.ColumnName())
+			getExpr, err := expr.GetExpr()
+			if err != nil {
+				return nil, false, err
+			}
+			if !qp.isExprInGroupByExprs(ctx, getExpr) {
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
 			continue
 		}
-		fnc, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
-		if !isAggregate {
-			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
+		_, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
+		if !isAggregate && !allowComplexExpression {
+			return nil, false, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		aggr := createAggrFromAggrFunc(fnc, aliasedExpr)
-		aggr.Index = &idxCopy
-		out = append(out, aggr)
+		sqlparser.CopyOnRewrite(aliasedExpr.Expr, func(node, parent sqlparser.SQLNode) bool {
+			ex, isExpr := node.(sqlparser.Expr)
+			if !isExpr {
+				return true
+			}
+			if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr {
+				ae := aeWrap(aggr)
+				if aggr == aliasedExpr.Expr {
+					ae = aliasedExpr
+				}
+				aggrFunc := createAggrFromAggrFunc(aggr, ae)
+				aggrFunc.Index = &idxCopy
+				out = append(out, aggrFunc)
+				return false
+			}
+			if sqlparser.ContainsAggregation(node) {
+				complex = true
+				return true
+			}
+			if !qp.isExprInGroupByExprs(ctx, ex) {
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
+				aggr.Index = &idxCopy
+				out = append(out, aggr)
+			}
+			return false
+		}, nil, nil)
 	}
 	return
 }
 
 func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
-	code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+	code := opcode.SupportedAggregates[fnc.AggrName()]
 
 	if code == opcode.AggregateCount {
 		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
@@ -683,9 +709,8 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 		}
 	}
 
-	aggrF, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
-
-	if aggrF.IsDistinct() {
+	distinct := sqlparser.IsDistinct(fnc)
+	if distinct {
 		switch code {
 		case opcode.AggregateCount:
 			code = opcode.AggregateCountDistinct
@@ -694,8 +719,8 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 		}
 	}
 
-	aggr := NewAggr(code, aggrF, aliasedExpr, aliasedExpr.ColumnName())
-	aggr.Distinct = aggrF.IsDistinct()
+	aggr := NewAggr(code, fnc, aliasedExpr, aliasedExpr.ColumnName())
+	aggr.Distinct = distinct
 	return aggr
 }
 

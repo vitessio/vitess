@@ -1,9 +1,12 @@
 /*
 Copyright 2023 The Vitess Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,10 +32,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		return nil, nil, errHorizonNotPlanned()
 	}
 
-	if sel.Having != nil {
-		return nil, nil, errHorizonNotPlanned()
-	}
-
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, nil, err
@@ -47,6 +46,14 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		op = &Distinct{
 			Source: op,
 			QP:     qp,
+		}
+	}
+
+	if sel.Having != nil {
+		op = &Filter{
+			Source:         op,
+			Predicates:     sqlparser.SplitAndExpression(nil, sel.Having.Expr),
+			FinalPredicate: nil,
 		}
 	}
 
@@ -105,7 +112,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		return nil, err
 	}
 
-	aggregations, err := qp.AggregationExpressions(ctx)
+	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +135,13 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		a.Alias = derived.Alias
 	}
 
+	if complexAggr {
+		return createProjectionForComplexAggregation(a, qp)
+	}
+	return createProjectionForSimpleAggregation(ctx, a, qp)
+}
+
+func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
 outer:
 	for colIdx, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
@@ -158,8 +172,33 @@ outer:
 		}
 		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae)))
 	}
-
 	return a, nil
+}
+
+func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
+	p := &Projection{
+		Source:  a,
+		Alias:   a.Alias,
+		TableID: a.TableID,
+	}
+
+	for _, expr := range qp.SelectExprs {
+		ae, err := expr.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		p.Columns = append(p.Columns, ae)
+		p.Projections = append(p.Projections, UnexploredExpression{E: ae.Expr})
+	}
+	for i, by := range a.Grouping {
+		a.Grouping[i].ColOffset = len(a.Columns)
+		a.Columns = append(a.Columns, aeWrap(by.SimplifiedExpr))
+	}
+	for i, aggregation := range a.Aggregations {
+		a.Aggregations[i].ColOffset = len(a.Columns)
+		a.Columns = append(a.Columns, aggregation.Original)
+	}
+	return p, nil
 }
 
 func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {

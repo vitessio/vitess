@@ -55,6 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -491,8 +493,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfTableSpec(in)
 	case *TablespaceOperation:
 		return CloneRefOfTablespaceOperation(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *TruncateTable:
@@ -726,6 +728,16 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfAnyValue creates a deep clone of the input.
+func CloneRefOfAnyValue(n *AnyValue) *AnyValue {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -3060,8 +3072,8 @@ func CloneRefOfTablespaceOperation(n *TablespaceOperation) *TablespaceOperation 
 	return &out
 }
 
-// CloneRefOfTimestampFuncExpr creates a deep clone of the input.
-func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
+// CloneRefOfTimestampDiffExpr creates a deep clone of the input.
+func CloneRefOfTimestampDiffExpr(n *TimestampDiffExpr) *TimestampDiffExpr {
 	if n == nil {
 		return nil
 	}
@@ -3407,6 +3419,8 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BitAnd:
@@ -3509,6 +3523,8 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3653,8 +3669,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *UpdateXMLExpr:
@@ -3773,6 +3789,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -3977,8 +3995,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:

@@ -54,6 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -490,8 +492,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfTableSpec(in, f)
 	case *TablespaceOperation:
 		return VisitRefOfTablespaceOperation(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *TruncateTable:
@@ -793,6 +795,18 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAnyValue(in *AnyValue, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3906,7 +3920,7 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
+func VisitRefOfTimestampDiffExpr(in *TimestampDiffExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -4376,6 +4390,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
 	case *BitAnd:
@@ -4474,6 +4490,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4618,8 +4636,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UpdateXMLExpr:
@@ -4726,6 +4744,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -4930,8 +4950,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:

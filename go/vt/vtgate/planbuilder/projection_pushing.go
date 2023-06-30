@@ -139,7 +139,7 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		return 0, false, err
 	}
 	node.aggregates = append(node.aggregates, &engine.AggregateParams{
-		Opcode:   popcode.AggregateRandom,
+		Opcode:   popcode.AggregateAnyValue,
 		Col:      offset,
 		Alias:    expr.ColumnName(),
 		Expr:     expr.Expr,

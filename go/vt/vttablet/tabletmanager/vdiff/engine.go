@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -297,7 +298,11 @@ func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, id), -1)
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffByID, sqltypes.Int64BindVariable(id))
+	if err != nil {
+		return nil, err
+	}
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +345,11 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 			return err
 		}
 		log.Infof("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError)
-		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, id), 1); err != nil {
+		query, err := sqlparser.ParseAndBind(sqlRetryVDiff, sqltypes.Int64BindVariable(id))
+		if err != nil {
+			return err
+		}
+		if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
 		options := &tabletmanagerdata.VDiffOptions{}
