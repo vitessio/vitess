@@ -135,8 +135,8 @@ func (b *Bytes) Int32() int32 {
 	return int32(b.Uint32())
 }
 
-func (b *Bytes) Pointer() unsafe.Pointer {
-	return unsafe.Pointer(unsafe.SliceData(b.buf))
+func (b *Bytes) Buffer() []byte {
+	return b.buf
 }
 
 func (b *Bytes) Skip(size int32) {
