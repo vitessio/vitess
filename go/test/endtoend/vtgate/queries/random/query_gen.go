@@ -136,21 +136,43 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	// create both tables and join at the same time since both occupy the from clause
 	tables, isJoin := createTablesAndJoin(schemaTables, sel)
 
+	// canAggregate determines if the query will have
+	// aggregate columns, group by, and having
+	canAggregate := rand.Intn(4) > 0
+
 	var (
 		groupBy          sqlparser.GroupBy
 		groupSelectExprs sqlparser.SelectExprs
 		grouping         []column
+		aggrExprs        sqlparser.SelectExprs
+		aggregates       []column
 	)
 	// TODO: distinct makes vitess think there is grouping on aggregation columns
-	if testFailingQueries || !isDistinct {
-		groupBy, groupSelectExprs, grouping = createGroupBy(tables, maxGroupBy)
-		sel.AddSelectExprs(groupSelectExprs)
-		sel.GroupBy = groupBy
+	if canAggregate {
+		if testFailingQueries || !isDistinct {
+			// group by
+			groupBy, groupSelectExprs, grouping = createGroupBy(tables, maxGroupBy)
+			sel.AddSelectExprs(groupSelectExprs)
+			sel.GroupBy = groupBy
+		}
+
+		// aggregate columns
+		aggrExprs, aggregates = createAggregations(tables, maxAggrs)
+		sel.AddSelectExprs(aggrExprs)
+
+		// having
+		isHaving := rand.Intn(2) < 1
+		if isHaving {
+			sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
+			if rand.Intn(2) < 1 && testFailingQueries {
+				// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
+				// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
+				sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
+			}
+		}
+		// TODO: use sqlparser.ExprGenerator to generate a random expression with aggregation functions
 
 	}
-
-	aggrExprs, aggregates := createAggregations(tables, maxAggrs)
-	sel.AddSelectExprs(aggrExprs)
 
 	// can add both aggregate and grouping columns to order by
 	// TODO: order fails with distinct and outer joins
@@ -171,42 +193,44 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 		sel.AddWhere(predRandomExpr)
 	}
 
-	// having
-	isHaving := rand.Intn(2) < 1
-	if isHaving {
-		sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
-		if rand.Intn(2) < 1 && testFailingQueries {
-			// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
-			// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
-			sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables, false)...))
-		}
-	}
-	// TODO: use sqlparser.ExprGenerator to generate a random expression with aggregation functions
-
 	// only add a limit if the grouping columns are ordered
 	// TODO: limit fails a lot
 	if rand.Intn(2) < 1 && (isOrdered || len(groupBy) == 0) && testFailingQueries {
 		sel.Limit = createLimit()
 	}
 
-	var newTable tableT
+	var (
+		newTable tableT
+		f        func() sqlparser.Expr
+		typ      string
+	)
 	// add random expression to select
 	// TODO: random expressions cause a lot of failures
 	isRandomExpr := rand.Intn(2) < 1 && testFailingQueries
-	var (
-		randomExpr sqlparser.Expr
-		typ        string
-	)
+
 	// TODO: selecting a random expression potentially with columns creates
 	// TODO: only_full_group_by related errors in Vitess
 	if testFailingQueries {
-		randomExpr = getRandomExpr(tables)
+		f = func() sqlparser.Expr { return getRandomExpr(tables) }
 	} else {
-		randomExpr = getRandomExpr(nil)
+		f = func() sqlparser.Expr { return getRandomExpr(nil) }
 	}
 
 	// make sure we have at least one select expression
-	if isRandomExpr || len(sel.SelectExprs) == 0 {
+	for isRandomExpr || len(sel.SelectExprs) == 0 {
+		// TODO: if the random expression is an int literal,
+		// TODO: and if the query is (potentially) an aggregate query,
+		// TODO: then we must group by the random expression,
+		// TODO: but we cannot do this for int literals,
+		// TODO: so we loop until we get a non-int-literal random expression
+		// TODO: this is necessary because grouping by the alias (crandom0) currently fails on vitess
+		randomExpr := f()
+		literal, ok := randomExpr.(*sqlparser.Literal)
+		isIntLiteral := ok && literal.Type == sqlparser.IntVal
+		if isIntLiteral && canAggregate {
+			continue
+		}
+
 		// TODO: select distinct [literal] fails
 		sel.Distinct = false
 
@@ -217,7 +241,11 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 		})
 
 		// make sure to add the random expression to group by for only_full_group_by
-		sel.AddGroupBy(randomExpr)
+		if canAggregate {
+			sel.AddGroupBy(randomExpr)
+		}
+
+		break
 	}
 
 	// add them to newTable

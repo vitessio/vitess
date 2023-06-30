@@ -78,14 +78,10 @@ func helperTest(t *testing.T, query string) {
 }
 
 func TestMustFix(t *testing.T) {
-	t.Skip("Skip CI")
+	//t.Skip("Skip CI")
 
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
-
-	// mismatched results
-	// sum values returned as int64 instead of decimal
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl1.sal) as caggr1 from emp as tbl0, emp as tbl1 group by tbl1.ename order by tbl1.ename asc")
 
 	// mismatched results
 	// limit >= 9 works
@@ -110,10 +106,6 @@ func TestMustFix(t *testing.T) {
 	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)")
 
-	// mismatched results
-	// previously failing, then succeeding query, now failing again
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3")
-
 	// mismatched results (group by + right join)
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
@@ -132,7 +124,7 @@ func TestMustFix(t *testing.T) {
 }
 
 func TestKnownFailures(t *testing.T) {
-	t.Skip("Skip CI")
+	//t.Skip("Skip CI")
 
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
@@ -228,6 +220,7 @@ func TestRandom(t *testing.T) {
 	endBy := time.Now().Add(1 * time.Second)
 
 	var queryCount int
+	// continue testing after an error if and only if testFailingQueries is true
 	for time.Now().Before(endBy) && (!t.Failed() || testFailingQueries) {
 		query := sqlparser.String(randomQuery(schemaTables, 3, 3))
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
@@ -257,6 +250,7 @@ func TestRandom(t *testing.T) {
 	fmt.Printf("Queries successfully executed: %d\n", queryCount)
 }
 
+// these queries were previously failing and have now been fixed
 func TestBuggyQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -264,47 +258,27 @@ func TestBuggyQueries(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*), count(*) from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.deptno group by tbl1.empno order by tbl1.empno",
-		`[[INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)]]`)
-	//mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3",
-	//	`[[INT64(8)] [INT64(16)] [INT64(12)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from emp as tbl0 group by tbl0.empno order by tbl0.empno",
-		`[[INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ distinct count(*), tbl0.loc from dept as tbl0 group by tbl0.loc",
-		`[[INT64(1) VARCHAR("BOSTON")] [INT64(1) VARCHAR("CHICAGO")] [INT64(1) VARCHAR("DALLAS")] [INT64(1) VARCHAR("NEW YORK")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.loc",
-		`[[INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(tbl1.comm) from emp as tbl0, emp as tbl1",
-		`[[DECIMAL(30800)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.mgr, tbl1.mgr, count(*) from emp as tbl1 group by tbl1.mgr",
-		`[[NULL NULL INT64(1)] [INT64(7566) INT64(7566) INT64(2)] [INT64(7698) INT64(7698) INT64(5)] [INT64(7782) INT64(7782) INT64(1)] [INT64(7788) INT64(7788) INT64(1)] [INT64(7839) INT64(7839) INT64(3)] [INT64(7902) INT64(7902) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.mgr, tbl1.mgr, count(*) from emp as tbl0, emp as tbl1 group by tbl1.mgr",
-		`[[NULL NULL INT64(14)] [INT64(7566) INT64(7566) INT64(28)] [INT64(7698) INT64(7698) INT64(70)] [INT64(7782) INT64(7782) INT64(14)] [INT64(7788) INT64(7788) INT64(14)] [INT64(7839) INT64(7839) INT64(42)] [INT64(7902) INT64(7902) INT64(14)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*), count(tbl0.comm) from emp as tbl0, emp as tbl1 join dept as tbl2",
-		`[[INT64(784) INT64(784) INT64(224)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0, dept as tbl1",
-		`[[INT64(16) INT64(16)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0",
-		`[[INT64(4)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ min(tbl0.loc) from dept as tbl0",
-		`[[VARCHAR("BOSTON")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.empno, max(tbl1.job) from dept as tbl0, emp as tbl1 group by tbl1.empno",
-		`[[INT64(7369) VARCHAR("CLERK")] [INT64(7499) VARCHAR("SALESMAN")] [INT64(7521) VARCHAR("SALESMAN")] [INT64(7566) VARCHAR("MANAGER")] [INT64(7654) VARCHAR("SALESMAN")] [INT64(7698) VARCHAR("MANAGER")] [INT64(7782) VARCHAR("MANAGER")] [INT64(7788) VARCHAR("ANALYST")] [INT64(7839) VARCHAR("PRESIDENT")] [INT64(7844) VARCHAR("SALESMAN")] [INT64(7876) VARCHAR("CLERK")] [INT64(7900) VARCHAR("CLERK")] [INT64(7902) VARCHAR("ANALYST")] [INT64(7934) VARCHAR("CLERK")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.ename, max(tbl0.comm) from emp as tbl0, emp as tbl1 group by tbl1.ename",
-		`[[VARCHAR("ADAMS") INT64(1400)] [VARCHAR("ALLEN") INT64(1400)] [VARCHAR("BLAKE") INT64(1400)] [VARCHAR("CLARK") INT64(1400)] [VARCHAR("FORD") INT64(1400)] [VARCHAR("JAMES") INT64(1400)] [VARCHAR("JONES") INT64(1400)] [VARCHAR("KING") INT64(1400)] [VARCHAR("MARTIN") INT64(1400)] [VARCHAR("MILLER") INT64(1400)] [VARCHAR("SCOTT") INT64(1400)] [VARCHAR("SMITH") INT64(1400)] [VARCHAR("TURNER") INT64(1400)] [VARCHAR("WARD") INT64(1400)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.dname, tbl0.dname, min(tbl0.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl0.dname",
-		`[[VARCHAR("ACCOUNTING") VARCHAR("ACCOUNTING") INT64(10)] [VARCHAR("OPERATIONS") VARCHAR("OPERATIONS") INT64(40)] [VARCHAR("RESEARCH") VARCHAR("RESEARCH") INT64(20)] [VARCHAR("SALES") VARCHAR("SALES") INT64(30)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.dname, min(tbl1.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl1.dname",
-		`[[VARCHAR("ACCOUNTING") INT64(10)] [VARCHAR("ACCOUNTING") INT64(40)] [VARCHAR("ACCOUNTING") INT64(20)] [VARCHAR("ACCOUNTING") INT64(30)] [VARCHAR("OPERATIONS") INT64(10)] [VARCHAR("OPERATIONS") INT64(40)] [VARCHAR("OPERATIONS") INT64(20)] [VARCHAR("OPERATIONS") INT64(30)] [VARCHAR("RESEARCH") INT64(10)] [VARCHAR("RESEARCH") INT64(40)] [VARCHAR("RESEARCH") INT64(20)] [VARCHAR("RESEARCH") INT64(30)] [VARCHAR("SALES") INT64(10)] [VARCHAR("SALES") INT64(40)] [VARCHAR("SALES") INT64(20)] [VARCHAR("SALES") INT64(30)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ max(tbl0.hiredate) from emp as tbl0",
-		`[[DATE("1983-01-12")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname",
-		`[[INT64(10) INT64(4)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)",
-		`[[INT64(4)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm",
-		`[[NULL NULL]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno",
-		`[[NULL INT64(0)]]`)
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ sum(tbl1.sal) as caggr1 from emp as tbl0, emp as tbl1 group by tbl1.ename order by tbl1.ename asc")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*), count(*), count(*) from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.deptno group by tbl1.empno order by tbl1.empno")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from emp as tbl0 group by tbl0.empno order by tbl0.empno")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ distinct count(*), tbl0.loc from dept as tbl0 group by tbl0.loc")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.loc")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ sum(tbl1.comm) from emp as tbl0, emp as tbl1")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ tbl1.mgr, tbl1.mgr, count(*) from emp as tbl1 group by tbl1.mgr")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ tbl1.mgr, tbl1.mgr, count(*) from emp as tbl0, emp as tbl1 group by tbl1.mgr")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*), count(*), count(tbl0.comm) from emp as tbl0, emp as tbl1 join dept as tbl2")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0, dept as tbl1")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ min(tbl0.loc) from dept as tbl0")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ tbl1.empno, max(tbl1.job) from dept as tbl0, emp as tbl1 group by tbl1.empno")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ tbl1.ename, max(tbl0.comm) from emp as tbl0, emp as tbl1 group by tbl1.ename")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ tbl0.dname, tbl0.dname, min(tbl0.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl0.dname")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ tbl0.dname, min(tbl1.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl1.dname")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ max(tbl0.hiredate) from emp as tbl0")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno")
 
 }
