@@ -204,7 +204,7 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
 	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 
-	//ReloadAt tests
+	// ReloadAt tests
 	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
 	require.NoError(t, err)
 	pos2, err := mysql.DecodePosition("MariaDB/0-41983-40")
@@ -426,7 +426,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	}
 }
 
-func TestOpenFailedDueToTableErr(t *testing.T) {
+func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,7 +67,7 @@ type Engine struct {
 	isOpen     bool
 	tables     map[string]*Table
 	lastChange int64
-	//the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
+	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos mysql.Position
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
@@ -498,6 +499,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[1].String(), row[3].ToString())
 		if err != nil {
+			tableType := row[1].ToString()
+			if strings.EqualFold(tableType, "VIEW") {
+				log.Warningf("Failed reading schema for the view: %s", tableName)
+				continue
+			}
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
