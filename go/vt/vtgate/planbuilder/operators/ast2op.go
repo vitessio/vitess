@@ -53,37 +53,6 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 	return op, nil
 }
 
-// func removeUnnecessaryOrdering(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-//	horizon, ok := op.(horizonLike)
-//	if !ok {
-//		return op, nil
-//	}
-//
-//	qp, err := horizon.getQP(ctx)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if !qp.HasAggr {
-//		return op, nil
-//	}
-//
-//	visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-//
-//	}
-//
-//	shouldVisit := func(o ops.Operator) rewrite.VisitRule {
-//		switch o.(type) {
-//		case *Aggregator, *Route:
-//			return false
-//		default:
-//			return true
-//		}
-//	}
-//	rewrite.TopDown(op, TableID, visit, shouldVisit)
-// }
-
-// createOperatorFromSelect creates an operator tree that represents the input SELECT query
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
 	subq, err := createSubqueryFromStatement(ctx, sel)
 	if err != nil {

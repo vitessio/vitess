@@ -102,6 +102,25 @@ func pushDownAggregationThroughRoute(
 	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
 	aggrBelowRoute.Aggregations = nil
 
+	err := pushDownAggregations(ctx, aggregator, aggrBelowRoute)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Set the source of the route to the new aggregator placed below the route.
+	route.Source = aggrBelowRoute
+
+	if !aggregator.Original {
+		// we only keep the root aggregation, if this aggregator was created
+		// by splitting one and pushing under a join, we can get rid of this one
+		return aggregator.Source, rewrite.NewTree("push aggregation under route - remove original", aggregator), nil
+	}
+
+	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
+}
+
+// pushDownAggregations splits aggregations between the original aggregator and the one we are pushing down
+func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) error {
 	for i, aggregation := range aggregator.Aggregations {
 		if !aggregation.Distinct || exprHasUniqueVindex(ctx, aggregation.Func.GetArg()) {
 			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggregation)
@@ -116,7 +135,7 @@ func pushDownAggregationThroughRoute(
 				aggrBelowRoute.Columns[aggregation.ColOffset] = aeWrap(innerExpr)
 				continue
 			}
-			return nil, nil, vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(aggregation.Original)))
+			return vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(aggregation.Original)))
 		}
 
 		// We handle a distinct aggregation by turning it into a group by and
@@ -130,17 +149,7 @@ func pushDownAggregationThroughRoute(
 		groupBy.ColOffset = aggregation.ColOffset
 		aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
 	}
-
-	// Set the source of the route to the new aggregator placed below the route.
-	route.Source = aggrBelowRoute
-
-	if !aggregator.Original {
-		// we only keep the root aggregation, if this aggregator was created
-		// by splitting one and pushing under a join, we can get rid of this one
-		return aggregator.Source, rewrite.NewTree("push aggregation under route - remove original", aggregator), nil
-	}
-
-	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
+	return nil
 }
 
 func pushDownAggregationThroughFilter(
