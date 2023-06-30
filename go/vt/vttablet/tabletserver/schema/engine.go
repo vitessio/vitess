@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +34,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -446,7 +444,6 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return err
 	}
 
-	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
 	curTables := map[string]bool{"dual": true}
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
@@ -499,12 +496,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[1].String(), row[3].ToString())
 		if err != nil {
-			tableType := row[1].ToString()
-			if strings.EqualFold(tableType, "VIEW") {
-				log.Warningf("Failed reading schema for the view: %s", tableName)
-				continue
-			}
-			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
+			log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
 			continue
 		}
 		if includeStats {
@@ -518,9 +510,6 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		} else {
 			created = append(created, table)
 		}
-	}
-	if rec.HasErrors() {
-		return rec.Error()
 	}
 
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
