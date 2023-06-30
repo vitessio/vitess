@@ -65,12 +65,11 @@ func (v *Viper) SetFs(fs afero.Fs) {
 // New returns a new synced Viper.
 func New() *Viper {
 	return &Viper{
-		disk:          viper.New(),
-		live:          viper.New(),
-		keys:          map[string]*sync.RWMutex{},
-		fs:            afero.NewOsFs(), // default Fs used by viper, but we need this set so loadFromDisk doesn't accidentally nil-out the live fs
-		setCh:         make(chan struct{}, 1),
-		onConfigWrite: func() {},
+		disk:  viper.New(),
+		live:  viper.New(),
+		keys:  map[string]*sync.RWMutex{},
+		fs:    afero.NewOsFs(), // default Fs used by viper, but we need this set so loadFromDisk doesn't accidentally nil-out the live fs
+		setCh: make(chan struct{}, 1),
 	}
 }
 
@@ -230,7 +229,9 @@ func (v *Viper) persistChanges(ctx context.Context, minWaitInterval time.Duratio
 
 // WriteConfig writes the live viper config back to disk.
 func (v *Viper) WriteConfig() error {
-	defer v.onConfigWrite()
+	if v.onConfigWrite != nil {
+		defer v.onConfigWrite()
+	}
 
 	for _, m := range v.keys {
 		m.Lock()
