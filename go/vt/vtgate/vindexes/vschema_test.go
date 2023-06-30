@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -2863,6 +2864,135 @@ func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
 	vs := BuildVSchema(&input)
 	_, err := vs.FindTable("", "t1")
 	require.Error(t, err)
+}
+
+// TestFindTableWithSequences tests tables with an autoincrement column that are associated with a sequence.
+// It validates that sequences obey routing rules, which might be set, for example, during a MoveTables
+// when sequence tables are being migrated to a new cluster.
+func TestFindTableWithSequences(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{{
+				FromTable: "seq3",
+				ToTables:  []string{"ksb.seq3"},
+			},
+				{
+					FromTable: "seq4",
+					ToTables:  []string{"ksb.seq4"},
+				}},
+		},
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "seq1",
+						},
+					},
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c2",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c2",
+							Sequence: "seq2",
+						},
+					},
+					"t3": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c3",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c3",
+							Sequence: "seq3",
+						},
+					},
+					"t4": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c4",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c4",
+							Sequence: "ksa.seq4",
+						},
+					},
+					"seq1": {
+						Type: "sequence",
+					},
+					"seq2": {
+						Type: "sequence",
+					},
+					"seq3": {
+						Type: "sequence",
+					},
+					"seq4": {
+						Type: "sequence",
+					},
+				},
+			},
+			"ksb": {
+				Tables: map[string]*vschemapb.Table{
+					"seq2": {
+						Type: "sequence",
+					},
+					"seq3": {
+						Type: "sequence",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+
+	notFoundError := func(table string) string {
+		return fmt.Sprintf("table %s not found", table)
+	}
+
+	type testCase struct {
+		name          string
+		keyspace      string
+		table         string
+		mustError     bool
+		errorContains string
+	}
+	testCases := []testCase{
+		{"unambiguous", "", "t1", false, ""},
+		{"ambiguous", "", "t2", true, notFoundError("t2")},
+		{"routed unambiguous", "", "t3", false, ""},
+		{"routed qualified unambiguous", "", "t4", false, ""},
+		{"keyspace specified", "ksa", "t2", false, ""},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := vschema.FindTableOrVindex(tc.keyspace, tc.table, topodatapb.TabletType_PRIMARY)
+			if tc.mustError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.errorContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func vindexNames(vindexes []*ColumnVindex) (result []string) {

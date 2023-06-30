@@ -120,6 +120,8 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
+		"vreplication_partial_movetables_simple",
+		"vreplication_partial_movetables_sequences",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
