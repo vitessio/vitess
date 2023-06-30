@@ -1918,7 +1918,8 @@ func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
 		return nil
 	}
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		ts.Logger().Infof("Resetting sequences for source %s", source.GetPrimary().String())
+		ts.Logger().Infof("Resetting sequences for source shard %s.%s on tablet %s",
+			source.GetShard().Keyspace(), source.GetShard().ShardName(), source.GetPrimary().String())
 		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
 	})
 }

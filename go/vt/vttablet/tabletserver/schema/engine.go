@@ -855,7 +855,7 @@ func (se *Engine) ResetSequences(tables []string) error {
 				table.SequenceInfo.Reset()
 			}
 		} else {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v not found in schema", tableName)
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %v not found in schema", tableName)
 		}
 	}
 	return nil

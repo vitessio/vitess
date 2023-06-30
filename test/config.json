@@ -1008,12 +1008,12 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vreplication_partial_movetables_simple": {
+		"vreplication_partial_movetables_basic": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTablesBasic"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_partial_movetables_simple",
+			"Shard": "vreplication_partial_movetables_basic",
 			"RetryMax": 0,
 			"Tags": []
 		},
