@@ -234,7 +234,7 @@ func init() {
 }
 
 func TestUnshardedVSchemaValid(t *testing.T) {
-	err := ValidateKeyspace(&vschemapb.Keyspace{
+	_, err := BuildKeyspace(&vschemapb.Keyspace{
 		Sharded:  false,
 		Vindexes: make(map[string]*vschemapb.Vindex),
 		Tables:   make(map[string]*vschemapb.Table),
@@ -2432,7 +2432,7 @@ func TestValidate(t *testing.T) {
 			"t2": {},
 		},
 	}
-	err := ValidateKeyspace(good)
+	_, err := BuildKeyspace(good)
 	require.NoError(t, err)
 	bad := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2445,7 +2445,7 @@ func TestValidate(t *testing.T) {
 			"t2": {},
 		},
 	}
-	err = ValidateKeyspace(bad)
+	_, err = BuildKeyspace(bad)
 	want := `vindexType "absent" not found`
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Validate: %v, must start with %s", err, want)
