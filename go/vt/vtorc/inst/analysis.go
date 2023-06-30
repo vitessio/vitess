@@ -18,7 +18,6 @@ package inst
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -154,18 +153,6 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
-}
-
-// AnalysisString returns a human friendly description of all analysis issues
-func (replicationAnalysis *ReplicationAnalysis) AnalysisString() string {
-	result := []string{}
-	if replicationAnalysis.Analysis != NoProblem {
-		result = append(result, string(replicationAnalysis.Analysis))
-	}
-	for _, structureAnalysis := range replicationAnalysis.StructureAnalysis {
-		result = append(result, string(structureAnalysis))
-	}
-	return strings.Join(result, ", ")
 }
 
 // Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)

@@ -153,14 +153,11 @@ func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 
 // ExecVTOrc will execute given query on the vtorc backend database.
 func ExecVTOrc(query string, args ...any) (sql.Result, error) {
-	var err error
-	query = translateStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return nil, err
 	}
-	res, err := sqlutils.ExecNoPrepare(db, query, args...)
-	return res, err
+	return execInternal(db, query, args...)
 }
 
 // QueryVTOrcRowsMap
