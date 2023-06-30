@@ -284,11 +284,10 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 	return vschema.Keyspaces[keyspace], err
 }
 
-// ValidateKeyspace ensures that the keyspace vschema is valid.
+// BuildKeyspace ensures that the keyspace vschema is valid.
 // External references (like sequence) are not validated.
-func ValidateKeyspace(input *vschemapb.Keyspace) error {
-	_, err := BuildKeyspaceSchema(input, "")
-	return err
+func BuildKeyspace(input *vschemapb.Keyspace) (*KeyspaceSchema, error) {
+	return BuildKeyspaceSchema(input, "")
 }
 
 func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
