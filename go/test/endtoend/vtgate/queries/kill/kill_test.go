@@ -35,10 +35,7 @@ func TestKillOwnConnection(t *testing.T) {
 	defer conn.Close()
 
 	_, err = utils.ExecAllowError(t, conn, fmt.Sprintf("kill %d", conn.ConnectionID))
-	// TODO: expected error "errno 1317) (sqlstate 70100)" as the kill query itself will be interrupted,
-	//  that error message should be relayed back first before closing the connection.
-	//  Currently, the connection is closed first, so the error message is not relayed back to the client.
-	require.ErrorContains(t, err, "EOF (errno 2013) (sqlstate HY000)")
+	require.NoError(t, err)
 
 	// the connection should be closed.
 	_, err = utils.ExecAllowError(t, conn, "select 1")
@@ -130,14 +127,14 @@ func TestKillOnHungQuery(t *testing.T) {
 
 	t.Run("connection kill", func(t *testing.T) {
 		testHungQuery(t, func(conn1 *mysql.Conn, conn2 *mysql.Conn) {
-			// kill conn2 connection
+			// kill the hung connection
 			utils.Exec(t, conn1, fmt.Sprintf("kill %d", conn2.ConnectionID))
-		}, "(errno 2013) (sqlstate HY000)")
+		}, "context canceled")
 	})
 
 	t.Run("query kill", func(t *testing.T) {
 		testHungQuery(t, func(conn1 *mysql.Conn, conn2 *mysql.Conn) {
-			// kill conn2 query
+			// kill the hung query
 			utils.Exec(t, conn1, fmt.Sprintf("kill query %d", conn2.ConnectionID))
 		}, "context canceled")
 	})
@@ -183,25 +180,25 @@ func TestKillStmtOnHugeData(t *testing.T) {
 	t.Run("oltp - kill conn", func(t *testing.T) {
 		testHugeData(t, "oltp", func(conn *mysql.Conn, killConn *mysql.Conn) {
 			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "(errno 1317) (sqlstate 70100)")
+		}, "context canceled (errno 1317) (sqlstate 70100)")
 	})
 
 	t.Run("oltp - kill query", func(t *testing.T) {
 		testHugeData(t, "oltp", func(conn *mysql.Conn, killConn *mysql.Conn) {
 			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "(errno 1317) (sqlstate 70100)")
+		}, "context canceled (errno 1317) (sqlstate 70100)")
 	})
 
 	t.Run("olap - kill conn", func(t *testing.T) {
 		testHugeData(t, "olap", func(conn *mysql.Conn, killConn *mysql.Conn) {
 			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "(errno 2013) (sqlstate HY000)")
+		}, "EOF (errno 2013) (sqlstate HY000)")
 	})
 
 	t.Run("olap - kill query", func(t *testing.T) {
 		testHugeData(t, "olap", func(conn *mysql.Conn, killConn *mysql.Conn) {
 			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "(errno 2013) (sqlstate HY000)")
+		}, "EOF (errno 2013) (sqlstate HY000)")
 	})
 }
 

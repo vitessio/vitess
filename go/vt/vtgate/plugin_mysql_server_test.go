@@ -30,10 +30,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/trace"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/trace"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/tlstest"
 )
@@ -334,5 +333,5 @@ func TestKillMethods(t *testing.T) {
 	err = vh.KillConnection(context.Background(), 1)
 	assert.NoError(t, err)
 	require.EqualError(t, ctx.Err(), "context canceled")
-	require.True(t, mysqlConn.IsClosed())
+	require.True(t, mysqlConn.IsMarkedForClose())
 }

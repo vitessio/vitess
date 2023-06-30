@@ -378,21 +378,21 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 
 // KillConnection closes an open connection by connection ID.
 func (vh *vtgateHandler) KillConnection(ctx context.Context, connectionID uint32) error {
-	var c *mysql.Conn
 	vh.mu.Lock()
-	defer func() {
-		if c != nil {
-			c.Close()
-			delete(vh.connections, c.ConnectionID)
-		}
-		vh.mu.Unlock()
-	}()
+	defer vh.mu.Unlock()
+
 	c, exists := vh.connections[connectionID]
 	if !exists {
 		return mysql.NewSQLError(mysql.ERNoSuchThread, mysql.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
+
+	// First, we mark the connection for close, so that even when the context is cancelled, while returning the response back to client,
+	// the connection can get closed,
+	// Closing the connection will trigger ConnectionClosed method which rollback any open transaction.
+	c.MarkForClose()
 	c.CancelCtx()
-	return vh.vtg.CloseSession(ctx, vh.session(c))
+
+	return nil
 }
 
 // KillQuery cancels any execution query on the provided connection ID.
