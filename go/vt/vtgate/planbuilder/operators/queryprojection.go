@@ -111,14 +111,11 @@ type (
 
 func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
 	switch aggr.OpCode {
-	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
+	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct, opcode.AggregateMin, opcode.AggregateMax:
 		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
-	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateGroupConcat:
-		// currently this returns false, as aggregation engine primitive does not support the usage of weight_string
-		// for comparison. If Min/Max column is non-comparable then it will fail at runtime.
+	default:
 		return false
 	}
-	return false
 }
 
 func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
