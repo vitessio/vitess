@@ -42,6 +42,7 @@ type TabletManagerClient interface {
 	ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error)
+	ResetSequences(ctx context.Context, in *tabletmanagerdata.ResetSequencesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetSequencesResponse, error)
 	LockTables(ctx context.Context, in *tabletmanagerdata.LockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockTablesResponse, error)
 	UnlockTables(ctx context.Context, in *tabletmanagerdata.UnlockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(ctx context.Context, in *tabletmanagerdata.ExecuteQueryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteQueryResponse, error)
@@ -226,6 +227,15 @@ func (c *tabletManagerClient) PreflightSchema(ctx context.Context, in *tabletman
 func (c *tabletManagerClient) ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error) {
 	out := new(tabletmanagerdata.ApplySchemaResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ApplySchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ResetSequences(ctx context.Context, in *tabletmanagerdata.ResetSequencesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetSequencesResponse, error) {
+	out := new(tabletmanagerdata.ResetSequencesResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ResetSequences", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -607,6 +617,7 @@ type TabletManagerServer interface {
 	ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error)
+	ResetSequences(context.Context, *tabletmanagerdata.ResetSequencesRequest) (*tabletmanagerdata.ResetSequencesResponse, error)
 	LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error)
 	UnlockTables(context.Context, *tabletmanagerdata.UnlockTablesRequest) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(context.Context, *tabletmanagerdata.ExecuteQueryRequest) (*tabletmanagerdata.ExecuteQueryResponse, error)
@@ -715,6 +726,9 @@ func (UnimplementedTabletManagerServer) PreflightSchema(context.Context, *tablet
 }
 func (UnimplementedTabletManagerServer) ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
+}
+func (UnimplementedTabletManagerServer) ResetSequences(context.Context, *tabletmanagerdata.ResetSequencesRequest) (*tabletmanagerdata.ResetSequencesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetSequences not implemented")
 }
 func (UnimplementedTabletManagerServer) LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LockTables not implemented")
@@ -1061,6 +1075,24 @@ func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).ApplySchema(ctx, req.(*tabletmanagerdata.ApplySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_ResetSequences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ResetSequencesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ResetSequences(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ResetSequences",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ResetSequences(ctx, req.(*tabletmanagerdata.ResetSequencesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1741,6 +1773,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplySchema",
 			Handler:    _TabletManager_ApplySchema_Handler,
+		},
+		{
+			MethodName: "ResetSequences",
+			Handler:    _TabletManager_ResetSequences_Handler,
 		},
 		{
 			MethodName: "LockTables",

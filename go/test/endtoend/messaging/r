@@ -1,7 +1,0 @@
-~/scratch/killprocs
-rm -rf ~/vtdataroot/*
-mkdir -p ~/vtdataroot
-mkdir -p ~/vtdataroot/tmp
-mkdir -p ~/vtdataroot/ext
-mkdir -p ~/vtdataroot/ext/tmp
-eatmydata go test -failfast -v --alsologtostderr -run  TestReparenting
