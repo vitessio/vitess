@@ -351,6 +351,9 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 			return 0, err
 		}
 		if aggr.ColOffset != offset {
+			if _, srcIsAlsoAggr := a.Source.(*Aggregator); srcIsAlsoAggr {
+				return 0, vterrors.VT12001("aggregation on top of aggregation not supported")
+			}
 			return -1, vterrors.VT13001(fmt.Sprintf("aggregation column on wrong index: want: %d, got: %d", colIdx, offset))
 		}
 
