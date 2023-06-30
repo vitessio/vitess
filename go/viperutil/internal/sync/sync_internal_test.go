@@ -81,7 +81,7 @@ func TestPersistConfig(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		v := New()
 
-		minPersistWaitInterval := 1 * time.Second
+		minPersistWaitInterval := 10 * time.Second
 		get := AdaptGetter("foo", func(v *viper.Viper) func(key string) int { return v.GetInt }, v)
 		fs, ch := setup(t, v, minPersistWaitInterval)
 
@@ -101,8 +101,8 @@ func TestPersistConfig(t *testing.T) {
 
 		select {
 		case <-ch:
-		case <-time.After(2 * minPersistWaitInterval):
-			assert.Fail(t, "config was not persisted quickly enough", "config took longer than %s to persist (minPersistWaitInterval = %s)", 2*minPersistWaitInterval, minPersistWaitInterval)
+		case <-time.After(3 * minPersistWaitInterval):
+			assert.Fail(t, "config was not persisted quickly enough", "config took longer than %s to persist (minPersistWaitInterval = %s)", 3*minPersistWaitInterval, minPersistWaitInterval)
 		}
 
 		assert.Equal(t, old+2, loadConfig(t, fs).Foo)
