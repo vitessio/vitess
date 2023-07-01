@@ -552,7 +552,7 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 		{
 			name:              "Unknown tablet",
 			tabletAlias:       "unknown-tablet",
-			errExpected:       "ForgetInstance(): instance unknown-tablet not found",
+			errExpected:       "ForgetInstance(): tablet unknown-tablet not found",
 			instanceForgotten: true,
 			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
 		}, {
