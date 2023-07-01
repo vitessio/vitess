@@ -203,7 +203,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 }
 
 func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	if _, isSourceDerived := a.Source.(*Derived); isSourceDerived {
+	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
 		return a.Columns, nil
 	}
 

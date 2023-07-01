@@ -81,7 +81,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 
 	return &Horizon{
 		Source: op,
-		Select: sel,
+		Query:  sel,
 	}, nil
 }
 
@@ -104,7 +104,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		Distinct: node.Distinct,
 		Sources:  []ops.Operator{opLHS, opRHS},
 	}
-	return &Horizon{Source: union, Select: node}, nil
+	return &Horizon{Source: union, Query: node}, nil
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
@@ -606,8 +606,8 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			return nil, err
 		}
 
-		return &Derived{
-			TableId:       tableID,
+		return &Horizon{
+			TableId:       &tableID,
 			Alias:         tableExpr.As.String(),
 			Source:        inner,
 			Query:         stmt,
