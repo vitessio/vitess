@@ -23,7 +23,7 @@ package udata
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"unsafe"
 )
 
@@ -92,21 +92,26 @@ func (b *Bytes) ReadHeader(isValid func(info *DataInfo) bool) error {
 	header := (*DataHeader)(unsafe.Pointer(data))
 
 	if header.dataHeader.magic1 != 0xda || header.dataHeader.magic2 != 0x27 {
-		return fmt.Errorf("invalid magic number")
+		return errors.New("invalid magic number")
 	}
 
 	if header.info.IsBigEndian != 0 {
-		return fmt.Errorf("unsupported: BigEndian data source")
+		return errors.New("unsupported: BigEndian data source")
 	}
 
 	if !isValid(&header.info) {
-		return fmt.Errorf("failed to validate data header")
+		return errors.New("failed to validate data header")
 	}
 
 	b.buf = b.buf[header.dataHeader.headerSize:]
 	return nil
 }
 
+func (b *Bytes) Uint8() uint8 {
+	u := b.buf[0]
+	b.buf = b.buf[1:]
+	return u
+}
 func (b *Bytes) Uint16() uint16 {
 	u := b.enc.Uint16(b.buf)
 	b.buf = b.buf[2:]
@@ -135,10 +140,6 @@ func (b *Bytes) Int32() int32 {
 	return int32(b.Uint32())
 }
 
-func (b *Bytes) Buffer() []byte {
-	return b.buf
-}
-
 func (b *Bytes) Skip(size int32) {
 	b.buf = b.buf[size:]
 }
@@ -146,12 +147,6 @@ func (b *Bytes) Skip(size int32) {
 func (b *Bytes) Uint8Slice(n int32) []uint8 {
 	s := b.buf[:n]
 	b.buf = b.buf[n:]
-	return s
-}
-
-func (b *Bytes) String(size int32) string {
-	s := unsafe.String(&b.buf[0], size)
-	b.buf = b.buf[size:]
 	return s
 }
 

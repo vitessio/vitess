@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
@@ -34,6 +33,14 @@ import (
 
 var charNamesOnce sync.Once
 var charNames *UCharNames
+
+type UCharNames struct {
+	tokens       []uint16
+	tokenStrings []uint8
+	groups       []uint16
+	groupNames   []uint8
+	algNames     []algorithmicRange
+}
 
 func loadCharNames() {
 	charNamesOnce.Do(func() {
@@ -50,37 +57,43 @@ func loadCharNames() {
 		}); err != nil {
 			panic(err)
 		}
+
+		tokenStringOffset := int32(b.Uint32() - 16)
+		groupsOffset := int32(b.Uint32() - 16)
+		groupStringOffset := int32(b.Uint32() - 16)
+		algNamesOffset := int32(b.Uint32() - 16)
 		charNames = &UCharNames{
-			tokenStringOffset: b.Uint32() - 16,
-			groupsOffset:      b.Uint32() - 16,
-			groupStringOffset: b.Uint32() - 16,
-			algNamesOffset:    b.Uint32() - 16,
-			buf:               b.Buffer(),
+			tokens:       b.Uint16Slice(tokenStringOffset / 2),
+			tokenStrings: b.Uint8Slice(groupsOffset - tokenStringOffset),
+			groups:       b.Uint16Slice((groupStringOffset - groupsOffset) / 2),
+			groupNames:   b.Uint8Slice(algNamesOffset - groupStringOffset),
+		}
+
+		algCount := b.Uint32()
+		charNames.algNames = make([]algorithmicRange, 0, algCount)
+
+		for i := uint32(0); i < algCount; i++ {
+			ar := algorithmicRange{
+				start:   b.Uint32(),
+				end:     b.Uint32(),
+				typ:     b.Uint8(),
+				variant: b.Uint8(),
+			}
+			size := b.Uint16()
+			switch ar.typ {
+			case 0:
+				ar.s = b.Uint8Slice(int32(size) - 12)
+			case 1:
+				ar.factors = b.Uint16Slice(int32(ar.variant))
+				ar.s = b.Uint8Slice(int32(size) - 12 - int32(ar.variant)*2)
+			}
+			charNames.algNames = append(charNames.algNames, ar)
 		}
 	})
 }
 
-func (names *UCharNames) tokenStrings() []uint8 {
-	return names.buf[names.tokenStringOffset:names.groupsOffset]
-}
-
 func (names *UCharNames) getGroupName(group []uint16) []uint8 {
-	return names.buf[names.groupStringOffset+names.getGroupOffset(group) : names.algNamesOffset]
-}
-
-func (names *UCharNames) getGroups() []uint16 {
-	buf := names.buf[names.groupsOffset:names.groupStringOffset]
-	return unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(buf))), len(buf)/2)
-}
-
-func (names *UCharNames) tokens() []uint16 {
-	buf := names.buf[:names.tokenStringOffset]
-	return unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(buf))), len(buf)/2)
-}
-
-func (names *UCharNames) algNames() []uint32 {
-	buf := names.buf[names.algNamesOffset:]
-	return unsafe.Slice((*uint32)(unsafe.Pointer(unsafe.SliceData(buf))), len(buf)/4)
+	return names.groupNames[names.getGroupOffset(group):]
 }
 
 type NameChoice int32
@@ -105,35 +118,16 @@ const (
 )
 
 type algorithmicRange struct {
-	start, end     uint32
-	type_, variant uint8
-	size           uint16
+	start, end   uint32
+	typ, variant uint8
+	factors      []uint16
+	s            []uint8
 }
 
-func (ar *algorithmicRange) next() *algorithmicRange {
-	return (*algorithmicRange)(unsafe.Add(unsafe.Pointer(ar), ar.size))
-}
-
-func (ar *algorithmicRange) ptrend(offset uintptr) unsafe.Pointer {
-	return unsafe.Add(unsafe.Pointer(ar), unsafe.Sizeof(algorithmicRange{})+offset)
-}
-
-func (ar *algorithmicRange) slice8(offset uintptr) []uint8 {
-	return unsafe.Slice((*uint8)(ar.ptrend(offset)), ar.sliceSize()-int(offset))
-}
-
-func (ar *algorithmicRange) slice16() []uint16 {
-	return unsafe.Slice((*uint16)(ar.ptrend(0)), ar.sliceSize()/2)
-}
-
-func (ar *algorithmicRange) sliceSize() int {
-	return int(ar.size) - int(unsafe.Sizeof(algorithmicRange{}))
-}
-
-func (ar *algorithmicRange) findAlgName(choice NameChoice, otherName string) rune {
-	switch ar.type_ {
+func (ar *algorithmicRange) findAlgName(otherName string) rune {
+	switch ar.typ {
 	case 0:
-		s := ar.slice8(0)
+		s := ar.s
 
 		for s[0] != 0 && len(otherName) > 0 {
 			if s[0] != otherName[0] {
@@ -161,9 +155,8 @@ func (ar *algorithmicRange) findAlgName(choice NameChoice, otherName string) run
 			return code
 		}
 	case 1:
-		factors := ar.slice16()
-		count := int(ar.variant)
-		s := ar.slice8(2 * uintptr(count))
+		factors := ar.factors
+		s := ar.s
 
 		for s[0] != 0 && len(otherName) > 0 {
 			if s[0] != otherName[0] {
@@ -182,14 +175,14 @@ func (ar *algorithmicRange) findAlgName(choice NameChoice, otherName string) run
 		var elements [8][]byte
 		var elementBases [8][]byte
 
-		ar.writeFactorSuffix0(factors, count, s, &buf, &elements, &elementBases)
+		ar.writeFactorSuffix0(factors, s, &buf, &elements, &elementBases)
 		if buf.String() == otherName {
 			return start
 		}
 
 		for start+1 < limit {
 			start++
-			i := count
+			i := len(factors)
 
 			for {
 				i--
@@ -200,14 +193,14 @@ func (ar *algorithmicRange) findAlgName(choice NameChoice, otherName string) run
 					s = s[bytes.IndexByte(s, 0)+1:]
 					elements[i] = s
 					break
-				} else {
-					indexes[i] = 0
-					elements[i] = elementBases[i]
 				}
+
+				indexes[i] = 0
+				elements[i] = elementBases[i]
 			}
 
 			t := otherName
-			for i = 0; i < count; i++ {
+			for i = 0; i < len(factors); i++ {
 				s = elements[i]
 
 				for s[0] != 0 && len(t) > 0 {
@@ -228,9 +221,9 @@ func (ar *algorithmicRange) findAlgName(choice NameChoice, otherName string) run
 	return -1
 }
 
-func (ar *algorithmicRange) writeFactorSuffix0(factors []uint16, count int, s []uint8, buf *strings.Builder, elements, elementBases *[8][]byte) {
+func (ar *algorithmicRange) writeFactorSuffix0(factors []uint16, s []uint8, buf *strings.Builder, elements, elementBases *[8][]byte) {
 	/* write each element */
-	for i := 0; i < count; i++ {
+	for i := 0; i < len(factors); i++ {
 		(*elements)[i] = s
 		(*elementBases)[i] = s
 
@@ -265,28 +258,13 @@ func CharForName(nameChoice NameChoice, name string) rune {
 		return -1
 	}
 
-	p := charNames.algNames()
-	i := p[0]
-	algRange := (*algorithmicRange)(unsafe.Pointer(unsafe.SliceData(p[1:])))
-	for {
-		if cp := algRange.findAlgName(nameChoice, upper); cp != -1 {
+	for _, ar := range charNames.algNames {
+		if cp := ar.findAlgName(upper); cp != -1 {
 			return cp
 		}
-		i--
-		if i == 0 {
-			break
-		}
-		// Only move to the next if we know it's safe, or we otherwise
-		// create slices that are outside the buffer.
-		algRange = algRange.next()
 	}
 
 	return charNames.enumNames(0, 0x10ffff+1, upper, nameChoice)
-}
-
-type UCharNames struct {
-	tokenStringOffset, groupsOffset, groupStringOffset, algNamesOffset uint32
-	buf                                                                []byte
 }
 
 const GROUP_SHIFT = 5
@@ -347,7 +325,7 @@ func (names *UCharNames) enumNames(start, limit rune, otherName string, nameChoi
 }
 
 func (names *UCharNames) getGroup(code rune) []uint16 {
-	groups := names.getGroups()
+	groups := names.groups
 	groupMSB := uint16(code >> GROUP_SHIFT)
 
 	start := 0
@@ -441,12 +419,11 @@ func expandGroupLengths(s []uint8, offsets []uint16, lengths []uint16) []uint8 {
 }
 
 func (names *UCharNames) compareName(name []byte, choice NameChoice, otherName string) bool {
-	tokens := names.tokens()
+	tokens := names.tokens
 
 	tokenCount := tokens[0]
 	tokens = tokens[1:]
 
-	tokenStrings := names.tokenStrings()
 	otherNameLen := len(otherName)
 
 	for len(name) > 0 && len(otherName) > 0 {
@@ -483,7 +460,7 @@ func (names *UCharNames) compareName(name []byte, choice NameChoice, otherName s
 					break
 				}
 			} else {
-				tokenString := tokenStrings[token:]
+				tokenString := names.tokenStrings[token:]
 				for tokenString[0] != 0 && len(otherName) > 0 {
 					if tokenString[0] != otherName[0] {
 						return false

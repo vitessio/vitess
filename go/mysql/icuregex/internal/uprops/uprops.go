@@ -31,9 +31,8 @@ import (
 )
 
 var pnames struct {
-	valueMaps  []uint32
-	byteTrie   []uint8
-	nameGroups string
+	valueMaps []uint32
+	byteTrie  []uint8
 }
 
 func readData(bytes *udata.Bytes) error {
@@ -78,13 +77,6 @@ func readData(bytes *udata.Bytes) error {
 	numBytes := nextOffset - offset
 
 	pnames.byteTrie = bytes.Uint8Slice(numBytes)
-
-	offset = nextOffset
-	nextOffset = indexes[IX_RESERVED3_OFFSET]
-	numBytes = nextOffset - offset
-
-	pnames.nameGroups = bytes.String(numBytes)
-
 	return nil
 }
 
