@@ -119,7 +119,7 @@ func (ar *algorithmicRange) ptrend(offset uintptr) unsafe.Pointer {
 }
 
 func (ar *algorithmicRange) slice8(offset uintptr) []uint8 {
-	return unsafe.Slice((*uint8)(ar.ptrend(offset)), ar.sliceSize())
+	return unsafe.Slice((*uint8)(ar.ptrend(offset)), ar.sliceSize()-int(offset))
 }
 
 func (ar *algorithmicRange) slice16() []uint16 {
@@ -229,10 +229,8 @@ func (ar *algorithmicRange) findAlgName(choice NameChoice, otherName string) run
 }
 
 func (ar *algorithmicRange) writeFactorSuffix0(factors []uint16, count int, s []uint8, buf *strings.Builder, elements, elementBases *[8][]byte) {
-	i := 0
-
 	/* write each element */
-	for {
+	for i := 0; i < count; i++ {
 		(*elements)[i] = s
 		(*elementBases)[i] = s
 
@@ -240,17 +238,11 @@ func (ar *algorithmicRange) writeFactorSuffix0(factors []uint16, count int, s []
 		buf.Write(s[:nul])
 		s = s[nul+1:]
 
-		if i >= count {
-			break
-		}
-
 		factor := int(factors[i] - 1)
 		for factor > 0 {
 			s = s[bytes.IndexByte(s, 0)+1:]
 			factor--
 		}
-
-		i++
 	}
 }
 
