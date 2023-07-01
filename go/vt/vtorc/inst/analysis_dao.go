@@ -387,8 +387,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf("analysis: Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
-				a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
+			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
+				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -596,10 +596,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		return nil
 	})
-
-	for _, analysis := range result {
-		log.Errorf("Analysis - Instance - %v, Code - %v, LastCheckValid - %v, ReplStopped - %v", analysis.AnalyzedInstanceAlias, analysis.Analysis, analysis.LastCheckValid, analysis.ReplicationStopped)
-	}
 
 	result = postProcessAnalyses(result, clusters)
 
