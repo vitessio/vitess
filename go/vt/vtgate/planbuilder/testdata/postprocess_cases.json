@@ -1860,8 +1860,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from `user` as u, (select user_id from user_extra where 1 != 1) as eu where 1 != 1",
-        "Query": "select * from `user` as u, (select user_id from user_extra where user_id = 5) as eu where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
+        "FieldQuery": "select * from (select user_id from user_extra where 1 != 1) as eu, `user` as u where 1 != 1",
+        "Query": "select * from (select user_id from user_extra where user_id = 5) as eu, `user` as u where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
         "Table": "`user`, user_extra",
         "Values": [
           "INT64(5)"

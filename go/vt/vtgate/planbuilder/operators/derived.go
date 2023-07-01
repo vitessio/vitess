@@ -247,3 +247,7 @@ func (d *Derived) setQP(qp *QueryProjection) {
 func (d *Derived) ShortDescription() string {
 	return d.Alias
 }
+
+func (d *Derived) introducesTableID() semantics.TableSet {
+	return d.TableId
+}

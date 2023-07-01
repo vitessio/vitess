@@ -500,11 +500,11 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a ops.Operator, exp sqlp
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = rewrite.Visit(a, func(rel ops.Operator) error {
-			to, isTableOp := rel.(TableIDIntroducer)
+			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return nil
 			}
-			id := to.Introduces()
+			id := to.introducesTableID()
 			if deps.IsSolvedBy(id) {
 				tableInfo, err := ctx.SemTable.TableInfoFor(id)
 				if err != nil {

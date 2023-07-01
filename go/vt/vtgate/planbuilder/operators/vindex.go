@@ -52,7 +52,7 @@ type (
 const VindexUnsupported = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
-func (v *Vindex) Introduces() semantics.TableSet {
+func (v *Vindex) introducesTableID() semantics.TableSet {
 	return v.Solved
 }
 

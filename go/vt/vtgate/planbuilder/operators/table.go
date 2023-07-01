@@ -54,7 +54,7 @@ func (to *Table) Clone([]ops.Operator) ops.Operator {
 }
 
 // Introduces implements the PhysicalOperator interface
-func (to *Table) Introduces() semantics.TableSet {
+func (to *Table) introducesTableID() semantics.TableSet {
 	return to.QTable.ID
 }
 

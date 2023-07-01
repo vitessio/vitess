@@ -342,3 +342,10 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 
 	return nil
 }
+
+func (p *Projection) introducesTableID() semantics.TableSet {
+	if p.TableID == nil {
+		return semantics.EmptyTableSet()
+	}
+	return *p.TableID
+}

@@ -449,4 +449,11 @@ func (a *Aggregator) SplitAggregatorBelowRoute(input []ops.Operator) *Aggregator
 	return newOp
 }
 
+func (a *Aggregator) introducesTableID() semantics.TableSet {
+	if a.TableID == nil {
+		return semantics.EmptyTableSet()
+	}
+	return *a.TableID
+}
+
 var _ ops.Operator = (*Aggregator)(nil)
