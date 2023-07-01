@@ -306,7 +306,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
+			log.Warningf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -1089,7 +1089,7 @@ func ForgetInstance(tabletAlias string) error {
 		return err
 	}
 	if rows == 0 {
-		errMsg := fmt.Sprintf("ForgetInstance(): instance %+v not found", tabletAlias)
+		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAlias)
 		log.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}

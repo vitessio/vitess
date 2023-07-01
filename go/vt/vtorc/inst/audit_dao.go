@@ -94,7 +94,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 			return err
 		}
 	}
-	logMessage := fmt.Sprintf("auditType:%s instance:%s keyspace:%s shard:%s message:%s", auditType, tabletAlias, keyspace, shard, message)
+	logMessage := fmt.Sprintf("auditType:%s alias:%s keyspace:%s shard:%s message:%s", auditType, tabletAlias, keyspace, shard, message)
 	if syslogWriter != nil {
 		auditWrittenToFile = true
 		go func() {
