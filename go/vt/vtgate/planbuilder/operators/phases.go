@@ -88,7 +88,7 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 		return in, rewrite.NewTree("added ordering before aggregation", in), nil
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
