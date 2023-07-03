@@ -629,7 +629,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer replCancel()
 
-	// Go thorugh all the tablets.
+	// Go through all the tablets.
 	// - New primary: populate the reparent journal.
 	// - Everybody else: reparent to the new primary; wait for the reparent
 	//	 journal row.
@@ -644,7 +644,7 @@ func (pr *PlannedReparenter) reparentTablets(
 
 	// Point all replicas at the new primary and check that they receive the
 	// reparent journal entry, proving that they are replicating from the new
-	// primary. We do this concurrently with  adding the journal entry (after
+	// primary. We do this concurrently with adding the journal entry (after
 	// this loop), because if semi-sync is enabled, the update to the journal
 	// table will block until at least one replica is successfully attached to
 	// the new primary.
@@ -672,7 +672,7 @@ func (pr *PlannedReparenter) reparentTablets(
 		}(alias, tabletInfo.Tablet)
 	}
 
-	// If `PromoteReplica` call is requried, we should call it and use the position that it returns.
+	// If `PromoteReplica` call is required, we should call it and use the position that it returns.
 	if promoteReplicaRequired {
 		// Promote the candidate primary to type:PRIMARY.
 		primaryPosition, err := pr.tmc.PromoteReplica(replCtx, ev.NewPrimary, SemiSyncAckers(opts.durability, ev.NewPrimary) > 0)
