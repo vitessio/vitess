@@ -22,7 +22,7 @@ limitations under the License.
 package ulayout
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
@@ -35,20 +35,11 @@ var inscTrie *utrie.UcpTrie
 var voTrie *utrie.UcpTrie
 
 const (
-	IX_INPC_TRIE_TOP = 1
-	IX_INSC_TRIE_TOP = 2
-	IX_VO_TRIE_TOP   = 3
-	IX_RESERVED_TOP  = 4
+	ixInpcTrieTop = 1
+	ixInscTrieTop = 2
+	ixVoTrieTop   = 3
 
-	IX_TRIES_TOP = 7
-
-	IX_MAX_VALUES = 9
-
-	IX_COUNT = 12
-
-	MAX_INPC_SHIFT = 24
-	MAX_INSC_SHIFT = 16
-	MAX_VO_SHIFT   = 8
+	ixCount = 12
 )
 
 func InpcTrie() *utrie.UcpTrie {
@@ -91,8 +82,8 @@ func readData(bytes *udata.Bytes) error {
 
 	startPos := bytes.Position()
 	indexesLength := int32(bytes.Uint32()) // inIndexes[IX_INDEXES_LENGTH]
-	if indexesLength < IX_COUNT {
-		return fmt.Errorf("Text layout properties data: not enough indexes")
+	if indexesLength < ixCount {
+		return errors.New("text layout properties data: not enough indexes")
 	}
 	index := make([]int32, indexesLength)
 	index[0] = indexesLength
@@ -101,7 +92,7 @@ func readData(bytes *udata.Bytes) error {
 	}
 
 	offset := indexesLength * 4
-	top := index[IX_INPC_TRIE_TOP]
+	top := index[ixInpcTrieTop]
 	trieSize := top - offset
 	if trieSize >= 16 {
 		inpcTrie, err = utrie.UcpTrieFromBytes(bytes)
@@ -113,7 +104,7 @@ func readData(bytes *udata.Bytes) error {
 	pos := bytes.Position() - startPos
 	bytes.Skip(top - pos)
 	offset = top
-	top = index[IX_INSC_TRIE_TOP]
+	top = index[ixInscTrieTop]
 	trieSize = top - offset
 	if trieSize >= 16 {
 		inscTrie, err = utrie.UcpTrieFromBytes(bytes)
@@ -125,7 +116,7 @@ func readData(bytes *udata.Bytes) error {
 	pos = bytes.Position() - startPos
 	bytes.Skip(top - pos)
 	offset = top
-	top = index[IX_VO_TRIE_TOP]
+	top = index[ixVoTrieTop]
 	trieSize = top - offset
 	if trieSize >= 16 {
 		voTrie, err = utrie.UcpTrieFromBytes(bytes)

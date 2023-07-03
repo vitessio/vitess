@@ -50,7 +50,7 @@ func _digit16(c rune) rune {
 	return -1
 }
 
-var UNESCAPE_MAP = []byte{
+var unscapeMap = []byte{
 	/*"   0x22, 0x22 */
 	/*'   0x27, 0x27 */
 	/*?   0x3F, 0x3F */
@@ -179,11 +179,11 @@ func UnescapeAt(str string) (rune, string) {
 	}
 
 	if c < utf8.RuneSelf {
-		for i := 0; i < len(UNESCAPE_MAP); i += 2 {
-			if byte(c) == UNESCAPE_MAP[i] {
-				return rune(UNESCAPE_MAP[i+1]), str
+		for i := 0; i < len(unscapeMap); i += 2 {
+			if byte(c) == unscapeMap[i] {
+				return rune(unscapeMap[i+1]), str
 			}
-			if byte(c) < UNESCAPE_MAP[i] {
+			if byte(c) < unscapeMap[i] {
 				break
 			}
 		}

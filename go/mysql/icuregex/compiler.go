@@ -22,9 +22,7 @@ limitations under the License.
 package icuregex
 
 import (
-	"fmt"
 	"math"
-	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -41,7 +39,7 @@ import (
 )
 
 const BreakIteration = false
-const kStackSize = 100
+const stackSize = 100
 
 type reChar struct {
 	char   rune
@@ -73,7 +71,7 @@ const (
 	setIntersection1 setOperation = 4<<16 | 8 // '&', single amp intersection op, for compatibility with old UnicodeSet.
 )
 
-type Compiler struct {
+type compiler struct {
 	err error
 	out *Pattern
 	p   string
@@ -89,7 +87,7 @@ type Compiler struct {
 	peekChar rune
 
 	c        reChar
-	stack    [kStackSize]uint16
+	stack    [stackSize]uint16
 	stackPtr int
 
 	modeFlags    RegexpFlag
@@ -112,8 +110,8 @@ type Compiler struct {
 	captureName    *strings.Builder
 }
 
-func NewCompiler(pat *Pattern) *Compiler {
-	return &Compiler{
+func newCompiler(pat *Pattern) *compiler {
+	return &compiler{
 		out:             pat,
 		scanIndex:       0,
 		eolComments:     true,
@@ -128,7 +126,7 @@ func NewCompiler(pat *Pattern) *Compiler {
 	}
 }
 
-func (c *Compiler) nextCharLL() (ch rune) {
+func (c *compiler) nextCharLL() (ch rune) {
 	if c.peekChar != -1 {
 		ch, c.peekChar = c.peekChar, -1
 		return
@@ -152,21 +150,21 @@ func (c *Compiler) nextCharLL() (ch rune) {
 	return
 }
 
-func (c *Compiler) peekCharLL() rune {
+func (c *compiler) peekCharLL() rune {
 	if c.peekChar == -1 {
 		c.peekChar = c.nextCharLL()
 	}
 	return c.peekChar
 }
 
-func (c *Compiler) nextChar(ch *reChar) {
+func (c *compiler) nextChar(ch *reChar) {
 	c.scanIndex++
 	ch.char = c.nextCharLL()
 	ch.quoted = false
 
 	if c.quoteMode {
 		ch.quoted = true
-		if (ch.char == chBackSlash && c.peekCharLL() == chE && ((c.modeFlags & UREGEX_LITERAL) == 0)) ||
+		if (ch.char == chBackSlash && c.peekCharLL() == chE && ((c.modeFlags & Literal) == 0)) ||
 			ch.char == -1 {
 			c.quoteMode = false //  Exit quote mode,
 			c.nextCharLL()      // discard the E
@@ -182,7 +180,7 @@ func (c *Compiler) nextChar(ch *reChar) {
 	} else {
 		// We are not in a \Q quoted region \E of the source.
 		//
-		if (c.modeFlags & UREGEX_COMMENTS) != 0 {
+		if (c.modeFlags & Comments) != 0 {
 			//
 			// We are in free-spacing and comments mode.
 			//  Scan through any white space and comments, until we
@@ -228,7 +226,7 @@ func (c *Compiler) nextChar(ch *reChar) {
 
 				ch.char, c.p = pattern.UnescapeAt(beforeEscape)
 				if ch.char < 0 {
-					c.error(uerror.U_REGEX_BAD_ESCAPE_SEQUENCE)
+					c.error(uerror.BadEscapeSequence)
 				}
 				c.charNum += len(beforeEscape) - len(c.p)
 			} else if c.peekCharLL() == chDigit0 {
@@ -246,7 +244,7 @@ func (c *Compiler) nextChar(ch *reChar) {
 					if ch2 < chDigit0 || ch2 > chDigit7 {
 						if index == 0 {
 							// \0 is not followed by any octal digits.
-							c.error(uerror.U_REGEX_BAD_ESCAPE_SEQUENCE)
+							c.error(uerror.BadEscapeSequence)
 						}
 						break
 					}
@@ -305,7 +303,7 @@ const (
 	chDash      = 0x2d   // '-'
 )
 
-func (c *Compiler) compile(pat string) error {
+func (c *compiler) compile(pat string) error {
 	if c.err != nil {
 		return c.err
 	}
@@ -320,7 +318,7 @@ func (c *Compiler) compile(pat string) error {
 	var table []regexTableEl
 
 	// UREGEX_LITERAL force entire pattern to be treated as a literal string.
-	if c.modeFlags&UREGEX_LITERAL != 0 {
+	if c.modeFlags&Literal != 0 {
 		c.quoteMode = true
 	}
 
@@ -372,8 +370,8 @@ func (c *Compiler) compile(pat string) error {
 
 		if table[0].pushState != 0 {
 			c.stackPtr++
-			if c.stackPtr >= kStackSize {
-				c.error(uerror.U_REGEX_INTERNAL_ERROR)
+			if c.stackPtr >= stackSize {
+				c.error(uerror.InternalError)
 				c.stackPtr--
 			}
 			c.stack[c.stackPtr] = uint16(table[0].pushState)
@@ -390,7 +388,7 @@ func (c *Compiler) compile(pat string) error {
 			c.stackPtr--
 			if c.stackPtr < 0 {
 				c.stackPtr++
-				c.error(uerror.U_REGEX_MISMATCHED_PAREN)
+				c.error(uerror.MismatchedParen)
 			}
 		}
 	}
@@ -399,7 +397,7 @@ func (c *Compiler) compile(pat string) error {
 		return c.err
 	}
 
-	c.allocateStackData(RESTACKFRAME_HDRCOUNT)
+	c.allocateStackData(restackframeHdrCount)
 	c.stripNOPs()
 
 	c.out.minMatchLen = c.minMatchLength(3, len(c.out.compiledPat)-1)
@@ -408,13 +406,7 @@ func (c *Compiler) compile(pat string) error {
 	return c.err
 }
 
-const DebugParseActions = false
-
-func (c *Compiler) doParseActions(action patternParseAction) bool {
-	if DebugParseActions {
-		fmt.Fprintf(os.Stderr, "doParseActions(action=%d)\n\t%s\n", action, c.p)
-	}
-
+func (c *compiler) doParseActions(action patternParseAction) bool {
 	switch action {
 	case doPatStart:
 		// Start of pattern compiles to:
@@ -425,9 +417,9 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//                    the start of an ( grouping.
 		//4   NOP             Resreved, will be replaced by a save if there are
 		//                    OR | operators at the top level
-		c.appendOp(URX_STATE_SAVE, 2)
-		c.appendOp(URX_JMP, 3)
-		c.appendOp(URX_FAIL, 0)
+		c.appendOp(urxStateSave, 2)
+		c.appendOp(urxJmp, 3)
+		c.appendOp(urxFail, 0)
 
 		// Standard open nonCapture paren action emits the two NOPs and
 		//   sets up the paren stack frame.
@@ -445,11 +437,11 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		c.handleCloseParen()
 		if len(c.parenStack) > 0 {
 			// Missing close paren in pattern.
-			c.error(uerror.U_REGEX_MISMATCHED_PAREN)
+			c.error(uerror.MismatchedParen)
 		}
 
 		// add the END operation to the compiled pattern.
-		c.appendOp(URX_END, 0)
+		c.appendOp(urxEnd, 0)
 
 		// Terminate the pattern compilation state machine.
 		return false
@@ -468,17 +460,17 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		savePosition, c.parenStack = stackPop(c.parenStack)
 		op := c.out.compiledPat[savePosition]
 
-		if op.Type() != URX_NOP {
+		if op.typ() != urxNop {
 			panic("expected a NOP placeholder")
 		}
 
-		op = c.buildOp(URX_STATE_SAVE, len(c.out.compiledPat)+1)
+		op = c.buildOp(urxStateSave, len(c.out.compiledPat)+1)
 		c.out.compiledPat[savePosition] = op
 
 		// Append an JMP operation into the compiled pattern.  The operand for
 		//  the JMP will eventually be the location following the ')' for the
 		//  group.  This will be patched in later, when the ')' is encountered.
-		c.appendOp(URX_JMP, 0)
+		c.appendOp(urxJmp, 0)
 
 		// Push the position of the newly added JMP op onto the parentheses stack.
 		// This registers if for fixup when this block's close paren is encountered.
@@ -487,7 +479,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		// Append a NOP to the compiled pattern.  This is the slot reserved
 		//   for a SAVE in the event that there is yet another '|' following
 		//   this one.
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
 		c.parenStack = append(c.parenStack, len(c.out.compiledPat)-1)
 
 	case doBeginNamedCapture:
@@ -499,7 +491,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		c.captureName.WriteRune(c.c.char)
 
 	case doBadNamedCapture:
-		c.error(uerror.U_REGEX_INVALID_CAPTURE_GROUP_NAME)
+		c.error(uerror.InvalidCaptureGroupName)
 
 	case doOpenCaptureParen:
 		// Open Capturing Paren, possibly named.
@@ -520,10 +512,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//      encountered.  This will be promoted to a completed capture when (and if) the corresponding
 		//      END_CAPTURE is encountered.
 		c.fixLiterals(false)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
 		varsLoc := c.allocateStackData(3) // Reserve three slots in match stack frame.
-		c.appendOp(URX_START_CAPTURE, varsLoc)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxStartCapture, varsLoc)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the two NOPs.  Depending on what follows in the pattern, the
@@ -547,7 +539,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 			c.captureName = nil
 
 			if _, ok := c.out.namedCaptureMap[captureName]; ok {
-				c.error(uerror.U_REGEX_INVALID_CAPTURE_GROUP_NAME)
+				c.error(uerror.InvalidCaptureGroupName)
 			}
 			c.out.namedCaptureMap[captureName] = groupNumber
 		}
@@ -560,8 +552,8 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//      - NOP, which may later be replaced by a save-state if there
 		//             is an '|' alternation within the parens.
 		c.fixLiterals(false)
-		c.appendOp(URX_NOP, 0)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the two NOPs.
@@ -579,10 +571,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//      - NOP, which may later be replaced by a save-state if there
 		//             is an '|' alternation within the parens.
 		c.fixLiterals(false)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
 		varLoc := c.allocateData(1) // Reserve a data location for saving the state stack ptr.
-		c.appendOp(URX_STO_SP, varLoc)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxStoSp, varLoc)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the two NOPs.  Depending on what follows in the pattern, the
@@ -626,13 +618,13 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//    3:   fActiveLimit, the active bounds limit on entry.
 		c.fixLiterals(false)
 		dataLoc := c.allocateData(4)
-		c.appendOp(URX_LA_START, dataLoc)
-		c.appendOp(URX_STATE_SAVE, len(c.out.compiledPat)+2)
-		c.appendOp(URX_JMP, len(c.out.compiledPat)+3)
-		c.appendOp(URX_LA_END, dataLoc)
-		c.appendOp(URX_BACKTRACK, 0)
-		c.appendOp(URX_NOP, 0)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxLaStart, dataLoc)
+		c.appendOp(urxStateSave, len(c.out.compiledPat)+2)
+		c.appendOp(urxJmp, len(c.out.compiledPat)+3)
+		c.appendOp(urxLaEnd, dataLoc)
+		c.appendOp(urxBacktrack, 0)
+		c.appendOp(urxNop, 0)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the NOPs.
@@ -660,9 +652,9 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//    3:   fActiveLimit, the active bounds limit on entry.
 		c.fixLiterals(false)
 		dataLoc := c.allocateData(4)
-		c.appendOp(URX_LA_START, dataLoc)
-		c.appendOp(URX_STATE_SAVE, 0) // dest address will be patched later.
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxLaStart, dataLoc)
+		c.appendOp(urxStateSave, 0) // dest address will be patched later.
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the StateSave and NOP.
@@ -702,16 +694,16 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		dataLoc := c.allocateData(5)
 
 		// Emit URX_LB_START
-		c.appendOp(URX_LB_START, dataLoc)
+		c.appendOp(urxLbStart, dataLoc)
 
 		// Emit URX_LB_CONT
-		c.appendOp(URX_LB_CONT, dataLoc)
-		c.appendOp(URX_RESERVED_OP, 0) // MinMatchLength.  To be filled later.
-		c.appendOp(URX_RESERVED_OP, 0) // MaxMatchLength.  To be filled later.
+		c.appendOp(urxLbCont, dataLoc)
+		c.appendOp(urxReservedOp, 0) // MinMatchLength.  To be filled later.
+		c.appendOp(urxReservedOp, 0) // MaxMatchLength.  To be filled later.
 
 		// Emit the NOPs
-		c.appendOp(URX_NOP, 0)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the URX_LB_CONT and the NOP.
@@ -752,17 +744,17 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		dataLoc := c.allocateData(5)
 
 		// Emit URX_LB_START
-		c.appendOp(URX_LB_START, dataLoc)
+		c.appendOp(urxLbStart, dataLoc)
 
 		// Emit URX_LBN_CONT
-		c.appendOp(URX_LBN_CONT, dataLoc)
-		c.appendOp(URX_RESERVED_OP, 0) // MinMatchLength.  To be filled later.
-		c.appendOp(URX_RESERVED_OP, 0) // MaxMatchLength.  To be filled later.
-		c.appendOp(URX_RESERVED_OP, 0) // Continue Loc.    To be filled later.
+		c.appendOp(urxLbnCount, dataLoc)
+		c.appendOp(urxReservedOp, 0) // MinMatchLength.  To be filled later.
+		c.appendOp(urxReservedOp, 0) // MaxMatchLength.  To be filled later.
+		c.appendOp(urxReservedOp, 0) // Continue Loc.    To be filled later.
 
 		// Emit the NOPs
-		c.appendOp(URX_NOP, 0)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the URX_LB_CONT and the NOP.
@@ -776,22 +768,22 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 	case doConditionalExpr, doPerlInline:
 		// Conditionals such as (?(1)a:b)
 		// Perl inline-condtionals.  (?{perl code}a|b) We're not perl, no way to do them.
-		c.error(uerror.U_REGEX_UNIMPLEMENTED)
+		c.error(uerror.Unimplemented)
 
 	case doCloseParen:
 		c.handleCloseParen()
 		if len(c.parenStack) == 0 {
 			//  Extra close paren, or missing open paren.
-			c.error(uerror.U_REGEX_MISMATCHED_PAREN)
+			c.error(uerror.MismatchedParen)
 		}
 
 	case doNOP:
 
 	case doBadOpenParenType, doRuleError:
-		c.error(uerror.U_REGEX_RULE_SYNTAX)
+		c.error(uerror.RuleSyntax)
 
 	case doMismatchedParenErr:
-		c.error(uerror.U_REGEX_MISMATCHED_PAREN)
+		c.error(uerror.MismatchedParen)
 
 	case doPlus:
 		//  Normal '+'  compiles to
@@ -816,27 +808,27 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		if topLoc == len(c.out.compiledPat)-1 {
 			repeatedOp := c.out.compiledPat[topLoc]
 
-			if repeatedOp.Type() == URX_SETREF {
+			if repeatedOp.typ() == urxSetref {
 				// Emit optimized code for [char set]+
-				c.appendOp(URX_LOOP_SR_I, repeatedOp.Value())
+				c.appendOp(urxLoopSrI, repeatedOp.value())
 				frameLoc := c.allocateStackData(1)
-				c.appendOp(URX_LOOP_C, frameLoc)
+				c.appendOp(urxLoopC, frameLoc)
 				break
 			}
 
-			if repeatedOp.Type() == URX_DOTANY || repeatedOp.Type() == URX_DOTANY_ALL || repeatedOp.Type() == URX_DOTANY_UNIX {
+			if repeatedOp.typ() == urxDotany || repeatedOp.typ() == urxDotanyAll || repeatedOp.typ() == urxDotanyUnix {
 				// Emit Optimized code for .+ operations.
-				loopOpI := c.buildOp(URX_LOOP_DOT_I, 0)
-				if repeatedOp.Type() == URX_DOTANY_ALL {
+				loopOpI := c.buildOp(urxLoopDotI, 0)
+				if repeatedOp.typ() == urxDotanyAll {
 					// URX_LOOP_DOT_I operand is a flag indicating ". matches any" mode.
 					loopOpI |= 1
 				}
-				if c.modeFlags&UREGEX_UNIX_LINES != 0 {
+				if c.modeFlags&UnixLines != 0 {
 					loopOpI |= 2
 				}
 				c.appendIns(loopOpI)
 				frameLoc := c.allocateStackData(1)
-				c.appendOp(URX_LOOP_C, frameLoc)
+				c.appendOp(urxLoopC, frameLoc)
 				break
 			}
 		}
@@ -850,13 +842,13 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 			// Emit the code sequence that can handle it.
 			c.insertOp(topLoc)
 			frameLoc := c.allocateStackData(1)
-			op := c.buildOp(URX_STO_INP_LOC, frameLoc)
+			op := c.buildOp(urxStoInpLoc, frameLoc)
 			c.out.compiledPat[topLoc] = op
 
-			c.appendOp(URX_JMP_SAV_X, topLoc+1)
+			c.appendOp(urxJmpSavX, topLoc+1)
 		} else {
 			// Simpler code when the repeated body must match something non-empty
-			c.appendOp(URX_JMP_SAV, topLoc)
+			c.appendOp(urxJmpSav, topLoc)
 		}
 
 	case doNGPlus:
@@ -865,7 +857,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//     2.   state-save  1
 		//     3.   ...
 		topLoc := c.blockTopLoc(false)
-		c.appendOp(URX_STATE_SAVE, topLoc)
+		c.appendOp(urxStateSave, topLoc)
 
 	case doOpt:
 		// Normal (greedy) ? quantifier.
@@ -875,7 +867,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//     3. ...
 		// Insert the state save into the compiled pattern, and we're done.
 		saveStateLoc := c.blockTopLoc(true)
-		saveStateOp := c.buildOp(URX_STATE_SAVE, len(c.out.compiledPat))
+		saveStateOp := c.buildOp(urxStateSave, len(c.out.compiledPat))
 		c.out.compiledPat[saveStateLoc] = saveStateOp
 
 	case doNGOpt:
@@ -891,11 +883,11 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		jmp1Loc := c.blockTopLoc(true)
 		jmp2Loc := len(c.out.compiledPat)
 
-		jmp1Op := c.buildOp(URX_JMP, jmp2Loc+1)
+		jmp1Op := c.buildOp(urxJmp, jmp2Loc+1)
 		c.out.compiledPat[jmp1Loc] = jmp1Op
 
-		c.appendOp(URX_JMP, jmp2Loc+2)
-		c.appendOp(URX_STATE_SAVE, jmp1Loc+1)
+		c.appendOp(urxJmp, jmp2Loc+2)
+		c.appendOp(urxStateSave, jmp1Loc+1)
 
 	case doStar:
 		// Normal (greedy) * quantifier.
@@ -928,28 +920,28 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		if topLoc == len(c.out.compiledPat)-1 {
 			repeatedOp := c.out.compiledPat[topLoc]
 
-			if repeatedOp.Type() == URX_SETREF {
+			if repeatedOp.typ() == urxSetref {
 				// Emit optimized code for a [char set]*
-				loopOpI := c.buildOp(URX_LOOP_SR_I, repeatedOp.Value())
+				loopOpI := c.buildOp(urxLoopSrI, repeatedOp.value())
 				c.out.compiledPat[topLoc] = loopOpI
 				dataLoc := c.allocateStackData(1)
-				c.appendOp(URX_LOOP_C, dataLoc)
+				c.appendOp(urxLoopC, dataLoc)
 				break
 			}
 
-			if repeatedOp.Type() == URX_DOTANY || repeatedOp.Type() == URX_DOTANY_ALL || repeatedOp.Type() == URX_DOTANY_UNIX {
+			if repeatedOp.typ() == urxDotany || repeatedOp.typ() == urxDotanyAll || repeatedOp.typ() == urxDotanyUnix {
 				// Emit Optimized code for .* operations.
-				loopOpI := c.buildOp(URX_LOOP_DOT_I, 0)
-				if repeatedOp.Type() == URX_DOTANY_ALL {
+				loopOpI := c.buildOp(urxLoopDotI, 0)
+				if repeatedOp.typ() == urxDotanyAll {
 					// URX_LOOP_DOT_I operand is a flag indicating . matches any mode.
 					loopOpI |= 1
 				}
-				if (c.modeFlags & UREGEX_UNIX_LINES) != 0 {
+				if (c.modeFlags & UnixLines) != 0 {
 					loopOpI |= 2
 				}
 				c.out.compiledPat[topLoc] = loopOpI
 				dataLoc := c.allocateStackData(1)
-				c.appendOp(URX_LOOP_C, dataLoc)
+				c.appendOp(urxLoopC, dataLoc)
 				break
 			}
 		}
@@ -958,7 +950,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		// The optimizations did not apply.
 
 		saveStateLoc := c.blockTopLoc(true)
-		jmpOp := c.buildOp(URX_JMP_SAV, saveStateLoc+1)
+		jmpOp := c.buildOp(urxJmpSav, saveStateLoc+1)
 
 		// Check for minimum match length of zero, which requires
 		//    extra loop-breaking code.
@@ -966,9 +958,9 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 			c.insertOp(saveStateLoc)
 			dataLoc := c.allocateStackData(1)
 
-			op := c.buildOp(URX_STO_INP_LOC, dataLoc)
+			op := c.buildOp(urxStoInpLoc, dataLoc)
 			c.out.compiledPat[saveStateLoc+1] = op
-			jmpOp = c.buildOp(URX_JMP_SAV_X, saveStateLoc+2)
+			jmpOp = c.buildOp(urxJmpSavX, saveStateLoc+2)
 		}
 
 		// Locate the position in the compiled pattern where the match will continue
@@ -976,7 +968,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		continueLoc := len(c.out.compiledPat) + 1
 
 		// Put together the save state op and store it into the compiled code.
-		saveStateOp := c.buildOp(URX_STATE_SAVE, continueLoc)
+		saveStateOp := c.buildOp(urxStateSave, continueLoc)
 		c.out.compiledPat[saveStateLoc] = saveStateOp
 
 		// Append the URX_JMP_SAV or URX_JMPX operation to the compiled pattern.
@@ -991,9 +983,9 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//     4    ...
 		jmpLoc := c.blockTopLoc(true)     // loc  1.
 		saveLoc := len(c.out.compiledPat) // loc  3.
-		jmpOp := c.buildOp(URX_JMP, saveLoc)
+		jmpOp := c.buildOp(urxJmp, saveLoc)
 		c.out.compiledPat[jmpLoc] = jmpOp
-		c.appendOp(URX_STATE_SAVE, jmpLoc+1)
+		c.appendOp(urxStateSave, jmpLoc+1)
 
 	case doIntervalInit:
 		// The '{' opening an interval quantifier was just scanned.
@@ -1004,10 +996,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 
 	case doIntevalLowerDigit:
 		// Scanned a digit from the lower value of an {lower,upper} interval
-		digitValue := u_charDigitValue(c.c.char)
+		digitValue := uCharDigitValue(c.c.char)
 		val := int64(c.intervalLow)*10 + digitValue
 		if val > math.MaxInt32 {
-			c.error(uerror.U_REGEX_NUMBER_TOO_BIG)
+			c.error(uerror.NumberTooBig)
 		} else {
 			c.intervalLow = int(val)
 		}
@@ -1017,10 +1009,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		if c.intervalUpper < 0 {
 			c.intervalUpper = 0
 		}
-		digitValue := u_charDigitValue(c.c.char)
+		digitValue := uCharDigitValue(c.c.char)
 		val := int64(c.intervalUpper)*10 + digitValue
 		if val > math.MaxInt32 {
-			c.error(uerror.U_REGEX_NUMBER_TOO_BIG)
+			c.error(uerror.NumberTooBig)
 		} else {
 			c.intervalUpper = int(val)
 		}
@@ -1032,7 +1024,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 	case doInterval:
 		// Finished scanning a normal {lower,upper} interval.  Generate the code for it.
 		if !c.compileInlineInterval() {
-			c.compileInterval(URX_CTR_INIT, URX_CTR_LOOP)
+			c.compileInterval(urxCtrInit, utxCtrLoop)
 		}
 
 	case doPossessiveInterval:
@@ -1045,7 +1037,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		topLoc := c.blockTopLoc(false)
 
 		// Produce normal looping code.
-		c.compileInterval(URX_CTR_INIT, URX_CTR_LOOP)
+		c.compileInterval(urxCtrInit, utxCtrLoop)
 
 		// Surround the just-emitted normal looping code with a STO_SP ... LD_SP
 		//  just as if the loop was inclosed in atomic parentheses.
@@ -1054,12 +1046,12 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		c.insertOp(topLoc)
 
 		varLoc := c.allocateData(1) // Reserve a data location for saving the
-		op := c.buildOp(URX_STO_SP, varLoc)
+		op := c.buildOp(urxStoSp, varLoc)
 		c.out.compiledPat[topLoc] = op
 
-		var loopOp Instruction
+		var loopOp instruction
 		loopOp, c.out.compiledPat = stackPop(c.out.compiledPat)
-		if loopOp.Type() != URX_CTR_LOOP || loopOp.Value() != topLoc {
+		if loopOp.typ() != utxCtrLoop || loopOp.value() != topLoc {
 			panic("bad instruction at the end of compiled pattern")
 		}
 
@@ -1067,14 +1059,14 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		c.appendIns(loopOp)
 
 		// Then the LD_SP after the end of the loop
-		c.appendOp(URX_LD_SP, varLoc)
+		c.appendOp(urxLdSp, varLoc)
 
 	case doNGInterval:
 		// Finished scanning a non-greedy {lower,upper}? interval.  Generate the code for it.
-		c.compileInterval(URX_CTR_INIT_NG, URX_CTR_LOOP_NG)
+		c.compileInterval(urxCtrInitNg, urxCtrLoopNg)
 
 	case doIntervalError:
-		c.error(uerror.U_REGEX_BAD_INTERVAL)
+		c.error(uerror.BadInterval)
 
 	case doLiteralChar:
 		// We've just scanned a "normal" character from the pattern,
@@ -1083,142 +1075,142 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 	case doEscapedLiteralChar:
 		// We've just scanned an backslashed escaped character with  no
 		//   special meaning.  It represents itself.
-		if (c.modeFlags&UREGEX_ERROR_ON_UNKNOWN_ESCAPES) != 0 && ((c.c.char >= 0x41 && c.c.char <= 0x5A) || /* in [A-Z] */ (c.c.char >= 0x61 && c.c.char <= 0x7a)) { // in [a-z]
-			c.error(uerror.U_REGEX_BAD_ESCAPE_SEQUENCE)
+		if (c.modeFlags&ErrorOnUnknownEscapes) != 0 && ((c.c.char >= 0x41 && c.c.char <= 0x5A) || /* in [A-Z] */ (c.c.char >= 0x61 && c.c.char <= 0x7a)) { // in [a-z]
+			c.error(uerror.BadEscapeSequence)
 		}
 		c.literalChar(c.c.char)
 
 	case doDotAny:
 		// scanned a ".",  match any single character.
 		c.fixLiterals(false)
-		if (c.modeFlags & UREGEX_DOTALL) != 0 {
-			c.appendOp(URX_DOTANY_ALL, 0)
-		} else if (c.modeFlags & UREGEX_UNIX_LINES) != 0 {
-			c.appendOp(URX_DOTANY_UNIX, 0)
+		if (c.modeFlags & DotAll) != 0 {
+			c.appendOp(urxDotanyAll, 0)
+		} else if (c.modeFlags & UnixLines) != 0 {
+			c.appendOp(urxDotanyUnix, 0)
 		} else {
-			c.appendOp(URX_DOTANY, 0)
+			c.appendOp(urxDotany, 0)
 		}
 
 	case doCaret:
 		c.fixLiterals(false)
-		if (c.modeFlags&UREGEX_MULTILINE) == 0 && (c.modeFlags&UREGEX_UNIX_LINES) == 0 {
-			c.appendOp(URX_CARET, 0)
-		} else if (c.modeFlags&UREGEX_MULTILINE) != 0 && (c.modeFlags&UREGEX_UNIX_LINES) == 0 {
-			c.appendOp(URX_CARET_M, 0)
-		} else if (c.modeFlags&UREGEX_MULTILINE) == 0 && (c.modeFlags&UREGEX_UNIX_LINES) != 0 {
-			c.appendOp(URX_CARET, 0) // Only testing true start of input.
-		} else if (c.modeFlags&UREGEX_MULTILINE) != 0 && (c.modeFlags&UREGEX_UNIX_LINES) != 0 {
-			c.appendOp(URX_CARET_M_UNIX, 0)
+		if (c.modeFlags&Multiline) == 0 && (c.modeFlags&UnixLines) == 0 {
+			c.appendOp(urxCaret, 0)
+		} else if (c.modeFlags&Multiline) != 0 && (c.modeFlags&UnixLines) == 0 {
+			c.appendOp(urxCaretM, 0)
+		} else if (c.modeFlags&Multiline) == 0 && (c.modeFlags&UnixLines) != 0 {
+			c.appendOp(urxCaret, 0) // Only testing true start of input.
+		} else if (c.modeFlags&Multiline) != 0 && (c.modeFlags&UnixLines) != 0 {
+			c.appendOp(urxCaretMUnix, 0)
 		}
 
 	case doDollar:
 		c.fixLiterals(false)
-		if (c.modeFlags&UREGEX_MULTILINE) == 0 && (c.modeFlags&UREGEX_UNIX_LINES) == 0 {
-			c.appendOp(URX_DOLLAR, 0)
-		} else if (c.modeFlags&UREGEX_MULTILINE) != 0 && (c.modeFlags&UREGEX_UNIX_LINES) == 0 {
-			c.appendOp(URX_DOLLAR_M, 0)
-		} else if (c.modeFlags&UREGEX_MULTILINE) == 0 && (c.modeFlags&UREGEX_UNIX_LINES) != 0 {
-			c.appendOp(URX_DOLLAR_D, 0)
-		} else if (c.modeFlags&UREGEX_MULTILINE) != 0 && (c.modeFlags&UREGEX_UNIX_LINES) != 0 {
-			c.appendOp(URX_DOLLAR_MD, 0)
+		if (c.modeFlags&Multiline) == 0 && (c.modeFlags&UnixLines) == 0 {
+			c.appendOp(urxDollar, 0)
+		} else if (c.modeFlags&Multiline) != 0 && (c.modeFlags&UnixLines) == 0 {
+			c.appendOp(urxDollarM, 0)
+		} else if (c.modeFlags&Multiline) == 0 && (c.modeFlags&UnixLines) != 0 {
+			c.appendOp(urxDollarD, 0)
+		} else if (c.modeFlags&Multiline) != 0 && (c.modeFlags&UnixLines) != 0 {
+			c.appendOp(urxDollarMd, 0)
 		}
 
 	case doBackslashA:
 		c.fixLiterals(false)
-		c.appendOp(URX_CARET, 0)
+		c.appendOp(urxCaret, 0)
 
 	case doBackslashB:
 		if !BreakIteration {
-			if (c.modeFlags & UREGEX_UWORD) != 0 {
-				c.error(uerror.U_REGEX_UNSUPPORTED_ERROR)
+			if (c.modeFlags & UWord) != 0 {
+				c.error(uerror.Unimplemented)
 			}
 		}
 		c.fixLiterals(false)
-		if c.modeFlags&UREGEX_UWORD != 0 {
-			c.appendOp(URX_BACKSLASH_BU, 1)
+		if c.modeFlags&UWord != 0 {
+			c.appendOp(urxBackslashBu, 1)
 		} else {
-			c.appendOp(URX_BACKSLASH_B, 1)
+			c.appendOp(urxBackslashB, 1)
 		}
 
 	case doBackslashb:
 		if !BreakIteration {
-			if (c.modeFlags & UREGEX_UWORD) != 0 {
-				c.error(uerror.U_REGEX_UNSUPPORTED_ERROR)
+			if (c.modeFlags & UWord) != 0 {
+				c.error(uerror.Unimplemented)
 			}
 		}
 		c.fixLiterals(false)
-		if c.modeFlags&UREGEX_UWORD != 0 {
-			c.appendOp(URX_BACKSLASH_BU, 0)
+		if c.modeFlags&UWord != 0 {
+			c.appendOp(urxBackslashBu, 0)
 		} else {
-			c.appendOp(URX_BACKSLASH_B, 0)
+			c.appendOp(urxBackslashB, 0)
 		}
 
 	case doBackslashD:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_D, 1)
+		c.appendOp(urxBackslashD, 1)
 
 	case doBackslashd:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_D, 0)
+		c.appendOp(urxBackslashD, 0)
 
 	case doBackslashG:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_G, 0)
+		c.appendOp(urxBackslashG, 0)
 
 	case doBackslashH:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_H, 1)
+		c.appendOp(urxBackslashH, 1)
 
 	case doBackslashh:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_H, 0)
+		c.appendOp(urxBackslashH, 0)
 
 	case doBackslashR:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_R, 0)
+		c.appendOp(urxBackslashR, 0)
 
 	case doBackslashS:
 		c.fixLiterals(false)
-		c.appendOp(URX_STAT_SETREF_N, URX_ISSPACE_SET)
+		c.appendOp(urxStatSetrefN, urxIsspaceSet)
 
 	case doBackslashs:
 		c.fixLiterals(false)
-		c.appendOp(URX_STATIC_SETREF, URX_ISSPACE_SET)
+		c.appendOp(urxStaticSetref, urxIsspaceSet)
 
 	case doBackslashV:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_V, 1)
+		c.appendOp(urxBackslashV, 1)
 
 	case doBackslashv:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_V, 0)
+		c.appendOp(urxBackslashV, 0)
 
 	case doBackslashW:
 		c.fixLiterals(false)
-		c.appendOp(URX_STAT_SETREF_N, URX_ISWORD_SET)
+		c.appendOp(urxStatSetrefN, urxIswordSet)
 
 	case doBackslashw:
 		c.fixLiterals(false)
-		c.appendOp(URX_STATIC_SETREF, URX_ISWORD_SET)
+		c.appendOp(urxStaticSetref, urxIswordSet)
 
 	case doBackslashX:
 		if !BreakIteration {
 			// Grapheme Cluster Boundary requires ICU break iteration.
-			c.error(uerror.U_REGEX_UNSUPPORTED_ERROR)
+			c.error(uerror.Unimplemented)
 		}
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_X, 0)
+		c.appendOp(urxBackslashX, 0)
 
 	case doBackslashZ:
 		c.fixLiterals(false)
-		c.appendOp(URX_DOLLAR, 0)
+		c.appendOp(urxDollar, 0)
 
 	case doBackslashz:
 		c.fixLiterals(false)
-		c.appendOp(URX_BACKSLASH_Z, 0)
+		c.appendOp(urxBackslashZ, 0)
 
 	case doEscapeError:
-		c.error(uerror.U_REGEX_BAD_ESCAPE_SEQUENCE)
+		c.error(uerror.BadEscapeSequence)
 
 	case doExit:
 		c.fixLiterals(false)
@@ -1244,13 +1236,13 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 
 		for {
 			// Loop once per digit, for max allowed number of digits in a back reference.
-			digit := u_charDigitValue(ch)
+			digit := uCharDigitValue(ch)
 			groupNum = groupNum*10 + digit
 			if groupNum >= int64(numCaptureGroups) {
 				break
 			}
 			ch = c.peekCharLL()
-			if !staticRuleSet[kRuleSetDigitChar-128].ContainsRune(ch) {
+			if !staticRuleSet[ruleSetDigitChar-128].ContainsRune(ch) {
 				break
 			}
 			c.nextCharLL()
@@ -1265,10 +1257,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 			panic("\\0 begins an octal escape sequence, and shouldn't enter this code path at all")
 		}
 		c.fixLiterals(false)
-		if (c.modeFlags & UREGEX_CASE_INSENSITIVE) != 0 {
-			c.appendOp(URX_BACKREF_I, int(groupNum))
+		if (c.modeFlags & CaseInsensitive) != 0 {
+			c.appendOp(urxBackrefI, int(groupNum))
 		} else {
-			c.appendOp(URX_BACKREF, int(groupNum))
+			c.appendOp(urxBackref, int(groupNum))
 		}
 
 	case doBeginNamedBackRef:
@@ -1287,15 +1279,15 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 				// Group name has not been defined.
 				//   Could be a forward reference. If we choose to support them at some
 				//   future time, extra mechanism will be required at this point.
-				c.error(uerror.U_REGEX_INVALID_CAPTURE_GROUP_NAME)
+				c.error(uerror.InvalidCaptureGroupName)
 			} else {
 				// Given the number, handle identically to a \n numbered back reference.
 				// See comments above, under doBackRef
 				c.fixLiterals(false)
-				if (c.modeFlags & UREGEX_CASE_INSENSITIVE) != 0 {
-					c.appendOp(URX_BACKREF_I, groupNumber)
+				if (c.modeFlags & CaseInsensitive) != 0 {
+					c.appendOp(urxBackrefI, groupNumber)
 				} else {
-					c.appendOp(URX_BACKREF, groupNumber)
+					c.appendOp(urxBackref, groupNumber)
 				}
 			}
 			c.captureName = nil
@@ -1317,17 +1309,17 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		// Emit the STO_SP
 		topLoc := c.blockTopLoc(true)
 		stoLoc := c.allocateData(1) // Reserve the data location for storing save stack ptr.
-		op := c.buildOp(URX_STO_SP, stoLoc)
+		op := c.buildOp(urxStoSp, stoLoc)
 		c.out.compiledPat[topLoc] = op
 
 		// Emit the STATE_SAVE
-		c.appendOp(URX_STATE_SAVE, len(c.out.compiledPat)+2)
+		c.appendOp(urxStateSave, len(c.out.compiledPat)+2)
 
 		// Emit the JMP
-		c.appendOp(URX_JMP, topLoc+1)
+		c.appendOp(urxJmp, topLoc+1)
 
 		// Emit the LD_SP
-		c.appendOp(URX_LD_SP, stoLoc)
+		c.appendOp(urxLdSp, stoLoc)
 
 	case doPossessiveStar:
 		// Possessive *+ quantifier.
@@ -1345,19 +1337,19 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 
 		// emit   STO_SP     loc
 		stoLoc := c.allocateData(1) // Reserve the data location for storing save stack ptr.
-		op := c.buildOp(URX_STO_SP, stoLoc)
+		op := c.buildOp(urxStoSp, stoLoc)
 		c.out.compiledPat[topLoc] = op
 
 		// Emit the SAVE_STATE   5
 		L7 := len(c.out.compiledPat) + 1
-		op = c.buildOp(URX_STATE_SAVE, L7)
+		op = c.buildOp(urxStateSave, L7)
 		c.out.compiledPat[topLoc+1] = op
 
 		// Append the JMP operation.
-		c.appendOp(URX_JMP, topLoc+1)
+		c.appendOp(urxJmp, topLoc+1)
 
 		// Emit the LD_SP       loc
-		c.appendOp(URX_LD_SP, stoLoc)
+		c.appendOp(urxLdSp, stoLoc)
 
 	case doPossessiveOpt:
 		// Possessive  ?+ quantifier.
@@ -1374,16 +1366,16 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 
 		// Emit the STO_SP
 		stoLoc := c.allocateData(1) // Reserve the data location for storing save stack ptr.
-		op := c.buildOp(URX_STO_SP, stoLoc)
+		op := c.buildOp(urxStoSp, stoLoc)
 		c.out.compiledPat[topLoc] = op
 
 		// Emit the SAVE_STATE
 		continueLoc := len(c.out.compiledPat) + 1
-		op = c.buildOp(URX_STATE_SAVE, continueLoc)
+		op = c.buildOp(urxStateSave, continueLoc)
 		c.out.compiledPat[topLoc+1] = op
 
 		// Emit the LD_SP
-		c.appendOp(URX_LD_SP, stoLoc)
+		c.appendOp(urxLdSp, stoLoc)
 
 	case doBeginMatchMode:
 		c.newModeFlags = c.modeFlags
@@ -1392,19 +1384,19 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		var bit RegexpFlag
 		switch c.c.char {
 		case 0x69: /* 'i' */
-			bit = UREGEX_CASE_INSENSITIVE
+			bit = CaseInsensitive
 		case 0x64: /* 'd' */
-			bit = UREGEX_UNIX_LINES
+			bit = UnixLines
 		case 0x6d: /* 'm' */
-			bit = UREGEX_MULTILINE
+			bit = Multiline
 		case 0x73: /* 's' */
-			bit = UREGEX_DOTALL
+			bit = DotAll
 		case 0x75: /* 'u' */
 			bit = 0 /* Unicode casing */
 		case 0x77: /* 'w' */
-			bit = UREGEX_UWORD
+			bit = UWord
 		case 0x78: /* 'x' */
-			bit = UREGEX_COMMENTS
+			bit = Comments
 		case 0x2d: /* '-' */
 			c.setModeFlag = false
 		default:
@@ -1438,8 +1430,8 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//      - NOP, which may later be replaced by a save-state if there
 		//             is an '|' alternation within the parens.
 		c.fixLiterals(false)
-		c.appendOp(URX_NOP, 0)
-		c.appendOp(URX_NOP, 0)
+		c.appendOp(urxNop, 0)
+		c.appendOp(urxNop, 0)
 
 		// On the Parentheses stack, start a new frame and add the postions
 		//   of the two NOPs (a normal non-capturing () frame, except for the
@@ -1456,7 +1448,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		c.modeFlags = c.newModeFlags
 
 	case doBadModeFlag:
-		c.error(uerror.U_REGEX_INVALID_FLAG)
+		c.error(uerror.InvalidFlag)
 
 	case doSuppressComments:
 		// We have just scanned a '(?'.  We now need to prevent the character scanner from
@@ -1472,53 +1464,53 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		set := c.setStack[len(c.setStack)-1]
 		set.AddRune(chDash)
 
-	case doSetBackslash_s:
+	case doSetBackslashs:
 		set := c.setStack[len(c.setStack)-1]
-		set.AddAll(staticPropertySets[URX_ISSPACE_SET])
+		set.AddAll(staticPropertySets[urxIsspaceSet])
 
-	case doSetBackslash_S:
+	case doSetBackslashS:
 		sset := uset.New()
-		sset.AddAll(staticPropertySets[URX_ISSPACE_SET]) // TODO: add latin1 spaces
+		sset.AddAll(staticPropertySets[urxIsspaceSet]) // TODO: add latin1 spaces
 		sset.Complement()
 
 		set := c.setStack[len(c.setStack)-1]
 		set.AddAll(sset)
 
-	case doSetBackslash_d:
+	case doSetBackslashd:
 		set := c.setStack[len(c.setStack)-1]
-		c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+		c.err = uprops.AddCategory(set, uchar.GcNdMask)
 
-	case doSetBackslash_D:
+	case doSetBackslashD:
 		digits := uset.New()
-		c.err = uprops.ApplyIntPropertyValue(digits, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ND_MASK))
+		c.err = uprops.ApplyIntPropertyValue(digits, uprops.UCharGeneralCategoryMask, int32(uchar.GcNdMask))
 		digits.Complement()
 		set := c.setStack[len(c.setStack)-1]
 		set.AddAll(digits)
 
-	case doSetBackslash_h:
+	case doSetBackslashh:
 		h := uset.New()
-		c.err = uprops.ApplyIntPropertyValue(h, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
+		c.err = uprops.ApplyIntPropertyValue(h, uprops.UCharGeneralCategoryMask, int32(uchar.GcZsMask))
 		h.AddRune(9) // Tab
 
 		set := c.setStack[len(c.setStack)-1]
 		set.AddAll(h)
 
-	case doSetBackslash_H:
+	case doSetBackslashH:
 		h := uset.New()
-		c.err = uprops.ApplyIntPropertyValue(h, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
+		c.err = uprops.ApplyIntPropertyValue(h, uprops.UCharGeneralCategoryMask, int32(uchar.GcZsMask))
 		h.AddRune(9) // Tab
 		h.Complement()
 
 		set := c.setStack[len(c.setStack)-1]
 		set.AddAll(h)
 
-	case doSetBackslash_v:
+	case doSetBackslashv:
 		set := c.setStack[len(c.setStack)-1]
 		set.AddRuneRange(0x0a, 0x0d) // add range
 		set.AddRune(0x85)
 		set.AddRuneRange(0x2028, 0x2029)
 
-	case doSetBackslash_V:
+	case doSetBackslashV:
 		v := uset.New()
 		v.AddRuneRange(0x0a, 0x0d) // add range
 		v.AddRune(0x85)
@@ -1528,13 +1520,13 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		set := c.setStack[len(c.setStack)-1]
 		set.AddAll(v)
 
-	case doSetBackslash_w:
+	case doSetBackslashw:
 		set := c.setStack[len(c.setStack)-1]
-		set.AddAll(staticPropertySets[URX_ISWORD_SET])
+		set.AddAll(staticPropertySets[urxIswordSet])
 
-	case doSetBackslash_W:
+	case doSetBackslashW:
 		sset := uset.New()
-		sset.AddAll(staticPropertySets[URX_ISWORD_SET])
+		sset.AddAll(staticPropertySets[urxIswordSet])
 		sset.Complement()
 
 		set := c.setStack[len(c.setStack)-1]
@@ -1544,7 +1536,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		c.fixLiterals(false)
 		c.setStack = append(c.setStack, uset.New())
 		c.setOpStack = append(c.setOpStack, setStart)
-		if (c.modeFlags & UREGEX_CASE_INSENSITIVE) != 0 {
+		if (c.modeFlags & CaseInsensitive) != 0 {
 			c.setOpStack = append(c.setOpStack, setCaseClose)
 		}
 
@@ -1555,7 +1547,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//    went before once it is created.
 		c.setPushOp(setDifference1)
 		c.setOpStack = append(c.setOpStack, setStart)
-		if (c.modeFlags & UREGEX_CASE_INSENSITIVE) != 0 {
+		if (c.modeFlags & CaseInsensitive) != 0 {
 			c.setOpStack = append(c.setOpStack, setCaseClose)
 		}
 
@@ -1564,7 +1556,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//   Need both the '&' operator and the open '[' operator.
 		c.setPushOp(setIntersection1)
 		c.setOpStack = append(c.setOpStack, setStart)
-		if (c.modeFlags & UREGEX_CASE_INSENSITIVE) != 0 {
+		if (c.modeFlags & CaseInsensitive) != 0 {
 			c.setOpStack = append(c.setOpStack, setCaseClose)
 		}
 
@@ -1573,7 +1565,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//     Need to handle the union operation explicitly [[abc] | [
 		c.setPushOp(setUnion)
 		c.setOpStack = append(c.setOpStack, setStart)
-		if (c.modeFlags & UREGEX_CASE_INSENSITIVE) != 0 {
+		if (c.modeFlags & CaseInsensitive) != 0 {
 			c.setOpStack = append(c.setOpStack, setCaseClose)
 		}
 
@@ -1624,10 +1616,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		// A back-slash escaped literal character was encountered.
 		// Processing is the same as with setLiteral, above, with the addition of
 		//  the optional check for errors on escaped ASCII letters.
-		if (c.modeFlags&UREGEX_ERROR_ON_UNKNOWN_ESCAPES) != 0 &&
+		if (c.modeFlags&ErrorOnUnknownEscapes) != 0 &&
 			((c.c.char >= 0x41 && c.c.char <= 0x5A) || // in [A-Z]
 				(c.c.char >= 0x61 && c.c.char <= 0x7a)) { // in [a-z]
-			c.error(uerror.U_REGEX_BAD_ESCAPE_SEQUENCE)
+			c.error(uerror.BadEscapeSequence)
 		}
 		c.setEval(setUnion)
 		set := c.setStack[len(c.setStack)-1]
@@ -1652,7 +1644,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//        and ICU UnicodeSet behavior.
 		ch := c.scanNamedChar()
 		if c.err == nil && (c.lastSetLiteral == -1 || c.lastSetLiteral > ch) {
-			c.error(uerror.U_REGEX_INVALID_RANGE)
+			c.error(uerror.InvalidRange)
 		}
 		set := c.setStack[len(c.setStack)-1]
 		set.AddRuneRange(c.lastSetLiteral, ch)
@@ -1676,10 +1668,10 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		}
 
 	case doSetNoCloseError:
-		c.error(uerror.U_REGEX_MISSING_CLOSE_BRACKET)
+		c.error(uerror.MissingCloseBracket)
 
 	case doSetOpError:
-		c.error(uerror.U_REGEX_RULE_SYNTAX) //  -- or && at the end of a set.  Illegal.
+		c.error(uerror.RuleSyntax) //  -- or && at the end of a set.  Illegal.
 
 	case doSetPosixProp:
 		if set := c.scanPosixProp(); set != nil {
@@ -1700,7 +1692,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 		//        and ICU UnicodeSet behavior.
 
 		if c.lastSetLiteral == -1 || c.lastSetLiteral > c.c.char {
-			c.error(uerror.U_REGEX_INVALID_RANGE)
+			c.error(uerror.InvalidRange)
 		}
 		c.setStack[len(c.setStack)-1].AddRuneRange(c.lastSetLiteral, c.c.char)
 
@@ -1711,7 +1703,7 @@ func (c *Compiler) doParseActions(action patternParseAction) bool {
 	return c.err == nil
 }
 
-func u_charDigitValue(char rune) int64 {
+func uCharDigitValue(char rune) int64 {
 	if char >= '0' && char <= '9' {
 		return int64(char - '0')
 	}
@@ -1727,7 +1719,7 @@ func stackPop[T any](stack []T) (T, []T) {
 	return out, stack
 }
 
-func (c *Compiler) error(e uerror.URegexCompileErrorCode) {
+func (c *compiler) error(e uerror.CompileErrorCode) {
 	c.err = &CompileError{
 		Code:    e,
 		Line:    c.lineNum,
@@ -1736,7 +1728,7 @@ func (c *Compiler) error(e uerror.URegexCompileErrorCode) {
 	}
 }
 
-func (c *Compiler) stripNOPs() {
+func (c *compiler) stripNOPs() {
 	if c.err != nil {
 		return
 	}
@@ -1750,7 +1742,7 @@ func (c *Compiler) stripNOPs() {
 	for loc = 0; loc < end; loc++ {
 		deltas = append(deltas, d)
 		op := c.out.compiledPat[loc]
-		if op.Type() == URX_NOP {
+		if op.typ() == urxNop {
 			d++
 		}
 	}
@@ -1762,32 +1754,31 @@ func (c *Compiler) stripNOPs() {
 	var src, dst int
 	for src = 0; src < end; src++ {
 		op := c.out.compiledPat[src]
-		opType := op.Type()
+		opType := op.typ()
 
 		switch opType {
-		case URX_NOP:
+		case urxNop:
 			// skip
 
-		case URX_STATE_SAVE,
-			URX_JMP,
-			URX_CTR_LOOP,
-			URX_CTR_LOOP_NG,
-			URX_RELOC_OPRND,
-			URX_JMPX,
-			URX_JMP_SAV,
-			URX_JMP_SAV_X:
+		case urxStateSave,
+			urxJmp,
+			utxCtrLoop,
+			urxCtrLoopNg,
+			urxRelocOprnd,
+			urxJmpx,
+			urxJmpSav,
+			urxJmpSavX:
 			// These are instructions with operands that refer to code locations.
-			operandAddress := op.Value()
-			// U_ASSERT(operandAddress >= 0 && operandAddress < deltas.size());
+			operandAddress := op.value()
 			fixedOperandAddress := operandAddress - deltas[operandAddress]
 			op = c.buildOp(opType, fixedOperandAddress)
 			c.out.compiledPat[dst] = op
 			dst++
 
-		case URX_BACKREF, URX_BACKREF_I:
-			where := op.Value()
+		case urxBackref, urxBackrefI:
+			where := op.value()
 			if where > len(c.out.groupMap) {
-				c.error(uerror.U_REGEX_INVALID_BACK_REF)
+				c.error(uerror.InvalidBackRef)
 				break
 			}
 
@@ -1797,55 +1788,55 @@ func (c *Compiler) stripNOPs() {
 			dst++
 			c.out.needsAltInput = true
 
-		case URX_RESERVED_OP,
-			URX_RESERVED_OP_N,
-			URX_BACKTRACK,
-			URX_END,
-			URX_ONECHAR,
-			URX_STRING,
-			URX_STRING_LEN,
-			URX_START_CAPTURE,
-			URX_END_CAPTURE,
-			URX_STATIC_SETREF,
-			URX_STAT_SETREF_N,
-			URX_SETREF,
-			URX_DOTANY,
-			URX_FAIL,
-			URX_BACKSLASH_B,
-			URX_BACKSLASH_BU,
-			URX_BACKSLASH_G,
-			URX_BACKSLASH_X,
-			URX_BACKSLASH_Z,
-			URX_DOTANY_ALL,
-			URX_BACKSLASH_D,
-			URX_CARET,
-			URX_DOLLAR,
-			URX_CTR_INIT,
-			URX_CTR_INIT_NG,
-			URX_DOTANY_UNIX,
-			URX_STO_SP,
-			URX_LD_SP,
-			URX_STO_INP_LOC,
-			URX_LA_START,
-			URX_LA_END,
-			URX_ONECHAR_I,
-			URX_STRING_I,
-			URX_DOLLAR_M,
-			URX_CARET_M,
-			URX_CARET_M_UNIX,
-			URX_LB_START,
-			URX_LB_CONT,
-			URX_LB_END,
-			URX_LBN_CONT,
-			URX_LBN_END,
-			URX_LOOP_SR_I,
-			URX_LOOP_DOT_I,
-			URX_LOOP_C,
-			URX_DOLLAR_D,
-			URX_DOLLAR_MD,
-			URX_BACKSLASH_H,
-			URX_BACKSLASH_R,
-			URX_BACKSLASH_V:
+		case urxReservedOp,
+			urxReservedOpN,
+			urxBacktrack,
+			urxEnd,
+			urxOnechar,
+			urxString,
+			urxStringLen,
+			urxStartCapture,
+			urxEndCapture,
+			urxStaticSetref,
+			urxStatSetrefN,
+			urxSetref,
+			urxDotany,
+			urxFail,
+			urxBackslashB,
+			urxBackslashBu,
+			urxBackslashG,
+			urxBackslashX,
+			urxBackslashZ,
+			urxDotanyAll,
+			urxBackslashD,
+			urxCaret,
+			urxDollar,
+			urxCtrInit,
+			urxCtrInitNg,
+			urxDotanyUnix,
+			urxStoSp,
+			urxLdSp,
+			urxStoInpLoc,
+			urxLaStart,
+			urxLaEnd,
+			urcOnecharI,
+			urxStringI,
+			urxDollarM,
+			urxCaretM,
+			urxCaretMUnix,
+			urxLbStart,
+			urxLbCont,
+			urxLbEnd,
+			urxLbnCount,
+			urxLbnEnd,
+			urxLoopSrI,
+			urxLoopDotI,
+			urxLoopC,
+			urxDollarD,
+			urxDollarMd,
+			urxBackslashH,
+			urxBackslashR,
+			urxBackslashV:
 			// These instructions are unaltered by the relocation.
 			c.out.compiledPat[dst] = op
 			dst++
@@ -1859,7 +1850,7 @@ func (c *Compiler) stripNOPs() {
 	c.out.compiledPat = c.out.compiledPat[:dst]
 }
 
-func (c *Compiler) matchStartType() {
+func (c *compiler) matchStartType() {
 	var loc int               // Location in the pattern of the current op being processed.
 	var currentLen int32      // Minimum length of a match to this point (loc) in the pattern
 	var numInitialStrings int // Number of strings encountered that could match at start.
@@ -1881,7 +1872,7 @@ func (c *Compiler) matchStartType() {
 
 	for loc = 3; loc < end; loc++ {
 		op := c.out.compiledPat[loc]
-		opType := op.Type()
+		opType := op.typ()
 
 		// The loop is advancing linearly through the pattern.
 		// If the op we are now at was the destination of a branch in the pattern,
@@ -1889,58 +1880,56 @@ func (c *Compiler) matchStartType() {
 		// replace the current accumulated value.
 		if forwardedLength[loc] < currentLen {
 			currentLen = forwardedLength[loc]
-			// U_ASSERT(currentLen >= 0 && currentLen < INT32_MAX);
 		}
 
 		switch opType {
 		// Ops that don't change the total length matched
-		case URX_RESERVED_OP,
-			URX_END,
-			URX_FAIL,
-			URX_STRING_LEN,
-			URX_NOP,
-			URX_START_CAPTURE,
-			URX_END_CAPTURE,
-			URX_BACKSLASH_B,
-			URX_BACKSLASH_BU,
-			URX_BACKSLASH_G,
-			URX_BACKSLASH_Z,
-			URX_DOLLAR,
-			URX_DOLLAR_M,
-			URX_DOLLAR_D,
-			URX_DOLLAR_MD,
-			URX_RELOC_OPRND,
-			URX_STO_INP_LOC,
-			URX_BACKREF, // BackRef.  Must assume that it might be a zero length match
-			URX_BACKREF_I,
-			URX_STO_SP, // Setup for atomic or possessive blocks.  Doesn't change what can match.
-			URX_LD_SP:
+		case urxReservedOp,
+			urxEnd,
+			urxFail,
+			urxStringLen,
+			urxNop,
+			urxStartCapture,
+			urxEndCapture,
+			urxBackslashB,
+			urxBackslashBu,
+			urxBackslashG,
+			urxBackslashZ,
+			urxDollar,
+			urxDollarM,
+			urxDollarD,
+			urxDollarMd,
+			urxRelocOprnd,
+			urxStoInpLoc,
+			urxBackref, // BackRef.  Must assume that it might be a zero length match
+			urxBackrefI,
+			urxStoSp, // Setup for atomic or possessive blocks.  Doesn't change what can match.
+			urxLdSp:
 			// skip
 
-		case URX_CARET:
+		case urxCaret:
 			if atStart {
-				c.out.startType = START_START
+				c.out.startType = startStart
 			}
 
-		case URX_CARET_M, URX_CARET_M_UNIX:
+		case urxCaretM, urxCaretMUnix:
 			if atStart {
-				c.out.startType = START_LINE
+				c.out.startType = startLine
 			}
 
-		case URX_ONECHAR:
+		case urxOnechar:
 			if currentLen == 0 {
 				// This character could appear at the start of a match.
 				//   Add it to the set of possible starting characters.
-				c.out.initialChars.AddRune(op.Value32())
+				c.out.initialChars.AddRune(op.value32())
 				numInitialStrings += 2
 			}
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_SETREF:
+		case urxSetref:
 			if currentLen == 0 {
-				sn := op.Value()
-				// U_ASSERT(sn > 0 && sn < fRXPat->fSets->size());
+				sn := op.value()
 				set := c.out.sets[sn]
 				c.out.initialChars.AddAll(set)
 				numInitialStrings += 2
@@ -1948,19 +1937,18 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_LOOP_SR_I:
+		case urxLoopSrI:
 			// [Set]*, like a SETREF, above, in what it can match,
 			//  but may not match at all, so currentLen is not incremented.
 			if currentLen == 0 {
-				sn := op.Value()
-				// U_ASSERT(sn > 0 && sn < fRXPat->fSets->size());
+				sn := op.value()
 				set := c.out.sets[sn]
 				c.out.initialChars.AddAll(set)
 				numInitialStrings += 2
 			}
 			atStart = false
 
-		case URX_LOOP_DOT_I:
+		case urxLoopDotI:
 			if currentLen == 0 {
 				// .* at the start of a pattern.
 				//    Any character can begin the match.
@@ -1970,18 +1958,18 @@ func (c *Compiler) matchStartType() {
 			}
 			atStart = false
 
-		case URX_STATIC_SETREF:
+		case urxStaticSetref:
 			if currentLen == 0 {
-				sn := op.Value()
+				sn := op.value()
 				c.out.initialChars.AddAll(staticPropertySets[sn])
 				numInitialStrings += 2
 			}
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_STAT_SETREF_N:
+		case urxStatSetrefN:
 			if currentLen == 0 {
-				sn := op.Value()
+				sn := op.value()
 				sc := uset.New()
 				sc.AddAll(staticPropertySets[sn])
 				sc.Complement()
@@ -1992,12 +1980,12 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_BACKSLASH_D:
+		case urxBackslashD:
 			// Digit Char
 			if currentLen == 0 {
 				s := uset.New()
-				c.err = uprops.ApplyIntPropertyValue(s, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ND_MASK))
-				if op.Value() != 0 {
+				c.err = uprops.ApplyIntPropertyValue(s, uprops.UCharGeneralCategoryMask, int32(uchar.GcNdMask))
+				if op.value() != 0 {
 					s.Complement()
 				}
 				c.out.initialChars.AddAll(s)
@@ -2006,13 +1994,13 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_BACKSLASH_H:
+		case urxBackslashH:
 			// Horiz white space
 			if currentLen == 0 {
 				s := uset.New()
-				c.err = uprops.ApplyIntPropertyValue(s, uprops.UCHAR_GENERAL_CATEGORY_MASK, int32(uchar.U_GC_ZS_MASK))
+				c.err = uprops.ApplyIntPropertyValue(s, uprops.UCharGeneralCategoryMask, int32(uchar.GcZsMask))
 				s.AddRune(9) // Tab
-				if op.Value() != 0 {
+				if op.value() != 0 {
 					s.Complement()
 				}
 				c.out.initialChars.AddAll(s)
@@ -2021,14 +2009,14 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_BACKSLASH_R, // Any line ending sequence
-			URX_BACKSLASH_V: // Any line ending code point, with optional negation
+		case urxBackslashR, // Any line ending sequence
+			urxBackslashV: // Any line ending code point, with optional negation
 			if currentLen == 0 {
 				s := uset.New()
 				s.AddRuneRange(0x0a, 0x0d) // add range
 				s.AddRune(0x85)
 				s.AddRuneRange(0x2028, 0x2029)
-				if op.Value() != 0 {
+				if op.value() != 0 {
 					// Complement option applies to URX_BACKSLASH_V only.
 					s.Complement()
 				}
@@ -2038,14 +2026,14 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_ONECHAR_I:
+		case urcOnecharI:
 			// Case Insensitive Single Character.
 			if currentLen == 0 {
-				ch := op.Value32()
-				if uprops.HasBinaryProperty(ch, uprops.UCHAR_CASE_SENSITIVE) {
+				ch := op.value32()
+				if uprops.HasBinaryProperty(ch, uprops.UCharCaseSensitive) {
 					starters := uset.New()
 					starters.AddRuneRange(ch, ch)
-					starters.CloseOver(uset.USET_CASE_INSENSITIVE)
+					starters.CloseOver(uset.CaseInsensitive)
 					// findCaseInsensitiveStarters(c, &starters);
 					//   For ONECHAR_I, no need to worry about text chars that expand on folding into
 					//   strings. The expanded folding can't match the pattern.
@@ -2060,10 +2048,10 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_BACKSLASH_X, // Grahpeme Cluster.  Minimum is 1, max unbounded.
-			URX_DOTANY_ALL, // . matches one or two.
-			URX_DOTANY,
-			URX_DOTANY_UNIX:
+		case urxBackslashX, // Grahpeme Cluster.  Minimum is 1, max unbounded.
+			urxDotanyAll, // . matches one or two.
+			urxDotany,
+			urxDotanyUnix:
 			if currentLen == 0 {
 				// These constructs are all bad news when they appear at the start
 				//   of a match.  Any character can begin the match.
@@ -2074,41 +2062,40 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case URX_JMPX:
+		case urxJmpx:
 			loc++ // Except for extra operand on URX_JMPX, same as URX_JMP.
 			fallthrough
 
-		case URX_JMP:
-			jmpDest := op.Value()
+		case urxJmp:
+			jmpDest := op.value()
 			if jmpDest < loc {
 				// Loop of some kind.  Can safely ignore, the worst that will happen
 				//  is that we understate the true minimum length
 				currentLen = forwardedLength[loc+1]
 			} else {
 				// Forward jump.  Propagate the current min length to the target loc of the jump.
-				// U_ASSERT(jmpDest <= end + 1);
 				if forwardedLength[jmpDest] > currentLen {
 					forwardedLength[jmpDest] = currentLen
 				}
 			}
 			atStart = false
 
-		case URX_JMP_SAV,
-			URX_JMP_SAV_X:
+		case urxJmpSav,
+			urxJmpSavX:
 			// Combo of state save to the next loc, + jmp backwards.
 			//   Net effect on min. length computation is nothing.
 			atStart = false
 
-		case URX_BACKTRACK:
+		case urxBacktrack:
 			// Fails are kind of like a branch, except that the min length was
 			//   propagated already, by the state save.
 			currentLen = forwardedLength[loc+1]
 			atStart = false
 
-		case URX_STATE_SAVE:
+		case urxStateSave:
 			// State Save, for forward jumps, propagate the current minimum.
 			//             of the state save.
-			jmpDest := op.Value()
+			jmpDest := op.value()
 			if jmpDest > loc {
 				if currentLen < forwardedLength[jmpDest] {
 					forwardedLength[jmpDest] = (currentLen)
@@ -2116,16 +2103,14 @@ func (c *Compiler) matchStartType() {
 			}
 			atStart = false
 
-		case URX_STRING:
+		case urxString:
 			loc++
 			stringLenOp := c.out.compiledPat[loc]
-			stringLen := stringLenOp.Value()
-			// U_ASSERT(URX_TYPE(stringLenOp) == URX_STRING_LEN);
-			// U_ASSERT(stringLenOp >= 2);
+			stringLen := stringLenOp.value()
 			if currentLen == 0 {
 				// Add the starting character of this string to the set of possible starting
 				//   characters for this pattern.
-				stringStartIdx := op.Value()
+				stringStartIdx := op.value()
 				ch := c.out.literalText[stringStartIdx]
 				c.out.initialChars.AddRune(ch)
 
@@ -2139,19 +2124,17 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, stringLen)
 			atStart = false
 
-		case URX_STRING_I:
+		case urxStringI:
 			// Case-insensitive string.  Unlike exact-match strings, we won't
 			//   attempt a string search for possible match positions.  But we
 			//   do update the set of possible starting characters.
 			loc++
 			stringLenOp := c.out.compiledPat[loc]
-			stringLen := stringLenOp.Value()
-			// U_ASSERT(URX_TYPE(stringLenOp) == URX_STRING_LEN);
-			// U_ASSERT(stringLenOp >= 2);
+			stringLen := stringLenOp.value()
 			if currentLen == 0 {
 				// Add the starting character of this string to the set of possible starting
 				//   characters for this pattern.
-				stringStartIdx := op.Value()
+				stringStartIdx := op.value()
 				ch := c.out.literalText[stringStartIdx]
 				s := uset.New()
 				c.findCaseInsensitiveStarters(ch, s)
@@ -2161,8 +2144,8 @@ func (c *Compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, stringLen)
 			atStart = false
 
-		case URX_CTR_INIT,
-			URX_CTR_INIT_NG:
+		case urxCtrInit,
+			urxCtrInitNg:
 			// Loop Init Ops.  These don't change the min length, but they are 4 word ops
 			//   so location must be updated accordingly.
 			// Loop Init Ops.
@@ -2170,13 +2153,12 @@ func (c *Compiler) matchStartType() {
 			//      move loc forwards to the end of the loop, skipping over the body.
 			//   If the min count is > 0,
 			//      continue normal processing of the body of the loop.
-			loopEndLoc := c.out.compiledPat[loc+1].Value()
+			loopEndLoc := c.out.compiledPat[loc+1].value()
 			minLoopCount := int(c.out.compiledPat[loc+2])
 			if minLoopCount == 0 {
 				// Min Loop Count of 0, treat like a forward branch and
 				//   move the current minimum length up to the target
 				//   (end of loop) location.
-				// U_ASSERT(loopEndLoc <= end + 1);
 				if forwardedLength[loopEndLoc] > currentLen {
 					forwardedLength[loopEndLoc] = currentLen
 				}
@@ -2184,19 +2166,19 @@ func (c *Compiler) matchStartType() {
 			loc += 3 // Skips over operands of CTR_INIT
 			atStart = false
 
-		case URX_CTR_LOOP,
-			URX_CTR_LOOP_NG:
+		case utxCtrLoop,
+			urxCtrLoopNg:
 			// Loop ops.
 			//  The jump is conditional, backwards only.
 			atStart = false
 
-		case URX_LOOP_C:
+		case urxLoopC:
 			// More loop ops.  These state-save to themselves.
 			//   don't change the minimum match
 			atStart = false
 
-		case URX_LA_START,
-			URX_LB_START:
+		case urxLaStart,
+			urxLbStart:
 			// Look-around.  Scan forward until the matching look-ahead end,
 			//   without processing the look-around block.  This is overly pessimistic.
 
@@ -2204,7 +2186,7 @@ func (c *Compiler) matchStartType() {
 			//   lookahead contains two LA_END instructions, so count goes up by two
 			//   for each LA_START.
 			var depth int
-			if opType == URX_LA_START {
+			if opType == urxLaStart {
 				depth = 2
 			} else {
 				depth = 1
@@ -2212,36 +2194,35 @@ func (c *Compiler) matchStartType() {
 			for {
 				loc++
 				op = c.out.compiledPat[loc]
-				if op.Type() == URX_LA_START {
+				if op.typ() == urxLaStart {
 					depth += 2
 				}
-				if op.Type() == URX_LB_START {
+				if op.typ() == urxLbStart {
 					depth++
 				}
-				if op.Type() == URX_LA_END || op.Type() == URX_LBN_END {
+				if op.typ() == urxLaEnd || op.typ() == urxLbnEnd {
 					depth--
 					if depth == 0 {
 						break
 					}
 				}
-				if op.Type() == URX_STATE_SAVE {
+				if op.typ() == urxStateSave {
 					// Need this because neg lookahead blocks will FAIL to outside
 					//   of the block.
-					jmpDest := op.Value()
+					jmpDest := op.value()
 					if jmpDest > loc {
 						if currentLen < forwardedLength[jmpDest] {
 							forwardedLength[jmpDest] = (currentLen)
 						}
 					}
 				}
-				// U_ASSERT(loc <= end);
 			}
 
-		case URX_LA_END,
-			URX_LB_CONT,
-			URX_LB_END,
-			URX_LBN_CONT,
-			URX_LBN_END:
+		case urxLaEnd,
+			urxLbCont,
+			urxLbEnd,
+			urxLbnCount,
+			urxLbnEnd:
 			panic("should be consumed in URX_LA_START")
 
 		default:
@@ -2257,47 +2238,45 @@ func (c *Compiler) matchStartType() {
 	//     4.   A single literal character.
 	//     5.   A character from a set of characters.
 	//
-	if c.out.startType == START_START {
+	if c.out.startType == startStart {
 		// Match only at the start of an input text string.
 		//    start type is already set.  We're done.
 	} else if numInitialStrings == 1 && c.out.minMatchLen > 0 {
 		// Match beginning only with a literal string.
 		ch := c.out.literalText[c.out.initialStringIdx]
-		// U_ASSERT(fRXPat->fInitialChars->contains(c));
-		c.out.startType = START_STRING
+		c.out.startType = startString
 		c.out.initialChar = ch
-	} else if c.out.startType == START_LINE {
+	} else if c.out.startType == startLine {
 		// Match at start of line in Multi-Line mode.
 		// Nothing to do here; everything is already set.
 	} else if c.out.minMatchLen == 0 {
 		// Zero length match possible.  We could start anywhere.
-		c.out.startType = START_NO_INFO
+		c.out.startType = startNoInfo
 	} else if c.out.initialChars.Len() == 1 {
 		// All matches begin with the same char.
-		c.out.startType = START_CHAR
+		c.out.startType = startChar
 		c.out.initialChar = c.out.initialChars.RuneAt(0)
-		// U_ASSERT(fRXPat->fInitialChar != (UChar32)-1);
 	} else if !c.out.initialChars.ContainsRuneRange(0, 0x10ffff) && c.out.minMatchLen > 0 {
 		// Matches start with a set of character smaller than the set of all chars.
-		c.out.startType = START_SET
+		c.out.startType = startSet
 	} else {
 		// Matches can start with anything
-		c.out.startType = START_NO_INFO
+		c.out.startType = startNoInfo
 	}
 }
 
-func (c *Compiler) appendOp(typ Opcode, arg int) {
+func (c *compiler) appendOp(typ opcode, arg int) {
 	c.appendIns(c.buildOp(typ, arg))
 }
 
-func (c *Compiler) appendIns(ins Instruction) {
+func (c *compiler) appendIns(ins instruction) {
 	if c.err != nil {
 		return
 	}
 	c.out.compiledPat = append(c.out.compiledPat, ins)
 }
 
-func (c *Compiler) buildOp(typ Opcode, val int) Instruction {
+func (c *compiler) buildOp(typ opcode, val int) instruction {
 	if c.err != nil {
 		return 0
 	}
@@ -2305,24 +2284,24 @@ func (c *Compiler) buildOp(typ Opcode, val int) Instruction {
 		panic("bad argument to buildOp")
 	}
 	if val < 0 {
-		if !(typ == URX_RESERVED_OP_N || typ == URX_RESERVED_OP) {
+		if !(typ == urxReservedOpN || typ == urxReservedOp) {
 			panic("bad value to buildOp")
 		}
-		typ = URX_RESERVED_OP_N
+		typ = urxReservedOpN
 	}
-	return Instruction(int32(typ)<<24 | int32(val))
+	return instruction(int32(typ)<<24 | int32(val))
 }
 
-func (c *Compiler) handleCloseParen() {
+func (c *compiler) handleCloseParen() {
 	if len(c.parenStack) == 0 {
-		c.error(uerror.U_REGEX_MISMATCHED_PAREN)
+		c.error(uerror.MismatchedParen)
 		return
 	}
 
 	c.fixLiterals(false)
 
 	var patIdx int
-	var patOp Instruction
+	var patOp instruction
 
 	for {
 		patIdx, c.parenStack = stackPop(c.parenStack)
@@ -2331,10 +2310,10 @@ func (c *Compiler) handleCloseParen() {
 		}
 
 		patOp = c.out.compiledPat[patIdx]
-		if patOp.Value() != 0 {
+		if patOp.value() != 0 {
 			panic("branch target for JMP should not be set")
 		}
-		patOp |= Instruction(len(c.out.compiledPat))
+		patOp |= instruction(len(c.out.compiledPat))
 		c.out.compiledPat[patIdx] = patOp
 		c.matchOpenParen = patIdx
 	}
@@ -2358,58 +2337,58 @@ func (c *Compiler) handleCloseParen() {
 		//       start capture op and put it into the end-capture op.
 
 		captureOp := c.out.compiledPat[c.matchOpenParen+1]
-		if captureOp.Type() != URX_START_CAPTURE {
+		if captureOp.typ() != urxStartCapture {
 			panic("bad type in capture op (expected URX_START_CAPTURE)")
 		}
-		frameVarLocation := captureOp.Value()
-		c.appendOp(URX_END_CAPTURE, frameVarLocation)
+		frameVarLocation := captureOp.value()
+		c.appendOp(urxEndCapture, frameVarLocation)
 
 	case parenAtomic:
 		// Atomic Parenthesis.
 		//   Insert a LD_SP operation to restore the state stack to the position
 		//   it was when the atomic parens were entered.
 		stoOp := c.out.compiledPat[c.matchOpenParen+1]
-		if stoOp.Type() != URX_STO_SP {
+		if stoOp.typ() != urxStoSp {
 			panic("bad type in capture op (expected URX_STO_SP)")
 		}
-		stoLoc := stoOp.Value()
-		c.appendOp(URX_LD_SP, stoLoc)
+		stoLoc := stoOp.value()
+		c.appendOp(urxLdSp, stoLoc)
 
 	case parenLookahead:
 		startOp := c.out.compiledPat[c.matchOpenParen-5]
-		if startOp.Type() != URX_LA_START {
+		if startOp.typ() != urxLaStart {
 			panic("bad type in capture op (expected URX_LA_START)")
 		}
-		dataLoc := startOp.Value()
-		c.appendOp(URX_LA_END, dataLoc)
+		dataLoc := startOp.value()
+		c.appendOp(urxLaEnd, dataLoc)
 
 	case parenNegLookahead:
 		startOp := c.out.compiledPat[c.matchOpenParen-1]
-		if startOp.Type() != URX_LA_START {
+		if startOp.typ() != urxLaStart {
 			panic("bad type in capture op (expected URX_LA_START)")
 		}
-		dataLoc := startOp.Value()
-		c.appendOp(URX_LA_END, dataLoc)
-		c.appendOp(URX_BACKTRACK, 0)
-		c.appendOp(URX_LA_END, dataLoc)
+		dataLoc := startOp.value()
+		c.appendOp(urxLaEnd, dataLoc)
+		c.appendOp(urxBacktrack, 0)
+		c.appendOp(urxLaEnd, dataLoc)
 
 		// Patch the URX_SAVE near the top of the block.
 		// The destination of the SAVE is the final LA_END that was just added.
 		saveOp := c.out.compiledPat[c.matchOpenParen]
-		if saveOp.Type() != URX_STATE_SAVE {
+		if saveOp.typ() != urxStateSave {
 			panic("bad type in capture op (expected URX_STATE_SAVE)")
 		}
-		saveOp = c.buildOp(URX_STATE_SAVE, len(c.out.compiledPat)-1)
+		saveOp = c.buildOp(urxStateSave, len(c.out.compiledPat)-1)
 		c.out.compiledPat[c.matchOpenParen] = saveOp
 
 	case parenLookBehind:
 		startOp := c.out.compiledPat[c.matchOpenParen-4]
-		if startOp.Type() != URX_LB_START {
+		if startOp.typ() != urxLbStart {
 			panic("bad type in capture op (expected URX_LB_START)")
 		}
-		dataLoc := startOp.Value()
-		c.appendOp(URX_LB_END, dataLoc)
-		c.appendOp(URX_LA_END, dataLoc)
+		dataLoc := startOp.value()
+		c.appendOp(urxLbEnd, dataLoc)
+		c.appendOp(urxLaEnd, dataLoc)
 
 		// Determine the min and max bounds for the length of the
 		//  string that the pattern can match.
@@ -2419,7 +2398,7 @@ func (c *Compiler) handleCloseParen() {
 		maxML := c.maxMatchLength(c.matchOpenParen, patEnd)
 
 		if maxML == math.MaxInt32 {
-			c.error(uerror.U_REGEX_LOOK_BEHIND_LIMIT)
+			c.error(uerror.LookBehindLimit)
 			break
 		}
 		if minML == math.MaxInt32 {
@@ -2430,16 +2409,16 @@ func (c *Compiler) handleCloseParen() {
 			minML = 0
 		}
 
-		c.out.compiledPat[c.matchOpenParen-2] = Instruction(minML)
-		c.out.compiledPat[c.matchOpenParen-1] = Instruction(maxML)
+		c.out.compiledPat[c.matchOpenParen-2] = instruction(minML)
+		c.out.compiledPat[c.matchOpenParen-1] = instruction(maxML)
 
 	case parenLookBehindN:
 		startOp := c.out.compiledPat[c.matchOpenParen-5]
-		if startOp.Type() != URX_LB_START {
+		if startOp.typ() != urxLbStart {
 			panic("bad type in capture op (expected URX_LB_START)")
 		}
-		dataLoc := startOp.Value()
-		c.appendOp(URX_LBN_END, dataLoc)
+		dataLoc := startOp.value()
+		c.appendOp(urxLbnEnd, dataLoc)
 
 		// Determine the min and max bounds for the length of the
 		//  string that the pattern can match.
@@ -2448,12 +2427,12 @@ func (c *Compiler) handleCloseParen() {
 		minML := c.minMatchLength(c.matchOpenParen, patEnd)
 		maxML := c.maxMatchLength(c.matchOpenParen, patEnd)
 
-		if Instruction(maxML).Type() != 0 {
-			c.error(uerror.U_REGEX_LOOK_BEHIND_LIMIT)
+		if instruction(maxML).typ() != 0 {
+			c.error(uerror.LookBehindLimit)
 			break
 		}
 		if maxML == math.MaxInt32 {
-			c.error(uerror.U_REGEX_LOOK_BEHIND_LIMIT)
+			c.error(uerror.LookBehindLimit)
 			break
 		}
 		if minML == math.MaxInt32 {
@@ -2464,10 +2443,10 @@ func (c *Compiler) handleCloseParen() {
 			minML = 0
 		}
 
-		c.out.compiledPat[c.matchOpenParen-3] = Instruction(minML)
-		c.out.compiledPat[c.matchOpenParen-2] = Instruction(maxML)
+		c.out.compiledPat[c.matchOpenParen-3] = instruction(minML)
+		c.out.compiledPat[c.matchOpenParen-2] = instruction(maxML)
 
-		op := c.buildOp(URX_RELOC_OPRND, len(c.out.compiledPat))
+		op := c.buildOp(urxRelocOprnd, len(c.out.compiledPat))
 		c.out.compiledPat[c.matchOpenParen-1] = op
 
 	default:
@@ -2477,7 +2456,7 @@ func (c *Compiler) handleCloseParen() {
 	c.matchCloseParen = len(c.out.compiledPat)
 }
 
-func (c *Compiler) fixLiterals(split bool) {
+func (c *compiler) fixLiterals(split bool) {
 	if len(c.literalChars) == 0 {
 		return
 	}
@@ -2497,85 +2476,85 @@ func (c *Compiler) fixLiterals(split bool) {
 		return
 	}
 
-	if c.modeFlags&UREGEX_CASE_INSENSITIVE != 0 {
+	if c.modeFlags&CaseInsensitive != 0 {
 		c.literalChars = ucase.FoldRunes(c.literalChars)
 		lastCodePoint = c.literalChars[len(c.literalChars)-1]
 	}
 
 	if len(c.literalChars) == 1 {
-		if c.modeFlags&UREGEX_CASE_INSENSITIVE != 0 && uprops.HasBinaryProperty(lastCodePoint, uprops.UCHAR_CASE_SENSITIVE) {
-			c.appendOp(URX_ONECHAR_I, int(lastCodePoint))
+		if c.modeFlags&CaseInsensitive != 0 && uprops.HasBinaryProperty(lastCodePoint, uprops.UCharCaseSensitive) {
+			c.appendOp(urcOnecharI, int(lastCodePoint))
 		} else {
-			c.appendOp(URX_ONECHAR, int(lastCodePoint))
+			c.appendOp(urxOnechar, int(lastCodePoint))
 		}
 	} else {
 		if len(c.literalChars) > 0x00ffffff || len(c.out.literalText) > 0x00ffffff {
-			c.error(uerror.U_REGEX_PATTERN_TOO_BIG)
+			c.error(uerror.PatternTooBig)
 		}
-		if c.modeFlags&UREGEX_CASE_INSENSITIVE != 0 {
-			c.appendOp(URX_STRING_I, len(c.out.literalText))
+		if c.modeFlags&CaseInsensitive != 0 {
+			c.appendOp(urxStringI, len(c.out.literalText))
 		} else {
-			c.appendOp(URX_STRING, len(c.out.literalText))
+			c.appendOp(urxString, len(c.out.literalText))
 		}
-		c.appendOp(URX_STRING_LEN, len(c.literalChars))
+		c.appendOp(urxStringLen, len(c.literalChars))
 		c.out.literalText = append(c.out.literalText, c.literalChars...)
 	}
 
 	c.literalChars = c.literalChars[:0]
 }
 
-func (c *Compiler) literalChar(point rune) {
+func (c *compiler) literalChar(point rune) {
 	c.literalChars = append(c.literalChars, point)
 }
 
-func (c *Compiler) allocateData(size int) int {
+func (c *compiler) allocateData(size int) int {
 	if c.err != nil {
 		return 0
 	}
 	if size <= 0 || size > 0x100 || c.out.dataSize < 0 {
-		c.error(uerror.U_REGEX_INTERNAL_ERROR)
+		c.error(uerror.InternalError)
 		return 0
 	}
 
 	dataIndex := c.out.dataSize
 	c.out.dataSize += size
 	if c.out.dataSize >= 0x00fffff0 {
-		c.error(uerror.U_REGEX_INTERNAL_ERROR)
+		c.error(uerror.InternalError)
 	}
 	return dataIndex
 }
 
-func (c *Compiler) allocateStackData(size int) int {
+func (c *compiler) allocateStackData(size int) int {
 	if c.err != nil {
 		return 0
 	}
 	if size <= 0 || size > 0x100 || c.out.frameSize < 0 {
-		c.error(uerror.U_REGEX_INTERNAL_ERROR)
+		c.error(uerror.InternalError)
 		return 0
 	}
 	dataIndex := c.out.frameSize
 	c.out.frameSize += size
 	if c.out.frameSize >= 0x00fffff0 {
-		c.error(uerror.U_REGEX_INTERNAL_ERROR)
+		c.error(uerror.InternalError)
 	}
 	return dataIndex
 }
 
-func (c *Compiler) insertOp(where int) {
+func (c *compiler) insertOp(where int) {
 	if where < 0 || where >= len(c.out.compiledPat) {
 		panic("insertOp: out of bounds")
 	}
 
-	nop := c.buildOp(URX_NOP, 0)
+	nop := c.buildOp(urxNop, 0)
 	c.out.compiledPat = slices.Insert(c.out.compiledPat, where, nop)
 
 	// Walk through the pattern, looking for any ops with targets that
 	//  were moved down by the insert.  Fix them.
 	for loc, op := range c.out.compiledPat {
-		switch op.Type() {
-		case URX_JMP, URX_JMPX, URX_STATE_SAVE, URX_CTR_LOOP, URX_CTR_LOOP_NG, URX_JMP_SAV, URX_JMP_SAV_X, URX_RELOC_OPRND:
-			if op.Value() > where {
-				op = c.buildOp(op.Type(), op.Value()+1)
+		switch op.typ() {
+		case urxJmp, urxJmpx, urxStateSave, utxCtrLoop, urxCtrLoopNg, urxJmpSav, urxJmpSavX, urxRelocOprnd:
+			if op.value() > where {
+				op = c.buildOp(op.typ(), op.value()+1)
 				c.out.compiledPat[loc] = op
 			}
 		}
@@ -2597,7 +2576,7 @@ func (c *Compiler) insertOp(where int) {
 	}
 }
 
-func (c *Compiler) blockTopLoc(reserve bool) int {
+func (c *compiler) blockTopLoc(reserve bool) int {
 	var loc int
 	c.fixLiterals(true)
 
@@ -2610,20 +2589,20 @@ func (c *Compiler) blockTopLoc(reserve bool) int {
 		// We need to make space now.
 		loc = len(c.out.compiledPat) - 1
 		op := c.out.compiledPat[loc]
-		if op.Type() == URX_STRING_LEN {
+		if op.typ() == urxStringLen {
 			// Strings take two opcode, we want the position of the first one.
 			// We can have a string at this point if a single character case-folded to two.
 			loc--
 		}
 		if reserve {
-			nop := c.buildOp(URX_NOP, 0)
+			nop := c.buildOp(urxNop, 0)
 			c.out.compiledPat = slices.Insert(c.out.compiledPat, loc, nop)
 		}
 	}
 	return loc
 }
 
-func (c *Compiler) compileInlineInterval() bool {
+func (c *compiler) compileInlineInterval() bool {
 	if c.intervalUpper > 10 || c.intervalUpper < c.intervalLow {
 		return false
 	}
@@ -2660,7 +2639,7 @@ func (c *Compiler) compileInlineInterval() bool {
 	//
 	endOfSequenceLoc := len(c.out.compiledPat) - 1 + c.intervalUpper + (c.intervalUpper - c.intervalLow)
 
-	saveOp := c.buildOp(URX_STATE_SAVE, endOfSequenceLoc)
+	saveOp := c.buildOp(urxStateSave, endOfSequenceLoc)
 	if c.intervalLow == 0 {
 		c.insertOp(topOfBlock)
 		c.out.compiledPat[topOfBlock] = saveOp
@@ -2678,7 +2657,7 @@ func (c *Compiler) compileInlineInterval() bool {
 	return true
 }
 
-func (c *Compiler) compileInterval(init Opcode, loop Opcode) {
+func (c *compiler) compileInterval(init opcode, loop opcode) {
 	// The CTR_INIT op at the top of the block with the {n,m} quantifier takes
 	//   four slots in the compiled code.  Reserve them.
 	topOfBlock := c.blockTopLoc(true)
@@ -2707,30 +2686,30 @@ func (c *Compiler) compileInterval(init Opcode, loop Opcode) {
 	//   compilation of something later on causes the code to grow and the target
 	//   position to move.
 	loopEnd := len(c.out.compiledPat)
-	op = c.buildOp(URX_RELOC_OPRND, loopEnd)
+	op = c.buildOp(urxRelocOprnd, loopEnd)
 	c.out.compiledPat[topOfBlock+1] = op
 
 	// Followed by the min and max counts.
-	c.out.compiledPat[topOfBlock+2] = Instruction(c.intervalLow)
-	c.out.compiledPat[topOfBlock+3] = Instruction(c.intervalUpper)
+	c.out.compiledPat[topOfBlock+2] = instruction(c.intervalLow)
+	c.out.compiledPat[topOfBlock+3] = instruction(c.intervalUpper)
 
 	// Append the CTR_LOOP op.  The operand is the location of the CTR_INIT op.
 	//   Goes at end of the block being looped over, so just append to the code so far.
 	c.appendOp(loop, topOfBlock)
 
 	if (c.intervalLow&0xff000000) != 0 || (c.intervalUpper > 0 && (c.intervalUpper&0xff000000) != 0) {
-		c.error(uerror.U_REGEX_NUMBER_TOO_BIG)
+		c.error(uerror.NumberTooBig)
 	}
 
 	if c.intervalLow > c.intervalUpper && c.intervalUpper != -1 {
-		c.error(uerror.U_REGEX_MAX_LT_MIN)
+		c.error(uerror.MaxLtMin)
 	}
 }
 
-func (c *Compiler) scanNamedChar() rune {
+func (c *compiler) scanNamedChar() rune {
 	c.nextChar(&c.c)
 	if c.c.char != chLBrace {
-		c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+		c.error(uerror.PropertySyntax)
 		return 0
 	}
 
@@ -2741,7 +2720,7 @@ func (c *Compiler) scanNamedChar() rune {
 			break
 		}
 		if c.c.char == -1 {
-			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+			c.error(uerror.PropertySyntax)
 			return 0
 		}
 		charName = append(charName, c.c.char)
@@ -2751,13 +2730,13 @@ func (c *Compiler) scanNamedChar() rune {
 		// All Unicode character names have only invariant characters.
 		// The API to get a character, given a name, accepts only char *, forcing us to convert,
 		//   which requires this error check
-		c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+		c.error(uerror.PropertySyntax)
 		return 0
 	}
 
-	theChar := unames.CharForName(unames.U_UNICODE_CHAR_NAME, string(charName))
+	theChar := unames.CharForName(unames.UnicodeCharName, string(charName))
 	if c.err != nil {
-		c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+		c.error(uerror.PropertySyntax)
 	}
 
 	c.nextChar(&c.c) // Continue overall regex pattern processing with char after the '}'
@@ -2770,7 +2749,7 @@ func isInvariantUString(name []rune) bool {
 		 * no assertions here because these functions are legitimately called
 		 * for strings with variant characters
 		 */
-		if !UCHAR_IS_INVARIANT(c) {
+		if !ucharIsInvariant(c) {
 			return false /* found a variant char */
 		}
 	}
@@ -2784,17 +2763,17 @@ var invariantChars = [...]uint32{
 	0x87fffffe, /* 60..7f but not 60 7b..7e */
 }
 
-func UCHAR_IS_INVARIANT(c rune) bool {
+func ucharIsInvariant(c rune) bool {
 	return c <= 0x7f && (invariantChars[(c)>>5]&(uint32(1)<<(c&0x1f))) != 0
 }
 
-func (c *Compiler) setPushOp(op setOperation) {
+func (c *compiler) setPushOp(op setOperation) {
 	c.setEval(op)
 	c.setOpStack = append(c.setOpStack, op)
 	c.setStack = append(c.setStack, uset.New())
 }
 
-func (c *Compiler) setEval(nextOp setOperation) {
+func (c *compiler) setEval(nextOp setOperation) {
 	var rightOperand *uset.UnicodeSet
 	var leftOperand *uset.UnicodeSet
 
@@ -2812,7 +2791,7 @@ func (c *Compiler) setEval(nextOp setOperation) {
 			rightOperand.Complement()
 
 		case setCaseClose:
-			rightOperand.CloseOver(uset.USET_CASE_INSENSITIVE)
+			rightOperand.CloseOver(uset.CaseInsensitive)
 
 		case setDifference1, setDifference2:
 			c.setStack = c.setStack[:len(c.setStack)-1]
@@ -2842,13 +2821,10 @@ func safeIncrement(val int32, delta int) int32 {
 	return math.MaxInt32
 }
 
-func (c *Compiler) minMatchLength(start, end int) int32 {
+func (c *compiler) minMatchLength(start, end int) int32 {
 	if c.err != nil {
 		return 0
 	}
-
-	// U_ASSERT(start <= end);
-	// U_ASSERT(end < fRXPat->fCompiledPat->size());
 
 	var loc int
 	var currentLen int32
@@ -2865,104 +2841,101 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 
 	for loc = start; loc <= end; loc++ {
 		op := c.out.compiledPat[loc]
-		opType := op.Type()
+		opType := op.typ()
 
 		// The loop is advancing linearly through the pattern.
 		// If the op we are now at was the destination of a branch in the pattern,
 		// and that path has a shorter minimum length than the current accumulated value,
 		// replace the current accumulated value.
-		// U_ASSERT(currentLen>=0 && currentLen < INT32_MAX);  // MinLength == INT32_MAX for some
 		//   no-match-possible cases.
 		if forwardedLength[loc] < currentLen {
 			currentLen = forwardedLength[loc]
-			// U_ASSERT(currentLen >= 0 && currentLen < INT32_MAX);
 		}
 
 		switch opType {
 		// Ops that don't change the total length matched
-		case URX_RESERVED_OP,
-			URX_END,
-			URX_STRING_LEN,
-			URX_NOP,
-			URX_START_CAPTURE,
-			URX_END_CAPTURE,
-			URX_BACKSLASH_B,
-			URX_BACKSLASH_BU,
-			URX_BACKSLASH_G,
-			URX_BACKSLASH_Z,
-			URX_CARET,
-			URX_DOLLAR,
-			URX_DOLLAR_M,
-			URX_DOLLAR_D,
-			URX_DOLLAR_MD,
-			URX_RELOC_OPRND,
-			URX_STO_INP_LOC,
-			URX_CARET_M,
-			URX_CARET_M_UNIX,
-			URX_BACKREF, // BackRef.  Must assume that it might be a zero length match
-			URX_BACKREF_I,
-			URX_STO_SP, // Setup for atomic or possessive blocks.  Doesn't change what can match.
-			URX_LD_SP,
-			URX_JMP_SAV,
-			URX_JMP_SAV_X:
+		case urxReservedOp,
+			urxEnd,
+			urxStringLen,
+			urxNop,
+			urxStartCapture,
+			urxEndCapture,
+			urxBackslashB,
+			urxBackslashBu,
+			urxBackslashG,
+			urxBackslashZ,
+			urxCaret,
+			urxDollar,
+			urxDollarM,
+			urxDollarD,
+			urxDollarMd,
+			urxRelocOprnd,
+			urxStoInpLoc,
+			urxCaretM,
+			urxCaretMUnix,
+			urxBackref, // BackRef.  Must assume that it might be a zero length match
+			urxBackrefI,
+			urxStoSp, // Setup for atomic or possessive blocks.  Doesn't change what can match.
+			urxLdSp,
+			urxJmpSav,
+			urxJmpSavX:
 			// no-op
 
 			// Ops that match a minimum of one character (one or two 16 bit code units.)
 			//
-		case URX_ONECHAR,
-			URX_STATIC_SETREF,
-			URX_STAT_SETREF_N,
-			URX_SETREF,
-			URX_BACKSLASH_D,
-			URX_BACKSLASH_H,
-			URX_BACKSLASH_R,
-			URX_BACKSLASH_V,
-			URX_ONECHAR_I,
-			URX_BACKSLASH_X, // Grahpeme Cluster.  Minimum is 1, max unbounded.
-			URX_DOTANY_ALL,  // . matches one or two.
-			URX_DOTANY,
-			URX_DOTANY_UNIX:
+		case urxOnechar,
+			urxStaticSetref,
+			urxStatSetrefN,
+			urxSetref,
+			urxBackslashD,
+			urxBackslashH,
+			urxBackslashR,
+			urxBackslashV,
+			urcOnecharI,
+			urxBackslashX, // Grahpeme Cluster.  Minimum is 1, max unbounded.
+			urxDotanyAll,  // . matches one or two.
+			urxDotany,
+			urxDotanyUnix:
 			currentLen = safeIncrement(currentLen, 1)
 
-		case URX_JMPX:
+		case urxJmpx:
 			loc++ // URX_JMPX has an extra operand, ignored here, otherwise processed identically to URX_JMP.
 			fallthrough
 
-		case URX_JMP:
-			jmpDest := op.Value()
+		case urxJmp:
+			jmpDest := op.value()
 			if jmpDest < loc {
 				// Loop of some kind.  Can safely ignore, the worst that will happen
 				//  is that we understate the true minimum length
 				currentLen = forwardedLength[loc+1]
 			} else {
 				// Forward jump.  Propagate the current min length to the target loc of the jump.
-				// U_ASSERT(jmpDest <= end + 1);
 				if forwardedLength[jmpDest] > currentLen {
 					forwardedLength[jmpDest] = currentLen
 				}
 			}
 
-		case URX_BACKTRACK:
+		case urxBacktrack:
 			// Back-tracks are kind of like a branch, except that the min length was
 			//   propagated already, by the state save.
 			currentLen = forwardedLength[loc+1]
 
-		case URX_STATE_SAVE:
+		case urxStateSave:
 			// State Save, for forward jumps, propagate the current minimum.
 			//             of the state save.
-			jmpDest := op.Value()
+			jmpDest := op.value()
 			if jmpDest > loc {
 				if currentLen < forwardedLength[jmpDest] {
 					forwardedLength[jmpDest] = currentLen
 				}
 			}
 
-		case URX_STRING:
+		case urxString:
 			loc++
 			stringLenOp := c.out.compiledPat[loc]
-			currentLen = safeIncrement(currentLen, stringLenOp.Value())
+			currentLen = safeIncrement(currentLen, stringLenOp.value())
 
-		case URX_STRING_I:
+		case urxStringI:
 			loc++
 			// TODO: with full case folding, matching input text may be shorter than
 			//       the string we have here.  More smarts could put some bounds on it.
@@ -2971,14 +2944,14 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 			// currentLen += URX_VAL(stringLenOp);
 			currentLen = safeIncrement(currentLen, 1)
 
-		case URX_CTR_INIT, URX_CTR_INIT_NG:
+		case urxCtrInit, urxCtrInitNg:
 			// Loop Init Ops.
 			//   If the min loop count == 0
 			//      move loc forwards to the end of the loop, skipping over the body.
 			//   If the min count is > 0,
 			//      continue normal processing of the body of the loop.
 			loopEndOp := c.out.compiledPat[loc+1]
-			loopEndLoc := loopEndOp.Value()
+			loopEndLoc := loopEndOp.value()
 			minLoopCount := c.out.compiledPat[loc+2]
 			if minLoopCount == 0 {
 				loc = loopEndLoc
@@ -2986,20 +2959,20 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 				loc += 3 // Skips over operands of CTR_INIT
 			}
 
-		case URX_CTR_LOOP, URX_CTR_LOOP_NG:
+		case utxCtrLoop, urxCtrLoopNg:
 			// Loop ops. The jump is conditional, backwards only.
 
-		case URX_LOOP_SR_I, URX_LOOP_DOT_I, URX_LOOP_C:
+		case urxLoopSrI, urxLoopDotI, urxLoopC:
 			// More loop ops.  These state-save to themselves. don't change the minimum match - could match nothing at all.
 
-		case URX_LA_START, URX_LB_START:
+		case urxLaStart, urxLbStart:
 			// Look-around.  Scan forward until the matching look-ahead end,
 			//   without processing the look-around block.  This is overly pessimistic for look-ahead,
 			//   it assumes that the look-ahead match might be zero-length.
 			//   TODO:  Positive lookahead could recursively do the block, then continue
 			//          with the longer of the block or the value coming in.  Ticket 6060
 			var depth int32
-			if opType == URX_LA_START {
+			if opType == urxLaStart {
 				depth = 2
 			} else {
 				depth = 1
@@ -3008,39 +2981,38 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 			for {
 				loc++
 				op = c.out.compiledPat[loc]
-				if op.Type() == URX_LA_START {
+				if op.typ() == urxLaStart {
 					// The boilerplate for look-ahead includes two LA_END insturctions,
 					//    Depth will be decremented by each one when it is seen.
 					depth += 2
 				}
-				if op.Type() == URX_LB_START {
+				if op.typ() == urxLbStart {
 					depth++
 				}
-				if op.Type() == URX_LA_END {
+				if op.typ() == urxLaEnd {
 					depth--
 					if depth == 0 {
 						break
 					}
 				}
-				if op.Type() == URX_LBN_END {
+				if op.typ() == urxLbnEnd {
 					depth--
 					if depth == 0 {
 						break
 					}
 				}
-				if op.Type() == URX_STATE_SAVE {
+				if op.typ() == urxStateSave {
 					// Need this because neg lookahead blocks will FAIL to outside of the block.
-					jmpDest := op.Value()
+					jmpDest := op.value()
 					if jmpDest > loc {
 						if currentLen < forwardedLength[jmpDest] {
 							forwardedLength[jmpDest] = currentLen
 						}
 					}
 				}
-				// U_ASSERT(loc <= end);
 			}
 
-		case URX_LA_END, URX_LB_CONT, URX_LB_END, URX_LBN_CONT, URX_LBN_END:
+		case urxLaEnd, urxLbCont, urxLbEnd, urxLbnCount, urxLbnEnd:
 			// Only come here if the matching URX_LA_START or URX_LB_START was not in the
 			//   range being sized, which happens when measuring size of look-behind blocks.
 
@@ -3053,19 +3025,15 @@ func (c *Compiler) minMatchLength(start, end int) int32 {
 	//   propagated a shorter length to location end+1.
 	if forwardedLength[end+1] < currentLen {
 		currentLen = forwardedLength[end+1]
-		// U_ASSERT(currentLen >= 0 && currentLen < INT32_MAX)
 	}
 
 	return currentLen
 }
 
-func (c *Compiler) maxMatchLength(start, end int) int32 {
+func (c *compiler) maxMatchLength(start, end int) int32 {
 	if c.err != nil {
 		return 0
 	}
-	// U_ASSERT(start <= end);
-	// U_ASSERT(end < fRXPat->fCompiledPat->size());
-
 	var loc int
 	var currentLen int32
 
@@ -3073,7 +3041,7 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 
 	for loc = start; loc <= end; loc++ {
 		op := c.out.compiledPat[loc]
-		opType := op.Type()
+		opType := op.typ()
 
 		// The loop is advancing linearly through the pattern.
 		// If the op we are now at was the destination of a branch in the pattern,
@@ -3085,68 +3053,68 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 
 		switch opType {
 		// Ops that don't change the total length matched
-		case URX_RESERVED_OP,
-			URX_END,
-			URX_STRING_LEN,
-			URX_NOP,
-			URX_START_CAPTURE,
-			URX_END_CAPTURE,
-			URX_BACKSLASH_B,
-			URX_BACKSLASH_BU,
-			URX_BACKSLASH_G,
-			URX_BACKSLASH_Z,
-			URX_CARET,
-			URX_DOLLAR,
-			URX_DOLLAR_M,
-			URX_DOLLAR_D,
-			URX_DOLLAR_MD,
-			URX_RELOC_OPRND,
-			URX_STO_INP_LOC,
-			URX_CARET_M,
-			URX_CARET_M_UNIX,
-			URX_STO_SP, // Setup for atomic or possessive blocks.  Doesn't change what can match.
-			URX_LD_SP,
-			URX_LB_END,
-			URX_LB_CONT,
-			URX_LBN_CONT,
-			URX_LBN_END:
+		case urxReservedOp,
+			urxEnd,
+			urxStringLen,
+			urxNop,
+			urxStartCapture,
+			urxEndCapture,
+			urxBackslashB,
+			urxBackslashBu,
+			urxBackslashG,
+			urxBackslashZ,
+			urxCaret,
+			urxDollar,
+			urxDollarM,
+			urxDollarD,
+			urxDollarMd,
+			urxRelocOprnd,
+			urxStoInpLoc,
+			urxCaretM,
+			urxCaretMUnix,
+			urxStoSp, // Setup for atomic or possessive blocks.  Doesn't change what can match.
+			urxLdSp,
+			urxLbEnd,
+			urxLbCont,
+			urxLbnCount,
+			urxLbnEnd:
 		// no-op
 
 		// Ops that increase that cause an unbounded increase in the length
 		//   of a matched string, or that increase it a hard to characterize way.
 		//   Call the max length unbounded, and stop further checking.
-		case URX_BACKREF, // BackRef.  Must assume that it might be a zero length match
-			URX_BACKREF_I,
-			URX_BACKSLASH_X: // Grahpeme Cluster.  Minimum is 1, max unbounded.
+		case urxBackref, // BackRef.  Must assume that it might be a zero length match
+			urxBackrefI,
+			urxBackslashX: // Grahpeme Cluster.  Minimum is 1, max unbounded.
 			currentLen = math.MaxInt32
 
 			// Ops that match a max of one character (possibly two 16 bit code units.)
 			//
-		case URX_STATIC_SETREF,
-			URX_STAT_SETREF_N,
-			URX_SETREF,
-			URX_BACKSLASH_D,
-			URX_BACKSLASH_H,
-			URX_BACKSLASH_R,
-			URX_BACKSLASH_V,
-			URX_ONECHAR_I,
-			URX_DOTANY_ALL,
-			URX_DOTANY,
-			URX_DOTANY_UNIX:
+		case urxStaticSetref,
+			urxStatSetrefN,
+			urxSetref,
+			urxBackslashD,
+			urxBackslashH,
+			urxBackslashR,
+			urxBackslashV,
+			urcOnecharI,
+			urxDotanyAll,
+			urxDotany,
+			urxDotanyUnix:
 			currentLen = safeIncrement(currentLen, 2)
 
 			// Single literal character.  Increase current max length by one or two,
 			//       depending on whether the char is in the supplementary range.
-		case URX_ONECHAR:
+		case urxOnechar:
 			currentLen = safeIncrement(currentLen, 1)
-			if op.Value() > 0x10000 {
+			if op.value() > 0x10000 {
 				currentLen = safeIncrement(currentLen, 1)
 			}
 
 			// Jumps.
 			//
-		case URX_JMP, URX_JMPX, URX_JMP_SAV, URX_JMP_SAV_X:
-			jmpDest := op.Value()
+		case urxJmp, urxJmpx, urxJmpSav, urxJmpSavX:
+			jmpDest := op.value()
 			if jmpDest < loc {
 				// Loop of some kind.  Max match length is unbounded.
 				currentLen = math.MaxInt32
@@ -3158,17 +3126,17 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 				currentLen = 0
 			}
 
-		case URX_BACKTRACK:
+		case urxBacktrack:
 			// back-tracks are kind of like a branch, except that the max length was
 			//   propagated already, by the state save.
 			currentLen = forwardedLength[loc+1]
 
-		case URX_STATE_SAVE:
+		case urxStateSave:
 			// State Save, for forward jumps, propagate the current minimum.
 			//               of the state save.
 			//             For backwards jumps, they create a loop, maximum
 			//               match length is unbounded.
-			jmpDest := op.Value()
+			jmpDest := op.value()
 			if jmpDest > loc {
 				if currentLen > forwardedLength[jmpDest] {
 					forwardedLength[jmpDest] = currentLen
@@ -3177,12 +3145,12 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 				currentLen = math.MaxInt32
 			}
 
-		case URX_STRING:
+		case urxString:
 			loc++
 			stringLenOp := c.out.compiledPat[loc]
-			currentLen = safeIncrement(currentLen, stringLenOp.Value())
+			currentLen = safeIncrement(currentLen, stringLenOp.value())
 
-		case URX_STRING_I:
+		case urxStringI:
 			// TODO:  This code assumes that any user string that matches will be no longer
 			//        than our compiled string, with case insensitive matching.
 			//        Our compiled string has been case-folded already.
@@ -3205,12 +3173,12 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 			//
 			loc++
 			stringLenOp := c.out.compiledPat[loc]
-			currentLen = safeIncrement(currentLen, stringLenOp.Value())
+			currentLen = safeIncrement(currentLen, stringLenOp.value())
 
-		case URX_CTR_INIT, URX_CTR_INIT_NG:
+		case urxCtrInit, urxCtrInitNg:
 			// For Loops, recursively call this function on the pattern for the loop body,
 			//   then multiply the result by the maximum loop count.
-			loopEndLoc := c.out.compiledPat[loc+1].Value()
+			loopEndLoc := c.out.compiledPat[loc+1].value()
 			if loopEndLoc == loc+4 {
 				// Loop has an empty body. No affect on max match length.
 				// Continue processing with code after the loop end.
@@ -3225,7 +3193,6 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 				break
 			}
 
-			// U_ASSERT(loopEndLoc >= loc + 4);
 			blockLen := c.maxMatchLength(loc+4, loopEndLoc-1) // Recursive call.
 			updatedLen := int(currentLen) + int(blockLen)*maxLoopCount
 			if updatedLen >= math.MaxInt32 {
@@ -3235,29 +3202,28 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 			currentLen = int32(updatedLen)
 			loc = loopEndLoc
 
-		case URX_CTR_LOOP, URX_CTR_LOOP_NG:
+		case utxCtrLoop, urxCtrLoopNg:
 			panic("should not encounter this opcode")
 
-		case URX_LOOP_SR_I, URX_LOOP_DOT_I, URX_LOOP_C:
+		case urxLoopSrI, urxLoopDotI, urxLoopC:
 			// For anything to do with loops, make the match length unbounded.
 			currentLen = math.MaxInt32
 
-		case URX_LA_START, URX_LA_END:
+		case urxLaStart, urxLaEnd:
 			// Look-ahead.  Just ignore, treat the look-ahead block as if
 			// it were normal pattern.  Gives a too-long match length,
 			//  but good enough for now.
 
-		case URX_LB_START:
+		case urxLbStart:
 			// Look-behind.  Scan forward until the matching look-around end,
 			//   without processing the look-behind block.
-			dataLoc := op.Value()
+			dataLoc := op.value()
 			for loc = loc + 1; loc <= end; loc++ {
 				op = c.out.compiledPat[loc]
-				if (op.Type() == URX_LA_END || op.Type() == URX_LBN_END) && (op.Value() == dataLoc) {
+				if (op.typ() == urxLaEnd || op.typ() == urxLbnEnd) && (op.value() == dataLoc) {
 					break
 				}
 			}
-			// U_ASSERT(loc <= end);
 
 		default:
 			panic("unreachable")
@@ -3280,25 +3246,25 @@ func (c *Compiler) maxMatchLength(start, end int) int32 {
 // svn+ssh://source.icu-project.org/repos/icu/tools/trunk/unicode/c/genregexcasing
 
 // Machine Generated Data. Do not hand edit.
-var RECaseFixCodePoints = [...]rune{
+var reCaseFixCodePoints = [...]rune{
 	0x61, 0x66, 0x68, 0x69, 0x6a, 0x73, 0x74, 0x77, 0x79, 0x2bc,
 	0x3ac, 0x3ae, 0x3b1, 0x3b7, 0x3b9, 0x3c1, 0x3c5, 0x3c9, 0x3ce, 0x565,
 	0x574, 0x57e, 0x1f00, 0x1f01, 0x1f02, 0x1f03, 0x1f04, 0x1f05, 0x1f06, 0x1f07,
 	0x1f20, 0x1f21, 0x1f22, 0x1f23, 0x1f24, 0x1f25, 0x1f26, 0x1f27, 0x1f60, 0x1f61,
 	0x1f62, 0x1f63, 0x1f64, 0x1f65, 0x1f66, 0x1f67, 0x1f70, 0x1f74, 0x1f7c, 0x110000}
 
-var RECaseFixStringOffsets = [...]int16{
+var reCaseFixStringOffsets = [...]int16{
 	0x0, 0x1, 0x6, 0x7, 0x8, 0x9, 0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13,
 	0x17, 0x1b, 0x20, 0x21, 0x2a, 0x2e, 0x2f, 0x30, 0x34, 0x35, 0x37, 0x39, 0x3b,
 	0x3d, 0x3f, 0x41, 0x43, 0x45, 0x47, 0x49, 0x4b, 0x4d, 0x4f, 0x51, 0x53, 0x55,
 	0x57, 0x59, 0x5b, 0x5d, 0x5f, 0x61, 0x63, 0x65, 0x66, 0x67, 0}
 
-var RECaseFixCounts = [...]int16{
+var reCaseFixCounts = [...]int16{
 	0x1, 0x5, 0x1, 0x1, 0x1, 0x4, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x4, 0x4, 0x5, 0x1, 0x9,
 	0x4, 0x1, 0x1, 0x4, 0x1, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2,
 	0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x1, 0x1, 0x1, 0}
 
-var RECaseFixData = [...]uint16{
+var reCaseFixData = [...]uint16{
 	0x1e9a, 0xfb00, 0xfb01, 0xfb02, 0xfb03, 0xfb04, 0x1e96, 0x130, 0x1f0, 0xdf, 0x1e9e, 0xfb05,
 	0xfb06, 0x1e97, 0x1e98, 0x1e99, 0x149, 0x1fb4, 0x1fc4, 0x1fb3, 0x1fb6, 0x1fb7, 0x1fbc, 0x1fc3,
 	0x1fc6, 0x1fc7, 0x1fcc, 0x390, 0x1fd2, 0x1fd3, 0x1fd6, 0x1fd7, 0x1fe4, 0x3b0, 0x1f50, 0x1f52,
@@ -3309,20 +3275,20 @@ var RECaseFixData = [...]uint16{
 	0x1f9f, 0x1fa0, 0x1fa8, 0x1fa1, 0x1fa9, 0x1fa2, 0x1faa, 0x1fa3, 0x1fab, 0x1fa4, 0x1fac, 0x1fa5,
 	0x1fad, 0x1fa6, 0x1fae, 0x1fa7, 0x1faf, 0x1fb2, 0x1fc2, 0x1ff2, 0}
 
-func (c *Compiler) findCaseInsensitiveStarters(ch rune, starterChars *uset.UnicodeSet) {
-	if uprops.HasBinaryProperty(ch, uprops.UCHAR_CASE_SENSITIVE) {
+func (c *compiler) findCaseInsensitiveStarters(ch rune, starterChars *uset.UnicodeSet) {
+	if uprops.HasBinaryProperty(ch, uprops.UCharCaseSensitive) {
 		caseFoldedC := ucase.Fold(ch)
 		starterChars.Clear()
 		starterChars.AddRune(caseFoldedC)
 
 		var i int
-		for i = 0; RECaseFixCodePoints[i] < ch; i++ {
+		for i = 0; reCaseFixCodePoints[i] < ch; i++ {
 			// Simple linear search through the sorted list of interesting code points.
 		}
 
-		if RECaseFixCodePoints[i] == ch {
-			data := RECaseFixData[RECaseFixStringOffsets[i]:]
-			numCharsToAdd := RECaseFixCounts[i]
+		if reCaseFixCodePoints[i] == ch {
+			data := reCaseFixData[reCaseFixStringOffsets[i]:]
+			numCharsToAdd := reCaseFixCounts[i]
 			for j := int16(0); j < numCharsToAdd; j++ {
 				var cpToAdd rune
 				cpToAdd, data = utf16.NextUnsafe(data)
@@ -3330,7 +3296,7 @@ func (c *Compiler) findCaseInsensitiveStarters(ch rune, starterChars *uset.Unico
 			}
 		}
 
-		starterChars.CloseOver(uset.USET_CASE_INSENSITIVE)
+		starterChars.CloseOver(uset.CaseInsensitive)
 	} else {
 		// Not a cased character. Just return it alone.
 		starterChars.Clear()
@@ -3338,7 +3304,7 @@ func (c *Compiler) findCaseInsensitiveStarters(ch rune, starterChars *uset.Unico
 	}
 }
 
-func (c *Compiler) scanProp() *uset.UnicodeSet {
+func (c *compiler) scanProp() *uset.UnicodeSet {
 	if c.err != nil {
 		return nil
 	}
@@ -3346,7 +3312,7 @@ func (c *Compiler) scanProp() *uset.UnicodeSet {
 
 	c.nextChar(&c.c)
 	if c.c.char != chLBrace {
-		c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+		c.error(uerror.PropertySyntax)
 		return nil
 	}
 
@@ -3357,7 +3323,7 @@ func (c *Compiler) scanProp() *uset.UnicodeSet {
 			break
 		}
 		if c.c.char == -1 {
-			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+			c.error(uerror.PropertySyntax)
 			return nil
 		}
 		propertyName.WriteRune(c.c.char)
@@ -3368,7 +3334,7 @@ func (c *Compiler) scanProp() *uset.UnicodeSet {
 	return ss
 }
 
-func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.UnicodeSet {
+func (c *compiler) createSetForProperty(propName string, negated bool) *uset.UnicodeSet {
 	if c.err != nil {
 		return nil
 	}
@@ -3376,8 +3342,8 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	var set *uset.UnicodeSet
 
 	var usetFlags uset.USet
-	if c.modeFlags&UREGEX_CASE_INSENSITIVE != 0 {
-		usetFlags |= uset.USET_CASE_INSENSITIVE
+	if c.modeFlags&CaseInsensitive != 0 {
+		usetFlags |= uset.CaseInsensitive
 	}
 
 	var err error
@@ -3393,7 +3359,7 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	//     Java accepts 'word' with mixed case.
 	//     Java accepts 'all' only in all lower case.
 	if strings.EqualFold(propName, "word") {
-		set = staticPropertySets[URX_ISWORD_SET].Clone()
+		set = staticPropertySets[urxIswordSet].Clone()
 		goto done
 	}
 	if propName == "all" {
@@ -3407,7 +3373,7 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	if strings.HasPrefix(propName, "In") && len(propName) >= 3 {
 		set = uset.New()
 		if uprops.ApplyPropertyAlias(set, "Block", propName[2:]) != nil {
-			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+			c.error(uerror.PropertySyntax)
 		}
 		goto done
 	}
@@ -3418,7 +3384,7 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	if strings.HasPrefix(propName, "Is") && len(propName) >= 3 {
 		mPropName := propName[2:]
 		if strings.IndexByte(mPropName, '=') >= 0 {
-			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+			c.error(uerror.PropertySyntax)
 			goto done
 		}
 
@@ -3431,9 +3397,9 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 
 		set, err = uprops.NewUnicodeSetFomPattern("\\p{"+mPropName+"}", 0)
 		if err != nil {
-			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
-		} else if !set.IsEmpty() && (usetFlags&uset.USET_CASE_INSENSITIVE) != 0 {
-			set.CloseOver(uset.USET_CASE_INSENSITIVE)
+			c.error(uerror.PropertySyntax)
+		} else if !set.IsEmpty() && (usetFlags&uset.CaseInsensitive) != 0 {
+			set.CloseOver(uset.CaseInsensitive)
 		}
 		goto done
 	}
@@ -3446,97 +3412,97 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 		//   These all begin with "java"
 		//
 		if propName == "javaDefined" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_CN_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcCnMask)
 			set.Complement()
 		} else if propName == "javaDigit" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcNdMask)
 		} else if propName == "javaIdentifierIgnorable" {
 			c.err = addIdentifierIgnorable(set)
 		} else if propName == "javaISOControl" {
 			set.AddRuneRange(0, 0x1F)
 			set.AddRuneRange(0x7F, 0x9F)
 		} else if propName == "javaJavaIdentifierPart" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_SC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcScMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_PC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcPcMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNdMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNlMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_MC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcMcMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_MN_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcMnMask)
 			}
 			if c.err == nil {
 				c.err = addIdentifierIgnorable(set)
 			}
 		} else if propName == "javaJavaIdentifierStart" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNlMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_SC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcScMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_PC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcPcMask)
 			}
 		} else if propName == "javaLetter" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLMask)
 		} else if propName == "javaLetterOrDigit" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNdMask)
 			}
 		} else if propName == "javaLowerCase" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_LL_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLlMask)
 		} else if propName == "javaMirrored" {
-			c.err = uprops.ApplyIntPropertyValue(set, uprops.UCHAR_BIDI_MIRRORED, 1)
+			c.err = uprops.ApplyIntPropertyValue(set, uprops.UCharBidiMirrored, 1)
 		} else if propName == "javaSpaceChar" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_Z_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcZMask)
 		} else if propName == "javaSupplementaryCodePoint" {
-			set.AddRuneRange(0x10000, uset.MAX_VALUE)
+			set.AddRuneRange(0x10000, uset.MaxValue)
 		} else if propName == "javaTitleCase" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_LT_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLtMask)
 		} else if propName == "javaUnicodeIdentifierStart" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNlMask)
 			}
 		} else if propName == "javaUnicodeIdentifierPart" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_L_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_PC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcPcMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_ND_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNdMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_NL_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcNlMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_MC_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcMcMask)
 			}
 			if c.err == nil {
-				c.err = uprops.AddCategory(set, uchar.U_GC_MN_MASK)
+				c.err = uprops.AddCategory(set, uchar.GcMnMask)
 			}
 			if c.err == nil {
 				c.err = addIdentifierIgnorable(set)
 			}
 		} else if propName == "javaUpperCase" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_LU_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcLuMask)
 		} else if propName == "javaValidCodePoint" {
-			set.AddRuneRange(0, uset.MAX_VALUE)
+			set.AddRuneRange(0, uset.MaxValue)
 		} else if propName == "javaWhitespace" {
-			c.err = uprops.AddCategory(set, uchar.U_GC_Z_MASK)
+			c.err = uprops.AddCategory(set, uchar.GcZMask)
 			excl := uset.New()
 			excl.AddRune(0x0a)
 			excl.AddRune(0x2007)
@@ -3545,18 +3511,18 @@ func (c *Compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			set.AddRuneRange(9, 0x0d)
 			set.AddRuneRange(0x1c, 0x1f)
 		} else {
-			c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+			c.error(uerror.PropertySyntax)
 		}
 
-		if c.err == nil && !set.IsEmpty() && (usetFlags&uset.USET_CASE_INSENSITIVE) != 0 {
-			set.CloseOver(uset.USET_CASE_INSENSITIVE)
+		if c.err == nil && !set.IsEmpty() && (usetFlags&uset.CaseInsensitive) != 0 {
+			set.CloseOver(uset.CaseInsensitive)
 		}
 		goto done
 	}
 
 	// Unrecognized property. ICU didn't like it as it was, and none of the Java compatibility
 	// extensions matched it.
-	c.error(uerror.U_REGEX_PROPERTY_SYNTAX)
+	c.error(uerror.PropertySyntax)
 
 done:
 	if c.err != nil {
@@ -3573,10 +3539,10 @@ func addIdentifierIgnorable(set *uset.UnicodeSet) error {
 	set.AddRuneRange(0x0e, 0x1b)
 	set.AddRuneRange(0x7f, 0x9f)
 
-	return uprops.AddCategory(set, uchar.U_GC_CF_MASK)
+	return uprops.AddCategory(set, uchar.GcCfMask)
 }
 
-func (c *Compiler) scanPosixProp() *uset.UnicodeSet {
+func (c *compiler) scanPosixProp() *uset.UnicodeSet {
 	var set *uset.UnicodeSet
 
 	if !(c.c.char == chColon) {
@@ -3647,7 +3613,7 @@ func (c *Compiler) scanPosixProp() *uset.UnicodeSet {
 	return set
 }
 
-func (c *Compiler) compileSet(set *uset.UnicodeSet) {
+func (c *compiler) compileSet(set *uset.UnicodeSet) {
 	if set == nil {
 		return
 	}
@@ -3660,7 +3626,7 @@ func (c *Compiler) compileSet(set *uset.UnicodeSet) {
 	switch setSize {
 	case 0:
 		// Set of no elements.   Always fails to match.
-		c.appendOp(URX_BACKTRACK, 0)
+		c.appendOp(urxBacktrack, 0)
 
 	case 1:
 		// The set contains only a single code point.  Put it into
@@ -3674,6 +3640,6 @@ func (c *Compiler) compileSet(set *uset.UnicodeSet) {
 		// theSet->freeze();
 		setNumber := len(c.out.sets)
 		c.out.sets = append(c.out.sets, set)
-		c.appendOp(URX_SETREF, setNumber)
+		c.appendOp(urxSetref, setNumber)
 	}
 }

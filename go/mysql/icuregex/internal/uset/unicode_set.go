@@ -28,26 +28,23 @@ import (
 )
 
 // HIGH_VALUE > all valid values. 110000 for codepoints
-const UNICODESET_HIGH = 0x0110000
+const unicodeSetHigh = 0x0110000
 
 // LOW <= all valid values. ZERO for codepoints
-const UNICODESET_LOW = 0x000000
-
-/** Max list [0, 1, 2, ..., max code point, HIGH] */
-const MAX_LENGTH = UNICODESET_HIGH + 1
+const unicodeSetLow = 0x000000
 
 const (
 	/**
 	 * Minimum value that can be stored in a UnicodeSet.
 	 * @stable ICU 2.4
 	 */
-	MIN_VALUE = 0
+	MinValue = 0
 
 	/**
 	 * Maximum value that can be stored in a UnicodeSet.
 	 * @stable ICU 2.4
 	 */
-	MAX_VALUE = 0x10ffff
+	MaxValue = 0x10ffff
 )
 
 type UnicodeSet struct {
@@ -58,7 +55,7 @@ type UnicodeSet struct {
 
 func New() *UnicodeSet {
 	buf := make([]rune, 1, 25)
-	buf[0] = UNICODESET_HIGH
+	buf[0] = unicodeSetHigh
 	return &UnicodeSet{list: buf}
 }
 
@@ -113,7 +110,7 @@ func (u *UnicodeSet) addbuffer(other []rune, polarity int8) {
 				j++
 				polarity ^= 2
 			} else {
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loopEnd
 				}
 				if k > 0 && a <= u.buffer[k-1] {
@@ -132,13 +129,13 @@ func (u *UnicodeSet) addbuffer(other []rune, polarity int8) {
 			}
 		case 3:
 			if b <= a {
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loopEnd
 				}
 				u.buffer[k] = a
 				k++
 			} else {
-				if b == UNICODESET_HIGH {
+				if b == unicodeSetHigh {
 					goto loopEnd
 				}
 				u.buffer[k] = b
@@ -162,7 +159,7 @@ func (u *UnicodeSet) addbuffer(other []rune, polarity int8) {
 				j++
 				polarity ^= 2
 			} else {
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loopEnd
 				}
 				a = u.list[i]
@@ -184,7 +181,7 @@ func (u *UnicodeSet) addbuffer(other []rune, polarity int8) {
 				i++
 				polarity ^= 1
 			} else {
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loopEnd
 				}
 				a = u.list[i]
@@ -198,7 +195,7 @@ func (u *UnicodeSet) addbuffer(other []rune, polarity int8) {
 	}
 
 loopEnd:
-	u.buffer[k] = UNICODESET_HIGH
+	u.buffer[k] = unicodeSetHigh
 	k++
 
 	u.list, u.buffer = u.buffer[:k], u.list
@@ -212,10 +209,10 @@ func max(a, b rune) rune {
 }
 
 func pinCodePoint(c *rune) rune {
-	if *c < UNICODESET_LOW {
-		*c = UNICODESET_LOW
-	} else if *c > (UNICODESET_HIGH - 1) {
-		*c = UNICODESET_HIGH - 1
+	if *c < unicodeSetLow {
+		*c = unicodeSetLow
+	} else if *c > (unicodeSetHigh - 1) {
+		*c = unicodeSetHigh - 1
 	}
 	return *c
 }
@@ -250,8 +247,8 @@ func (u *UnicodeSet) AddRune(c rune) {
 		// c is before start of next range
 		u.list[i] = c
 		// if we touched the HIGH mark, then add a new one
-		if c == (UNICODESET_HIGH - 1) {
-			u.list = append(u.list, UNICODESET_HIGH)
+		if c == (unicodeSetHigh - 1) {
+			u.list = append(u.list, unicodeSetHigh)
 		}
 		if i > 0 && c == u.list[i-1] {
 			// collapse adjacent ranges
@@ -300,16 +297,16 @@ func (u *UnicodeSet) AddRuneRange(start, end rune) {
 				if lastLimit == start {
 					// Extend the last range.
 					u.list[len(u.list)-2] = limit
-					if limit == UNICODESET_HIGH {
+					if limit == unicodeSetHigh {
 						u.list = u.list[:len(u.list)-1]
 					}
 				} else {
 					u.list[len(u.list)-1] = start
-					if limit < UNICODESET_HIGH {
+					if limit < unicodeSetHigh {
 						u.list = append(u.list, limit)
-						u.list = append(u.list, UNICODESET_HIGH)
+						u.list = append(u.list, unicodeSetHigh)
 					} else { // limit == UNICODESET_HIGH
-						u.list = append(u.list, UNICODESET_HIGH)
+						u.list = append(u.list, unicodeSetHigh)
 					}
 				}
 				return
@@ -317,7 +314,7 @@ func (u *UnicodeSet) AddRuneRange(start, end rune) {
 		}
 		// This is slow. Could be much faster using findCodePoint(start)
 		// and modifying the list, dealing with adjacent & overlapping ranges.
-		addRange := [3]rune{start, limit, UNICODESET_HIGH}
+		addRange := [3]rune{start, limit, unicodeSetHigh}
 		u.addbuffer(addRange[:], 0)
 	} else if start == end {
 		u.AddRune(start)
@@ -334,18 +331,18 @@ func (u *UnicodeSet) Complement() {
 	if u.frozen != nil {
 		panic("UnicodeSet is frozen")
 	}
-	if u.list[0] == UNICODESET_LOW {
+	if u.list[0] == unicodeSetLow {
 		copy(u.list, u.list[1:])
 		u.list = u.list[:len(u.list)-1]
 	} else {
-		u.list = slices.Insert(u.list, 0, UNICODESET_LOW)
+		u.list = slices.Insert(u.list, 0, unicodeSetLow)
 	}
 }
 
 func (u *UnicodeSet) RemoveRuneRange(start, end rune) {
 	if pinCodePoint(&start) < pinCodePoint(&end) {
-		range_ := [3]rune{start, end + 1, UNICODESET_HIGH}
-		u.retain(range_[:], 2)
+		r := [3]rune{start, end + 1, unicodeSetHigh}
+		u.retain(r[:], 2)
 	}
 }
 
@@ -385,7 +382,7 @@ func (u *UnicodeSet) retain(other []rune, polarity int8) {
 				j++
 				polarity ^= 2
 			} else { // a == b, take one, drop other
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loop_end
 				}
 				u.buffer[k] = a
@@ -411,7 +408,7 @@ func (u *UnicodeSet) retain(other []rune, polarity int8) {
 				j++
 				polarity ^= 2
 			} else { // a == b, take one, drop other
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loop_end
 				}
 				u.buffer[k] = a
@@ -435,7 +432,7 @@ func (u *UnicodeSet) retain(other []rune, polarity int8) {
 				j++
 				polarity ^= 2
 			} else { // a == b, drop both!
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loop_end
 				}
 				a = u.list[i]
@@ -457,7 +454,7 @@ func (u *UnicodeSet) retain(other []rune, polarity int8) {
 				i++
 				polarity ^= 1
 			} else { // a == b, drop both!
-				if a == UNICODESET_HIGH {
+				if a == unicodeSetHigh {
 					goto loop_end
 				}
 				a = u.list[i]
@@ -471,7 +468,7 @@ func (u *UnicodeSet) retain(other []rune, polarity int8) {
 	}
 
 loop_end:
-	u.buffer[k] = UNICODESET_HIGH // terminate
+	u.buffer[k] = unicodeSetHigh // terminate
 	k++
 	u.list, u.buffer = u.buffer[:k], u.list
 }
@@ -481,7 +478,7 @@ func (u *UnicodeSet) Clear() {
 		panic("UnicodeSet is frozen")
 	}
 	u.list = u.list[:1]
-	u.list[0] = UNICODESET_HIGH
+	u.list[0] = unicodeSetHigh
 }
 
 func (u *UnicodeSet) Len() (n int) {
@@ -543,21 +540,19 @@ func (u *UnicodeSet) ContainsRune(c rune) bool {
 				// All 64 code points with the same bits 15..6
 				// are either in the set or not.
 				return twoBits != 0
-			} else {
-				// Look up the code point in its 4k block of code points.
-				return f.containsSlow(u.list, c, f.list4kStarts[lead], f.list4kStarts[lead+1])
 			}
+			// Look up the code point in its 4k block of code points.
+			return f.containsSlow(u.list, c, f.list4kStarts[lead], f.list4kStarts[lead+1])
 		} else if c <= 0x10ffff {
 			// surrogate or supplementary code point
 			return f.containsSlow(u.list, c, f.list4kStarts[0xd], f.list4kStarts[0x11])
-		} else {
-			// Out-of-range code points get FALSE, consistent with long-standing
-			// behavior of UnicodeSet::contains(c).
-			return false
 		}
+		// Out-of-range code points get FALSE, consistent with long-standing
+		// behavior of UnicodeSet::contains(c).
+		return false
 	}
 
-	if c >= UNICODESET_HIGH {
+	if c >= unicodeSetHigh {
 		return false
 	}
 	i := u.findCodePoint(c)

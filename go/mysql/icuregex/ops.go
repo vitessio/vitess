@@ -29,41 +29,41 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utf16"
 )
 
-type Opcode uint8
+type opcode uint8
 
 const (
-	URX_RESERVED_OP Opcode = iota // For multi-operand ops, most non-first words.
-	URX_BACKTRACK                 // Force a backtrack, as if a match test had failed.
-	URX_END
-	URX_ONECHAR    // Value field is the 21 bit unicode char to match
-	URX_STRING     // Value field is index of string start
-	URX_STRING_LEN // Value field is string length (code units)
-	URX_STATE_SAVE // Value field is pattern position to push
-	URX_NOP
-	URX_START_CAPTURE // Value field is capture group number.
-	URX_END_CAPTURE   // Value field is capture group number
-	URX_STATIC_SETREF // Value field is index of set in array of sets.
-	URX_SETREF        // Value field is index of set in array of sets.
-	URX_DOTANY
-	URX_JMP  // Value field is destination position in the pattern.
-	URX_FAIL // Stop match operation,  No match.
+	urxReservedOp opcode = iota // For multi-operand ops, most non-first words.
+	urxBacktrack                // Force a backtrack, as if a match test had failed.
+	urxEnd
+	urxOnechar   // Value field is the 21 bit unicode char to match
+	urxString    // Value field is index of string start
+	urxStringLen // Value field is string length (code units)
+	urxStateSave // Value field is pattern position to push
+	urxNop
+	urxStartCapture // Value field is capture group number.
+	urxEndCapture   // Value field is capture group number
+	urxStaticSetref // Value field is index of set in array of sets.
+	urxSetref       // Value field is index of set in array of sets.
+	urxDotany
+	urxJmp  // Value field is destination position in the pattern.
+	urxFail // Stop match operation,  No match.
 
-	URX_JMP_SAV     // Operand:  JMP destination location
-	URX_BACKSLASH_B // Value field:  0:  \b    1:  \B
-	URX_BACKSLASH_G
-	URX_JMP_SAV_X // Conditional JMP_SAV,
+	urxJmpSav     // Operand:  JMP destination location
+	urxBackslashB // Value field:  0:  \b    1:  \B
+	urxBackslashG
+	urxJmpSavX // Conditional JMP_SAV,
 	//    Used in (x)+, breaks loop on zero length match.
 	//    Operand:  Jmp destination.
-	URX_BACKSLASH_X
-	URX_BACKSLASH_Z // \z   Unconditional end of line.
+	urxBackslashX
+	urxBackslashZ // \z   Unconditional end of line.
 
-	URX_DOTANY_ALL  // ., in the . matches any mode.
-	URX_BACKSLASH_D // Value field:  0:  \d    1:  \D
-	URX_CARET       // Value field:  1:  multi-line mode.
-	URX_DOLLAR      // Also for \Z
+	urxDotanyAll  // ., in the . matches any mode.
+	urxBackslashD // Value field:  0:  \d    1:  \D
+	urxCaret      // Value field:  1:  multi-line mode.
+	urxDollar     // Also for \Z
 
-	URX_CTR_INIT    // Counter Inits for {Interval} loops.
-	URX_CTR_INIT_NG //   2 kinds, normal and non-greedy.
+	urxCtrInit   // Counter Inits for {Interval} loops.
+	urxCtrInitNg //   2 kinds, normal and non-greedy.
 	//   These are 4 word opcodes.  See description.
 	//    First Operand:  Data loc of counter variable
 	//    2nd   Operand:  Pat loc of the URX_CTR_LOOPx
@@ -71,76 +71,76 @@ const (
 	//    3rd   Operand:  Minimum count.
 	//    4th   Operand:  Max count, -1 for unbounded.
 
-	URX_DOTANY_UNIX // '.' operator in UNIX_LINES mode, only \n marks end of line.
+	urxDotanyUnix // '.' operator in UNIX_LINES mode, only \n marks end of line.
 
-	URX_CTR_LOOP    // Loop Ops for {interval} loops.
-	URX_CTR_LOOP_NG //   Also in three flavors.
+	utxCtrLoop   // Loop Ops for {interval} loops.
+	urxCtrLoopNg //   Also in three flavors.
 	//   Operand is loc of corresponding CTR_INIT.
 
-	URX_CARET_M_UNIX // '^' operator, test for start of line in multi-line
+	urxCaretMUnix // '^' operator, test for start of line in multi-line
 	//      plus UNIX_LINES mode.
 
-	URX_RELOC_OPRND // Operand value in multi-operand ops that refers
+	urxRelocOprnd // Operand value in multi-operand ops that refers
 	//   back into compiled pattern code, and thus must
 	//   be relocated when inserting/deleting ops in code.
 
-	URX_STO_SP // Store the stack ptr.  Operand is location within
+	urxStoSp // Store the stack ptr.  Operand is location within
 	//   matcher data (not stack data) to store it.
-	URX_LD_SP // Load the stack pointer.  Operand is location
+	urxLdSp // Load the stack pointer.  Operand is location
 	//   to load from.
-	URX_BACKREF // Back Reference.  Parameter is the index of the
+	urxBackref // Back Reference.  Parameter is the index of the
 	//   capture group variables in the state stack frame.
-	URX_STO_INP_LOC // Store the input location.  Operand is location
+	urxStoInpLoc // Store the input location.  Operand is location
 	//   within the matcher stack frame.
-	URX_JMPX // Conditional JMP.
+	urxJmpx // Conditional JMP.
 	//   First Operand:  JMP target location.
 	//   Second Operand:  Data location containing an
 	//     input position.  If current input position ==
 	//     saved input position, FAIL rather than taking
 	//     the JMP
-	URX_LA_START // Starting a LookAround expression.
+	urxLaStart // Starting a LookAround expression.
 	//   Save InputPos, SP and active region in static data.
 	//   Operand:  Static data offset for the save
-	URX_LA_END // Ending a Lookaround expression.
+	urxLaEnd // Ending a Lookaround expression.
 	//   Restore InputPos and Stack to saved values.
 	//   Operand:  Static data offset for saved data.
-	URX_ONECHAR_I // Test for case-insensitive match of a literal character.
+	urcOnecharI // Test for case-insensitive match of a literal character.
 	//   Operand:  the literal char.
-	URX_STRING_I // Case insensitive string compare.
+	urxStringI // Case insensitive string compare.
 	//   First Operand:  Index of start of string in string literals
 	//   Second Operand (next word in compiled code):
 	//     the length of the string.
-	URX_BACKREF_I // Case insensitive back reference.
+	urxBackrefI // Case insensitive back reference.
 	//   Parameter is the index of the
 	//   capture group variables in the state stack frame.
-	URX_DOLLAR_M // $ in multi-line mode.
-	URX_CARET_M  // ^ in multi-line mode.
-	URX_LB_START // LookBehind Start.
+	urxDollarM // $ in multi-line mode.
+	urxCaretM  // ^ in multi-line mode.
+	urxLbStart // LookBehind Start.
 	//   Parameter is data location
-	URX_LB_CONT // LookBehind Continue.
+	urxLbCont // LookBehind Continue.
 	//   Param 0:  the data location
 	//   Param 1:  The minimum length of the look-behind match
 	//   Param 2:  The max length of the look-behind match
-	URX_LB_END // LookBehind End.
+	urxLbEnd // LookBehind End.
 	//   Parameter is the data location.
 	//     Check that match ended at the right spot,
 	//     Restore original input string len.
-	URX_LBN_CONT // Negative LookBehind Continue
+	urxLbnCount // Negative LookBehind Continue
 	//   Param 0:  the data location
 	//   Param 1:  The minimum length of the look-behind match
 	//   Param 2:  The max     length of the look-behind match
 	//   Param 3:  The pattern loc following the look-behind block.
-	URX_LBN_END // Negative LookBehind end
+	urxLbnEnd // Negative LookBehind end
 	//   Parameter is the data location.
 	//   Check that the match ended at the right spot.
-	URX_STAT_SETREF_N // Reference to a prebuilt set (e.g. \w), negated
+	urxStatSetrefN // Reference to a prebuilt set (e.g. \w), negated
 	//   Operand is index of set in array of sets.
-	URX_LOOP_SR_I // Init a [set]* loop.
+	urxLoopSrI // Init a [set]* loop.
 	//   Operand is the sets index in array of user sets.
-	URX_LOOP_C // Continue a [set]* or OneChar* loop.
+	urxLoopC // Continue a [set]* or OneChar* loop.
 	//   Operand is a matcher static data location.
 	//   Must always immediately follow  LOOP_x_I instruction.
-	URX_LOOP_DOT_I // .*, initialization of the optimized loop.
+	urxLoopDotI // .*, initialization of the optimized loop.
 	//   Operand value:
 	//      bit 0:
 	//         0:  Normal (. doesn't match new-line) mode.
@@ -148,21 +148,21 @@ const (
 	//      bit 1:  controls what new-lines are recognized by this operation.
 	//         0:  All Unicode New-lines
 	//         1:  UNIX_LINES, \u000a only.
-	URX_BACKSLASH_BU // \b or \B in UREGEX_UWORD mode, using Unicode style
+	urxBackslashBu // \b or \B in UREGEX_UWORD mode, using Unicode style
 	//   word boundaries.
-	URX_DOLLAR_D    // $ end of input test, in UNIX_LINES mode.
-	URX_DOLLAR_MD   // $ end of input test, in MULTI_LINE and UNIX_LINES mode.
-	URX_BACKSLASH_H // Value field:  0:  \h    1:  \H
-	URX_BACKSLASH_R // Any line break sequence.
-	URX_BACKSLASH_V // Value field:  0:  \v    1:  \V
+	urxDollarD    // $ end of input test, in UNIX_LINES mode.
+	urxDollarMd   // $ end of input test, in MULTI_LINE and UNIX_LINES mode.
+	urxBackslashH // Value field:  0:  \h    1:  \H
+	urxBackslashR // Any line break sequence.
+	urxBackslashV // Value field:  0:  \v    1:  \V
 
-	URX_RESERVED_OP_N Opcode = 255 // For multi-operand ops, negative operand values.
+	urxReservedOpN opcode = 255 // For multi-operand ops, negative operand values.
 )
 
 // Keep this list of opcode names in sync with the above enum
 //
 //	Used for debug printing only.
-var UrxOpcodeNames = []string{
+var urxOpcodeNames = []string{
 	"               ",
 	"BACKTRACK",
 	"END",
@@ -224,156 +224,154 @@ var UrxOpcodeNames = []string{
 	"URX_BACKSLASH_V",
 }
 
-type Instruction int32
+type instruction int32
 
-func (ins Instruction) Type() Opcode {
-	return Opcode(uint32(ins) >> 24)
+func (ins instruction) typ() opcode {
+	return opcode(uint32(ins) >> 24)
 }
 
-func (ins Instruction) Value32() int32 {
+func (ins instruction) value32() int32 {
 	return int32(ins) & 0xffffff
 }
 
-func (ins Instruction) Value() int {
-	return int(ins.Value32())
+func (ins instruction) value() int {
+	return int(ins.value32())
 }
 
 // Access to Unicode Sets composite character properties
 //
 //	The sets are accessed by the match engine for things like \w (word boundary)
 const (
-	URX_ISWORD_SET  = 1
-	URX_ISALNUM_SET = 2
-	URX_ISALPHA_SET = 3
-	URX_ISSPACE_SET = 4
+	urxIswordSet  = 1
+	urxIsalnumSet = 2
+	urxIsalphaSet = 3
+	urxIsspaceSet = 4
 
-	URX_GC_NORMAL = iota + 1 // Sets for finding grapheme cluster boundaries.
-	URX_GC_EXTEND
-	URX_GC_CONTROL
-	URX_GC_L
-	URX_GC_LV
-	URX_GC_LVT
-	URX_GC_V
-	URX_GC_T
+	urxGcNormal = iota + 1 // Sets for finding grapheme cluster boundaries.
+	urxGcExtend
+	urxGcControl
+	urxGcL
+	urxGcLv
+	urxGcLvt
+	urxGcV
+	urxGcT
 
-	URX_LAST_SET
-
-	URX_NEG_SET = 0x800000 // Flag bit to reverse sense of set
+	urxNegSet = 0x800000 // Flag bit to reverse sense of set
 	//   membership test.
 )
 
-type Stack struct {
+type stack struct {
 	ary        []int
 	frameSize  int
 	stackLimit int
 }
 
-type StackFrame []int
+type stackFrame []int
 
-func (f StackFrame) inputIdx() *int {
+func (f stackFrame) inputIdx() *int {
 	return &f[0]
 }
 
-func (f StackFrame) patIdx() *int {
+func (f stackFrame) patIdx() *int {
 	return &f[1]
 }
 
-func (f StackFrame) extra(n int) *int {
+func (f stackFrame) extra(n int) *int {
 	return &f[2+n]
 }
 
-func (f StackFrame) equals(f2 StackFrame) bool {
+func (f stackFrame) equals(f2 stackFrame) bool {
 	return &f[0] == &f2[0]
 }
 
-func (stack *Stack) len() int {
-	return len(stack.ary)
+func (s *stack) len() int {
+	return len(s.ary)
 }
 
-func (stack *Stack) sp() int {
-	return len(stack.ary) - stack.frameSize
+func (s *stack) sp() int {
+	return len(s.ary) - s.frameSize
 }
 
-func (stack *Stack) newFrame(inputIdx int, input []rune, pattern string) (StackFrame, error) {
-	if stack.stackLimit != 0 && len(stack.ary)+stack.frameSize > stack.stackLimit {
+func (s *stack) newFrame(inputIdx int, input []rune, pattern string) (stackFrame, error) {
+	if s.stackLimit != 0 && len(s.ary)+s.frameSize > s.stackLimit {
 		return nil, &MatchError{
-			Code:     uerror.U_REGEX_STACK_OVERFLOW,
+			Code:     uerror.StackOverflow,
 			Pattern:  pattern,
 			Position: inputIdx,
 			Input:    input,
 		}
 	}
-	stack.ary = slices.Grow(stack.ary, stack.frameSize)
+	s.ary = slices.Grow(s.ary, s.frameSize)
 
-	f := stack.ary[len(stack.ary) : len(stack.ary)+stack.frameSize]
-	stack.ary = stack.ary[:len(stack.ary)+stack.frameSize]
+	f := s.ary[len(s.ary) : len(s.ary)+s.frameSize]
+	s.ary = s.ary[:len(s.ary)+s.frameSize]
 	return f, nil
 }
 
-func (stack *Stack) prevFromTop() StackFrame {
-	return stack.ary[len(stack.ary)-2*stack.frameSize:]
+func (s *stack) prevFromTop() stackFrame {
+	return s.ary[len(s.ary)-2*s.frameSize:]
 }
 
-func (stack *Stack) popFrame() StackFrame {
-	stack.ary = stack.ary[:len(stack.ary)-stack.frameSize]
-	return stack.ary[len(stack.ary)-stack.frameSize:]
+func (s *stack) popFrame() stackFrame {
+	s.ary = s.ary[:len(s.ary)-s.frameSize]
+	return s.ary[len(s.ary)-s.frameSize:]
 }
 
-func (stack *Stack) reset() {
-	stack.ary = stack.ary[:0]
+func (s *stack) reset() {
+	s.ary = s.ary[:0]
 }
 
-func (stack *Stack) offset(size int) StackFrame {
-	return stack.ary[size-stack.frameSize : size]
+func (s *stack) offset(size int) stackFrame {
+	return s.ary[size-s.frameSize : size]
 }
 
-func (stack *Stack) setSize(size int) {
-	stack.ary = stack.ary[:size]
+func (s *stack) setSize(size int) {
+	s.ary = s.ary[:size]
 }
 
-func (f StackFrame) clearExtra() {
+func (f stackFrame) clearExtra() {
 	for i := 2; i < len(f); i++ {
 		f[i] = -1
 	}
 }
 
 // number of UVector elements in the header
-const RESTACKFRAME_HDRCOUNT = 2
+const restackframeHdrCount = 2
 
 // Start-Of-Match type.  Used by find() to quickly scan to positions where a
 //
 //	match might start before firing up the full match engine.
-type StartOfMatch int8
+type startOfMatch int8
 
 const (
-	START_NO_INFO StartOfMatch = iota // No hint available.
-	START_CHAR                        // Match starts with a literal code point.
-	START_SET                         // Match starts with something matching a set.
-	START_START                       // Match starts at start of buffer only (^ or \A)
-	START_LINE                        // Match starts with ^ in multi-line mode.
-	START_STRING                      // Match starts with a literal string.
+	startNoInfo startOfMatch = iota // No hint available.
+	startChar                       // Match starts with a literal code point.
+	startSet                        // Match starts with something matching a set.
+	startStart                      // Match starts at start of buffer only (^ or \A)
+	startLine                       // Match starts with ^ in multi-line mode.
+	startString                     // Match starts with a literal string.
 )
 
-func (som StartOfMatch) String() string {
+func (som startOfMatch) String() string {
 	switch som {
-	case START_NO_INFO:
+	case startNoInfo:
 		return "START_NO_INFO"
-	case START_CHAR:
+	case startChar:
 		return "START_CHAR"
-	case START_SET:
+	case startSet:
 		return "START_SET"
-	case START_START:
+	case startStart:
 		return "START_START"
-	case START_LINE:
+	case startLine:
 		return "START_LINE"
-	case START_STRING:
+	case startString:
 		return "START_STRING"
 	default:
 		panic("unknown StartOfMatch")
 	}
 }
 
-type CaseFoldIterator struct {
+type caseFoldIterator struct {
 	chars []rune
 	index int
 	limit int
@@ -381,7 +379,7 @@ type CaseFoldIterator struct {
 	foldChars []uint16
 }
 
-func (it *CaseFoldIterator) next() rune {
+func (it *caseFoldIterator) next() rune {
 	if len(it.foldChars) == 0 {
 		// We are not in a string folding of an earlier character.
 		// Start handling the next char from the input UText.
@@ -404,12 +402,12 @@ func (it *CaseFoldIterator) next() rune {
 	return res
 }
 
-func (it *CaseFoldIterator) inExpansion() bool {
+func (it *caseFoldIterator) inExpansion() bool {
 	return len(it.foldChars) > 0
 }
 
-func newCaseFoldIterator(chars []rune, start, limit int) CaseFoldIterator {
-	return CaseFoldIterator{
+func newCaseFoldIterator(chars []rune, start, limit int) caseFoldIterator {
+	return caseFoldIterator{
 		chars: chars,
 		index: start,
 		limit: limit,

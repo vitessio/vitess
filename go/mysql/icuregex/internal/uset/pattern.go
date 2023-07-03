@@ -51,7 +51,7 @@ func (u *UnicodeSet) ToPattern(w *strings.Builder, escapeUnprintable bool) {
 	// If the set contains at least 2 intervals and includes both
 	// MIN_VALUE and MAX_VALUE, then the inverse representation will
 	// be more economical.
-	if count > 1 && u.RangeStart(0) == MIN_VALUE && u.RangeEnd(count-1) == MAX_VALUE {
+	if count > 1 && u.RangeStart(0) == MinValue && u.RangeEnd(count-1) == MaxValue {
 
 		// Emit the inverse
 		w.WriteByte('^')

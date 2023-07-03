@@ -22,6 +22,7 @@ limitations under the License.
 package utrie
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
@@ -29,13 +30,13 @@ import (
 )
 
 type UTrie2 struct {
-	Index  []uint16
-	Data16 []uint16
-	Data32 []uint32
+	index  []uint16
+	data16 []uint16
+	data32 []uint32
 
-	IndexLength, DataLength int
-	Index2NullOffset        uint16
-	DataNullOffset          uint16
+	indexLength, dataLength int
+	index2NullOffset        uint16
+	dataNullOffset          uint16
 	InitialValue            uint32
 	ErrorValue              uint32
 
@@ -44,33 +45,33 @@ type UTrie2 struct {
 }
 
 func (t *UTrie2) SerializedLength() int32 {
-	return 16 + int32(t.IndexLength+t.DataLength)*2
+	return 16 + int32(t.indexLength+t.dataLength)*2
 }
 
 func (t *UTrie2) getIndex(asciiOffset int, c rune) uint16 {
-	return t.Index[t.indexFromCp(asciiOffset, c)]
+	return t.index[t.indexFromCp(asciiOffset, c)]
 }
 
 func (t *UTrie2) Get16(c rune) uint16 {
-	return t.getIndex(t.IndexLength, c)
+	return t.getIndex(t.indexLength, c)
 }
 
 func (t *UTrie2) indexFromCp(asciiOffset int, c rune) int {
 	switch {
 	case c < 0xd800:
-		return indexRaw(0, t.Index, c)
+		return indexRaw(0, t.index, c)
 	case c <= 0xffff:
 		var offset int32
 		if c <= 0xdbff {
-			offset = UTRIE2_LSCP_INDEX_2_OFFSET - (0xd800 >> UTRIE2_SHIFT_2)
+			offset = lscpIndex2Offset - (0xd800 >> shift2)
 		}
-		return indexRaw(offset, t.Index, c)
+		return indexRaw(offset, t.index, c)
 	case c > 0x10ffff:
-		return asciiOffset + UTRIE2_BAD_UTF8_DATA_OFFSET
+		return asciiOffset + badUtf8DataOffset
 	case c >= t.HighStart:
 		return t.HighValueIndex
 	default:
-		return indexFromSupp(t.Index, c)
+		return indexFromSupp(t.index, c)
 	}
 }
 
@@ -102,10 +103,10 @@ func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRang
 
 	/* frozen trie */
 	var (
-		idx              = t.Index
-		data32           = t.Data32
-		index2NullOffset = int(t.Index2NullOffset)
-		nullBlock        = int(t.DataNullOffset)
+		idx              = t.index
+		data32           = t.data32
+		index2NullOffset = int(t.index2NullOffset)
+		nullBlock        = int(t.dataNullOffset)
 
 		c         rune
 		prev      = start
@@ -125,38 +126,38 @@ func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRang
 	/* enumerate index-2 blocks */
 	for c = start; c < limit && c < highStart; {
 		/* Code point limit for iterating inside this i2Block. */
-		tempLimit := c + UTRIE2_CP_PER_INDEX_1_ENTRY
+		tempLimit := c + cpPerIndex1Entry
 		if limit < tempLimit {
 			tempLimit = limit
 		}
 		if c <= 0xffff {
 			if !utf16.IsSurrogate(c) {
-				i2Block = int(c >> UTRIE2_SHIFT_2)
+				i2Block = int(c >> shift2)
 			} else if utf16.IsSurrogateLead(c) {
 				/*
 				 * Enumerate values for lead surrogate code points, not code units:
 				 * This special block has half the normal length.
 				 */
-				i2Block = UTRIE2_LSCP_INDEX_2_OFFSET
+				i2Block = lscpIndex2Offset
 				tempLimit = min(0xdc00, limit)
 			} else {
 				/*
 				 * Switch back to the normal part of the index-2 table.
 				 * Enumerate the second half of the surrogates block.
 				 */
-				i2Block = 0xd800 >> UTRIE2_SHIFT_2
+				i2Block = 0xd800 >> shift2
 				tempLimit = min(0xe000, limit)
 			}
 		} else {
 			/* supplementary code points */
-			i2Block = int(idx[(UTRIE2_INDEX_1_OFFSET-UTRIE2_OMITTED_BMP_INDEX_1_LENGTH)+(c>>UTRIE2_SHIFT_1)])
-			if i2Block == prevI2Block && (c-prev) >= UTRIE2_CP_PER_INDEX_1_ENTRY {
+			i2Block = int(idx[(index1Offset-omittedBmpIndex1Length)+(c>>shift1)])
+			if i2Block == prevI2Block && (c-prev) >= cpPerIndex1Entry {
 				/*
 				 * The index-2 block is the same as the previous one, and filled with prevValue.
 				 * Only possible for supplementary code points because the linear-BMP index-2
 				 * table creates unique i2Block values.
 				 */
-				c += UTRIE2_CP_PER_INDEX_1_ENTRY
+				c += cpPerIndex1Entry
 				continue
 			}
 		}
@@ -171,20 +172,20 @@ func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRang
 				prev = c
 				prevValue = initialValue
 			}
-			c += UTRIE2_CP_PER_INDEX_1_ENTRY
+			c += cpPerIndex1Entry
 		} else {
 			/* enumerate data blocks for one index-2 block */
 			var i2Limit int
-			if (c >> UTRIE2_SHIFT_1) == (tempLimit >> UTRIE2_SHIFT_1) {
-				i2Limit = int(tempLimit>>UTRIE2_SHIFT_2) & UTRIE2_INDEX_2_MASK
+			if (c >> shift1) == (tempLimit >> shift1) {
+				i2Limit = int(tempLimit>>shift2) & index2Mask
 			} else {
-				i2Limit = UTRIE2_INDEX_2_BLOCK_LENGTH
+				i2Limit = index2BlockLength
 			}
-			for i2 := int(c>>UTRIE2_SHIFT_2) & UTRIE2_INDEX_2_MASK; i2 < i2Limit; i2++ {
-				block = int(idx[i2Block+i2] << UTRIE2_INDEX_SHIFT)
-				if block == prevBlock && (c-prev) >= UTRIE2_DATA_BLOCK_LENGTH {
+			for i2 := int(c>>shift2) & index2Mask; i2 < i2Limit; i2++ {
+				block = int(idx[i2Block+i2] << indexShift)
+				if block == prevBlock && (c-prev) >= dataBlockLength {
 					/* the block is the same as the previous one, and filled with prevValue */
-					c += UTRIE2_DATA_BLOCK_LENGTH
+					c += dataBlockLength
 					continue
 				}
 				prevBlock = block
@@ -197,9 +198,9 @@ func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRang
 						prev = c
 						prevValue = initialValue
 					}
-					c += UTRIE2_DATA_BLOCK_LENGTH
+					c += dataBlockLength
 				} else {
-					for j := 0; j < UTRIE2_DATA_BLOCK_LENGTH; j++ {
+					for j := 0; j < dataBlockLength; j++ {
 						var value uint32
 						if data32 != nil {
 							value = data32[block+j]
@@ -247,47 +248,47 @@ func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRang
 }
 
 func indexFromSupp(index []uint16, c rune) int {
-	i1 := int(index[(UTRIE2_INDEX_1_OFFSET-UTRIE2_OMITTED_BMP_INDEX_1_LENGTH)+(c>>UTRIE2_SHIFT_1)])
-	return (int(index[i1+int((c>>UTRIE2_SHIFT_2)&UTRIE2_INDEX_2_MASK)]) << UTRIE2_INDEX_SHIFT) + int(c&UTRIE2_DATA_MASK)
+	i1 := int(index[(index1Offset-omittedBmpIndex1Length)+(c>>shift1)])
+	return (int(index[i1+int((c>>shift2)&index2Mask)]) << indexShift) + int(c&dataMask)
 }
 
 func indexRaw(offset int32, index []uint16, c rune) int {
-	return int(index[offset+(c>>UTRIE2_SHIFT_2)]<<UTRIE2_INDEX_SHIFT) + int(c&UTRIE2_DATA_MASK)
+	return int(index[offset+(c>>shift2)]<<indexShift) + int(c&dataMask)
 }
 
 const (
 	/** Shift size for getting the index-1 table offset. */
-	UTRIE2_SHIFT_1 = 6 + 5
+	shift1 = 6 + 5
 
 	/** Shift size for getting the index-2 table offset. */
-	UTRIE2_SHIFT_2 = 5
+	shift2 = 5
 
 	/**
 	 * Difference between the two shift sizes,
 	 * for getting an index-1 offset from an index-2 offset. 6=11-5
 	 */
-	UTRIE2_SHIFT_1_2 = UTRIE2_SHIFT_1 - UTRIE2_SHIFT_2
+	shift1min2 = shift1 - shift2
 
 	/**
 	 * Number of index-1 entries for the BMP. 32=0x20
 	 * This part of the index-1 table is omitted from the serialized form.
 	 */
-	UTRIE2_OMITTED_BMP_INDEX_1_LENGTH = 0x10000 >> UTRIE2_SHIFT_1
+	omittedBmpIndex1Length = 0x10000 >> shift1
 
 	/** Number of code points per index-1 table entry. 2048=0x800 */
-	UTRIE2_CP_PER_INDEX_1_ENTRY = 1 << UTRIE2_SHIFT_1
+	cpPerIndex1Entry = 1 << shift1
 
 	/** Number of entries in an index-2 block. 64=0x40 */
-	UTRIE2_INDEX_2_BLOCK_LENGTH = 1 << UTRIE2_SHIFT_1_2
+	index2BlockLength = 1 << shift1min2
 
 	/** Mask for getting the lower bits for the in-index-2-block offset. */
-	UTRIE2_INDEX_2_MASK = UTRIE2_INDEX_2_BLOCK_LENGTH - 1
+	index2Mask = index2BlockLength - 1
 
 	/** Number of entries in a data block. 32=0x20 */
-	UTRIE2_DATA_BLOCK_LENGTH = 1 << UTRIE2_SHIFT_2
+	dataBlockLength = 1 << shift2
 
 	/** Mask for getting the lower bits for the in-data-block offset. */
-	UTRIE2_DATA_MASK = UTRIE2_DATA_BLOCK_LENGTH - 1
+	dataMask = dataBlockLength - 1
 
 	/**
 	 * Shift size for shifting left the index array values.
@@ -295,18 +296,12 @@ const (
 	 * of compactability.
 	 * This requires data blocks to be aligned by UTRIE2_DATA_GRANULARITY.
 	 */
-	UTRIE2_INDEX_SHIFT = 2
+	indexShift = 2
 
 	/** The alignment size of a data block. Also the granularity for compaction. */
-	UTRIE2_DATA_GRANULARITY = 1 << UTRIE2_INDEX_SHIFT
+	dataGranularity = 1 << indexShift
 
 	/* Fixed layout of the first part of the index array. ------------------- */
-
-	/**
-	 * The BMP part of the index-2 table is fixed and linear and starts at offset 0.
-	 * Length=2048=0x800=0x10000>>UTRIE2_SHIFT_2
-	 */
-	UTRIE2_INDEX_2_OFFSET = 0
 
 	/**
 	 * The part of the index-2 table for U+D800..U+DBFF stores values for
@@ -314,18 +309,18 @@ const (
 	 * Values for lead surrogate code _points_ are indexed with this portion of the table.
 	 * Length=32=0x20=0x400>>UTRIE2_SHIFT_2. (There are 1024=0x400 lead surrogates.)
 	 */
-	UTRIE2_LSCP_INDEX_2_OFFSET = 0x10000 >> UTRIE2_SHIFT_2
-	UTRIE2_LSCP_INDEX_2_LENGTH = 0x400 >> UTRIE2_SHIFT_2
+	lscpIndex2Offset = 0x10000 >> shift2
+	lscpIndex2Length = 0x400 >> shift2
 
 	/** Count the lengths of both BMP pieces. 2080=0x820 */
-	UTRIE2_INDEX_2_BMP_LENGTH = UTRIE2_LSCP_INDEX_2_OFFSET + UTRIE2_LSCP_INDEX_2_LENGTH
+	index2BmpLength = lscpIndex2Offset + lscpIndex2Length
 
 	/**
 	 * The 2-byte UTF-8 version of the index-2 table follows at offset 2080=0x820.
 	 * Length 32=0x20 for lead bytes C0..DF, regardless of UTRIE2_SHIFT_2.
 	 */
-	UTRIE2_UTF8_2B_INDEX_2_OFFSET = UTRIE2_INDEX_2_BMP_LENGTH
-	UTRIE2_UTF8_2B_INDEX_2_LENGTH = 0x800 >> 6 /* U+0800 is the first code point after 2-byte UTF-8 */
+	utf82BIndex2Offset = index2BmpLength
+	utf82BIndex2Length = 0x800 >> 6 /* U+0800 is the first code point after 2-byte UTF-8 */
 
 	/**
 	 * The index-1 table, only used for supplementary code points, at offset 2112=0x840.
@@ -339,8 +334,8 @@ const (
 	 * Both the index-1 table and the following part of the index-2 table
 	 * are omitted completely if there is only BMP data.
 	 */
-	UTRIE2_INDEX_1_OFFSET     = UTRIE2_UTF8_2B_INDEX_2_OFFSET + UTRIE2_UTF8_2B_INDEX_2_LENGTH
-	UTRIE2_MAX_INDEX_1_LENGTH = 0x100000 >> UTRIE2_SHIFT_1
+	index1Offset    = utf82BIndex2Offset + utf82BIndex2Length
+	maxIndex1Length = 0x100000 >> shift1
 
 	/*
 	 * Fixed layout of the first part of the data array. -----------------------
@@ -352,14 +347,11 @@ const (
 	 * Used with linear access for single bytes 0..0xbf for simple error handling.
 	 * Length 64=0x40, not UTRIE2_DATA_BLOCK_LENGTH.
 	 */
-	UTRIE2_BAD_UTF8_DATA_OFFSET = 0x80
-
-	/** The start of non-linear-ASCII data blocks, at offset 192=0xc0. */
-	UTRIE2_DATA_START_OFFSET = 0xc0
+	badUtf8DataOffset = 0x80
 )
 
 func UTrie2FromBytes(bytes *udata.Bytes) (*UTrie2, error) {
-	type UTrie2Header struct {
+	type utrie2Header struct {
 		/** "Tri2" in big-endian US-ASCII (0x54726932) */
 		signature uint32
 
@@ -386,13 +378,13 @@ func UTrie2FromBytes(bytes *udata.Bytes) (*UTrie2, error) {
 		shiftedHighStart uint16
 	}
 
-	var header UTrie2Header
+	var header utrie2Header
 	header.signature = bytes.Uint32()
 
 	switch header.signature {
 	case 0x54726932:
 	case 0x32697254:
-		return nil, fmt.Errorf("unsupported: BigEndian encoding")
+		return nil, errors.New("unsupported: BigEndian encoding")
 	default:
 		return nil, fmt.Errorf("invalid signature for Trie2: 0x%08x", header.signature)
 	}
@@ -411,37 +403,37 @@ func UTrie2FromBytes(bytes *udata.Bytes) (*UTrie2, error) {
 	case 1:
 		width = 32
 	default:
-		return nil, fmt.Errorf("invalid width for serialized UTrie2")
+		return nil, errors.New("invalid width for serialized UTrie2")
 	}
 
 	trie := &UTrie2{
-		IndexLength:      int(header.indexLength),
-		DataLength:       int(header.shiftedDataLength) << UTRIE2_INDEX_SHIFT,
-		Index2NullOffset: header.index2NullOffset,
-		DataNullOffset:   header.dataNullOffset,
-		HighStart:        rune(header.shiftedHighStart) << UTRIE2_SHIFT_1,
+		indexLength:      int(header.indexLength),
+		dataLength:       int(header.shiftedDataLength) << indexShift,
+		index2NullOffset: header.index2NullOffset,
+		dataNullOffset:   header.dataNullOffset,
+		HighStart:        rune(header.shiftedHighStart) << shift1,
 	}
 
-	trie.HighValueIndex = trie.DataLength - UTRIE2_DATA_GRANULARITY
+	trie.HighValueIndex = trie.dataLength - dataGranularity
 	if width == 16 {
-		trie.HighValueIndex += trie.IndexLength
+		trie.HighValueIndex += trie.indexLength
 	}
 
-	indexArraySize := trie.IndexLength
+	indexArraySize := trie.indexLength
 	if width == 16 {
-		indexArraySize += trie.DataLength
+		indexArraySize += trie.dataLength
 	}
 
-	trie.Index = bytes.Uint16Slice(int32(indexArraySize))
+	trie.index = bytes.Uint16Slice(int32(indexArraySize))
 
 	if width == 16 {
-		trie.Data16 = trie.Index[trie.IndexLength:]
-		trie.InitialValue = uint32(trie.Index[trie.DataNullOffset])
-		trie.ErrorValue = uint32(trie.Index[trie.IndexLength+UTRIE2_BAD_UTF8_DATA_OFFSET])
+		trie.data16 = trie.index[trie.indexLength:]
+		trie.InitialValue = uint32(trie.index[trie.dataNullOffset])
+		trie.ErrorValue = uint32(trie.index[trie.indexLength+badUtf8DataOffset])
 	} else {
-		trie.Data32 = bytes.Uint32Slice(int32(trie.DataLength))
-		trie.InitialValue = trie.Data32[trie.DataNullOffset]
-		trie.ErrorValue = trie.Data32[UTRIE2_BAD_UTF8_DATA_OFFSET]
+		trie.data32 = bytes.Uint32Slice(int32(trie.dataLength))
+		trie.InitialValue = trie.data32[trie.dataNullOffset]
+		trie.ErrorValue = trie.data32[badUtf8DataOffset]
 	}
 
 	return trie, nil

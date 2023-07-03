@@ -29,7 +29,7 @@ type Pattern struct {
 	pattern string
 	flags   RegexpFlag
 
-	compiledPat []Instruction
+	compiledPat []instruction
 	literalText []rune
 
 	sets []*uset.UnicodeSet
@@ -40,7 +40,7 @@ type Pattern struct {
 
 	groupMap []int32
 
-	startType        StartOfMatch
+	startType        startOfMatch
 	initialStringIdx int
 	initialStringLen int
 	initialChars     *uset.UnicodeSet
@@ -69,7 +69,7 @@ func MustCompileString(in string, flags RegexpFlag) *Pattern {
 
 func CompileString(in string, flags RegexpFlag) (*Pattern, error) {
 	pat := NewPattern(flags)
-	cmp := NewCompiler(pat)
+	cmp := newCompiler(pat)
 	if err := cmp.compile(in); err != nil {
 		return nil, err
 	}
@@ -82,22 +82,18 @@ func (p *Pattern) Match(input string) *Matcher {
 	return m
 }
 
-func (p *Pattern) Matcher() *Matcher {
-	return NewMatcher(p)
-}
-
 type RegexpFlag int32
 
 const (
 	/**  Enable case insensitive matching.  @stable ICU 2.4 */
-	UREGEX_CASE_INSENSITIVE RegexpFlag = 2
+	CaseInsensitive RegexpFlag = 2
 
 	/**  Allow white space and comments within patterns  @stable ICU 2.4 */
-	UREGEX_COMMENTS RegexpFlag = 4
+	Comments RegexpFlag = 4
 
 	/**  If set, '.' matches line terminators,  otherwise '.' matching stops at line end.
 	 *  @stable ICU 2.4 */
-	UREGEX_DOTALL RegexpFlag = 32
+	DotAll RegexpFlag = 32
 
 	/**  If set, treat the entire pattern as a literal string.
 	 *  Metacharacters or escape sequences in the input sequence will be given
@@ -109,20 +105,20 @@ const (
 	 *
 	 * @stable ICU 4.0
 	 */
-	UREGEX_LITERAL RegexpFlag = 16
+	Literal RegexpFlag = 16
 
 	/**   Control behavior of "$" and "^"
 	 *    If set, recognize line terminators within string,
 	 *    otherwise, match only at start and end of input string.
 	 *   @stable ICU 2.4 */
-	UREGEX_MULTILINE RegexpFlag = 8
+	Multiline RegexpFlag = 8
 
 	/**   Unix-only line endings.
 	 *   When this mode is enabled, only \\u000a is recognized as a line ending
 	 *    in the behavior of ., ^, and $.
 	 *   @stable ICU 4.0
 	 */
-	UREGEX_UNIX_LINES RegexpFlag = 1
+	UnixLines RegexpFlag = 1
 
 	/**  Unicode word boundaries.
 	 *     If set, \b uses the Unicode TR 29 definition of word boundaries.
@@ -131,7 +127,7 @@ const (
 	 *     http://unicode.org/reports/tr29/#Word_Boundaries
 	 *     @stable ICU 2.8
 	 */
-	UREGEX_UWORD RegexpFlag = 256
+	UWord RegexpFlag = 256
 
 	/**  Error on Unrecognized backslash escapes.
 	 *     If set, fail with an error on patterns that contain
@@ -140,5 +136,5 @@ const (
 	 *     escaped letters represent themselves.
 	 *     @stable ICU 4.0
 	 */
-	UREGEX_ERROR_ON_UNKNOWN_ESCAPES RegexpFlag = 512
+	ErrorOnUnknownEscapes RegexpFlag = 512
 )

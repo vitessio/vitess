@@ -35,14 +35,14 @@ var pnames struct {
 	byteTrie  []uint8
 }
 
-func readData(bytes *udata.Bytes) error {
-	const (
-		IX_VALUE_MAPS_OFFSET  = 0
-		IX_BYTE_TRIES_OFFSET  = 1
-		IX_NAME_GROUPS_OFFSET = 2
-		IX_RESERVED3_OFFSET   = 3
-	)
+const (
+	ixValueMapsOffset  = 0
+	ixByteTriesOffset  = 1
+	ixNameGroupsOffset = 2
+	ixReserved3Offset  = 3
+)
 
+func readData(bytes *udata.Bytes) error {
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
 		return info.DataFormat[0] == 0x70 &&
 			info.DataFormat[1] == 0x6e &&
@@ -66,14 +66,14 @@ func readData(bytes *udata.Bytes) error {
 		indexes[i] = bytes.Int32()
 	}
 
-	offset := indexes[IX_VALUE_MAPS_OFFSET]
-	nextOffset := indexes[IX_BYTE_TRIES_OFFSET]
+	offset := indexes[ixValueMapsOffset]
+	nextOffset := indexes[ixByteTriesOffset]
 	numInts := (nextOffset - offset) / 4
 
 	pnames.valueMaps = bytes.Uint32Slice(numInts)
 
 	offset = nextOffset
-	nextOffset = indexes[IX_NAME_GROUPS_OFFSET]
+	nextOffset = indexes[ixNameGroupsOffset]
 	numBytes := nextOffset - offset
 
 	pnames.byteTrie = bytes.Uint8Slice(numBytes)
@@ -87,74 +87,72 @@ func init() {
 	}
 }
 
-func (prop Property) Source() PropertySource {
-	if prop < UCHAR_BINARY_START {
-		return UPROPS_SRC_NONE /* undefined */
-	} else if prop < UCHAR_BINARY_LIMIT {
+func (prop Property) source() propertySource {
+	if prop < UCharBinaryStart {
+		return srcNone /* undefined */
+	} else if prop < uCharBinaryLimit {
 		bprop := binProps[prop]
 		if bprop.mask != 0 {
-			return UPROPS_SRC_PROPSVEC
-		} else {
-			return bprop.column
+			return srcPropsvec
 		}
-	} else if prop < UCHAR_INT_START {
-		return UPROPS_SRC_NONE /* undefined */
-	} else if prop < UCHAR_INT_LIMIT {
-		iprop := intProps[prop-UCHAR_INT_START]
+		return bprop.column
+	} else if prop < UCharIntStart {
+		return srcNone /* undefined */
+	} else if prop < uCharIntLimit {
+		iprop := intProps[prop-UCharIntStart]
 		if iprop.mask != 0 {
-			return UPROPS_SRC_PROPSVEC
-		} else {
-			return iprop.column
+			return srcPropsvec
 		}
-	} else if prop < UCHAR_STRING_START {
+		return iprop.column
+	} else if prop < UCharStringStart {
 		switch prop {
-		case UCHAR_GENERAL_CATEGORY_MASK,
-			UCHAR_NUMERIC_VALUE:
-			return UPROPS_SRC_CHAR
+		case UCharGeneralCategoryMask,
+			UCharNumericValue:
+			return srcChar
 
 		default:
-			return UPROPS_SRC_NONE
+			return srcNone
 		}
-	} else if prop < UCHAR_STRING_LIMIT {
+	} else if prop < uCharStringLimit {
 		switch prop {
-		case UCHAR_AGE:
-			return UPROPS_SRC_PROPSVEC
+		case UCharAge:
+			return srcPropsvec
 
-		case UCHAR_BIDI_MIRRORING_GLYPH:
-			return UPROPS_SRC_BIDI
+		case UCharBidiMirroringGlyph:
+			return srcBidi
 
-		case UCHAR_CASE_FOLDING,
-			UCHAR_LOWERCASE_MAPPING,
-			UCHAR_SIMPLE_CASE_FOLDING,
-			UCHAR_SIMPLE_LOWERCASE_MAPPING,
-			UCHAR_SIMPLE_TITLECASE_MAPPING,
-			UCHAR_SIMPLE_UPPERCASE_MAPPING,
-			UCHAR_TITLECASE_MAPPING,
-			UCHAR_UPPERCASE_MAPPING:
-			return UPROPS_SRC_CASE
+		case UCharCaseFolding,
+			UCharLowercaseMapping,
+			UCharSimpleCaseFolding,
+			UCharSimpleLowercaseMapping,
+			UcharSimpleTitlecaseMapping,
+			UCharSimpleUppercaseMapping,
+			UCharTitlecaseMapping,
+			UCharUppercaseMapping:
+			return srcCase
 
 		/* UCHAR_ISO_COMMENT, UCHAR_UNICODE_1_NAME (deprecated) */
-		case UCHAR_NAME:
-			return UPROPS_SRC_NAMES
+		case UCharName:
+			return srcNames
 
 		default:
-			return UPROPS_SRC_NONE
+			return srcNone
 		}
 	} else {
 		switch prop {
-		case UCHAR_SCRIPT_EXTENSIONS:
-			return UPROPS_SRC_PROPSVEC
+		case UCharScriptExtensions:
+			return srcPropsvec
 		default:
-			return UPROPS_SRC_NONE /* undefined */
+			return srcNone /* undefined */
 		}
 	}
 }
 
-func GetPropertyEnum(alias string) Property {
+func getPropertyEnum(alias string) Property {
 	return Property(getPropertyOrValueEnum(0, alias))
 }
 
-func GetPropertyValueEnum(prop Property, alias string) int32 {
+func getPropertyValueEnum(prop Property, alias string) int32 {
 	valueMapIdx := findProperty(prop)
 	if valueMapIdx == 0 {
 		return -1
@@ -194,7 +192,7 @@ func getPropertyOrValueEnum(offset int32, alias string) int32 {
 	return -1
 }
 
-func ComparePropertyNames(name1, name2 string) int {
+func comparePropertyNames(name1, name2 string) int {
 	next := func(s string) (byte, string) {
 		for len(s) > 0 && (s[0] == 0x2d || s[0] == 0x5f || s[0] == 0x20 || (0x09 <= s[0] && s[0] <= 0x0d)) {
 			s = s[1:]
@@ -226,9 +224,9 @@ func ComparePropertyNames(name1, name2 string) int {
 	}
 }
 
-func GetIntPropertyValue(c rune, which Property) int32 {
-	if which < UCHAR_INT_START {
-		if UCHAR_BINARY_START <= which && which < UCHAR_BINARY_LIMIT {
+func getIntPropertyValue(c rune, which Property) int32 {
+	if which < UCharIntStart {
+		if UCharBinaryStart <= which && which < uCharBinaryLimit {
 			prop := binProps[which]
 			if prop.contains == nil {
 				return 0
@@ -238,47 +236,32 @@ func GetIntPropertyValue(c rune, which Property) int32 {
 			}
 			return 0
 		}
-	} else if which < UCHAR_INT_LIMIT {
-		iprop := intProps[which-UCHAR_INT_START]
+	} else if which < uCharIntLimit {
+		iprop := intProps[which-UCharIntStart]
 		return iprop.getValue(iprop, c, which)
-	} else if which == UCHAR_GENERAL_CATEGORY_MASK {
-		return int32(U_MASK(uchar.CharType(c)))
+	} else if which == UCharGeneralCategoryMask {
+		return int32(uMask(uchar.CharType(c)))
 	}
 	return 0 // undefined
 }
 
-const (
-	UPROPS_SCRIPT_X_MASK  = 0x00f000ff
-	UPROPS_SCRIPT_X_SHIFT = 22
-
-	UPROPS_SCRIPT_HIGH_MASK  = 0x00300000
-	UPROPS_SCRIPT_HIGH_SHIFT = 12
-	UPROPS_MAX_SCRIPT        = 0x3ff
-
-	UPROPS_SCRIPT_LOW_MASK = 0x000000ff
-
-	UPROPS_SCRIPT_X_WITH_COMMON    = 0x400000
-	UPROPS_SCRIPT_X_WITH_INHERITED = 0x800000
-	UPROPS_SCRIPT_X_WITH_OTHER     = 0xc00000
-)
-
 func mergeScriptCodeOrIndex(scriptX uint32) uint32 {
-	return ((scriptX & UPROPS_SCRIPT_HIGH_MASK) >> UPROPS_SCRIPT_HIGH_SHIFT) |
-		(scriptX & UPROPS_SCRIPT_LOW_MASK)
+	return ((scriptX & scriptHighMask) >> scriptHighShift) |
+		(scriptX & scriptLowMask)
 }
 
-func GetScript(c rune) int32 {
+func script(c rune) int32 {
 	if c > 0x10ffff {
 		return -1
 	}
-	scriptX := uchar.GetUnicodeProperties(c, 0) & UPROPS_SCRIPT_X_MASK
+	scriptX := uchar.GetUnicodeProperties(c, 0) & scriptXMask
 	codeOrIndex := mergeScriptCodeOrIndex(scriptX)
 
-	if scriptX < UPROPS_SCRIPT_X_WITH_COMMON {
+	if scriptX < scriptXWithCommon {
 		return int32(codeOrIndex)
-	} else if scriptX < UPROPS_SCRIPT_X_WITH_INHERITED {
+	} else if scriptX < scriptXWithInherited {
 		return 0
-	} else if scriptX < UPROPS_SCRIPT_X_WITH_OTHER {
+	} else if scriptX < scriptXWithOther {
 		return 1
 	} else {
 		return int32(uchar.ScriptExtension(codeOrIndex))

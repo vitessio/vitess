@@ -32,9 +32,9 @@ import (
 )
 
 var charNamesOnce sync.Once
-var charNames *UCharNames
+var charNames *unames
 
-type UCharNames struct {
+type unames struct {
 	tokens       []uint16
 	tokenStrings []uint8
 	groups       []uint16
@@ -62,7 +62,7 @@ func loadCharNames() {
 		groupsOffset := int32(b.Uint32() - 16)
 		groupStringOffset := int32(b.Uint32() - 16)
 		algNamesOffset := int32(b.Uint32() - 16)
-		charNames = &UCharNames{
+		charNames = &unames{
 			tokens:       b.Uint16Slice(tokenStringOffset / 2),
 			tokenStrings: b.Uint8Slice(groupsOffset - tokenStringOffset),
 			groups:       b.Uint16Slice((groupStringOffset - groupsOffset) / 2),
@@ -92,29 +92,24 @@ func loadCharNames() {
 	})
 }
 
-func (names *UCharNames) getGroupName(group []uint16) []uint8 {
+func (names *unames) getGroupName(group []uint16) []uint8 {
 	return names.groupNames[names.getGroupOffset(group):]
 }
 
 type NameChoice int32
 
 const (
-	U_UNICODE_CHAR_NAME NameChoice = iota
+	UnicodeCharName NameChoice = iota
 	/**
 	 * The Unicode_1_Name property value which is of little practical value.
 	 * Beginning with ICU 49, ICU APIs return an empty string for this name choice.
 	 * @deprecated ICU 49
 	 */
-	U_UNICODE_10_CHAR_NAME
+	Unicode10CharName
 	/** Standard or synthetic character name. @stable ICU 2.0 */
-	U_EXTENDED_CHAR_NAME
+	ExtendedCharName
 	/** Corrected name from NameAliases.txt. @stable ICU 4.4 */
-	U_CHAR_NAME_ALIAS
-	/**
-	 * One more than the highest normal UCharNameChoice value.
-	 * @deprecated ICU 58 The numeric value may change over time, see ICU ticket #12420.
-	 */
-	U_CHAR_NAME_CHOICE_COUNT
+	CharNameAlias
 )
 
 type algorithmicRange struct {
@@ -246,7 +241,7 @@ func CharForName(nameChoice NameChoice, name string) rune {
 	upper := strings.ToUpper(name)
 
 	if lower[0] == '<' {
-		if nameChoice == U_EXTENDED_CHAR_NAME && lower[len(lower)-1] == '>' {
+		if nameChoice == ExtendedCharName && lower[len(lower)-1] == '>' {
 			if limit := strings.LastIndexByte(lower, '-'); limit >= 2 {
 				cp, err := strconv.ParseUint(lower[limit+1:len(lower)-1], 16, 32)
 				if err != nil || cp > 0x10ffff {
@@ -267,25 +262,25 @@ func CharForName(nameChoice NameChoice, name string) rune {
 	return charNames.enumNames(0, 0x10ffff+1, upper, nameChoice)
 }
 
-const GROUP_SHIFT = 5
-const LINES_PER_GROUP = 1 << GROUP_SHIFT
-const GROUP_MASK = LINES_PER_GROUP - 1
+const groupShift = 5
+const linesPerGroup = 1 << groupShift
+const groupMask = linesPerGroup - 1
 
 const (
-	GROUP_MSB = iota
-	GROUP_OFFSET_HIGH
-	GROUP_OFFSET_LOW
-	GROUP_LENGTH
+	groupMsb = iota
+	groupOffsetHigh
+	groupOffsetLow
+	groupLength
 )
 
-func (names *UCharNames) enumNames(start, limit rune, otherName string, nameChoice NameChoice) rune {
-	startGroupMSB := uint16(start >> GROUP_SHIFT)
-	endGroupMSB := uint16((limit - 1) >> GROUP_SHIFT)
+func (names *unames) enumNames(start, limit rune, otherName string, nameChoice NameChoice) rune {
+	startGroupMSB := uint16(start >> groupShift)
+	endGroupMSB := uint16((limit - 1) >> groupShift)
 
 	group := names.getGroup(start)
 
-	if startGroupMSB < group[GROUP_MSB] && nameChoice == U_EXTENDED_CHAR_NAME {
-		extLimit := rune(group[GROUP_MSB]) << GROUP_SHIFT
+	if startGroupMSB < group[groupMsb] && nameChoice == ExtendedCharName {
+		extLimit := rune(group[groupMsb]) << groupShift
 		if extLimit > limit {
 			extLimit = limit
 		}
@@ -293,40 +288,40 @@ func (names *UCharNames) enumNames(start, limit rune, otherName string, nameChoi
 	}
 
 	if startGroupMSB == endGroupMSB {
-		if startGroupMSB == group[GROUP_MSB] {
+		if startGroupMSB == group[groupMsb] {
 			return names.enumGroupNames(group, start, limit-1, otherName, nameChoice)
 		}
 	} else {
-		if startGroupMSB == group[GROUP_MSB] {
-			if start&GROUP_MASK != 0 {
-				if cp := names.enumGroupNames(group, start, (rune(startGroupMSB)<<GROUP_SHIFT)+LINES_PER_GROUP-1, otherName, nameChoice); cp != -1 {
+		if startGroupMSB == group[groupMsb] {
+			if start&groupMask != 0 {
+				if cp := names.enumGroupNames(group, start, (rune(startGroupMSB)<<groupShift)+linesPerGroup-1, otherName, nameChoice); cp != -1 {
 					return cp
 				}
-				group = group[GROUP_LENGTH:]
+				group = group[groupLength:]
 			}
-		} else if startGroupMSB > group[GROUP_MSB] {
-			group = group[GROUP_LENGTH:]
+		} else if startGroupMSB > group[groupMsb] {
+			group = group[groupLength:]
 		}
 
-		for len(group) > 0 && group[GROUP_MSB] < endGroupMSB {
-			start = rune(group[GROUP_MSB]) << GROUP_SHIFT
-			if cp := names.enumGroupNames(group, start, start+LINES_PER_GROUP-1, otherName, nameChoice); cp != -1 {
+		for len(group) > 0 && group[groupMsb] < endGroupMSB {
+			start = rune(group[groupMsb]) << groupShift
+			if cp := names.enumGroupNames(group, start, start+linesPerGroup-1, otherName, nameChoice); cp != -1 {
 				return cp
 			}
-			group = group[GROUP_LENGTH:]
+			group = group[groupLength:]
 		}
 
-		if len(group) > 0 && group[GROUP_MSB] == endGroupMSB {
-			return names.enumGroupNames(group, (limit-1)&^GROUP_MASK, limit-1, otherName, nameChoice)
+		if len(group) > 0 && group[groupMsb] == endGroupMSB {
+			return names.enumGroupNames(group, (limit-1)&^groupMask, limit-1, otherName, nameChoice)
 		}
 	}
 
 	return -1
 }
 
-func (names *UCharNames) getGroup(code rune) []uint16 {
+func (names *unames) getGroup(code rune) []uint16 {
 	groups := names.groups
-	groupMSB := uint16(code >> GROUP_SHIFT)
+	groupMSB := uint16(code >> groupShift)
 
 	start := 0
 	groupCount := int(groups[0])
@@ -335,30 +330,30 @@ func (names *UCharNames) getGroup(code rune) []uint16 {
 
 	for start < limit-1 {
 		number := (start + limit) / 2
-		if groupMSB < groups[number*GROUP_LENGTH+GROUP_MSB] {
+		if groupMSB < groups[number*groupLength+groupMsb] {
 			limit = number
 		} else {
 			start = number
 		}
 	}
 
-	return groups[start*GROUP_LENGTH : (groupCount-start)*GROUP_LENGTH]
+	return groups[start*groupLength : (groupCount-start)*groupLength]
 }
 
-func (names *UCharNames) getGroupOffset(group []uint16) uint32 {
-	return (uint32(group[GROUP_OFFSET_HIGH]) << 16) | uint32(group[GROUP_OFFSET_LOW])
+func (names *unames) getGroupOffset(group []uint16) uint32 {
+	return (uint32(group[groupOffsetHigh]) << 16) | uint32(group[groupOffsetLow])
 }
 
-func (names *UCharNames) enumGroupNames(group []uint16, start, end rune, otherName string, choice NameChoice) rune {
-	var offsets [LINES_PER_GROUP + 2]uint16
-	var lengths [LINES_PER_GROUP + 2]uint16
+func (names *unames) enumGroupNames(group []uint16, start, end rune, otherName string, choice NameChoice) rune {
+	var offsets [linesPerGroup + 2]uint16
+	var lengths [linesPerGroup + 2]uint16
 
 	s := names.getGroupName(group)
 	s = expandGroupLengths(s, offsets[:0], lengths[:0])
 
 	for start < end {
-		name := s[offsets[start&GROUP_MASK]:]
-		nameLen := lengths[start&GROUP_MASK]
+		name := s[offsets[start&groupMask]:]
+		nameLen := lengths[start&groupMask]
 		if names.compareName(name[:nameLen], choice, otherName) {
 			return start
 		}
@@ -373,7 +368,7 @@ func expandGroupLengths(s []uint8, offsets []uint16, lengths []uint16) []uint8 {
 	var lengthByte uint8
 
 	/* all 32 lengths must be read to get the offset of the first group string */
-	for i < LINES_PER_GROUP {
+	for i < linesPerGroup {
 		lengthByte = s[0]
 		s = s[1:]
 
@@ -418,7 +413,7 @@ func expandGroupLengths(s []uint8, offsets []uint16, lengths []uint16) []uint8 {
 	return s
 }
 
-func (names *UCharNames) compareName(name []byte, choice NameChoice, otherName string) bool {
+func (names *unames) compareName(name []byte, choice NameChoice, otherName string) bool {
 	tokens := names.tokens
 
 	tokenCount := tokens[0]
@@ -452,7 +447,7 @@ func (names *UCharNames) compareName(name []byte, choice NameChoice, otherName s
 					}
 					otherName = otherName[1:]
 				} else {
-					if len(otherName) == otherNameLen && choice == U_EXTENDED_CHAR_NAME {
+					if len(otherName) == otherNameLen && choice == ExtendedCharName {
 						if ';' >= tokenCount || int16(tokens[';']) == -1 {
 							continue
 						}

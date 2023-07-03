@@ -39,16 +39,10 @@ import (
 )
 
 var inclusionsMu sync.Mutex
-var inclusionsForSource = make(map[PropertySource]*uset.UnicodeSet)
+var inclusionsForSource = make(map[propertySource]*uset.UnicodeSet)
 var inclusionsForProperty = make(map[Property]*uset.UnicodeSet)
 
-func GetInclusionsForBinaryProperty(prop Property) (*uset.UnicodeSet, error) {
-	inclusionsMu.Lock()
-	defer inclusionsMu.Unlock()
-	return getInclusionsForBinaryProperty(prop)
-}
-
-func getInclusionsForSource(src PropertySource) (*uset.UnicodeSet, error) {
+func getInclusionsForSource(src propertySource) (*uset.UnicodeSet, error) {
 	if inc, ok := inclusionsForSource[src]; ok {
 		return inc, nil
 	}
@@ -56,57 +50,59 @@ func getInclusionsForSource(src PropertySource) (*uset.UnicodeSet, error) {
 	u := uset.New()
 
 	switch src {
-	case UPROPS_SRC_CHAR:
+	case srcChar:
 		uchar.AddPropertyStarts(u)
-	case UPROPS_SRC_PROPSVEC:
+	case srcPropsvec:
 		uchar.VecAddPropertyStarts(u)
-	case UPROPS_SRC_CHAR_AND_PROPSVEC:
+	case srcCharAndPropsvec:
 		uchar.AddPropertyStarts(u)
 		uchar.VecAddPropertyStarts(u)
-	case UPROPS_SRC_CASE_AND_NORM:
+	case srcCaseAndNorm:
 		normalizer.Nfc().AddPropertyStarts(u)
 		ucase.AddPropertyStarts(u)
-	case UPROPS_SRC_NFC:
+	case srcNfc:
 		normalizer.Nfc().AddPropertyStarts(u)
-	case UPROPS_SRC_NFKC:
+	case srcNfkc:
 		normalizer.Nfkc().AddPropertyStarts(u)
-	case UPROPS_SRC_NFKC_CF:
-		return nil, uerror.UnsupportedError
-	case UPROPS_SRC_NFC_CANON_ITER:
-		return nil, uerror.UnsupportedError
-	case UPROPS_SRC_CASE:
+	case srcNfkcCf:
+		return nil, uerror.ErrUnsupported
+	case srcNfcCanonIter:
+		return nil, uerror.ErrUnsupported
+	case srcCase:
 		ucase.AddPropertyStarts(u)
-	case UPROPS_SRC_BIDI:
+	case srcBidi:
 		ubidi.AddPropertyStarts(u)
-	case UPROPS_SRC_INPC, UPROPS_SRC_INSC, UPROPS_SRC_VO:
+	case srcInpc, srcInsc, srcVo:
 		AddULayoutPropertyStarts(src, u)
 	default:
-		return nil, uerror.UnsupportedError
+		return nil, uerror.ErrUnsupported
 	}
 
 	inclusionsForSource[src] = u
 	return u, nil
 }
 
-func getInclusionsForProperty(prop Property) (*uset.UnicodeSet, error) {
-	if UCHAR_INT_START <= prop && prop < UCHAR_INT_LIMIT {
+func getInclusionsForPropertyLocked(prop Property) (*uset.UnicodeSet, error) {
+	if UCharIntStart <= prop && prop < uCharIntLimit {
 		return getInclusionsForIntProperty(prop)
 	}
-	return getInclusionsForSource(prop.Source())
+	return getInclusionsForSource(prop.source())
 }
 
-func GetInclusionsForProperty(prop Property) (*uset.UnicodeSet, error) {
+func getInclusionsForProperty(prop Property) (*uset.UnicodeSet, error) {
 	inclusionsMu.Lock()
 	defer inclusionsMu.Unlock()
-	return getInclusionsForProperty(prop)
+	return getInclusionsForPropertyLocked(prop)
 }
 
 func getInclusionsForBinaryProperty(prop Property) (*uset.UnicodeSet, error) {
+	inclusionsMu.Lock()
+	defer inclusionsMu.Unlock()
 	if inc, ok := inclusionsForProperty[prop]; ok {
 		return inc, nil
 	}
 
-	incl, err := getInclusionsForProperty(prop)
+	incl, err := getInclusionsForPropertyLocked(prop)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +125,7 @@ func getInclusionsForBinaryProperty(prop Property) (*uset.UnicodeSet, error) {
 		}
 	}
 	if startHasProperty >= 0 {
-		set.AddRuneRange(startHasProperty, uset.MAX_VALUE)
+		set.AddRuneRange(startHasProperty, uset.MaxValue)
 	}
 
 	inclusionsForProperty[prop] = set
@@ -141,7 +137,7 @@ func getInclusionsForIntProperty(prop Property) (*uset.UnicodeSet, error) {
 		return inc, nil
 	}
 
-	src := prop.Source()
+	src := prop.source()
 	incl, err := getInclusionsForSource(src)
 	if err != nil {
 		return nil, err
@@ -156,7 +152,7 @@ func getInclusionsForIntProperty(prop Property) (*uset.UnicodeSet, error) {
 	for i := 0; i < numRanges; i++ {
 		rangeEnd := incl.RangeEnd(i)
 		for c := incl.RangeStart(i); c <= rangeEnd; c++ {
-			value := GetIntPropertyValue(c, prop)
+			value := getIntPropertyValue(c, prop)
 			if value != prevValue {
 				intPropIncl.AddRune(c)
 				prevValue = value
@@ -170,25 +166,25 @@ func getInclusionsForIntProperty(prop Property) (*uset.UnicodeSet, error) {
 
 func ApplyIntPropertyValue(u *uset.UnicodeSet, prop Property, value int32) error {
 	switch {
-	case prop == UCHAR_GENERAL_CATEGORY_MASK:
-		inclusions, err := GetInclusionsForProperty(prop)
+	case prop == UCharGeneralCategoryMask:
+		inclusions, err := getInclusionsForProperty(prop)
 		if err != nil {
 			return err
 		}
 		u.ApplyFilter(inclusions, func(ch rune) bool {
-			return (U_MASK(uchar.CharType(ch)) & uint32(value)) != 0
+			return (uMask(uchar.CharType(ch)) & uint32(value)) != 0
 		})
-	case prop == UCHAR_SCRIPT_EXTENSIONS:
-		inclusions, err := GetInclusionsForProperty(prop)
+	case prop == UCharScriptExtensions:
+		inclusions, err := getInclusionsForProperty(prop)
 		if err != nil {
 			return err
 		}
 		u.ApplyFilter(inclusions, func(ch rune) bool {
-			return UScriptHasScript(ch, UScriptCode(value))
+			return uscriptHasScript(ch, code(value))
 		})
-	case 0 <= prop && prop < UCHAR_BINARY_LIMIT:
+	case 0 <= prop && prop < uCharBinaryLimit:
 		if value == 0 || value == 1 {
-			set, err := GetInclusionsForBinaryProperty(prop)
+			set, err := getInclusionsForBinaryProperty(prop)
 			if err != nil {
 				return err
 			}
@@ -200,16 +196,16 @@ func ApplyIntPropertyValue(u *uset.UnicodeSet, prop Property, value int32) error
 			u.Clear()
 		}
 
-	case UCHAR_INT_START <= prop && prop < UCHAR_INT_LIMIT:
-		inclusions, err := GetInclusionsForProperty(prop)
+	case UCharIntStart <= prop && prop < uCharIntLimit:
+		inclusions, err := getInclusionsForProperty(prop)
 		if err != nil {
 			return err
 		}
 		u.ApplyFilter(inclusions, func(ch rune) bool {
-			return GetIntPropertyValue(ch, prop) == value
+			return getIntPropertyValue(ch, prop) == value
 		})
 	default:
-		return uerror.UnsupportedError
+		return uerror.ErrUnsupported
 	}
 	return nil
 }
@@ -228,7 +224,7 @@ func mungeCharName(charname string) string {
 
 func ApplyPropertyPattern(u *uset.UnicodeSet, pat string) error {
 	if len(pat) < 5 {
-		return uerror.IllegalArgumentError
+		return uerror.ErrIllegalArgument
 	}
 
 	var posix, isName, invert bool
@@ -246,30 +242,30 @@ func ApplyPropertyPattern(u *uset.UnicodeSet, pat string) error {
 		isName = c == 'N'
 		pat = pattern.SkipWhitespace(pat[2:])
 		if len(pat) == 0 || pat[0] != '{' {
-			return uerror.IllegalArgumentError
+			return uerror.ErrIllegalArgument
 		}
 		pat = pat[1:]
 	} else {
-		return uerror.IllegalArgumentError
+		return uerror.ErrIllegalArgument
 	}
 
-	var close int
+	var closePos int
 	if posix {
-		close = strings.Index(pat, ":]")
+		closePos = strings.Index(pat, ":]")
 	} else {
-		close = strings.IndexByte(pat, '}')
+		closePos = strings.IndexByte(pat, '}')
 	}
-	if close < 0 {
-		return uerror.IllegalArgumentError
+	if closePos < 0 {
+		return uerror.ErrIllegalArgument
 	}
 
 	equals := strings.IndexByte(pat, '=')
 	var propName, valueName string
-	if equals >= 0 && equals < close && !isName {
+	if equals >= 0 && equals < closePos && !isName {
 		propName = pat[:equals]
-		valueName = pat[equals+1 : close]
+		valueName = pat[equals+1 : closePos]
 	} else {
-		propName = pat[:close]
+		propName = pat[:closePos]
 		if isName {
 			valueName = propName
 			propName = "na"
@@ -303,40 +299,40 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 	var invert bool
 
 	if len(value) > 0 {
-		p = GetPropertyEnum(prop)
+		p = getPropertyEnum(prop)
 		if p == -1 {
-			return uerror.IllegalArgumentError
+			return uerror.ErrIllegalArgument
 		}
-		if p == UCHAR_GENERAL_CATEGORY {
-			p = UCHAR_GENERAL_CATEGORY_MASK
+		if p == UCharGeneralCategory {
+			p = UCharGeneralCategoryMask
 		}
 
-		if (p >= UCHAR_BINARY_START && p < UCHAR_BINARY_LIMIT) ||
-			(p >= UCHAR_INT_START && p < UCHAR_INT_LIMIT) ||
-			(p >= UCHAR_MASK_START && p < UCHAR_MASK_LIMIT) {
-			v = GetPropertyValueEnum(p, value)
+		if (p >= UCharBinaryStart && p < uCharBinaryLimit) ||
+			(p >= UCharIntStart && p < uCharIntLimit) ||
+			(p >= UCharMaskStart && p < uCharMaskLimit) {
+			v = getPropertyValueEnum(p, value)
 			if v == -1 {
 				// Handle numeric CCC
-				if p == UCHAR_CANONICAL_COMBINING_CLASS ||
-					p == UCHAR_TRAIL_CANONICAL_COMBINING_CLASS ||
-					p == UCHAR_LEAD_CANONICAL_COMBINING_CLASS {
+				if p == UCharCanonicalCombiningClass ||
+					p == UCharTrailCanonicalCombiningClass ||
+					p == UCharLeadCanonicalCombiningClass {
 					val, err := strconv.ParseUint(value, 10, 8)
 					if err != nil {
-						return uerror.IllegalArgumentError
+						return uerror.ErrIllegalArgument
 					}
 					v = int32(val)
 				} else {
-					return uerror.IllegalArgumentError
+					return uerror.ErrIllegalArgument
 				}
 			}
 		} else {
 			switch p {
-			case UCHAR_NUMERIC_VALUE:
+			case UCharNumericValue:
 				val, err := strconv.ParseFloat(value, 64)
 				if err != nil {
-					return uerror.IllegalArgumentError
+					return uerror.ErrIllegalArgument
 				}
-				incl, err := GetInclusionsForProperty(p)
+				incl, err := getInclusionsForProperty(p)
 				if err != nil {
 					return err
 				}
@@ -344,23 +340,23 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 					return uchar.NumericValue(ch) == val
 				})
 				return nil
-			case UCHAR_NAME:
+			case UCharName:
 				// Must munge name, since u_charFromName() does not do
 				// 'loose' matching.
 				charName := mungeCharName(value)
-				ch := unames.CharForName(unames.U_EXTENDED_CHAR_NAME, charName)
+				ch := unames.CharForName(unames.ExtendedCharName, charName)
 				if ch < 0 {
-					return uerror.IllegalArgumentError
+					return uerror.ErrIllegalArgument
 				}
 				u.Clear()
 				u.AddRune(ch)
 				return nil
-			case UCHAR_AGE:
+			case UCharAge:
 				// Must munge name, since u_versionFromString() does not do
 				// 'loose' matching.
 				charName := mungeCharName(value)
 				version := uchar.VersionFromString(charName)
-				incl, err := GetInclusionsForProperty(p)
+				incl, err := getInclusionsForProperty(p)
 				if err != nil {
 					return err
 				}
@@ -368,44 +364,44 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 					return uchar.CharAge(ch) == version
 				})
 				return nil
-			case UCHAR_SCRIPT_EXTENSIONS:
-				v = GetPropertyValueEnum(UCHAR_SCRIPT, value)
+			case UCharScriptExtensions:
+				v = getPropertyValueEnum(UCharScript, value)
 				if v == -1 {
-					return uerror.IllegalArgumentError
+					return uerror.ErrIllegalArgument
 				}
 			default:
 				// p is a non-binary, non-enumerated property that we
 				// don't support (yet).
-				return uerror.IllegalArgumentError
+				return uerror.ErrIllegalArgument
 			}
 		}
 	} else {
 		// value is empty.  Interpret as General Category, Script, or
 		// Binary property.
-		p = UCHAR_GENERAL_CATEGORY_MASK
-		v = GetPropertyValueEnum(p, prop)
+		p = UCharGeneralCategoryMask
+		v = getPropertyValueEnum(p, prop)
 		if v == -1 {
-			p = UCHAR_SCRIPT
-			v = GetPropertyValueEnum(p, prop)
+			p = UCharScript
+			v = getPropertyValueEnum(p, prop)
 			if v == -1 {
-				p = GetPropertyEnum(prop)
-				if p >= UCHAR_BINARY_START && p < UCHAR_BINARY_LIMIT {
+				p = getPropertyEnum(prop)
+				if p >= UCharBinaryStart && p < uCharBinaryLimit {
 					v = 1
-				} else if 0 == ComparePropertyNames("ANY", prop) {
+				} else if 0 == comparePropertyNames("ANY", prop) {
 					u.Clear()
-					u.AddRuneRange(uset.MIN_VALUE, uset.MAX_VALUE)
+					u.AddRuneRange(uset.MinValue, uset.MaxValue)
 					return nil
-				} else if 0 == ComparePropertyNames("ASCII", prop) {
+				} else if 0 == comparePropertyNames("ASCII", prop) {
 					u.Clear()
 					u.AddRuneRange(0, 0x7F)
 					return nil
-				} else if 0 == ComparePropertyNames("Assigned", prop) {
+				} else if 0 == comparePropertyNames("Assigned", prop) {
 					// [:Assigned:]=[:^Cn:]
-					p = UCHAR_GENERAL_CATEGORY_MASK
-					v = int32(uchar.U_GC_CN_MASK)
+					p = UCharGeneralCategoryMask
+					v = int32(uchar.GcCnMask)
 					invert = true
 				} else {
-					return uerror.IllegalArgumentError
+					return uerror.ErrIllegalArgument
 				}
 			}
 		}
@@ -421,14 +417,14 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 	return nil
 }
 
-func AddULayoutPropertyStarts(src PropertySource, u *uset.UnicodeSet) {
+func AddULayoutPropertyStarts(src propertySource, u *uset.UnicodeSet) {
 	var trie *utrie.UcpTrie
 	switch src {
-	case UPROPS_SRC_INPC:
+	case srcInpc:
 		trie = ulayout.InpcTrie()
-	case UPROPS_SRC_INSC:
+	case srcInsc:
 		trie = ulayout.InscTrie()
-	case UPROPS_SRC_VO:
+	case srcVo:
 		trie = ulayout.VoTrie()
 	default:
 		panic("unreachable")
@@ -437,7 +433,7 @@ func AddULayoutPropertyStarts(src PropertySource, u *uset.UnicodeSet) {
 	// Add the start code point of each same-value range of the trie.
 	var start, end rune
 	for {
-		end, _ = trie.GetRange(start, utrie.UCPMAP_RANGE_NORMAL, 0, nil)
+		end, _ = trie.GetRange(start, utrie.UcpMapRangeNormal, 0, nil)
 		if end < 0 {
 			break
 		}
@@ -448,7 +444,7 @@ func AddULayoutPropertyStarts(src PropertySource, u *uset.UnicodeSet) {
 
 func AddCategory(u *uset.UnicodeSet, mask uint32) error {
 	set := uset.New()
-	err := ApplyIntPropertyValue(set, UCHAR_GENERAL_CATEGORY_MASK, int32(mask))
+	err := ApplyIntPropertyValue(set, UCharGeneralCategoryMask, int32(mask))
 	if err != nil {
 		return err
 	}
@@ -461,8 +457,8 @@ func NewUnicodeSetFomPattern(pattern string, flags uset.USet) (*uset.UnicodeSet,
 	if err := ApplyPropertyPattern(u, pattern); err != nil {
 		return nil, err
 	}
-	if flags&uset.USET_CASE_INSENSITIVE != 0 {
-		u.CloseOver(uset.USET_CASE_INSENSITIVE)
+	if flags&uset.CaseInsensitive != 0 {
+		u.CloseOver(uset.CaseInsensitive)
 	}
 	return u, nil
 }

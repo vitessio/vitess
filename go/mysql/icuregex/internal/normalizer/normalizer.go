@@ -22,7 +22,7 @@ limitations under the License.
 package normalizer
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-type normalizer struct {
+type Normalizer struct {
 	minDecompNoCP    rune
 	minCompNoMaybeCP rune
 	minLcccCP        rune
@@ -55,58 +55,58 @@ type normalizer struct {
 	smallFCD             []uint8  // [0x100] one bit per 32 BMP code points, set if any FCD!=0
 }
 
-var nfc *normalizer
-var nfkc *normalizer
+var nfc *Normalizer
+var nfkc *Normalizer
 
 var normalizerOnce sync.Once
 
 func loadNormalizer() {
 	normalizerOnce.Do(func() {
-		nfc = &normalizer{}
-		if err := nfc.load(icudata.NFC); err != nil {
+		nfc = &Normalizer{}
+		if err := nfc.load(icudata.Nfc); err != nil {
 			panic(err)
 		}
 
-		nfkc = &normalizer{}
-		if err := nfkc.load(icudata.NFKC); err != nil {
+		nfkc = &Normalizer{}
+		if err := nfkc.load(icudata.Nfkc); err != nil {
 			panic(err)
 		}
 	})
 }
 
-const IX_NORM_TRIE_OFFSET = 0
-const IX_EXTRA_DATA_OFFSET = 1
-const IX_SMALL_FCD_OFFSET = 2
-const IX_RESERVED3_OFFSET = 3
-const IX_TOTAL_SIZE = 7
+const ixNormTrieOffset = 0
+const ixExtraDataOffset = 1
+const ixSmallFcdOffset = 2
+const ixReserved3Offset = 3
+const ixTotalSize = 7
 
-const IX_MIN_DECOMP_NO_CP = 8
-const IX_MIN_COMP_NO_MAYBE_CP = 9
+const ixMinDecompNoCp = 8
+const ixMinCompNoMaybeCp = 9
 
 /** Mappings & compositions in [minYesNo..minYesNoMappingsOnly[. */
-const IX_MIN_YES_NO = 10
+const ixMinYesNo = 10
 
 /** Mappings are comp-normalized. */
-const IX_MIN_NO_NO = 11
-const IX_LIMIT_NO_NO = 12
-const IX_MIN_MAYBE_YES = 13
+const ixMinNoNo = 11
+const ixLimitNoNo = 12
+const ixMinMaybeYes = 13
 
 /** Mappings only in [minYesNoMappingsOnly..minNoNo[. */
-const IX_MIN_YES_NO_MAPPINGS_ONLY = 14
+const ixMinYesNoMappingsOnly = 14
 
 /** Mappings are not comp-normalized but have a comp boundary before. */
-const IX_MIN_NO_NO_COMP_BOUNDARY_BEFORE = 15
+const ixMinNoNoCompBoundaryBefore = 15
 
 /** Mappings do not have a comp boundary before. */
-const IX_MIN_NO_NO_COMP_NO_MAYBE_CC = 16
+const ixMinNoNoCompNoMaybeCc = 16
 
 /** Mappings to the empty string. */
-const IX_MIN_NO_NO_EMPTY = 17
+const ixMinNoNoEmpty = 17
 
-const IX_MIN_LCCC_CP = 18
-const IX_COUNT = 20
+const ixMinLcccCp = 18
+const ixCount = 20
 
-func (n *normalizer) load(data []byte) error {
+func (n *Normalizer) load(data []byte) error {
 	bytes := udata.NewBytes(data)
 
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
@@ -124,8 +124,8 @@ func (n *normalizer) load(data []byte) error {
 	}
 
 	indexesLength := int32(bytes.Uint32()) / 4
-	if indexesLength <= IX_MIN_LCCC_CP {
-		return fmt.Errorf("normalizer2 data: not enough indexes")
+	if indexesLength <= ixMinLcccCp {
+		return errors.New("normalizer2 data: not enough indexes")
 	}
 	indexes := make([]int32, indexesLength)
 	indexes[0] = indexesLength * 4
@@ -133,23 +133,23 @@ func (n *normalizer) load(data []byte) error {
 		indexes[i] = bytes.Int32()
 	}
 
-	n.minDecompNoCP = indexes[IX_MIN_DECOMP_NO_CP]
-	n.minCompNoMaybeCP = indexes[IX_MIN_COMP_NO_MAYBE_CP]
-	n.minLcccCP = indexes[IX_MIN_LCCC_CP]
+	n.minDecompNoCP = indexes[ixMinDecompNoCp]
+	n.minCompNoMaybeCP = indexes[ixMinCompNoMaybeCp]
+	n.minLcccCP = indexes[ixMinLcccCp]
 
-	n.minYesNo = uint16(indexes[IX_MIN_YES_NO])
-	n.minYesNoMappingsOnly = uint16(indexes[IX_MIN_YES_NO_MAPPINGS_ONLY])
-	n.minNoNo = uint16(indexes[IX_MIN_NO_NO])
-	n.minNoNoCompBoundaryBefore = uint16(indexes[IX_MIN_NO_NO_COMP_BOUNDARY_BEFORE])
-	n.minNoNoCompNoMaybeCC = uint16(indexes[IX_MIN_NO_NO_COMP_NO_MAYBE_CC])
-	n.minNoNoEmpty = uint16(indexes[IX_MIN_NO_NO_EMPTY])
-	n.limitNoNo = uint16(indexes[IX_LIMIT_NO_NO])
-	n.minMaybeYes = uint16(indexes[IX_MIN_MAYBE_YES])
+	n.minYesNo = uint16(indexes[ixMinYesNo])
+	n.minYesNoMappingsOnly = uint16(indexes[ixMinYesNoMappingsOnly])
+	n.minNoNo = uint16(indexes[ixMinNoNo])
+	n.minNoNoCompBoundaryBefore = uint16(indexes[ixMinNoNoCompBoundaryBefore])
+	n.minNoNoCompNoMaybeCC = uint16(indexes[ixMinNoNoCompNoMaybeCc])
+	n.minNoNoEmpty = uint16(indexes[ixMinNoNoEmpty])
+	n.limitNoNo = uint16(indexes[ixLimitNoNo])
+	n.minMaybeYes = uint16(indexes[ixMinMaybeYes])
 
-	n.centerNoNoDelta = uint16(indexes[IX_MIN_MAYBE_YES]>>DELTA_SHIFT) - MAX_DELTA - 1
+	n.centerNoNoDelta = uint16(indexes[ixMinMaybeYes]>>deltaShift) - maxDelta - 1
 
-	offset := indexes[IX_NORM_TRIE_OFFSET]
-	nextOffset := indexes[IX_EXTRA_DATA_OFFSET]
+	offset := indexes[ixNormTrieOffset]
+	nextOffset := indexes[ixExtraDataOffset]
 	triePosition := bytes.Position()
 
 	n.normTrie, err = utrie.UcpTrieFromBytes(bytes)
@@ -159,17 +159,17 @@ func (n *normalizer) load(data []byte) error {
 
 	trieLength := bytes.Position() - triePosition
 	if trieLength > nextOffset-offset {
-		return fmt.Errorf("normalizer2 data: not enough bytes for normTrie")
+		return errors.New("normalizer2 data: not enough bytes for normTrie")
 	}
 	bytes.Skip((nextOffset - offset) - trieLength) // skip padding after trie bytes
 
 	// Read the composition and mapping data.
 	offset = nextOffset
-	nextOffset = indexes[IX_SMALL_FCD_OFFSET]
+	nextOffset = indexes[ixSmallFcdOffset]
 	numChars := (nextOffset - offset) / 2
 	if numChars != 0 {
 		n.maybeYesCompositions = bytes.Uint16Slice(numChars)
-		n.extraData = n.maybeYesCompositions[((MIN_NORMAL_MAYBE_YES - n.minMaybeYes) >> OFFSET_SHIFT):]
+		n.extraData = n.maybeYesCompositions[((minNormalMaybeYes - n.minMaybeYes) >> offsetShift):]
 	}
 
 	// smallFCD: new in formatVersion 2
@@ -177,26 +177,26 @@ func (n *normalizer) load(data []byte) error {
 	return nil
 }
 
-func Nfc() *normalizer {
+func Nfc() *Normalizer {
 	loadNormalizer()
 	return nfc
 }
 
-func Nfkc() *normalizer {
+func Nfkc() *Normalizer {
 	loadNormalizer()
 	return nfkc
 }
 
-func (n *normalizer) AddPropertyStarts(u *uset.UnicodeSet) {
+func (n *Normalizer) AddPropertyStarts(u *uset.UnicodeSet) {
 	var start, end rune
 	var value uint32
 	for {
-		end, value = nfc.normTrie.GetRange(start, utrie.UCPMAP_RANGE_FIXED_LEAD_SURROGATES, INERT, nil)
+		end, value = nfc.normTrie.GetRange(start, utrie.UcpMapRangeFixedLeadSurrogates, inert, nil)
 		if end < 0 {
 			break
 		}
 		u.AddRune(start)
-		if start != end && n.isAlgorithmicNoNo(uint16(value)) && (value&DELTA_TCCC_MASK) > DELTA_TCCC_1 {
+		if start != end && n.isAlgorithmicNoNo(uint16(value)) && (value&deltaTcccMask) > deltaTccc1 {
 			// Range of code points with same-norm16-value algorithmic decompositions.
 			// They might have different non-zero FCD16 values.
 			prevFCD16 := n.GetFCD16(start)
@@ -216,18 +216,18 @@ func (n *normalizer) AddPropertyStarts(u *uset.UnicodeSet) {
 	}
 
 	// add Hangul LV syllables and LV+1 because of skippables
-	for c := HANGUL_BASE; c < HANGUL_LIMIT; c += JAMO_T_COUNT {
+	for c := hangulBase; c < hangulLimit; c += jamoTCount {
 		u.AddRune(c)
 		u.AddRune(c + 1)
 	}
-	u.AddRune(HANGUL_LIMIT)
+	u.AddRune(hangulLimit)
 }
 
-func (n *normalizer) isAlgorithmicNoNo(norm16 uint16) bool {
+func (n *Normalizer) isAlgorithmicNoNo(norm16 uint16) bool {
 	return n.limitNoNo <= norm16 && norm16 < n.minMaybeYes
 }
 
-func (n *normalizer) GetFCD16(c rune) uint16 {
+func (n *Normalizer) GetFCD16(c rune) uint16 {
 	if c < n.minDecompNoCP {
 		return 0
 	} else if c <= 0xffff {
@@ -238,7 +238,7 @@ func (n *normalizer) GetFCD16(c rune) uint16 {
 	return n.getFCD16FromNormData(c)
 }
 
-func (n *normalizer) singleLeadMightHaveNonZeroFCD16(lead rune) bool {
+func (n *Normalizer) singleLeadMightHaveNonZeroFCD16(lead rune) bool {
 	// 0<=lead<=0xffff
 	bits := n.smallFCD[lead>>8]
 	if bits == 0 {
@@ -247,19 +247,19 @@ func (n *normalizer) singleLeadMightHaveNonZeroFCD16(lead rune) bool {
 	return ((bits >> ((lead >> 5) & 7)) & 1) != 0
 }
 
-func (n *normalizer) getFCD16FromNormData(c rune) uint16 {
-	norm16 := n.GetNorm16(c)
+func (n *Normalizer) getFCD16FromNormData(c rune) uint16 {
+	norm16 := n.getNorm16(c)
 	if norm16 >= n.limitNoNo {
-		if norm16 >= MIN_NORMAL_MAYBE_YES {
+		if norm16 >= minNormalMaybeYes {
 			// combining mark
 			norm16 = uint16(n.getCCFromNormalYesOrMaybe(norm16))
 			return norm16 | (norm16 << 8)
 		} else if norm16 >= n.minMaybeYes {
 			return 0
 		} else { // isDecompNoAlgorithmic(norm16)
-			deltaTrailCC := norm16 & DELTA_TCCC_MASK
-			if deltaTrailCC <= DELTA_TCCC_1 {
-				return deltaTrailCC >> OFFSET_SHIFT
+			deltaTrailCC := norm16 & deltaTcccMask
+			if deltaTrailCC <= deltaTccc1 {
+				return deltaTrailCC >> offsetShift
 			}
 			// Maps to an isCompYesAndZeroCC.
 			c = n.mapAlgorithmic(c, norm16)
@@ -274,119 +274,120 @@ func (n *normalizer) getFCD16FromNormData(c rune) uint16 {
 	// c decomposes, get everything from the variable-length extra data
 	mapping := n.getMapping(norm16)
 	firstUnit := mapping[1]
-	if firstUnit&MAPPING_HAS_CCC_LCCC_WORD != 0 {
+	if firstUnit&mappingHasCccLcccWord != 0 {
 		norm16 |= mapping[0] & 0xff00
 	}
 	return norm16
 }
 
-func (n *normalizer) getMapping(norm16 uint16) []uint16 {
-	return n.extraData[(norm16>>OFFSET_SHIFT)-1:]
+func (n *Normalizer) getMapping(norm16 uint16) []uint16 {
+	return n.extraData[(norm16>>offsetShift)-1:]
 }
 
-func (n *normalizer) GetNorm16(c rune) uint16 {
+func (n *Normalizer) getNorm16(c rune) uint16 {
 	if utf16.IsLead(c) {
-		return INERT
+		return inert
 	}
 	return n.getRawNorm16(c)
 }
 
-func (n *normalizer) getRawNorm16(c rune) uint16 {
+func (n *Normalizer) getRawNorm16(c rune) uint16 {
 	return uint16(n.normTrie.Get(c))
 }
 
-func (n *normalizer) getCCFromNormalYesOrMaybe(norm16 uint16) uint8 {
-	return uint8(norm16 >> OFFSET_SHIFT)
+func (n *Normalizer) getCCFromNormalYesOrMaybe(norm16 uint16) uint8 {
+	return uint8(norm16 >> offsetShift)
 }
 
-func (n *normalizer) mapAlgorithmic(c rune, norm16 uint16) rune {
-	return c + rune(norm16>>DELTA_SHIFT) - rune(n.centerNoNoDelta)
+func (n *Normalizer) mapAlgorithmic(c rune, norm16 uint16) rune {
+	return c + rune(norm16>>deltaShift) - rune(n.centerNoNoDelta)
 }
 
-func (n *normalizer) isHangulLV(norm16 uint16) bool {
+func (n *Normalizer) isHangulLV(norm16 uint16) bool {
 	return norm16 == n.minYesNo
 }
 
-func (n *normalizer) isHangulLVT(norm16 uint16) bool {
+func (n *Normalizer) isHangulLVT(norm16 uint16) bool {
 	return norm16 == n.hangulLVT()
 }
 
-func (n *normalizer) hangulLVT() uint16 {
-	return n.minYesNoMappingsOnly | HAS_COMP_BOUNDARY_AFTER
+func (n *Normalizer) hangulLVT() uint16 {
+	return n.minYesNoMappingsOnly | hasCompBoundaryAfter
 }
 
-func (n *normalizer) getComposeQuickCheck(c rune) UNormalizationCheckResult {
-	return n.getCompQuickCheck(n.GetNorm16(c))
+func (n *Normalizer) getComposeQuickCheck(c rune) CheckResult {
+	return n.getCompQuickCheck(n.getNorm16(c))
 }
 
-func (n *normalizer) getDecomposeQuickCheck(c rune) UNormalizationCheckResult {
-	if n.isDecompYes(n.GetNorm16(c)) {
-		return UNORM_YES
+func (n *Normalizer) getDecomposeQuickCheck(c rune) CheckResult {
+	if n.isDecompYes(n.getNorm16(c)) {
+		return Yes
 	}
-	return UNORM_NO
+	return No
 }
 
-func QuickCheck(c rune, mode UNormalizationMode) UNormalizationCheckResult {
-	if mode <= UNORM_NONE || UNORM_FCD <= mode {
-		return UNORM_YES
+func QuickCheck(c rune, mode Mode) CheckResult {
+	if mode <= NormNone || NormFcd <= mode {
+		return Yes
 	}
 	switch mode {
-	case UNORM_NFC:
+	case NormNfc:
 		return Nfc().getComposeQuickCheck(c)
-	case UNORM_NFD:
+	case NormNfd:
 		return Nfc().getDecomposeQuickCheck(c)
-	case UNORM_NFKC:
+	case NormNfkc:
 		return Nfkc().getComposeQuickCheck(c)
-	case UNORM_NFKD:
+	case NormNfkd:
 		return Nfkc().getDecomposeQuickCheck(c)
 	default:
-		return UNORM_MAYBE
+		return Maybe
 	}
 }
 
-func IsInert(c rune, mode UNormalizationMode) bool {
+func IsInert(c rune, mode Mode) bool {
 	switch mode {
-	case UNORM_NFC:
+	case NormNfc:
 		return Nfc().isCompInert(c)
-	case UNORM_NFD:
+	case NormNfd:
 		return Nfc().isDecompInert(c)
-	case UNORM_NFKC:
+	case NormNfkc:
 		return Nfkc().isCompInert(c)
-	case UNORM_NFKD:
+	case NormNfkd:
 		return Nfkc().isDecompInert(c)
 	default:
 		return true
 	}
 }
 
-func (n *normalizer) isDecompYes(norm16 uint16) bool {
+func (n *Normalizer) isDecompYes(norm16 uint16) bool {
 	return norm16 < n.minYesNo || n.minMaybeYes <= norm16
 }
 
-func (n *normalizer) getCompQuickCheck(norm16 uint16) UNormalizationCheckResult {
-	if norm16 < n.minNoNo || MIN_YES_YES_WITH_CC <= norm16 {
-		return UNORM_YES
+func (n *Normalizer) getCompQuickCheck(norm16 uint16) CheckResult {
+	if norm16 < n.minNoNo || minYesYesWithCC <= norm16 {
+		return Yes
 	} else if n.minMaybeYes <= norm16 {
-		return UNORM_MAYBE
+		return Maybe
 	} else {
-		return UNORM_NO
+		return No
 	}
 }
 
-func (n *normalizer) isMaybeOrNonZeroCC(norm16 uint16) bool {
+func (n *Normalizer) isMaybeOrNonZeroCC(norm16 uint16) bool {
 	return norm16 >= n.minMaybeYes
 }
 
-func (n *normalizer) isDecompNoAlgorithmic(norm16 uint16) bool {
+func (n *Normalizer) isDecompNoAlgorithmic(norm16 uint16) bool {
 	return norm16 >= n.limitNoNo
 }
 
-func (n *normalizer) IsCompNo(norm16 uint16) bool {
+func (n *Normalizer) IsCompNo(c rune) bool {
+	norm16 := n.getNorm16(c)
 	return n.minNoNo <= norm16 && norm16 < n.minMaybeYes
 }
 
-func (n *normalizer) Decompose(c rune) []rune {
-	norm16 := n.GetNorm16(c)
+func (n *Normalizer) Decompose(c rune) []rune {
+	norm16 := n.getNorm16(c)
 	if c < n.minDecompNoCP || n.isMaybeOrNonZeroCC(norm16) {
 		// c does not decompose
 		return nil
@@ -414,7 +415,7 @@ func (n *normalizer) Decompose(c rune) []rune {
 	}
 	// c decomposes, get everything from the variable-length extra data
 	mapping := n.getMapping(norm16)
-	length := mapping[1] & MAPPING_LENGTH_MASK
+	length := mapping[1] & mappingLengthMask
 	mapping = mapping[2 : 2+length]
 
 	for len(mapping) > 0 {
@@ -426,43 +427,43 @@ func (n *normalizer) Decompose(c rune) []rune {
 }
 
 func hangulDecompose(c rune) []uint16 {
-	c -= HANGUL_BASE
-	c2 := c % JAMO_T_COUNT
-	c /= JAMO_T_COUNT
+	c -= hangulBase
+	c2 := c % jamoTCount
+	c /= jamoTCount
 	var buffer []uint16
-	buffer = append(buffer, uint16(JAMO_L_BASE+c/JAMO_V_COUNT))
-	buffer = append(buffer, uint16(JAMO_V_BASE+c%JAMO_V_COUNT))
+	buffer = append(buffer, uint16(jamoLBase+c/jamoVCount))
+	buffer = append(buffer, uint16(jamoVBase+c%jamoVCount))
 	if c2 != 0 {
-		buffer = append(buffer, uint16(JAMO_T_BASE+c2))
+		buffer = append(buffer, uint16(jamoTBase+c2))
 	}
 	return buffer
 }
 
-func (n *normalizer) isCompInert(c rune) bool {
-	norm16 := n.GetNorm16(c)
-	return n.isCompYesAndZeroCC(norm16) && (norm16&HAS_COMP_BOUNDARY_AFTER) != 0
+func (n *Normalizer) isCompInert(c rune) bool {
+	norm16 := n.getNorm16(c)
+	return n.isCompYesAndZeroCC(norm16) && (norm16&hasCompBoundaryAfter) != 0
 }
 
-func (n *normalizer) isDecompInert(c rune) bool {
-	return n.isDecompYesAndZeroCC(n.GetNorm16(c))
+func (n *Normalizer) isDecompInert(c rune) bool {
+	return n.isDecompYesAndZeroCC(n.getNorm16(c))
 }
 
-func (n *normalizer) isCompYesAndZeroCC(norm16 uint16) bool {
+func (n *Normalizer) isCompYesAndZeroCC(norm16 uint16) bool {
 	return norm16 < n.minNoNo
 }
 
-func (n *normalizer) isDecompYesAndZeroCC(norm16 uint16) bool {
+func (n *Normalizer) isDecompYesAndZeroCC(norm16 uint16) bool {
 	return norm16 < n.minYesNo ||
-		norm16 == JAMO_VT ||
-		(n.minMaybeYes <= norm16 && norm16 <= MIN_NORMAL_MAYBE_YES)
+		norm16 == jamoVt ||
+		(n.minMaybeYes <= norm16 && norm16 <= minNormalMaybeYes)
 }
 
-func (n *normalizer) CombiningClass(c rune) uint8 {
-	return n.getCC(n.GetNorm16(c))
+func (n *Normalizer) CombiningClass(c rune) uint8 {
+	return n.getCC(n.getNorm16(c))
 }
 
-func (n *normalizer) getCC(norm16 uint16) uint8 {
-	if norm16 >= MIN_NORMAL_MAYBE_YES {
+func (n *Normalizer) getCC(norm16 uint16) uint8 {
+	if norm16 >= minNormalMaybeYes {
 		return n.getCCFromNormalYesOrMaybe(norm16)
 	}
 	if norm16 < n.minNoNo || n.limitNoNo <= norm16 {
@@ -472,11 +473,10 @@ func (n *normalizer) getCC(norm16 uint16) uint8 {
 
 }
 
-func (n *normalizer) getCCFromNoNo(norm16 uint16) uint8 {
+func (n *Normalizer) getCCFromNoNo(norm16 uint16) uint8 {
 	mapping := n.getMapping(norm16)
-	if mapping[1]&MAPPING_HAS_CCC_LCCC_WORD != 0 {
+	if mapping[1]&mappingHasCccLcccWord != 0 {
 		return uint8(mapping[0])
-	} else {
-		return 0
 	}
+	return 0
 }

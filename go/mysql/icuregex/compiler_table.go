@@ -24,7 +24,7 @@ package icuregex
 type patternParseAction uint8
 
 const (
-	doSetBackslash_D patternParseAction = iota
+	doSetBackslashD patternParseAction = iota
 	doBackslashh
 	doBackslashH
 	doSetLiteralEscaped
@@ -41,7 +41,7 @@ const (
 	doBackslashG
 	doBackslashR
 	doSetBegin
-	doSetBackslash_v
+	doSetBackslashv
 	doPossessivePlus
 	doPerlInline
 	doBackslashZ
@@ -58,17 +58,17 @@ const (
 	doOpenNonCaptureParen
 	doExit
 	doSetNamedChar
-	doSetBackslash_V
+	doSetBackslashV
 	doConditionalExpr
 	doEscapeError
 	doBadOpenParenType
 	doPossessiveStar
 	doSetAddDash
 	doEscapedLiteralChar
-	doSetBackslash_w
+	doSetBackslashw
 	doIntervalUpperDigit
 	doBackslashv
-	doSetBackslash_S
+	doSetBackslashS
 	doSetNoCloseError
 	doSetProp
 	doBackslashB
@@ -89,14 +89,14 @@ const (
 	doNamedChar
 	doNGPlus
 	doSetDifference2
-	doSetBackslash_H
+	doSetBackslashH
 	doCloseParen
 	doDotAny
 	doOpenCaptureParen
 	doEnterQuoteMode
 	doOpenAtomicParen
 	doBadModeFlag
-	doSetBackslash_d
+	doSetBackslashd
 	doSetFinish
 	doProperty
 	doBeginNamedBackRef
@@ -111,7 +111,7 @@ const (
 	doBackslashb
 	doSetBeginUnion
 	doIntevalLowerDigit
-	doSetBackslash_h
+	doSetBackslashh
 	doStar
 	doMatchMode
 	doBackslashA
@@ -126,9 +126,9 @@ const (
 	doIntervalSame
 	doNGOpt
 	doOpenLookAhead
-	doSetBackslash_W
+	doSetBackslashW
 	doMismatchedParenErr
-	doSetBackslash_s
+	doSetBackslashs
 	rbbiLastAction
 )
 
@@ -341,16 +341,16 @@ var parseStateTable = []regexTableEl{
 	{doSetProp, 112 /* p */, 148, 0, false},               //  191      set-escape
 	{doSetProp, 80 /* P */, 148, 0, false},                //  192
 	{doSetNamedChar, 78 /* N */, 141, 0, false},           //  193
-	{doSetBackslash_s, 115 /* s */, 155, 0, true},         //  194
-	{doSetBackslash_S, 83 /* S */, 155, 0, true},          //  195
-	{doSetBackslash_w, 119 /* w */, 155, 0, true},         //  196
-	{doSetBackslash_W, 87 /* W */, 155, 0, true},          //  197
-	{doSetBackslash_d, 100 /* d */, 155, 0, true},         //  198
-	{doSetBackslash_D, 68 /* D */, 155, 0, true},          //  199
-	{doSetBackslash_h, 104 /* h */, 155, 0, true},         //  200
-	{doSetBackslash_H, 72 /* H */, 155, 0, true},          //  201
-	{doSetBackslash_v, 118 /* v */, 155, 0, true},         //  202
-	{doSetBackslash_V, 86 /* V */, 155, 0, true},          //  203
+	{doSetBackslashs, 115 /* s */, 155, 0, true},          //  194
+	{doSetBackslashS, 83 /* S */, 155, 0, true},           //  195
+	{doSetBackslashw, 119 /* w */, 155, 0, true},          //  196
+	{doSetBackslashW, 87 /* W */, 155, 0, true},           //  197
+	{doSetBackslashd, 100 /* d */, 155, 0, true},          //  198
+	{doSetBackslashD, 68 /* D */, 155, 0, true},           //  199
+	{doSetBackslashh, 104 /* h */, 155, 0, true},          //  200
+	{doSetBackslashH, 72 /* H */, 155, 0, true},           //  201
+	{doSetBackslashv, 118 /* v */, 155, 0, true},          //  202
+	{doSetBackslashV, 86 /* V */, 155, 0, true},           //  203
 	{doSetLiteralEscaped, 255, 141, 0, true},              //  204
 	{doSetFinish, 255, 14, 0, false},                      //  205      set-finish
 	{doExit, 255, 206, 0, true},                           //  206      errorDeath

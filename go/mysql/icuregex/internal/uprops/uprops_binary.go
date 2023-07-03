@@ -31,21 +31,21 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
 )
 
-type BinaryProperty struct {
-	column   PropertySource
+type binaryProperty struct {
+	column   propertySource
 	mask     uint32
-	contains func(prop *BinaryProperty, c rune, which Property) bool
+	contains func(prop *binaryProperty, c rune, which Property) bool
 }
 
-func U_MASK[T constraints.Integer](x T) uint32 {
+func uMask[T constraints.Integer](x T) uint32 {
 	return 1 << x
 }
 
-func defaultContains(prop *BinaryProperty, c rune, _ Property) bool {
+func defaultContains(prop *binaryProperty, c rune, _ Property) bool {
 	return (uchar.GetUnicodeProperties(c, int(prop.column)) & prop.mask) != 0
 }
 
-var binProps = [UCHAR_BINARY_LIMIT]*BinaryProperty{
+var binProps = [uCharBinaryLimit]*binaryProperty{
 	/*
 	 * column and mask values for binary properties from u_getUnicodeProperties().
 	 * Must be in order of corresponding UProperty,
@@ -56,86 +56,86 @@ var binProps = [UCHAR_BINARY_LIMIT]*BinaryProperty{
 	 *
 	 * See also https://unicode-org.github.io/icu/userguide/strings/properties.html
 	 */
-	{1, U_MASK(UPROPS_ALPHABETIC), defaultContains},
-	{1, U_MASK(UPROPS_ASCII_HEX_DIGIT), defaultContains},
-	{UPROPS_SRC_BIDI, 0, isBidiControl},
-	{UPROPS_SRC_BIDI, 0, isMirrored},
-	{1, U_MASK(UPROPS_DASH), defaultContains},
-	{1, U_MASK(UPROPS_DEFAULT_IGNORABLE_CODE_POINT), defaultContains},
-	{1, U_MASK(UPROPS_DEPRECATED), defaultContains},
-	{1, U_MASK(UPROPS_DIACRITIC), defaultContains},
-	{1, U_MASK(UPROPS_EXTENDER), defaultContains},
-	{UPROPS_SRC_NFC, 0, hasFullCompositionExclusion},
-	{1, U_MASK(UPROPS_GRAPHEME_BASE), defaultContains},
-	{1, U_MASK(UPROPS_GRAPHEME_EXTEND), defaultContains},
-	{1, U_MASK(UPROPS_GRAPHEME_LINK), defaultContains},
-	{1, U_MASK(UPROPS_HEX_DIGIT), defaultContains},
-	{1, U_MASK(UPROPS_HYPHEN), defaultContains},
-	{1, U_MASK(UPROPS_ID_CONTINUE), defaultContains},
-	{1, U_MASK(UPROPS_ID_START), defaultContains},
-	{1, U_MASK(UPROPS_IDEOGRAPHIC), defaultContains},
-	{1, U_MASK(UPROPS_IDS_BINARY_OPERATOR), defaultContains},
-	{1, U_MASK(UPROPS_IDS_TRINARY_OPERATOR), defaultContains},
-	{UPROPS_SRC_BIDI, 0, isJoinControl},
-	{1, U_MASK(UPROPS_LOGICAL_ORDER_EXCEPTION), defaultContains},
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_LOWERCASE
-	{1, U_MASK(UPROPS_MATH), defaultContains},
-	{1, U_MASK(UPROPS_NONCHARACTER_CODE_POINT), defaultContains},
-	{1, U_MASK(UPROPS_QUOTATION_MARK), defaultContains},
-	{1, U_MASK(UPROPS_RADICAL), defaultContains},
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_SOFT_DOTTED
-	{1, U_MASK(UPROPS_TERMINAL_PUNCTUATION), defaultContains},
-	{1, U_MASK(UPROPS_UNIFIED_IDEOGRAPH), defaultContains},
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_UPPERCASE
-	{1, U_MASK(UPROPS_WHITE_SPACE), defaultContains},
-	{1, U_MASK(UPROPS_XID_CONTINUE), defaultContains},
-	{1, U_MASK(UPROPS_XID_START), defaultContains},
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CASE_SENSITIVE
-	{1, U_MASK(UPROPS_S_TERM), defaultContains},
-	{1, U_MASK(UPROPS_VARIATION_SELECTOR), defaultContains},
-	{UPROPS_SRC_NFC, 0, isNormInert},    // UCHAR_NFD_INERT
-	{UPROPS_SRC_NFKC, 0, isNormInert},   // UCHAR_NFKD_INERT
-	{UPROPS_SRC_NFC, 0, isNormInert},    // UCHAR_NFC_INERT
-	{UPROPS_SRC_NFKC, 0, isNormInert},   // UCHAR_NFKC_INERT
-	{UPROPS_SRC_NFC_CANON_ITER, 0, nil}, // Segment_Starter is currently unsupported
-	{1, U_MASK(UPROPS_PATTERN_SYNTAX), defaultContains},
-	{1, U_MASK(UPROPS_PATTERN_WHITE_SPACE), defaultContains},
-	{UPROPS_SRC_CHAR_AND_PROPSVEC, 0, isPOSIX_alnum},
-	{UPROPS_SRC_CHAR, 0, isPOSIX_blank},
-	{UPROPS_SRC_CHAR, 0, isPOSIX_graph},
-	{UPROPS_SRC_CHAR, 0, isPOSIX_print},
-	{UPROPS_SRC_CHAR, 0, isPOSIX_xdigit},
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CASED
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CASE_IGNORABLE
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_LOWERCASED
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_UPPERCASED
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_TITLECASED
-	{UPROPS_SRC_CASE_AND_NORM, 0, changesWhenCasefolded},
-	{UPROPS_SRC_CASE, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_CASEMAPPED
-	{UPROPS_SRC_NFKC_CF, 0, nil},                     // Changes_When_NFKC_Casefolded is currently unsupported
-	{2, U_MASK(UPROPS_2_EMOJI), defaultContains},
-	{2, U_MASK(UPROPS_2_EMOJI_PRESENTATION), defaultContains},
-	{2, U_MASK(UPROPS_2_EMOJI_MODIFIER), defaultContains},
-	{2, U_MASK(UPROPS_2_EMOJI_MODIFIER_BASE), defaultContains},
-	{2, U_MASK(UPROPS_2_EMOJI_COMPONENT), defaultContains},
+	{1, uMask(pAlphabetic), defaultContains},
+	{1, uMask(pASCIIHexDigit), defaultContains},
+	{srcBidi, 0, isBidiControl},
+	{srcBidi, 0, isMirrored},
+	{1, uMask(pDash), defaultContains},
+	{1, uMask(pDefaultIgnorableCodePoint), defaultContains},
+	{1, uMask(pDeprecated), defaultContains},
+	{1, uMask(pDiacritic), defaultContains},
+	{1, uMask(pExtender), defaultContains},
+	{srcNfc, 0, hasFullCompositionExclusion},
+	{1, uMask(pGraphemeBase), defaultContains},
+	{1, uMask(pGraphemeExtend), defaultContains},
+	{1, uMask(pGraphemeLink), defaultContains},
+	{1, uMask(pHexDigit), defaultContains},
+	{1, uMask(pHyphen), defaultContains},
+	{1, uMask(pIDContinue), defaultContains},
+	{1, uMask(pIDStart), defaultContains},
+	{1, uMask(pIdeographic), defaultContains},
+	{1, uMask(pIdsBinaryOperator), defaultContains},
+	{1, uMask(pIdsTrinaryOperator), defaultContains},
+	{srcBidi, 0, isJoinControl},
+	{1, uMask(pLogicalOrderException), defaultContains},
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_LOWERCASE
+	{1, uMask(pMath), defaultContains},
+	{1, uMask(pNoncharacterCodePoint), defaultContains},
+	{1, uMask(pQuotationMark), defaultContains},
+	{1, uMask(pRadical), defaultContains},
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_SOFT_DOTTED
+	{1, uMask(pTerminalPunctuation), defaultContains},
+	{1, uMask(pUnifiedIdeograph), defaultContains},
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_UPPERCASE
+	{1, uMask(pWhiteSpace), defaultContains},
+	{1, uMask(pXidContinue), defaultContains},
+	{1, uMask(pXidStart), defaultContains},
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CASE_SENSITIVE
+	{1, uMask(pSTerm), defaultContains},
+	{1, uMask(pVariationSelector), defaultContains},
+	{srcNfc, 0, isNormInert},  // UCHAR_NFD_INERT
+	{srcNfkc, 0, isNormInert}, // UCHAR_NFKD_INERT
+	{srcNfc, 0, isNormInert},  // UCHAR_NFC_INERT
+	{srcNfkc, 0, isNormInert}, // UCHAR_NFKC_INERT
+	{srcNfcCanonIter, 0, nil}, // Segment_Starter is currently unsupported
+	{1, uMask(pPatternSyntax), defaultContains},
+	{1, uMask(pPatternWhiteSpace), defaultContains},
+	{srcCharAndPropsvec, 0, isPOSIXAlnum},
+	{srcChar, 0, isPOSIXBlank},
+	{srcChar, 0, isPOSIXGraph},
+	{srcChar, 0, isPOSIXPrint},
+	{srcChar, 0, isPOSIXXdigit},
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CASED
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CASE_IGNORABLE
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_LOWERCASED
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_UPPERCASED
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_TITLECASED
+	{srcCaseAndNorm, 0, changesWhenCasefolded},
+	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_CASEMAPPED
+	{srcNfkcCf, 0, nil},                      // Changes_When_NFKC_Casefolded is currently unsupported
+	{2, uMask(p2Emoji), defaultContains},
+	{2, uMask(p2EmojiPresentation), defaultContains},
+	{2, uMask(p2EmojiModifier), defaultContains},
+	{2, uMask(p2EmojiModifierBase), defaultContains},
+	{2, uMask(p2EmojiComponent), defaultContains},
 	{2, 0, isRegionalIndicator},
-	{1, U_MASK(UPROPS_PREPENDED_CONCATENATION_MARK), defaultContains},
-	{2, U_MASK(UPROPS_2_EXTENDED_PICTOGRAPHIC), defaultContains},
+	{1, uMask(pPrependedConcatenationMark), defaultContains},
+	{2, uMask(p2ExtendedPictographic), defaultContains},
 }
 
-func isBidiControl(prop *BinaryProperty, c rune, which Property) bool {
+func isBidiControl(_ *binaryProperty, c rune, _ Property) bool {
 	return ubidi.IsBidiControl(c)
 }
 
-func isMirrored(prop *BinaryProperty, c rune, which Property) bool {
+func isMirrored(_ *binaryProperty, c rune, _ Property) bool {
 	return ubidi.IsMirrored(c)
 }
 
-func isRegionalIndicator(prop *BinaryProperty, c rune, which Property) bool {
+func isRegionalIndicator(_ *binaryProperty, c rune, _ Property) bool {
 	return 0x1F1E6 <= c && c <= 0x1F1FF
 }
 
-func changesWhenCasefolded(prop *BinaryProperty, c rune, which Property) bool {
+func changesWhenCasefolded(_ *binaryProperty, c rune, _ Property) bool {
 	if c < 0 {
 		return false
 	}
@@ -148,53 +148,53 @@ func changesWhenCasefolded(prop *BinaryProperty, c rune, which Property) bool {
 	return !slices.Equal(nfd, folded)
 }
 
-func isPOSIX_xdigit(prop *BinaryProperty, c rune, which Property) bool {
+func isPOSIXXdigit(_ *binaryProperty, c rune, _ Property) bool {
 	return uchar.IsXDigit(c)
 }
 
-func isPOSIX_print(prop *BinaryProperty, c rune, which Property) bool {
+func isPOSIXPrint(_ *binaryProperty, c rune, _ Property) bool {
 	return uchar.IsPOSIXPrint(c)
 }
 
-func isPOSIX_graph(prop *BinaryProperty, c rune, which Property) bool {
+func isPOSIXGraph(_ *binaryProperty, c rune, _ Property) bool {
 	return uchar.IsGraphPOSIX(c)
 }
 
-func isPOSIX_blank(prop *BinaryProperty, c rune, which Property) bool {
+func isPOSIXBlank(_ *binaryProperty, c rune, _ Property) bool {
 	return uchar.IsBlank(c)
 }
 
-func isPOSIX_alnum(prop *BinaryProperty, c rune, which Property) bool {
-	return (uchar.GetUnicodeProperties(c, 1)&U_MASK(UPROPS_ALPHABETIC)) != 0 || uchar.IsDigit(c)
+func isPOSIXAlnum(_ *binaryProperty, c rune, _ Property) bool {
+	return (uchar.GetUnicodeProperties(c, 1)&uMask(pAlphabetic)) != 0 || uchar.IsDigit(c)
 }
 
-func isJoinControl(prop *BinaryProperty, c rune, which Property) bool {
+func isJoinControl(_ *binaryProperty, c rune, _ Property) bool {
 	return ubidi.IsJoinControl(c)
 }
 
-func hasFullCompositionExclusion(prop *BinaryProperty, c rune, which Property) bool {
+func hasFullCompositionExclusion(_ *binaryProperty, c rune, _ Property) bool {
 	impl := normalizer.Nfc()
-	return impl.IsCompNo(impl.GetNorm16(c))
+	return impl.IsCompNo(c)
 }
 
-func caseBinaryPropertyContains(prop *BinaryProperty, c rune, which Property) bool {
+func caseBinaryPropertyContains(_ *binaryProperty, c rune, which Property) bool {
 	return HasBinaryPropertyUcase(c, which)
 }
 
 func HasBinaryPropertyUcase(c rune, which Property) bool {
 	/* case mapping properties */
 	switch which {
-	case UCHAR_LOWERCASE:
-		return ucase.UCASE_LOWER == ucase.GetType(c)
-	case UCHAR_UPPERCASE:
-		return ucase.UCASE_UPPER == ucase.GetType(c)
-	case UCHAR_SOFT_DOTTED:
+	case UCharLowercase:
+		return ucase.Lower == ucase.GetType(c)
+	case UCharUppercase:
+		return ucase.Upper == ucase.GetType(c)
+	case UCharSoftDotted:
 		return ucase.IsSoftDotted(c)
-	case UCHAR_CASE_SENSITIVE:
+	case UCharCaseSensitive:
 		return ucase.IsCaseSensitive(c)
-	case UCHAR_CASED:
-		return ucase.UCASE_NONE != ucase.GetType(c)
-	case UCHAR_CASE_IGNORABLE:
+	case UCharCased:
+		return ucase.None != ucase.GetType(c)
+	case UCharCaseIgnorable:
 		return (ucase.GetTypeOrIgnorable(c) >> 2) != 0
 	/*
 	 * Note: The following Changes_When_Xyz are defined as testing whether
@@ -208,27 +208,27 @@ func HasBinaryPropertyUcase(c rune, which Property) bool {
 	 * and the property starts set needs to be the union of the
 	 * start sets for normalization and case mappings.
 	 */
-	case UCHAR_CHANGES_WHEN_LOWERCASED:
+	case UCharChangesWhenLowercased:
 		return ucase.ToFullLower(c) >= 0
-	case UCHAR_CHANGES_WHEN_UPPERCASED:
+	case UCharChangesWhenUppercased:
 		return ucase.ToFullUpper(c) >= 0
-	case UCHAR_CHANGES_WHEN_TITLECASED:
+	case UCharChangesWhenTitlecased:
 		return ucase.ToFullTitle(c) >= 0
 	/* case UCHAR_CHANGES_WHEN_CASEFOLDED: -- in uprops.c */
-	case UCHAR_CHANGES_WHEN_CASEMAPPED:
+	case UCharChangesWhenCasemapped:
 		return ucase.ToFullLower(c) >= 0 || ucase.ToFullUpper(c) >= 0 || ucase.ToFullTitle(c) >= 0
 	default:
 		return false
 	}
 }
 
-func isNormInert(prop *BinaryProperty, c rune, which Property) bool {
-	mode := normalizer.UNormalizationMode(int32(which) - int32(UCHAR_NFD_INERT) + int32(normalizer.UNORM_NFD))
+func isNormInert(_ *binaryProperty, c rune, which Property) bool {
+	mode := normalizer.Mode(int32(which) - int32(UCharNfdInert) + int32(normalizer.NormNfd))
 	return normalizer.IsInert(c, mode)
 }
 
 func HasBinaryProperty(c rune, which Property) bool {
-	if which < UCHAR_BINARY_START || UCHAR_BINARY_LIMIT <= which {
+	if which < UCharBinaryStart || uCharBinaryLimit <= which {
 		return false
 	}
 	prop := binProps[which]

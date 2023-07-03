@@ -36,7 +36,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/icuregex"
 	"vitess.io/vitess/go/mysql/icuregex/internal/pattern"
-	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
 var ErrSkip = errors.New("ignored test")
@@ -89,19 +88,19 @@ func (tp *TestPattern) parseFlags(line string) (string, error) {
 			return line, nil
 		case ' ', '\t':
 		case 'i':
-			tp.Flags |= icuregex.UREGEX_CASE_INSENSITIVE
+			tp.Flags |= icuregex.CaseInsensitive
 		case 'x':
-			tp.Flags |= icuregex.UREGEX_COMMENTS
+			tp.Flags |= icuregex.Comments
 		case 's':
-			tp.Flags |= icuregex.UREGEX_DOTALL
+			tp.Flags |= icuregex.DotAll
 		case 'm':
-			tp.Flags |= icuregex.UREGEX_MULTILINE
+			tp.Flags |= icuregex.Multiline
 		case 'e':
-			tp.Flags |= icuregex.UREGEX_ERROR_ON_UNKNOWN_ESCAPES
+			tp.Flags |= icuregex.ErrorOnUnknownEscapes
 		case 'D':
-			tp.Flags |= icuregex.UREGEX_UNIX_LINES
+			tp.Flags |= icuregex.UnixLines
 		case 'Q':
-			tp.Flags |= icuregex.UREGEX_LITERAL
+			tp.Flags |= icuregex.Literal
 		case '2', '3', '4', '5', '6', '7', '8', '9':
 			tp.Options.FindCount = int(line[0] - '0')
 		case 'G':
@@ -134,11 +133,10 @@ func (tp *TestPattern) parseFlags(line string) (string, error) {
 	return "", io.ErrUnexpectedEOF
 }
 
-func (tp *TestPattern) parseMatch(input string) error {
-	var ok bool
-	input, ok = pattern.Unescape(input)
+func (tp *TestPattern) parseMatch(orig string) error {
+	input, ok := pattern.Unescape(orig)
 	if !ok {
-		return fmt.Errorf("failed to unquote input")
+		return fmt.Errorf("failed to unquote input: %s", orig)
 	}
 
 	var detagged []rune
@@ -153,27 +151,26 @@ func (tp *TestPattern) parseMatch(input string) error {
 		groupNum := input[g[4]:g[5]]
 		if groupNum == "r" {
 			return ErrSkip
+		}
+		num, err := strconv.Atoi(groupNum)
+		if err != nil {
+			return fmt.Errorf("bad group number %q: %w", groupNum, err)
+		}
+
+		if num >= len(tp.Groups) {
+			grp := make([]TestGroup, num+1)
+			for i := range grp {
+				grp[i].Start = -1
+				grp[i].End = -1
+			}
+			copy(grp, tp.Groups)
+			tp.Groups = grp
+		}
+
+		if closing {
+			tp.Groups[num].End = len(detagged)
 		} else {
-			num, err := strconv.Atoi(groupNum)
-			if err != nil {
-				return fmt.Errorf("bad group number %q: %w", groupNum, err)
-			}
-
-			if num >= len(tp.Groups) {
-				grp := make([]TestGroup, num+1)
-				for i := range grp {
-					grp[i].Start = -1
-					grp[i].End = -1
-				}
-				copy(grp, tp.Groups)
-				tp.Groups = grp
-			}
-
-			if closing {
-				tp.Groups[num].End = len(detagged)
-			} else {
-				tp.Groups[num].Start = len(detagged)
-			}
+			tp.Groups[num].Start = len(detagged)
 		}
 	}
 
@@ -193,7 +190,7 @@ func ParseTestFile(t testing.TB, filename string) []TestPattern {
 	var lineno int
 	var patterns []TestPattern
 
-	error := func(err error) {
+	errFunc := func(err error) {
 		if err == ErrSkip {
 			return
 		}
@@ -218,14 +215,14 @@ func ParseTestFile(t testing.TB, filename string) []TestPattern {
 		tp.Pattern = line[1 : idx+1]
 		line, err = tp.parseFlags(line[idx+2:])
 		if err != nil {
-			error(err)
+			errFunc(err)
 			continue
 		}
 
 		idx = strings.IndexByte(line[1:], line[0])
 		err = tp.parseMatch(line[1 : idx+1])
 		if err != nil {
-			error(err)
+			errFunc(err)
 			continue
 		}
 
@@ -386,7 +383,7 @@ func TestCornerCases(t *testing.T) {
 		{`(abc)*+a`, "abcabcabc", 0, false},
 		{`(abc)*+a`, "abcabcab", 0, true},
 		{`a\N{LATIN SMALL LETTER B}c`, "abc", 0, true},
-		{`a.b`, "a\rb", icuregex.UREGEX_UNIX_LINES, true},
+		{`a.b`, "a\rb", icuregex.UnixLines, true},
 		{`a.b`, "a\rb", 0, false},
 		{`(?d)abc$`, "abc\r", 0, false},
 		{`[ \b]`, "b", 0, true},
@@ -422,9 +419,4 @@ func TestOne(t *testing.T) {
 	found, err := m.Find()
 	require.NoError(t, err)
 	t.Logf("match = %v", found)
-}
-
-func TestTrie(t *testing.T) {
-	p := uprops.GetPropertyEnum("Block")
-	t.Logf("%v", p)
 }

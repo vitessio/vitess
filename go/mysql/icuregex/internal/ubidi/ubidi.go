@@ -22,7 +22,7 @@ limitations under the License.
 package ubidi
 
 import (
-	"fmt"
+	"errors"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
@@ -30,18 +30,18 @@ import (
 )
 
 const (
-	UBIDI_IX_INDEX_TOP = iota
-	UBIDI_IX_LENGTH
-	UBIDI_IX_TRIE_SIZE
-	UBIDI_IX_MIRROR_LENGTH
+	ixIndexTop = iota
+	ixLength
+	ixTrieSize
+	ixMirrorLength
 
-	UBIDI_IX_JG_START
-	UBIDI_IX_JG_LIMIT
-	UBIDI_IX_JG_START2 /* new in format version 2.2, ICU 54 */
-	UBIDI_IX_JG_LIMIT2
+	ixJgStart
+	ixJgLimit
+	ixJgStart2 /* new in format version 2.2, ICU 54 */
+	ixJgLimit2
 
-	UBIDI_MAX_VALUES_INDEX
-	UBIDI_IX_TOP
+	maxValuesIndex
+	ixTop
 )
 
 var ubidi struct {
@@ -65,8 +65,8 @@ func readData(bytes *udata.Bytes) error {
 	}
 
 	count := int32(bytes.Uint32())
-	if count < UBIDI_IX_TOP {
-		return fmt.Errorf("indexes[0] too small in ucase.icu")
+	if count < ixTop {
+		return errors.New("indexes[0] too small in ucase.icu")
 	}
 
 	ubidi.indexes = make([]int32, count)
@@ -81,22 +81,22 @@ func readData(bytes *udata.Bytes) error {
 		return err
 	}
 
-	expectedTrieLength := ubidi.indexes[UBIDI_IX_TRIE_SIZE]
+	expectedTrieLength := ubidi.indexes[ixTrieSize]
 	trieLength := ubidi.trie.SerializedLength()
 
 	if trieLength > expectedTrieLength {
-		return fmt.Errorf("ucase.icu: not enough bytes for the trie")
+		return errors.New("ucase.icu: not enough bytes for the trie")
 	}
 
 	bytes.Skip(expectedTrieLength - trieLength)
 
-	if n := ubidi.indexes[UBIDI_IX_MIRROR_LENGTH]; n > 0 {
+	if n := ubidi.indexes[ixMirrorLength]; n > 0 {
 		ubidi.mirrors = bytes.Uint32Slice(n)
 	}
-	if n := ubidi.indexes[UBIDI_IX_JG_LIMIT] - ubidi.indexes[UBIDI_IX_JG_START]; n > 0 {
+	if n := ubidi.indexes[ixJgLimit] - ubidi.indexes[ixJgStart]; n > 0 {
 		ubidi.jg = bytes.Uint8Slice(n)
 	}
-	if n := ubidi.indexes[UBIDI_IX_JG_LIMIT2] - ubidi.indexes[UBIDI_IX_JG_START2]; n > 0 {
+	if n := ubidi.indexes[ixJgLimit2] - ubidi.indexes[ixJgStart2]; n > 0 {
 		ubidi.jg2 = bytes.Uint8Slice(n)
 	}
 
@@ -112,17 +112,14 @@ func init() {
 
 const (
 	/* UBIDI_CLASS_SHIFT=0, */ /* bidi class: 5 bits (4..0) */
-	UBIDI_JT_SHIFT             = 5 /* joining type: 3 bits (7..5) */
+	jtShift                    = 5 /* joining type: 3 bits (7..5) */
 
-	UBIDI_BPT_SHIFT = 8 /* Bidi_Paired_Bracket_Type(bpt): 2 bits (9..8) */
+	bptShift = 8 /* Bidi_Paired_Bracket_Type(bpt): 2 bits (9..8) */
 
-	UBIDI_JOIN_CONTROL_SHIFT = 10
-	UBIDI_BIDI_CONTROL_SHIFT = 11
+	joinControlShift = 10
+	bidiControlShift = 11
 
-	UBIDI_IS_MIRRORED_SHIFT  = 12 /* 'is mirrored' */
-	UBIDI_MIRROR_DELTA_SHIFT = 13 /* bidi mirroring delta: 3 bits (15..13) */
-
-	UBIDI_MAX_JG_SHIFT = 16 /* max JG value in indexes[UBIDI_MAX_VALUES_INDEX] bits 23..16 */
+	isMirroredShift = 12 /* 'is mirrored' */
 )
 
 /**
@@ -131,7 +128,7 @@ const (
  * @see UCHAR_BIDI_PAIRED_BRACKET_TYPE
  * @stable ICU 52
  */
-type UBidiPairedBracketType int32
+type UPairedBracketType int32
 
 /*
  * Note: UBidiPairedBracketType constants are parsed by preparseucd.py.
@@ -140,16 +137,16 @@ type UBidiPairedBracketType int32
  */
 const (
 	/** Not a paired bracket. @stable ICU 52 */
-	U_BPT_NONE = iota
+	BptNone UPairedBracketType = iota
 	/** Open paired bracket. @stable ICU 52 */
-	U_BPT_OPEN
+	BptOpen
 	/** Close paired bracket. @stable ICU 52 */
-	U_BPT_CLOSE
+	BptClose
 )
 
-const UBIDI_CLASS_MASK = 0x0000001f
-const UBIDI_JT_MASK = 0x000000e0
-const UBIDI_BPT_MASK = 0x00000300
+const classMask = 0x0000001f
+const jtMask = 0x000000e0
+const bptMask = 0x00000300
 
 /**
  * Joining Type constants.
@@ -157,7 +154,7 @@ const UBIDI_BPT_MASK = 0x00000300
  * @see UCHAR_JOINING_TYPE
  * @stable ICU 2.2
  */
-type UJoiningType int32
+type JoiningType int32
 
 /*
  * Note: UJoiningType constants are parsed by preparseucd.py.
@@ -165,12 +162,12 @@ type UJoiningType int32
  *     U_JT_<Unicode Joining_Type value name>
  */
 const (
-	U_JT_NON_JOINING   UJoiningType = iota /*[U]*/
-	U_JT_JOIN_CAUSING                      /*[C]*/
-	U_JT_DUAL_JOINING                      /*[D]*/
-	U_JT_LEFT_JOINING                      /*[L]*/
-	U_JT_RIGHT_JOINING                     /*[R]*/
-	U_JT_TRANSPARENT                       /*[T]*/
+	JtNonJoining   JoiningType = iota /*[U]*/
+	JtJoinCausing                     /*[C]*/
+	JtDualJoining                     /*[D]*/
+	JtLeftJoining                     /*[L]*/
+	JtRightJoining                    /*[R]*/
+	JtTransparent                     /*[T]*/
 )
 
 /**
@@ -179,7 +176,7 @@ const (
  * @see UCHAR_JOINING_GROUP
  * @stable ICU 2.2
  */
-type UJoiningGroup int32
+type JoiningGroup int32
 
 /*
  * Note: UJoiningGroup constants are parsed by preparseucd.py.
@@ -187,120 +184,120 @@ type UJoiningGroup int32
  *     U_JG_<Unicode Joining_Group value name>
  */
 const (
-	U_JG_NO_JOINING_GROUP UJoiningGroup = iota
-	U_JG_AIN
-	U_JG_ALAPH
-	U_JG_ALEF
-	U_JG_BEH
-	U_JG_BETH
-	U_JG_DAL
-	U_JG_DALATH_RISH
-	U_JG_E
-	U_JG_FEH
-	U_JG_FINAL_SEMKATH
-	U_JG_GAF
-	U_JG_GAMAL
-	U_JG_HAH
-	U_JG_TEH_MARBUTA_GOAL /**< @stable ICU 4.6 */
-	U_JG_HE
-	U_JG_HEH
-	U_JG_HEH_GOAL
-	U_JG_HETH
-	U_JG_KAF
-	U_JG_KAPH
-	U_JG_KNOTTED_HEH
-	U_JG_LAM
-	U_JG_LAMADH
-	U_JG_MEEM
-	U_JG_MIM
-	U_JG_NOON
-	U_JG_NUN
-	U_JG_PE
-	U_JG_QAF
-	U_JG_QAPH
-	U_JG_REH
-	U_JG_REVERSED_PE
-	U_JG_SAD
-	U_JG_SADHE
-	U_JG_SEEN
-	U_JG_SEMKATH
-	U_JG_SHIN
-	U_JG_SWASH_KAF
-	U_JG_SYRIAC_WAW
-	U_JG_TAH
-	U_JG_TAW
-	U_JG_TEH_MARBUTA
-	U_JG_TETH
-	U_JG_WAW
-	U_JG_YEH
-	U_JG_YEH_BARREE
-	U_JG_YEH_WITH_TAIL
-	U_JG_YUDH
-	U_JG_YUDH_HE
-	U_JG_ZAIN
-	U_JG_FE                    /**< @stable ICU 2.6 */
-	U_JG_KHAPH                 /**< @stable ICU 2.6 */
-	U_JG_ZHAIN                 /**< @stable ICU 2.6 */
-	U_JG_BURUSHASKI_YEH_BARREE /**< @stable ICU 4.0 */
-	U_JG_FARSI_YEH             /**< @stable ICU 4.4 */
-	U_JG_NYA                   /**< @stable ICU 4.4 */
-	U_JG_ROHINGYA_YEH          /**< @stable ICU 49 */
-	U_JG_MANICHAEAN_ALEPH      /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_AYIN       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_BETH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_DALETH     /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_DHAMEDH    /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_FIVE       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_GIMEL      /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_HETH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_HUNDRED    /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_KAPH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_LAMEDH     /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_MEM        /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_NUN        /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_ONE        /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_PE         /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_QOPH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_RESH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_SADHE      /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_SAMEKH     /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_TAW        /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_TEN        /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_TETH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_THAMEDH    /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_TWENTY     /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_WAW        /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_YODH       /**< @stable ICU 54 */
-	U_JG_MANICHAEAN_ZAYIN      /**< @stable ICU 54 */
-	U_JG_STRAIGHT_WAW          /**< @stable ICU 54 */
-	U_JG_AFRICAN_FEH           /**< @stable ICU 58 */
-	U_JG_AFRICAN_NOON          /**< @stable ICU 58 */
-	U_JG_AFRICAN_QAF           /**< @stable ICU 58 */
+	JgNoJoiningGroup JoiningGroup = iota
+	JgAin
+	JgAlaph
+	JgAlef
+	JgBeh
+	JgBeth
+	JgDal
+	JgDalathRish
+	JgE
+	JgFeh
+	JgFinalSemkath
+	JgGaf
+	JgGamal
+	JgHah
+	JgTehMarbutaGoal /**< @stable ICU 4.6 */
+	JgHe
+	JgHeh
+	JgHehGoal
+	JgHeth
+	JgKaf
+	JgKaph
+	JgKnottedHeh
+	JgLam
+	JgLamadh
+	JgMeem
+	JgMim
+	JgNoon
+	JgNun
+	JgPe
+	JgQaf
+	JgQaph
+	JgReh
+	JgReversedPe
+	JgSad
+	JgSadhe
+	JgSeen
+	JgSemkath
+	JgShin
+	JgSwashKaf
+	JgSyriacWaw
+	JgTah
+	JgTaw
+	JgTehMarbuta
+	JgTeth
+	JgWaw
+	JgYeh
+	JgYehBarree
+	JgYehWithTail
+	JgYudh
+	JgYudhHe
+	JgZain
+	JgFe                   /**< @stable ICU 2.6 */
+	JgKhaph                /**< @stable ICU 2.6 */
+	JgZhain                /**< @stable ICU 2.6 */
+	JgBurushashkiYehBarree /**< @stable ICU 4.0 */
+	JgFarsiYeh             /**< @stable ICU 4.4 */
+	JgNya                  /**< @stable ICU 4.4 */
+	JgRohingyaYeh          /**< @stable ICU 49 */
+	JgManichaeanAleph      /**< @stable ICU 54 */
+	JgManichaeanAyin       /**< @stable ICU 54 */
+	JgManichaeanBeth       /**< @stable ICU 54 */
+	JgManichaeanDaleth     /**< @stable ICU 54 */
+	JgManichaeanDhamedh    /**< @stable ICU 54 */
+	JgManichaeanFive       /**< @stable ICU 54 */
+	JgManichaeanGimel      /**< @stable ICU 54 */
+	JgManichaeanHeth       /**< @stable ICU 54 */
+	JgManichaeanHundred    /**< @stable ICU 54 */
+	JgManichaeanKaph       /**< @stable ICU 54 */
+	JgManichaeanLamedh     /**< @stable ICU 54 */
+	JgManichaeanMem        /**< @stable ICU 54 */
+	JgManichaeanNun        /**< @stable ICU 54 */
+	JgManichaeanOne        /**< @stable ICU 54 */
+	JgManichaeanPe         /**< @stable ICU 54 */
+	JgManichaeanQoph       /**< @stable ICU 54 */
+	JgManichaeanResh       /**< @stable ICU 54 */
+	JgManichaeanSadhe      /**< @stable ICU 54 */
+	JgManichaeanSamekh     /**< @stable ICU 54 */
+	JgManichaeanTaw        /**< @stable ICU 54 */
+	JgManichaeanTen        /**< @stable ICU 54 */
+	JgManichaeanTeth       /**< @stable ICU 54 */
+	JgManichaeanThamedh    /**< @stable ICU 54 */
+	JgManichaeanTwenty     /**< @stable ICU 54 */
+	JgManichaeanWaw        /**< @stable ICU 54 */
+	JgManichaeanYodh       /**< @stable ICU 54 */
+	JgManichaeanZayin      /**< @stable ICU 54 */
+	JgStraightWaw          /**< @stable ICU 54 */
+	JgAfricanFeh           /**< @stable ICU 58 */
+	JgAfricanNoon          /**< @stable ICU 58 */
+	JgAfricanQaf           /**< @stable ICU 58 */
 
-	U_JG_MALAYALAM_BHA  /**< @stable ICU 60 */
-	U_JG_MALAYALAM_JA   /**< @stable ICU 60 */
-	U_JG_MALAYALAM_LLA  /**< @stable ICU 60 */
-	U_JG_MALAYALAM_LLLA /**< @stable ICU 60 */
-	U_JG_MALAYALAM_NGA  /**< @stable ICU 60 */
-	U_JG_MALAYALAM_NNA  /**< @stable ICU 60 */
-	U_JG_MALAYALAM_NNNA /**< @stable ICU 60 */
-	U_JG_MALAYALAM_NYA  /**< @stable ICU 60 */
-	U_JG_MALAYALAM_RA   /**< @stable ICU 60 */
-	U_JG_MALAYALAM_SSA  /**< @stable ICU 60 */
-	U_JG_MALAYALAM_TTA  /**< @stable ICU 60 */
+	JgMalayalamBha  /**< @stable ICU 60 */
+	JgMalayalamJa   /**< @stable ICU 60 */
+	JgMalayalamLla  /**< @stable ICU 60 */
+	JgMalayalamLlla /**< @stable ICU 60 */
+	JgMalayalamNga  /**< @stable ICU 60 */
+	JgMalayalamNna  /**< @stable ICU 60 */
+	JgMalayalamNnna /**< @stable ICU 60 */
+	JgMalayalamNya  /**< @stable ICU 60 */
+	JgMalayalamRa   /**< @stable ICU 60 */
+	JgMalayalamSsa  /**< @stable ICU 60 */
+	JgMalayalamTta  /**< @stable ICU 60 */
 
-	U_JG_HANIFI_ROHINGYA_KINNA_YA /**< @stable ICU 62 */
-	U_JG_HANIFI_ROHINGYA_PA       /**< @stable ICU 62 */
+	JgHanafiRohingyaKinnaYa /**< @stable ICU 62 */
+	JgHanafiRohingyaPa      /**< @stable ICU 62 */
 
-	U_JG_THIN_YEH      /**< @stable ICU 70 */
-	U_JG_VERTICAL_TAIL /**< @stable ICU 70 */
+	JgThinYeh      /**< @stable ICU 70 */
+	JgVerticalTail /**< @stable ICU 70 */
 )
 
 /**
  * This specifies the language directional property of a character set.
  * @stable ICU 2.0
  */
-type UCharDirection int32
+type CharDirection int32
 
 /*
  * Note: UCharDirection constants and their API comments are parsed by preparseucd.py.
@@ -311,59 +308,59 @@ type UCharDirection int32
 
 const (
 	/** L @stable ICU 2.0 */
-	U_LEFT_TO_RIGHT UCharDirection = 0
+	LeftToRight CharDirection = 0
 	/** R @stable ICU 2.0 */
-	U_RIGHT_TO_LEFT UCharDirection = 1
+	RightToLeft CharDirection = 1
 	/** EN @stable ICU 2.0 */
-	U_EUROPEAN_NUMBER UCharDirection = 2
+	EuropeanNumber CharDirection = 2
 	/** ES @stable ICU 2.0 */
-	U_EUROPEAN_NUMBER_SEPARATOR UCharDirection = 3
+	EuropeanNumberSeparator CharDirection = 3
 	/** ET @stable ICU 2.0 */
-	U_EUROPEAN_NUMBER_TERMINATOR UCharDirection = 4
+	EuropeanNumberTerminator CharDirection = 4
 	/** AN @stable ICU 2.0 */
-	U_ARABIC_NUMBER UCharDirection = 5
+	ArabicNumber CharDirection = 5
 	/** CS @stable ICU 2.0 */
-	U_COMMON_NUMBER_SEPARATOR UCharDirection = 6
+	CommonNumberSeparator CharDirection = 6
 	/** B @stable ICU 2.0 */
-	U_BLOCK_SEPARATOR UCharDirection = 7
+	BlockSeparator CharDirection = 7
 	/** S @stable ICU 2.0 */
-	U_SEGMENT_SEPARATOR UCharDirection = 8
+	SegmentSeparator CharDirection = 8
 	/** WS @stable ICU 2.0 */
-	U_WHITE_SPACE_NEUTRAL UCharDirection = 9
+	WhiteSpaceNeutral CharDirection = 9
 	/** ON @stable ICU 2.0 */
-	U_OTHER_NEUTRAL UCharDirection = 10
+	OtherNeutral CharDirection = 10
 	/** LRE @stable ICU 2.0 */
-	U_LEFT_TO_RIGHT_EMBEDDING UCharDirection = 11
+	LeftToRightEmbedding CharDirection = 11
 	/** LRO @stable ICU 2.0 */
-	U_LEFT_TO_RIGHT_OVERRIDE UCharDirection = 12
+	LeftToRightOverride CharDirection = 12
 	/** AL @stable ICU 2.0 */
-	U_RIGHT_TO_LEFT_ARABIC UCharDirection = 13
+	RightToLeftArabic CharDirection = 13
 	/** RLE @stable ICU 2.0 */
-	U_RIGHT_TO_LEFT_EMBEDDING UCharDirection = 14
+	RightToLeftEmbedding CharDirection = 14
 	/** RLO @stable ICU 2.0 */
-	U_RIGHT_TO_LEFT_OVERRIDE UCharDirection = 15
+	RightToLeftOverride CharDirection = 15
 	/** PDF @stable ICU 2.0 */
-	U_POP_DIRECTIONAL_FORMAT UCharDirection = 16
+	PopDirectionalFormat CharDirection = 16
 	/** NSM @stable ICU 2.0 */
-	U_DIR_NON_SPACING_MARK UCharDirection = 17
+	DirNonSpacingMark CharDirection = 17
 	/** BN @stable ICU 2.0 */
-	U_BOUNDARY_NEUTRAL UCharDirection = 18
+	BoundaryNeutral CharDirection = 18
 	/** FSI @stable ICU 52 */
-	U_FIRST_STRONG_ISOLATE UCharDirection = 19
+	StrongIsolate CharDirection = 19
 	/** LRI @stable ICU 52 */
-	U_LEFT_TO_RIGHT_ISOLATE UCharDirection = 20
+	LeftToRightIsolate CharDirection = 20
 	/** RLI @stable ICU 52 */
-	U_RIGHT_TO_LEFT_ISOLATE UCharDirection = 21
+	RightToLeftIsolate CharDirection = 21
 	/** PDI @stable ICU 52 */
-	U_POP_DIRECTIONAL_ISOLATE UCharDirection = 22
+	PopDirectionalIsolate CharDirection = 22
 )
 
-type PropertySet interface {
+type propertySet interface {
 	AddRune(ch rune)
 	AddRuneRange(from rune, to rune)
 }
 
-func AddPropertyStarts(sa PropertySet) {
+func AddPropertyStarts(sa propertySet) {
 	/* add the start code point of each same-value range of the trie */
 	ubidi.trie.Enum(nil, func(start, _ rune, _ uint32) bool {
 		sa.AddRune(start)
@@ -371,15 +368,15 @@ func AddPropertyStarts(sa PropertySet) {
 	})
 
 	/* add the code points from the bidi mirroring table */
-	length := ubidi.indexes[UBIDI_IX_MIRROR_LENGTH]
+	length := ubidi.indexes[ixMirrorLength]
 	for i := int32(0); i < length; i++ {
 		c := mirrorCodePoint(rune(ubidi.mirrors[i]))
 		sa.AddRuneRange(c, c+1)
 	}
 
 	/* add the code points from the Joining_Group array where the value changes */
-	start := ubidi.indexes[UBIDI_IX_JG_START]
-	limit := ubidi.indexes[UBIDI_IX_JG_LIMIT]
+	start := ubidi.indexes[ixJgStart]
+	limit := ubidi.indexes[ixJgLimit]
 	jgArray := ubidi.jg[:]
 	for {
 		prev := uint8(0)
@@ -396,10 +393,10 @@ func AddPropertyStarts(sa PropertySet) {
 			/* add the limit code point if the last value was not 0 (it is now start==limit) */
 			sa.AddRune(limit)
 		}
-		if limit == ubidi.indexes[UBIDI_IX_JG_LIMIT] {
+		if limit == ubidi.indexes[ixJgLimit] {
 			/* switch to the second Joining_Group range */
-			start = ubidi.indexes[UBIDI_IX_JG_START2]
-			limit = ubidi.indexes[UBIDI_IX_JG_LIMIT2]
+			start = ubidi.indexes[ixJgStart2]
+			limit = ubidi.indexes[ixJgLimit2]
 			jgArray = ubidi.jg2[:]
 		} else {
 			break
@@ -421,44 +418,44 @@ func mirrorCodePoint(m rune) rune {
 
 func IsJoinControl(c rune) bool {
 	props := ubidi.trie.Get16(c)
-	return HasFlag(props, UBIDI_JOIN_CONTROL_SHIFT)
+	return HasFlag(props, joinControlShift)
 }
 
-func JoiningType(c rune) UJoiningType {
+func JoinType(c rune) JoiningType {
 	props := ubidi.trie.Get16(c)
-	return UJoiningType((props & UBIDI_JT_MASK) >> UBIDI_JT_SHIFT)
+	return JoiningType((props & jtMask) >> jtShift)
 }
 
-func JoiningGroup(c rune) UJoiningGroup {
-	start := ubidi.indexes[UBIDI_IX_JG_START]
-	limit := ubidi.indexes[UBIDI_IX_JG_LIMIT]
+func JoinGroup(c rune) JoiningGroup {
+	start := ubidi.indexes[ixJgStart]
+	limit := ubidi.indexes[ixJgLimit]
 	if start <= c && c < limit {
-		return UJoiningGroup(ubidi.jg[c-start])
+		return JoiningGroup(ubidi.jg[c-start])
 	}
-	start = ubidi.indexes[UBIDI_IX_JG_START2]
-	limit = ubidi.indexes[UBIDI_IX_JG_LIMIT2]
+	start = ubidi.indexes[ixJgStart2]
+	limit = ubidi.indexes[ixJgLimit2]
 	if start <= c && c < limit {
-		return UJoiningGroup(ubidi.jg2[c-start])
+		return JoiningGroup(ubidi.jg2[c-start])
 	}
-	return U_JG_NO_JOINING_GROUP
+	return JgNoJoiningGroup
 }
 
 func IsMirrored(c rune) bool {
 	props := ubidi.trie.Get16(c)
-	return HasFlag(props, UBIDI_IS_MIRRORED_SHIFT)
+	return HasFlag(props, isMirroredShift)
 }
 
 func IsBidiControl(c rune) bool {
 	props := ubidi.trie.Get16(c)
-	return HasFlag(props, UBIDI_BIDI_CONTROL_SHIFT)
+	return HasFlag(props, bidiControlShift)
 }
 
-func PairedBracketType(c rune) UBidiPairedBracketType {
+func PairedBracketType(c rune) UPairedBracketType {
 	props := ubidi.trie.Get16(c)
-	return UBidiPairedBracketType((props & UBIDI_BPT_MASK) >> UBIDI_BPT_SHIFT)
+	return UPairedBracketType((props & bptMask) >> bptShift)
 }
 
-func Class(c rune) UCharDirection {
+func Class(c rune) CharDirection {
 	props := ubidi.trie.Get16(c)
-	return UCharDirection(props & UBIDI_CLASS_MASK)
+	return CharDirection(props & classMask)
 }

@@ -31,7 +31,7 @@ func New(pos []byte) BytesTrie {
 	return BytesTrie{pos: pos, original: pos, remainingMatchLength: -1}
 }
 
-type Result int32
+type result int32
 
 const ( /**
 	 * The input unit(s) did not continue a matching string.
@@ -40,14 +40,14 @@ const ( /**
 	 * until the trie is reset to its original state or to a saved state.
 	 * @stable ICU 4.8
 	 */
-	NO_MATCH Result = iota
+	noMatch result = iota
 	/**
 	 * The input unit(s) continued a matching string
 	 * but there is no value for the string so far.
 	 * (It is a prefix of a longer string.)
 	 * @stable ICU 4.8
 	 */
-	NO_VALUE
+	noValue
 	/**
 	 * The input unit(s) continued a matching string
 	 * and there is a value for the string so far.
@@ -55,7 +55,7 @@ const ( /**
 	 * No further input byte/unit can continue a matching string.
 	 * @stable ICU 4.8
 	 */
-	FINAL_VALUE
+	finalValue
 	/**
 	 * The input unit(s) continued a matching string
 	 * and there is a value for the string so far.
@@ -63,43 +63,43 @@ const ( /**
 	 * Another input byte/unit can continue a matching string.
 	 * @stable ICU 4.8
 	 */
-	INTERMEDIATE_VALUE
+	intermediateValue
 )
 
 const (
-	kMaxBranchLinearSubNodeLength = 5
+	maxBranchLinearSubNodeLength = 5
 
 	// 10..1f: Linear-match node, match 1..16 bytes and continue reading the next node.
-	kMinLinearMatch       = 0x10
-	kMaxLinearMatchLength = 0x10
+	minLinearMatch       = 0x10
+	maxLinearMatchLength = 0x10
 
 	// 20..ff: Variable-length value node.
 	// If odd, the value is final. (Otherwise, intermediate value or jump delta.)
 	// Then shift-right by 1 bit.
 	// The remaining lead byte value indicates the number of following bytes (0..4)
 	// and contains the value's top bits.
-	kMinValueLead = kMinLinearMatch + kMaxLinearMatchLength // 0x20
+	minValueLead = minLinearMatch + maxLinearMatchLength // 0x20
 	// It is a final value if bit 0 is set.
-	kValueIsFinal = 1
+	valueIsFinal = 1
 
 	// Compact value: After testing bit 0, shift right by 1 and then use the following thresholds.
-	kMinOneByteValueLead = kMinValueLead / 2 // 0x10
-	kMaxOneByteValue     = 0x40              // At least 6 bits in the first byte.
+	minOneByteValueLead = minValueLead / 2 // 0x10
+	maxOneByteValue     = 0x40             // At least 6 bits in the first byte.
 
-	kMinTwoByteValueLead   = kMinOneByteValueLead + kMaxOneByteValue + 1 // 0x51
-	kMaxTwoByteValue       = 0x1aff
-	kMinThreeByteValueLead = kMinTwoByteValueLead + (kMaxTwoByteValue >> 8) + 1 // 0x6c
-	kFourByteValueLead     = 0x7e
+	minTwoByteValueLead   = minOneByteValueLead + maxOneByteValue + 1 // 0x51
+	maxTwoByteValue       = 0x1aff
+	minThreeByteValueLead = minTwoByteValueLead + (maxTwoByteValue >> 8) + 1 // 0x6c
+	fourByteValueLead     = 0x7e
 
 	// Compact delta integers.
-	kMaxOneByteDelta       = 0xbf
-	kMinTwoByteDeltaLead   = kMaxOneByteDelta + 1 // 0xc0
-	kMinThreeByteDeltaLead = 0xf0
-	kFourByteDeltaLead     = 0xfe
+	maxOneByteDelta       = 0xbf
+	minTwoByteDeltaLead   = maxOneByteDelta + 1 // 0xc0
+	minThreeByteDeltaLead = 0xf0
+	fourByteDeltaLead     = 0xfe
 )
 
 func (bt *BytesTrie) ContainsName(name string) bool {
-	result := NO_VALUE
+	result := noValue
 	for _, c := range []byte(name) {
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'
@@ -112,13 +112,13 @@ func (bt *BytesTrie) ContainsName(name string) bool {
 		}
 		result = bt.next(int32(c))
 	}
-	return result >= FINAL_VALUE
+	return result >= finalValue
 }
 
-func (bt *BytesTrie) next(inByte int32) Result {
+func (bt *BytesTrie) next(inByte int32) result {
 	pos := bt.pos
 	if pos == nil {
-		return NO_MATCH
+		return noMatch
 	}
 	if inByte < 0 {
 		inByte += 0x100
@@ -134,28 +134,27 @@ func (bt *BytesTrie) next(inByte int32) Result {
 			bt.pos = pos
 			if length < 0 {
 				node := int32(pos[0])
-				if node >= kMinValueLead {
+				if node >= minValueLead {
 					return bt.valueResult(node)
 				}
 			}
-			return NO_VALUE
-		} else {
-			bt.stop()
-			return NO_MATCH
+			return noValue
 		}
+		bt.stop()
+		return noMatch
 	}
 	return bt.nextImpl(pos, inByte)
 }
 
-func (bt *BytesTrie) nextImpl(pos []byte, inByte int32) Result {
+func (bt *BytesTrie) nextImpl(pos []byte, inByte int32) result {
 	for {
 		node := int32(pos[0])
 		pos = pos[1:]
-		if node < kMinLinearMatch {
+		if node < minLinearMatch {
 			return bt.branchNext(pos, node, inByte)
-		} else if node < kMinValueLead {
+		} else if node < minValueLead {
 			// Match the first of length+1 bytes.
-			length := node - kMinLinearMatch // Actual match length minus 1.
+			length := node - minLinearMatch // Actual match length minus 1.
 			match := inByte == int32(pos[0])
 			pos = pos[1:]
 			if match {
@@ -164,38 +163,36 @@ func (bt *BytesTrie) nextImpl(pos []byte, inByte int32) Result {
 				bt.pos = pos
 				if length < 0 {
 					node = int32(pos[0])
-					if node >= kMinValueLead {
+					if node >= minValueLead {
 						return bt.valueResult(node)
 					}
 				}
-				return NO_VALUE
-			} else {
-				// No match.
-				break
+				return noValue
 			}
-		} else if (node & kValueIsFinal) != 0 {
+			// No match.
+			break
+		} else if (node & valueIsFinal) != 0 {
 			// No further matching bytes.
 			break
 		} else {
 			// Skip intermediate value.
 			pos = bt.skipValue2(pos, node)
 			// The next node must not also be a value node.
-			// U_ASSERT(*pos<kMinValueLead);
 		}
 	}
 	bt.stop()
-	return NO_MATCH
+	return noMatch
 }
 
 func (bt *BytesTrie) stop() {
 	bt.pos = nil
 }
 
-func (bt *BytesTrie) valueResult(node int32) Result {
-	return INTERMEDIATE_VALUE - Result(node&kValueIsFinal)
+func (bt *BytesTrie) valueResult(node int32) result {
+	return intermediateValue - result(node&valueIsFinal)
 }
 
-func (bt *BytesTrie) branchNext(pos []byte, length int32, inByte int32) Result {
+func (bt *BytesTrie) branchNext(pos []byte, length int32, inByte int32) result {
 	// Branch according to the current unit.
 	if length == 0 {
 		length = int32(pos[0])
@@ -204,7 +201,7 @@ func (bt *BytesTrie) branchNext(pos []byte, length int32, inByte int32) Result {
 	length++
 	// The length of the branch is the number of units to select from.
 	// The data structure encodes a binary search.
-	for length > kMaxBranchLinearSubNodeLength {
+	for length > maxBranchLinearSubNodeLength {
 		p := int32(pos[0])
 		pos = pos[1:]
 		if inByte < p {
@@ -222,27 +219,26 @@ func (bt *BytesTrie) branchNext(pos []byte, length int32, inByte int32) Result {
 		p := int32(pos[0])
 		pos = pos[1:]
 		if inByte == p {
-			var result Result
+			var result result
 			node := int32(pos[0])
-			// U_ASSERT(node>=kMinValueLead);
-			if (node & kValueIsFinal) != 0 {
+			if (node & valueIsFinal) != 0 {
 				// Leave the final value for getValue() to read.
-				result = FINAL_VALUE
+				result = finalValue
 			} else {
 				// Use the non-final value as the jump delta.
 				pos = pos[1:]
 				// int32_t delta=readValue(pos, node>>1);
 				node >>= 1
 				var delta int32
-				if node < kMinTwoByteValueLead {
-					delta = node - kMinOneByteValueLead
-				} else if node < kMinThreeByteValueLead {
-					delta = ((node - kMinTwoByteValueLead) << 8) | int32(pos[0])
+				if node < minTwoByteValueLead {
+					delta = node - minOneByteValueLead
+				} else if node < minThreeByteValueLead {
+					delta = ((node - minTwoByteValueLead) << 8) | int32(pos[0])
 					pos = pos[1:]
-				} else if node < kFourByteValueLead {
-					delta = ((node - kMinThreeByteValueLead) << 16) | (int32(pos[0]) << 8) | int32(pos[1])
+				} else if node < fourByteValueLead {
+					delta = ((node - minThreeByteValueLead) << 16) | (int32(pos[0]) << 8) | int32(pos[1])
 					pos = pos[2:]
-				} else if node == kFourByteValueLead {
+				} else if node == fourByteValueLead {
 					delta = (int32(pos[0]) << 16) | (int32(pos[1]) << 8) | int32(pos[2])
 					pos = pos[3:]
 				} else {
@@ -252,10 +248,10 @@ func (bt *BytesTrie) branchNext(pos []byte, length int32, inByte int32) Result {
 				// end readValue()
 				pos = pos[delta:]
 				node = int32(pos[0])
-				if node >= kMinValueLead {
+				if node >= minValueLead {
 					result = bt.valueResult(node)
 				} else {
-					result = NO_VALUE
+					result = noValue
 				}
 			}
 			bt.pos = pos
@@ -272,14 +268,13 @@ func (bt *BytesTrie) branchNext(pos []byte, length int32, inByte int32) Result {
 	if inByte == p {
 		bt.pos = pos
 		node := int32(pos[0])
-		if node >= kMinValueLead {
+		if node >= minValueLead {
 			return bt.valueResult(node)
 		}
-		return NO_VALUE
-	} else {
-		bt.stop()
-		return NO_MATCH
+		return noValue
 	}
+	bt.stop()
+	return noMatch
 }
 
 func (bt *BytesTrie) skipValue1(pos []byte) []byte {
@@ -288,10 +283,10 @@ func (bt *BytesTrie) skipValue1(pos []byte) []byte {
 }
 
 func (bt *BytesTrie) skipValue2(pos []byte, leadByte int32) []byte {
-	if leadByte >= (kMinTwoByteValueLead << 1) {
-		if leadByte < (kMinThreeByteValueLead << 1) {
+	if leadByte >= (minTwoByteValueLead << 1) {
+		if leadByte < (minThreeByteValueLead << 1) {
 			pos = pos[1:]
-		} else if leadByte < (kFourByteValueLead << 1) {
+		} else if leadByte < (fourByteValueLead << 1) {
 			pos = pos[2:]
 		} else {
 			pos = pos[3+((leadByte>>1)&1):]
@@ -303,10 +298,10 @@ func (bt *BytesTrie) skipValue2(pos []byte, leadByte int32) []byte {
 func (bt *BytesTrie) skipDelta(pos []byte) []byte {
 	delta := int32(pos[0])
 	pos = pos[1:]
-	if delta >= kMinTwoByteDeltaLead {
-		if delta < kMinThreeByteDeltaLead {
+	if delta >= minTwoByteDeltaLead {
+		if delta < minThreeByteDeltaLead {
 			pos = pos[1:]
-		} else if delta < kFourByteDeltaLead {
+		} else if delta < fourByteDeltaLead {
 			pos = pos[2:]
 		} else {
 			pos = pos[3+(delta&1):]
@@ -318,15 +313,15 @@ func (bt *BytesTrie) skipDelta(pos []byte) []byte {
 func (bt *BytesTrie) jumpByDelta(pos []byte) []byte {
 	delta := int32(pos[0])
 	pos = pos[1:]
-	if delta < kMinTwoByteDeltaLead {
+	if delta < minTwoByteDeltaLead {
 		// nothing to do
-	} else if delta < kMinThreeByteDeltaLead {
-		delta = ((delta - kMinTwoByteDeltaLead) << 8) | int32(pos[0])
+	} else if delta < minThreeByteDeltaLead {
+		delta = ((delta - minTwoByteDeltaLead) << 8) | int32(pos[0])
 		pos = pos[1:]
-	} else if delta < kFourByteDeltaLead {
-		delta = ((delta - kMinThreeByteDeltaLead) << 16) | (int32(pos[0]) << 8) | int32(pos[1])
+	} else if delta < fourByteDeltaLead {
+		delta = ((delta - minThreeByteDeltaLead) << 16) | (int32(pos[0]) << 8) | int32(pos[1])
 		pos = pos[2:]
-	} else if delta == kFourByteDeltaLead {
+	} else if delta == fourByteDeltaLead {
 		delta = (int32(pos[0]) << 16) | (int32(pos[1]) << 8) | int32(pos[2])
 		pos = pos[3:]
 	} else {
@@ -344,13 +339,13 @@ func (bt *BytesTrie) GetValue() int32 {
 
 func (bt *BytesTrie) readValue(pos []byte, leadByte int32) int32 {
 	var value int32
-	if leadByte < kMinTwoByteValueLead {
-		value = leadByte - kMinOneByteValueLead
-	} else if leadByte < kMinThreeByteValueLead {
-		value = ((leadByte - kMinTwoByteValueLead) << 8) | int32(pos[0])
-	} else if leadByte < kFourByteValueLead {
-		value = ((leadByte - kMinThreeByteValueLead) << 16) | (int32(pos[0]) << 8) | int32(pos[1])
-	} else if leadByte == kFourByteValueLead {
+	if leadByte < minTwoByteValueLead {
+		value = leadByte - minOneByteValueLead
+	} else if leadByte < minThreeByteValueLead {
+		value = ((leadByte - minTwoByteValueLead) << 8) | int32(pos[0])
+	} else if leadByte < fourByteValueLead {
+		value = ((leadByte - minThreeByteValueLead) << 16) | (int32(pos[0]) << 8) | int32(pos[1])
+	} else if leadByte == fourByteValueLead {
 		value = (int32(pos[0]) << 16) | (int32(pos[1]) << 8) | int32(pos[2])
 	} else {
 		value = (int32(pos[0]) << 24) | (int32(pos[1]) << 16) | (int32(pos[2]) << 8) | int32(pos[3])

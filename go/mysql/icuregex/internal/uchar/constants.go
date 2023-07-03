@@ -23,9 +23,11 @@ package uchar
 
 import "golang.org/x/exp/constraints"
 
-func U_MASK[T constraints.Integer](x T) uint32 {
+func uMask[T constraints.Integer](x T) uint32 {
 	return 1 << x
 }
+
+type Category int8
 
 const (
 	/*
@@ -36,67 +38,67 @@ const (
 	 */
 
 	/** Non-category for unassigned and non-character code points. @stable ICU 2.0 */
-	U_UNASSIGNED = 0
+	Unassigned Category = 0
 	/** Cn "Other, Not Assigned (no characters in [UnicodeData.txt] have this property)" (same as U_UNASSIGNED!) @stable ICU 2.0 */
-	U_GENERAL_OTHER_TYPES = 0
+	GeneralOtherTypes Category = iota - 1
 	/** Lu @stable ICU 2.0 */
-	U_UPPERCASE_LETTER = 1
+	UppercaseLetter
 	/** Ll @stable ICU 2.0 */
-	U_LOWERCASE_LETTER = 2
+	LowercaseLetter
 	/** Lt @stable ICU 2.0 */
-	U_TITLECASE_LETTER = 3
+	TitlecaseLetter
 	/** Lm @stable ICU 2.0 */
-	U_MODIFIER_LETTER = 4
+	ModifierLetter
 	/** Lo @stable ICU 2.0 */
-	U_OTHER_LETTER = 5
+	OtherLetter
 	/** Mn @stable ICU 2.0 */
-	U_NON_SPACING_MARK = 6
+	NonSpacingMask
 	/** Me @stable ICU 2.0 */
-	U_ENCLOSING_MARK = 7
+	EnclosingMark
 	/** Mc @stable ICU 2.0 */
-	U_COMBINING_SPACING_MARK = 8
+	CombiningSpacingMask
 	/** Nd @stable ICU 2.0 */
-	U_DECIMAL_DIGIT_NUMBER = 9
+	DecimalDigitNumber
 	/** Nl @stable ICU 2.0 */
-	U_LETTER_NUMBER = 10
+	LetterNumber
 	/** No @stable ICU 2.0 */
-	U_OTHER_NUMBER = 11
+	OtherNumber
 	/** Zs @stable ICU 2.0 */
-	U_SPACE_SEPARATOR = 12
+	SpaceSeparator
 	/** Zl @stable ICU 2.0 */
-	U_LINE_SEPARATOR = 13
+	LineSeparator
 	/** Zp @stable ICU 2.0 */
-	U_PARAGRAPH_SEPARATOR = 14
+	ParagraphSeparator
 	/** Cc @stable ICU 2.0 */
-	U_CONTROL_CHAR = 15
+	ControlChar
 	/** Cf @stable ICU 2.0 */
-	U_FORMAT_CHAR = 16
+	FormatChar
 	/** Co @stable ICU 2.0 */
-	U_PRIVATE_USE_CHAR = 17
+	PrivateUseChar
 	/** Cs @stable ICU 2.0 */
-	U_SURROGATE = 18
+	Surrogate
 	/** Pd @stable ICU 2.0 */
-	U_DASH_PUNCTUATION = 19
+	DashPunctuation
 	/** Ps @stable ICU 2.0 */
-	U_START_PUNCTUATION = 20
+	StartPunctuation
 	/** Pe @stable ICU 2.0 */
-	U_END_PUNCTUATION = 21
+	EndPunctuation
 	/** Pc @stable ICU 2.0 */
-	U_CONNECTOR_PUNCTUATION = 22
+	ConnectorPunctuation
 	/** Po @stable ICU 2.0 */
-	U_OTHER_PUNCTUATION = 23
+	OtherPunctuation
 	/** Sm @stable ICU 2.0 */
-	U_MATH_SYMBOL = 24
+	MathSymbol
 	/** Sc @stable ICU 2.0 */
-	U_CURRENCY_SYMBOL = 25
+	CurrencySymbol
 	/** Sk @stable ICU 2.0 */
-	U_MODIFIER_SYMBOL = 26
+	ModifierSymbol
 	/** So @stable ICU 2.0 */
-	U_OTHER_SYMBOL = 27
+	OtherSymbol
 	/** Pi @stable ICU 2.0 */
-	U_INITIAL_PUNCTUATION = 28
+	InitialPunctuation
 	/** Pf @stable ICU 2.0 */
-	U_FINAL_PUNCTUATION = 29
+	FinalPunctuation
 	/**
 	 * One higher than the last enum UCharCategory constant.
 	 * This numeric value is stable (will not change), see
@@ -104,135 +106,135 @@ const (
 	 *
 	 * @stable ICU 2.0
 	 */
-	U_CHAR_CATEGORY_COUNT = 30
+	CharCategoryCount
 )
 
 var (
-	U_GC_CN_MASK = U_MASK(U_GENERAL_OTHER_TYPES)
+	GcCnMask = uMask(GeneralOtherTypes)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_LU_MASK = U_MASK(U_UPPERCASE_LETTER)
+	GcLuMask = uMask(UppercaseLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_LL_MASK = U_MASK(U_LOWERCASE_LETTER)
+	GcLlMask = uMask(LowercaseLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_LT_MASK = U_MASK(U_TITLECASE_LETTER)
+	GcLtMask = uMask(TitlecaseLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_LM_MASK = U_MASK(U_MODIFIER_LETTER)
+	GcLmMask = uMask(ModifierLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_LO_MASK = U_MASK(U_OTHER_LETTER)
+	GcLoMask = uMask(OtherLetter)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_MN_MASK = U_MASK(U_NON_SPACING_MARK)
+	GcMnMask = uMask(NonSpacingMask)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_ME_MASK = U_MASK(U_ENCLOSING_MARK)
+	GcMeMask = uMask(EnclosingMark)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_MC_MASK = U_MASK(U_COMBINING_SPACING_MARK)
+	GcMcMask = uMask(CombiningSpacingMask)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_ND_MASK = U_MASK(U_DECIMAL_DIGIT_NUMBER)
+	GcNdMask = uMask(DecimalDigitNumber)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_NL_MASK = U_MASK(U_LETTER_NUMBER)
+	GcNlMask = uMask(LetterNumber)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_NO_MASK = U_MASK(U_OTHER_NUMBER)
+	GcNoMask = uMask(OtherNumber)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_ZS_MASK = U_MASK(U_SPACE_SEPARATOR)
+	GcZsMask = uMask(SpaceSeparator)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_ZL_MASK = U_MASK(U_LINE_SEPARATOR)
+	GcZlMask = uMask(LineSeparator)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_ZP_MASK = U_MASK(U_PARAGRAPH_SEPARATOR)
+	GcZpMask = uMask(ParagraphSeparator)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_CC_MASK = U_MASK(U_CONTROL_CHAR)
+	GcCcMask = uMask(ControlChar)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_CF_MASK = U_MASK(U_FORMAT_CHAR)
+	GcCfMask = uMask(FormatChar)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_CO_MASK = U_MASK(U_PRIVATE_USE_CHAR)
+	GcCoMask = uMask(PrivateUseChar)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_CS_MASK = U_MASK(U_SURROGATE)
+	GcCsMask = uMask(Surrogate)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_PD_MASK = U_MASK(U_DASH_PUNCTUATION)
+	GcPdMask = uMask(DashPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_PS_MASK = U_MASK(U_START_PUNCTUATION)
+	GcPsMask = uMask(StartPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_PE_MASK = U_MASK(U_END_PUNCTUATION)
+	GcPeMask = uMask(EndPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_PC_MASK = U_MASK(U_CONNECTOR_PUNCTUATION)
+	GcPcMask = uMask(ConnectorPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_PO_MASK = U_MASK(U_OTHER_PUNCTUATION)
+	GcPoMask = uMask(OtherPunctuation)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_SM_MASK = U_MASK(U_MATH_SYMBOL)
+	GcSmMask = uMask(MathSymbol)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_SC_MASK = U_MASK(U_CURRENCY_SYMBOL)
+	GcScMask = uMask(CurrencySymbol)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_SK_MASK = U_MASK(U_MODIFIER_SYMBOL)
+	GcSkMask = uMask(ModifierSymbol)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	U_GC_SO_MASK = U_MASK(U_OTHER_SYMBOL)
+	GcSoMask = uMask(OtherSymbol)
 
 	/** Mask constant for multiple UCharCategory bits (L Letters). @stable ICU 2.1 */
-	U_GC_L_MASK = (U_GC_LU_MASK | U_GC_LL_MASK | U_GC_LT_MASK | U_GC_LM_MASK | U_GC_LO_MASK)
+	GcLMask = (GcLuMask | GcLlMask | GcLtMask | GcLmMask | GcLoMask)
 
 	/** Mask constant for multiple UCharCategory bits (LC Cased Letters). @stable ICU 2.1 */
-	U_GC_LC_MASK = (U_GC_LU_MASK | U_GC_LL_MASK | U_GC_LT_MASK)
+	GcLcMask = (GcLuMask | GcLlMask | GcLtMask)
 
 	/** Mask constant for multiple UCharCategory bits (M Marks). @stable ICU 2.1 */
-	U_GC_M_MASK = (U_GC_MN_MASK | U_GC_ME_MASK | U_GC_MC_MASK)
+	GcMMask = (GcMnMask | GcMeMask | GcMcMask)
 
 	/** Mask constant for multiple UCharCategory bits (N Numbers). @stable ICU 2.1 */
-	U_GC_N_MASK = (U_GC_ND_MASK | U_GC_NL_MASK | U_GC_NO_MASK)
+	GcNMask = (GcNdMask | GcNlMask | GcNoMask)
 
 	/** Mask constant for multiple UCharCategory bits (Z Separators). @stable ICU 2.1 */
-	U_GC_Z_MASK = (U_GC_ZS_MASK | U_GC_ZL_MASK | U_GC_ZP_MASK)
+	GcZMask = (GcZsMask | GcZlMask | GcZpMask)
 )
 
-const UPROPS_AGE_SHIFT = 24
-const U_MAX_VERSION_LENGTH = 4
-const U_VERSION_DELIMITER = '.'
+const upropsAgeShift = 24
+const maxVersionLength = 4
+const versionDelimiter = '.'
 
-type UVersionInfo [U_MAX_VERSION_LENGTH]uint8
+type UVersionInfo [maxVersionLength]uint8
 
 const (
 	/** No numeric value. */
-	UPROPS_NTV_NONE = 0
+	UPropsNtvNone = 0
 	/** Decimal digits: nv=0..9 */
-	UPROPS_NTV_DECIMAL_START = 1
+	UPropsNtvDecimalStart = 1
 	/** Other digits: nv=0..9 */
-	UPROPS_NTV_DIGIT_START = 11
+	UPropsNtvDigitStart = 11
 	/** Small integers: nv=0..154 */
-	UPROPS_NTV_NUMERIC_START = 21
+	UPropsNtvNumericStart = 21
 	/** Fractions: ((ntv>>4)-12) / ((ntv&0xf)+1) = -1..17 / 1..16 */
-	UPROPS_NTV_FRACTION_START = 0xb0
+	UPropsNtvFractionStart = 0xb0
 	/**
 	 * Large integers:
 	 * ((ntv>>5)-14) * 10^((ntv&0x1f)+2) = (1..9)*(10^2..10^33)
 	 * (only one significant decimal digit)
 	 */
-	UPROPS_NTV_LARGE_START = 0x1e0
+	UPropsNtvLargeStart = 0x1e0
 	/**
 	 * Sexagesimal numbers:
 	 * ((ntv>>2)-0xbf) * 60^((ntv&3)+1) = (1..9)*(60^1..60^4)
 	 */
-	UPROPS_NTV_BASE60_START = 0x300
+	UPropsNtvBase60Start = 0x300
 	/**
 	 * Fraction-20 values:
 	 * frac20 = ntv-0x324 = 0..0x17 -> 1|3|5|7 / 20|40|80|160|320|640
 	 * numerator: num = 2*(frac20&3)+1
 	 * denominator: den = 20<<(frac20>>2)
 	 */
-	UPROPS_NTV_FRACTION20_START = UPROPS_NTV_BASE60_START + 36 // 0x300+9*4=0x324
+	UPropsNtvFraction20Start = UPropsNtvBase60Start + 36 // 0x300+9*4=0x324
 	/**
 	 * Fraction-32 values:
 	 * frac32 = ntv-0x34c = 0..15 -> 1|3|5|7 / 32|64|128|256
 	 * numerator: num = 2*(frac32&3)+1
 	 * denominator: den = 32<<(frac32>>2)
 	 */
-	UPROPS_NTV_FRACTION32_START = UPROPS_NTV_FRACTION20_START + 24 // 0x324+6*4=0x34c
+	UPropsNtvFraction32Start = UPropsNtvFraction20Start + 24 // 0x324+6*4=0x34c
 	/** No numeric value (yet). */
-	UPROPS_NTV_RESERVED_START = UPROPS_NTV_FRACTION32_START + 16 // 0x34c+4*4=0x35c
+	UPropsNtvReservedStart = UPropsNtvFraction32Start + 16 // 0x34c+4*4=0x35c
 
-	UPROPS_NTV_MAX_SMALL_INT = UPROPS_NTV_FRACTION_START - UPROPS_NTV_NUMERIC_START - 1
+	UPropsNtvMaxSmallInt = UPropsNtvFractionStart - UPropsNtvNumericStart - 1
 )
 
-const U_NO_NUMERIC_VALUE = -123456789.0
+const noNumericValue = -123456789.0

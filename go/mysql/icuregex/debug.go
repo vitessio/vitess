@@ -30,11 +30,11 @@ func (pat *Pattern) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Original Pattern:  \"%s\"\n", pat.pattern)
 	fmt.Fprintf(w, "   Min Match Length:  %d\n", pat.minMatchLen)
 	fmt.Fprintf(w, "   Match Start Type:  %v\n", pat.startType)
-	if pat.startType == START_STRING {
+	if pat.startType == startString {
 		fmt.Fprintf(w, "   Initial match string: \"%s\"\n", string(pat.literalText[pat.initialStringIdx:pat.initialStringIdx+pat.initialStringLen]))
-	} else if pat.startType == START_SET {
+	} else if pat.startType == startSet {
 		fmt.Fprintf(w, "    Match First Chars: %s\n", pat.initialChars.String())
-	} else if pat.startType == START_CHAR {
+	} else if pat.startType == startChar {
 		fmt.Fprintf(w, "    First char of Match: ")
 		if pat.initialChar > 0x20 {
 			fmt.Fprintf(w, "'%c'\n", pat.initialChar)
@@ -61,93 +61,87 @@ func (pat *Pattern) Dump(w io.Writer) {
 
 func (pat *Pattern) dumpOp(w io.Writer, index int) {
 	op := pat.compiledPat[index]
-	val := op.Value()
-	opType := op.Type()
+	val := op.value()
+	opType := op.typ()
 	pinnedType := opType
-	if int(pinnedType) >= len(UrxOpcodeNames) {
+	if int(pinnedType) >= len(urxOpcodeNames) {
 		pinnedType = 0
 	}
 
-	fmt.Fprintf(w, "%4d   %08x    %-15s  ", index, op, UrxOpcodeNames[pinnedType])
+	fmt.Fprintf(w, "%4d   %08x    %-15s  ", index, op, urxOpcodeNames[pinnedType])
 
 	switch opType {
-	case URX_NOP,
-		URX_DOTANY,
-		URX_DOTANY_ALL,
-		URX_FAIL,
-		URX_CARET,
-		URX_DOLLAR,
-		URX_BACKSLASH_G,
-		URX_BACKSLASH_X,
-		URX_END,
-		URX_DOLLAR_M,
-		URX_CARET_M:
+	case urxNop,
+		urxDotany,
+		urxDotanyAll,
+		urxFail,
+		urxCaret,
+		urxDollar,
+		urxBackslashG,
+		urxBackslashX,
+		urxEnd,
+		urxDollarM,
+		urxCaretM:
 		// Types with no operand field of interest.
 
-	case URX_RESERVED_OP,
-		URX_START_CAPTURE,
-		URX_END_CAPTURE,
-		URX_STATE_SAVE,
-		URX_JMP,
-		URX_JMP_SAV,
-		URX_JMP_SAV_X,
-		URX_BACKSLASH_B,
-		URX_BACKSLASH_BU,
-		URX_BACKSLASH_D,
-		URX_BACKSLASH_Z,
-		URX_STRING_LEN,
-		URX_CTR_INIT,
-		URX_CTR_INIT_NG,
-		URX_CTR_LOOP,
-		URX_CTR_LOOP_NG,
-		URX_RELOC_OPRND,
-		URX_STO_SP,
-		URX_LD_SP,
-		URX_BACKREF,
-		URX_STO_INP_LOC,
-		URX_JMPX,
-		URX_LA_START,
-		URX_LA_END,
-		URX_BACKREF_I,
-		URX_LB_START,
-		URX_LB_CONT,
-		URX_LB_END,
-		URX_LBN_CONT,
-		URX_LBN_END,
-		URX_LOOP_C,
-		URX_LOOP_DOT_I,
-		URX_BACKSLASH_H,
-		URX_BACKSLASH_R,
-		URX_BACKSLASH_V:
+	case urxReservedOp,
+		urxStartCapture,
+		urxEndCapture,
+		urxStateSave,
+		urxJmp,
+		urxJmpSav,
+		urxJmpSavX,
+		urxBackslashB,
+		urxBackslashBu,
+		urxBackslashD,
+		urxBackslashZ,
+		urxStringLen,
+		urxCtrInit,
+		urxCtrInitNg,
+		utxCtrLoop,
+		urxCtrLoopNg,
+		urxRelocOprnd,
+		urxStoSp,
+		urxLdSp,
+		urxBackref,
+		urxStoInpLoc,
+		urxJmpx,
+		urxLaStart,
+		urxLaEnd,
+		urxBackrefI,
+		urxLbStart,
+		urxLbCont,
+		urxLbEnd,
+		urxLbnCount,
+		urxLbnEnd,
+		urxLoopC,
+		urxLoopDotI,
+		urxBackslashH,
+		urxBackslashR,
+		urxBackslashV:
 		// types with an integer operand field.
 		fmt.Fprintf(w, "%d", val)
 
-	case URX_ONECHAR, URX_ONECHAR_I:
+	case urxOnechar, urcOnecharI:
 		if val < 0x20 {
 			fmt.Fprintf(w, "%#x", val)
 		} else {
 			fmt.Fprintf(w, "'%c'", rune(val))
 		}
 
-	case URX_STRING, URX_STRING_I:
+	case urxString, urxStringI:
 		lengthOp := pat.compiledPat[index+1]
-		// U_ASSERT(URX_TYPE(lengthOp) == URX_STRING_LEN);
-		length := lengthOp.Value()
+		length := lengthOp.value()
 		fmt.Fprintf(w, "%q", string(pat.literalText[val:val+length]))
 
-	case URX_SETREF, URX_LOOP_SR_I:
-		// UnicodeString s;
-		// UnicodeSet *set = (UnicodeSet *)fSets->elementAt(val);
-		//set->toPattern(s, TRUE);
+	case urxSetref, urxLoopSrI:
 		fmt.Fprintf(w, "%s", pat.sets[val].String())
 
-	case URX_STATIC_SETREF, URX_STAT_SETREF_N:
-		if (val & URX_NEG_SET) != 0 {
+	case urxStaticSetref, urxStatSetrefN:
+		if (val & urxNegSet) != 0 {
 			fmt.Fprintf(w, "NOT ")
-			val &= ^URX_NEG_SET
+			val &= ^urxNegSet
 		}
-		// UnicodeSet &set = RegexStaticSets::gStaticSets->fPropSets[val];
-		// set.toPattern(s, TRUE);
 		fmt.Fprintf(w, "%s", staticPropertySets[val].String())
 
 	default:

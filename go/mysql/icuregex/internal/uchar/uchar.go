@@ -22,7 +22,7 @@ limitations under the License.
 package uchar
 
 import (
-	"fmt"
+	"errors"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
@@ -73,7 +73,7 @@ func readData(bytes *udata.Bytes) error {
 	trieLength := uprops.trie.SerializedLength()
 
 	if trieLength > expectedTrieLength {
-		return fmt.Errorf("ucase.icu: not enough bytes for the trie")
+		return errors.New("ucase.icu: not enough bytes for the trie")
 	}
 
 	bytes.Skip(expectedTrieLength - trieLength)
@@ -89,7 +89,7 @@ func readData(bytes *udata.Bytes) error {
 		trieLength = uprops.trie2.SerializedLength()
 
 		if trieLength > expectedTrieLength {
-			return fmt.Errorf("ucase.icu: not enough bytes for the trie")
+			return errors.New("ucase.icu: not enough bytes for the trie")
 		}
 
 		bytes.Skip(expectedTrieLength - trieLength)
@@ -121,23 +121,23 @@ func VecAddPropertyStarts(sa PropertySet) {
 	})
 }
 
-func AddPropertyStarts(sa PropertySet) {
-	const (
-		TAB      = 0x0009
-		LF       = 0x000a
-		FF       = 0x000c
-		CR       = 0x000d
-		NBSP     = 0x00a0
-		CGJ      = 0x034f
-		FIGURESP = 0x2007
-		HAIRSP   = 0x200a
-		ZWNJ     = 0x200c
-		ZWJ      = 0x200d
-		RLM      = 0x200f
-		NNBSP    = 0x202f
-		ZWNBSP   = 0xfef
-	)
+const (
+	tab      = 0x0009
+	lf       = 0x000a
+	ff       = 0x000c
+	cr       = 0x000d
+	nbsp     = 0x00a0
+	cgj      = 0x034f
+	figuresp = 0x2007
+	hairsp   = 0x200a
+	zwnj     = 0x200c
+	zwj      = 0x200d
+	rlm      = 0x200f
+	nnbsp    = 0x202f
+	zwnbsp   = 0xfef
+)
 
+func AddPropertyStarts(sa PropertySet) {
 	/* add the start code point of each same-value range of the main trie */
 	uprops.trie.Enum(nil, func(start, _ rune, _ uint32) bool {
 		sa.AddRune(start)
@@ -147,11 +147,11 @@ func AddPropertyStarts(sa PropertySet) {
 	/* add code points with hardcoded properties, plus the ones following them */
 
 	/* add for u_isblank() */
-	sa.AddRune(TAB)
-	sa.AddRune(TAB + 1)
+	sa.AddRune(tab)
+	sa.AddRune(tab + 1)
 
 	/* add for IS_THAT_CONTROL_SPACE() */
-	sa.AddRune(CR + 1) /* range TAB..CR */
+	sa.AddRune(cr + 1) /* range TAB..CR */
 	sa.AddRune(0x1c)
 	sa.AddRune(0x1f + 1)
 	sa.AddRune(0x85) // NEXT LINE (NEL)
@@ -159,20 +159,20 @@ func AddPropertyStarts(sa PropertySet) {
 
 	/* add for u_isIDIgnorable() what was not added above */
 	sa.AddRune(0x7f) /* range DEL..NBSP-1, NBSP added below */
-	sa.AddRune(HAIRSP)
-	sa.AddRune(RLM + 1)
+	sa.AddRune(hairsp)
+	sa.AddRune(rlm + 1)
 	sa.AddRune(0x206a)     // INHIBIT SYMMETRIC SWAPPING
 	sa.AddRune(0x206f + 1) // NOMINAL DIGIT SHAPES
-	sa.AddRune(ZWNBSP)
-	sa.AddRune(ZWNBSP + 1)
+	sa.AddRune(zwnbsp)
+	sa.AddRune(zwnbsp + 1)
 
 	/* add no-break spaces for u_isWhitespace() what was not added above */
-	sa.AddRune(NBSP)
-	sa.AddRune(NBSP + 1)
-	sa.AddRune(FIGURESP)
-	sa.AddRune(FIGURESP + 1)
-	sa.AddRune(NNBSP)
-	sa.AddRune(NNBSP + 1)
+	sa.AddRune(nbsp)
+	sa.AddRune(nbsp + 1)
+	sa.AddRune(figuresp)
+	sa.AddRune(figuresp + 1)
+	sa.AddRune(nnbsp)
+	sa.AddRune(nnbsp + 1)
 
 	/* add for u_digit() */
 	sa.AddRune('a')
@@ -200,21 +200,21 @@ func AddPropertyStarts(sa PropertySet) {
 	sa.AddRune(0xe0fff + 1)
 
 	/* add for UCHAR_GRAPHEME_BASE and others */
-	sa.AddRune(CGJ)
-	sa.AddRune(CGJ + 1)
+	sa.AddRune(cgj)
+	sa.AddRune(cgj + 1)
 }
 
-func CharType(c rune) int8 {
+func CharType(c rune) Category {
 	props := uprops.trie.Get16(c)
-	return GET_CATEGORY(props)
+	return getCategory(props)
 }
 
 func GetProperties(c rune) uint16 {
 	return uprops.trie.Get16(c)
 }
 
-func GET_CATEGORY(props uint16) int8 {
-	return int8(props & 0x1f)
+func getCategory(props uint16) Category {
+	return Category(props & 0x1f)
 }
 
 func GetUnicodeProperties(c rune, column int) uint32 {
@@ -234,18 +234,18 @@ func ScriptExtensions(idx uint32) []uint16 {
 }
 
 func IsDigit(c rune) bool {
-	return CharType(c) == U_DECIMAL_DIGIT_NUMBER
+	return CharType(c) == DecimalDigitNumber
 }
 
 func IsPOSIXPrint(c rune) bool {
-	return CharType(c) == U_SPACE_SEPARATOR || IsGraphPOSIX(c)
+	return CharType(c) == SpaceSeparator || IsGraphPOSIX(c)
 }
 
 func IsGraphPOSIX(c rune) bool {
 	props := uprops.trie.Get16(c)
 	/* \p{space}\p{gc=Control} == \p{gc=Z}\p{Control} */
 	/* comparing ==0 returns FALSE for the categories mentioned */
-	return U_MASK(GET_CATEGORY(props))&(U_GC_CC_MASK|U_GC_CS_MASK|U_GC_CN_MASK|U_GC_Z_MASK) == 0
+	return uMask(getCategory(props))&(GcCcMask|GcCsMask|GcCnMask|GcZMask) == 0
 }
 
 func IsXDigit(c rune) bool {
@@ -262,18 +262,18 @@ func IsBlank(c rune) bool {
 		return c == 9 || c == 0x20 /* TAB or SPACE */
 	}
 	/* Zs */
-	return CharType(c) == U_SPACE_SEPARATOR
+	return CharType(c) == SpaceSeparator
 }
 
 func CharAge(c rune) UVersionInfo {
-	version := GetUnicodeProperties(c, 0) >> UPROPS_AGE_SHIFT
+	version := GetUnicodeProperties(c, 0) >> upropsAgeShift
 	return UVersionInfo{uint8(version >> 4), uint8(version & 0xf), 0, 0}
 }
 
 func VersionFromString(str string) (version UVersionInfo) {
 	part := 0
-	for len(str) > 0 && part < U_MAX_VERSION_LENGTH {
-		if str[0] == U_VERSION_DELIMITER {
+	for len(str) > 0 && part < maxVersionLength {
+		if str[0] == versionDelimiter {
 			str = str[1:]
 		}
 		str, version[part] = parseInt(str)
@@ -291,13 +291,14 @@ func parseInt(str string) (string, uint8) {
 
 	start := 0
 	end := 0
+whitespace:
 	for i := 0; i < len(str); i++ {
 		switch str[i] {
 		case ' ', '\f', '\n', '\r', '\t', '\v':
 			start++
 			continue
 		default:
-			break
+			break whitespace
 		}
 	}
 	str = str[start:]
@@ -317,33 +318,33 @@ func parseInt(str string) (string, uint8) {
 	return str[end:], uint8(val)
 }
 
-const UPROPS_NUMERIC_TYPE_VALUE_SHIFT = 6
+const upropsNumericTypeValueShift = 6
 
 func NumericTypeValue(c rune) uint16 {
 	props := uprops.trie.Get16(c)
-	return props >> UPROPS_NUMERIC_TYPE_VALUE_SHIFT
+	return props >> upropsNumericTypeValueShift
 }
 
 func NumericValue(c rune) float64 {
 	ntv := int32(NumericTypeValue(c))
 
-	if ntv == UPROPS_NTV_NONE {
-		return U_NO_NUMERIC_VALUE
-	} else if ntv < UPROPS_NTV_DIGIT_START {
+	if ntv == UPropsNtvNone {
+		return noNumericValue
+	} else if ntv < UPropsNtvDigitStart {
 		/* decimal digit */
-		return float64(ntv - UPROPS_NTV_DECIMAL_START)
-	} else if ntv < UPROPS_NTV_NUMERIC_START {
+		return float64(ntv - UPropsNtvDecimalStart)
+	} else if ntv < UPropsNtvNumericStart {
 		/* other digit */
-		return float64(ntv - UPROPS_NTV_DIGIT_START)
-	} else if ntv < UPROPS_NTV_FRACTION_START {
+		return float64(ntv - UPropsNtvDigitStart)
+	} else if ntv < UPropsNtvFractionStart {
 		/* small integer */
-		return float64(ntv - UPROPS_NTV_NUMERIC_START)
-	} else if ntv < UPROPS_NTV_LARGE_START {
+		return float64(ntv - UPropsNtvNumericStart)
+	} else if ntv < UPropsNtvLargeStart {
 		/* fraction */
 		numerator := (ntv >> 4) - 12
 		denominator := (ntv & 0xf) + 1
 		return float64(numerator) / float64(denominator)
-	} else if ntv < UPROPS_NTV_BASE60_START {
+	} else if ntv < UPropsNtvBase60Start {
 		/* large, single-significant-digit integer */
 		mant := (ntv >> 5) - 14
 		exp := (ntv & 0x1f) + 2
@@ -366,7 +367,7 @@ func NumericValue(c rune) float64 {
 		}
 
 		return numValue
-	} else if ntv < UPROPS_NTV_FRACTION20_START {
+	} else if ntv < UPropsNtvFraction20Start {
 		/* sexagesimal (base 60) integer */
 		numValue := (ntv >> 2) - 0xbf
 		exp := (ntv & 3) + 1
@@ -385,20 +386,20 @@ func NumericValue(c rune) float64 {
 		}
 
 		return float64(numValue)
-	} else if ntv < UPROPS_NTV_FRACTION32_START {
+	} else if ntv < UPropsNtvFraction32Start {
 		// fraction-20 e.g. 3/80
-		frac20 := ntv - UPROPS_NTV_FRACTION20_START // 0..0x17
+		frac20 := ntv - UPropsNtvFraction20Start // 0..0x17
 		numerator := 2*(frac20&3) + 1
 		denominator := 20 << (frac20 >> 2)
 		return float64(numerator) / float64(denominator)
-	} else if ntv < UPROPS_NTV_RESERVED_START {
+	} else if ntv < UPropsNtvReservedStart {
 		// fraction-32 e.g. 3/64
-		frac32 := ntv - UPROPS_NTV_FRACTION32_START // 0..15
+		frac32 := ntv - UPropsNtvFraction32Start // 0..15
 		numerator := 2*(frac32&3) + 1
 		denominator := 32 << (frac32 >> 2)
 		return float64(numerator) / float64(denominator)
 	} else {
 		/* reserved */
-		return U_NO_NUMERIC_VALUE
+		return noNumericValue
 	}
 }

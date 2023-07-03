@@ -30,7 +30,7 @@ const (
 	 * Ignore white space within patterns unless quoted or escaped.
 	 * @stable ICU 2.4
 	 */
-	USET_IGNORE_SPACE USet = 1
+	IgnoreSpace USet = 1
 
 	/**
 	 * Enable case insensitive matching.  E.g., "[ab]" with this flag
@@ -58,7 +58,7 @@ const (
 	 *
 	 * @stable ICU 2.4
 	 */
-	USET_CASE_INSENSITIVE USet = 2
+	CaseInsensitive USet = 2
 
 	/**
 	 * Enable case insensitive matching.  E.g., "[ab]" with this flag
@@ -68,14 +68,14 @@ const (
 	 * of each existing element in the set.
 	 * @stable ICU 3.2
 	 */
-	USET_ADD_CASE_MAPPINGS USet = 4
+	AddCaseMappings USet = 4
 )
 
 func (u *UnicodeSet) CloseOver(attribute USet) {
-	if attribute&USET_ADD_CASE_MAPPINGS != 0 {
+	if attribute&AddCaseMappings != 0 {
 		panic("USET_ADD_CASE_MAPPINGS is unsupported")
 	}
-	if (attribute & USET_CASE_INSENSITIVE) == 0 {
+	if (attribute & CaseInsensitive) == 0 {
 		return
 	}
 

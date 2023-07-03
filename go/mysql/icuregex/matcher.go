@@ -31,9 +31,9 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
-const TIMER_INITIAL_VALUE = 10000
-const DEFAULT_TIMEOUT = 3
-const DEFAULT_STACK_LIMIT = 0
+const timerInitialValue = 10000
+const defaultTimeout = 3
+const defaultStackLimit = 0
 
 type Matcher struct {
 	pattern *Pattern
@@ -70,8 +70,8 @@ type Matcher struct {
 	requireEnd bool // True if the last match required end-of-input
 	//    (matched $ or Z)
 
-	stack Stack
-	frame StackFrame // After finding a match, the last active stack frame,
+	stack stack
+	frame stackFrame // After finding a match, the last active stack frame,
 	//   which will contain the capture group results.
 	//   NOT valid while match engine is running.
 
@@ -91,11 +91,11 @@ func NewMatcher(pat *Pattern) *Matcher {
 	m := &Matcher{
 		pattern: pat,
 		data:    make([]int, pat.dataSize),
-		stack: Stack{
+		stack: stack{
 			frameSize:  pat.frameSize,
-			stackLimit: DEFAULT_STACK_LIMIT,
+			stackLimit: defaultStackLimit,
 		},
-		timeLimit: DEFAULT_TIMEOUT,
+		timeLimit: defaultTimeout,
 	}
 	m.reset()
 	return m
@@ -144,33 +144,33 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 		*fp.patIdx()++
 
-		switch op.Type() {
-		case URX_NOP:
+		switch op.typ() {
+		case urxNop:
 			// Nothing to do.
-		case URX_BACKTRACK:
+		case urxBacktrack:
 			// Force a backtrack.  In some circumstances, the pattern compiler
 			//   will notice that the pattern can't possibly match anything, and will
 			//   emit one of these at that point.
 			fp = m.stack.popFrame()
-		case URX_ONECHAR:
+		case urxOnechar:
 			if *fp.inputIdx() < m.activeLimit {
 				c := charAt(inputText, *fp.inputIdx())
 				*fp.inputIdx()++
-				if c == rune(op.Value()) {
+				if c == rune(op.value()) {
 					break
 				}
 			} else {
 				m.hitEnd = true
 			}
 			fp = m.stack.popFrame()
-		case URX_STRING:
+		case urxString:
 			// Test input against a literal string.
 			// Strings require two slots in the compiled pattern, one for the
 			//   offset to the string text, and one for the length.
-			stringStartIdx := op.Value()
+			stringStartIdx := op.value()
 			nextOp := pat[*fp.patIdx()] // Fetch the second operand
 			*fp.patIdx()++
-			stringLen := nextOp.Value()
+			stringLen := nextOp.value()
 
 			patternString := litText[stringStartIdx:]
 			var patternStringIndex int
@@ -192,12 +192,12 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			if !success {
 				fp = m.stack.popFrame()
 			}
-		case URX_STATE_SAVE:
-			fp, err = m.StateSave(*fp.inputIdx(), op.Value())
+		case urxStateSave:
+			fp, err = m.stateSave(*fp.inputIdx(), op.value())
 			if err != nil {
 				return err
 			}
-		case URX_END:
+		case urxEnd:
 			// The match loop will exit via this path on a successful match,
 			//   when we reach the end of the pattern.
 			if toEnd && *fp.inputIdx() != m.activeLimit {
@@ -213,13 +213,13 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 		//             opValue+1 - The end   of a completed capture group
 		//             opValue+2 - the start of a capture group whose end
 		//                          has not yet been reached (and might not ever be).
-		case URX_START_CAPTURE:
-			*fp.extra(op.Value() + 2) = *fp.inputIdx()
-		case URX_END_CAPTURE:
-			*fp.extra(op.Value()) = *fp.extra(op.Value() + 2) // Tentative start becomes real.
-			*fp.extra(op.Value() + 1) = *fp.inputIdx()        // End position
+		case urxStartCapture:
+			*fp.extra(op.value() + 2) = *fp.inputIdx()
+		case urxEndCapture:
+			*fp.extra(op.value()) = *fp.extra(op.value() + 2) // Tentative start becomes real.
+			*fp.extra(op.value() + 1) = *fp.inputIdx()        // End position
 
-		case URX_DOLLAR: //  $, test for End of line
+		case urxDollar: //  $, test for End of line
 			if *fp.inputIdx() < m.anchorLimit-2 {
 				fp = m.stack.popFrame()
 				break
@@ -249,26 +249,25 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 			fp = m.stack.popFrame()
 
-		case URX_DOLLAR_D: //  $, test for End of Line, in UNIX_LINES mode.
+		case urxDollarD: //  $, test for End of Line, in UNIX_LINES mode.
 			if *fp.inputIdx() >= m.anchorLimit {
 				// Off the end of input.  Success.
 				m.hitEnd = true
 				m.requireEnd = true
 				break
-			} else {
-				c := charAt(inputText, *fp.inputIdx())
-				*fp.inputIdx()++
-				// Either at the last character of input, or off the end.
-				if c == 0x0a && *fp.inputIdx() == m.anchorLimit {
-					m.hitEnd = true
-					m.requireEnd = true
-					break
-				}
+			}
+			c := charAt(inputText, *fp.inputIdx())
+			*fp.inputIdx()++
+			// Either at the last character of input, or off the end.
+			if c == 0x0a && *fp.inputIdx() == m.anchorLimit {
+				m.hitEnd = true
+				m.requireEnd = true
+				break
 			}
 
 			// Not at end of input.  Back-track out.
 			fp = m.stack.popFrame()
-		case URX_DOLLAR_M: //  $, test for End of line in multi-line mode
+		case urxDollarM: //  $, test for End of line in multi-line mode
 			if *fp.inputIdx() >= m.anchorLimit {
 				// We really are at the end of input.  Success.
 				m.hitEnd = true
@@ -288,7 +287,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 			// not at a new line.  Fail.
 			fp = m.stack.popFrame()
-		case URX_DOLLAR_MD: //  $, test for End of line in multi-line and UNIX_LINES mode
+		case urxDollarMd: //  $, test for End of line in multi-line and UNIX_LINES mode
 			if *fp.inputIdx() >= m.anchorLimit {
 				// We really are at the end of input.  Success.
 				m.hitEnd = true
@@ -300,11 +299,11 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			if charAt(inputText, *fp.inputIdx()) != 0x0a {
 				fp = m.stack.popFrame()
 			}
-		case URX_CARET: //  ^, test for start of line
+		case urxCaret: //  ^, test for start of line
 			if *fp.inputIdx() != m.anchorStart {
 				fp = m.stack.popFrame()
 			}
-		case URX_CARET_M: //  ^, test for start of line in mulit-line mode
+		case urxCaretM: //  ^, test for start of line in mulit-line mode
 			if *fp.inputIdx() == m.anchorStart {
 				// We are at the start input.  Success.
 				break
@@ -319,7 +318,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 			// Not at the start of a line.  Fail.
 			fp = m.stack.popFrame()
-		case URX_CARET_M_UNIX: //  ^, test for start of line in mulit-line + Unix-line mode
+		case urxCaretMUnix: //  ^, test for start of line in mulit-line + Unix-line mode
 			if *fp.inputIdx() <= m.anchorStart {
 				// We are at the start input.  Success.
 				break
@@ -330,19 +329,19 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				// Not at the start of a line.  Back-track out.
 				fp = m.stack.popFrame()
 			}
-		case URX_BACKSLASH_B: // Test for word boundaries
+		case urxBackslashB: // Test for word boundaries
 			success := m.isWordBoundary(*fp.inputIdx())
-			success = success != (op.Value() != 0) // flip sense for \B
+			success = success != (op.value() != 0) // flip sense for \B
 			if !success {
 				fp = m.stack.popFrame()
 			}
-		case URX_BACKSLASH_BU: // Test for word boundaries, Unicode-style
+		case urxBackslashBu: // Test for word boundaries, Unicode-style
 			success := m.isUWordBoundary(*fp.inputIdx())
-			success = success != (op.Value() != 0) // flip sense for \B
+			success = success != (op.value() != 0) // flip sense for \B
 			if !success {
 				fp = m.stack.popFrame()
 			}
-		case URX_BACKSLASH_D: // Test for decimal digit
+		case urxBackslashD: // Test for decimal digit
 			if *fp.inputIdx() >= m.activeLimit {
 				m.hitEnd = true
 				fp = m.stack.popFrame()
@@ -352,19 +351,19 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			c := charAt(inputText, *fp.inputIdx())
 
 			success := m.isDecimalDigit(c)
-			success = success != (op.Value() != 0) // flip sense for \D
+			success = success != (op.value() != 0) // flip sense for \D
 			if success {
 				*fp.inputIdx()++
 			} else {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_BACKSLASH_G: // Test for position at end of previous match
+		case urxBackslashG: // Test for position at end of previous match
 			if !((m.match && *fp.inputIdx() == m.matchEnd) || (!m.match && *fp.inputIdx() == m.activeStart)) {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_BACKSLASH_H: // Test for \h, horizontal white space.
+		case urxBackslashH: // Test for \h, horizontal white space.
 			if *fp.inputIdx() >= m.activeLimit {
 				m.hitEnd = true
 				fp = m.stack.popFrame()
@@ -373,14 +372,14 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 			c := charAt(inputText, *fp.inputIdx())
 			success := m.isHorizWS(c) || c == 9
-			success = success != (op.Value() != 0) // flip sense for \H
+			success = success != (op.value() != 0) // flip sense for \H
 			if success {
 				*fp.inputIdx()++
 			} else {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_BACKSLASH_R: // Test for \R, any line break sequence.
+		case urxBackslashR: // Test for \R, any line break sequence.
 			if *fp.inputIdx() >= m.activeLimit {
 				m.hitEnd = true
 				fp = m.stack.popFrame()
@@ -396,7 +395,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_BACKSLASH_V: // \v, any single line ending character.
+		case urxBackslashV: // \v, any single line ending character.
 			if *fp.inputIdx() >= m.activeLimit {
 				m.hitEnd = true
 				fp = m.stack.popFrame()
@@ -404,14 +403,14 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 			c := charAt(inputText, *fp.inputIdx())
 			success := isLineTerminator(c)
-			success = success != (op.Value() != 0) // flip sense for \V
+			success = success != (op.value() != 0) // flip sense for \V
 			if success {
 				*fp.inputIdx()++
 			} else {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_BACKSLASH_X:
+		case urxBackslashX:
 			//  Match a Grapheme, as defined by Unicode UAX 29.
 
 			// Fail if at end of input
@@ -427,14 +426,14 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				*fp.inputIdx() = m.activeLimit
 			}
 
-		case URX_BACKSLASH_Z: // Test for end of Input
+		case urxBackslashZ: // Test for end of Input
 			if *fp.inputIdx() < m.anchorLimit {
 				fp = m.stack.popFrame()
 			} else {
 				m.hitEnd = true
 				m.requireEnd = true
 			}
-		case URX_STATIC_SETREF:
+		case urxStaticSetref:
 			// Test input character against one of the predefined sets
 			//    (Word Characters, for example)
 			// The high bit of the op value is a flag for the match polarity.
@@ -446,8 +445,8 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				break
 			}
 
-			success := (op.Value() & URX_NEG_SET) == URX_NEG_SET
-			negOp := op.Value() & ^URX_NEG_SET
+			success := (op.value() & urxNegSet) == urxNegSet
+			negOp := op.value() & ^urxNegSet
 
 			c := charAt(inputText, *fp.inputIdx())
 			s := staticPropertySets[negOp]
@@ -461,7 +460,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				// the character wasn't in the set.
 				fp = m.stack.popFrame()
 			}
-		case URX_STAT_SETREF_N:
+		case urxStatSetrefN:
 			// Test input character for NOT being a member of  one of
 			//    the predefined sets (Word Characters, for example)
 			if *fp.inputIdx() >= m.activeLimit {
@@ -471,7 +470,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 
 			c := charAt(inputText, *fp.inputIdx())
-			s := staticPropertySets[op.Value()]
+			s := staticPropertySets[op.value()]
 			if !s.ContainsRune(c) {
 				*fp.inputIdx()++
 				break
@@ -479,7 +478,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// the character wasn't in the set.
 			fp = m.stack.popFrame()
 
-		case URX_SETREF:
+		case urxSetref:
 			if *fp.inputIdx() >= m.activeLimit {
 				m.hitEnd = true
 				fp = m.stack.popFrame()
@@ -489,7 +488,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// There is input left.  Pick up one char and test it for set membership.
 			c := charAt(inputText, *fp.inputIdx())
 
-			s := sets[op.Value()]
+			s := sets[op.value()]
 			if s.ContainsRune(c) {
 				*fp.inputIdx()++
 				break
@@ -498,7 +497,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// the character wasn't in the set.
 			fp = m.stack.popFrame()
 
-		case URX_DOTANY:
+		case urxDotany:
 			// . matches anything, but stops at end-of-line.
 			if *fp.inputIdx() >= m.activeLimit {
 				m.hitEnd = true
@@ -514,7 +513,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			}
 			*fp.inputIdx()++
 
-		case URX_DOTANY_ALL:
+		case urxDotanyAll:
 			// ., in dot-matches-all (including new lines) mode
 			if *fp.inputIdx() >= m.activeLimit {
 				// At end of input.  Match failed.  Backtrack out.
@@ -533,7 +532,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				}
 			}
 
-		case URX_DOTANY_UNIX:
+		case urxDotanyUnix:
 			// '.' operator, matches all, but stops at end-of-line.
 			//   UNIX_LINES mode, so 0x0a is the only recognized line ending.
 			if *fp.inputIdx() >= m.activeLimit {
@@ -551,71 +550,71 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			} else {
 				*fp.inputIdx()++
 			}
-		case URX_JMP:
-			*fp.patIdx() = op.Value()
+		case urxJmp:
+			*fp.patIdx() = op.value()
 
-		case URX_FAIL:
+		case urxFail:
 			isMatch = false
 			goto breakFromLoop
 
-		case URX_JMP_SAV:
-			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()) // State save to loc following current
+		case urxJmpSav:
+			fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx()) // State save to loc following current
 			if err != nil {
 				return err
 			}
-			*fp.patIdx() = op.Value() // Then JMP.
+			*fp.patIdx() = op.value() // Then JMP.
 
-		case URX_JMP_SAV_X:
+		case urxJmpSavX:
 			// This opcode is used with (x)+, when x can match a zero length string.
 			// Same as JMP_SAV, except conditional on the match having made forward progress.
 			// Destination of the JMP must be a URX_STO_INP_LOC, from which we get the
 			//   data address of the input position at the start of the loop.
-			stoOp := pat[op.Value()-1]
-			frameLoc := stoOp.Value()
+			stoOp := pat[op.value()-1]
+			frameLoc := stoOp.value()
 
 			prevInputIdx := *fp.extra(frameLoc)
 			if prevInputIdx < *fp.inputIdx() {
 				// The match did make progress.  Repeat the loop.
-				fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()) // State save to loc following current
+				fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx()) // State save to loc following current
 				if err != nil {
 					return err
 				}
-				*fp.patIdx() = op.Value() // Then JMP.
+				*fp.patIdx() = op.value() // Then JMP.
 				*fp.extra(frameLoc) = *fp.inputIdx()
 			}
 			// If the input position did not advance, we do nothing here,
 			//   execution will fall out of the loop.
 
-		case URX_CTR_INIT:
-			*fp.extra(op.Value()) = 0 // Set the loop counter variable to zero
+		case urxCtrInit:
+			*fp.extra(op.value()) = 0 // Set the loop counter variable to zero
 
 			// Pick up the three extra operands that CTR_INIT has, and
 			//    skip the pattern location counter past
 			instOperandLoc := *fp.patIdx()
 			*fp.patIdx() += 3 // Skip over the three operands that CTR_INIT has.
 
-			loopLoc := pat[instOperandLoc].Value()
+			loopLoc := pat[instOperandLoc].value()
 			minCount := int(pat[instOperandLoc+1])
 			maxCount := int(pat[instOperandLoc+2])
 
 			if minCount == 0 {
-				fp, err = m.StateSave(*fp.inputIdx(), loopLoc+1)
+				fp, err = m.stateSave(*fp.inputIdx(), loopLoc+1)
 				if err != nil {
 					return err
 				}
 			}
 			if maxCount == -1 {
-				*fp.extra(op.Value() + 1) = *fp.inputIdx() // For loop breaking.
+				*fp.extra(op.value() + 1) = *fp.inputIdx() // For loop breaking.
 			} else if maxCount == 0 {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_CTR_LOOP:
-			initOp := pat[op.Value()]
-			opValue := initOp.Value()
+		case utxCtrLoop:
+			initOp := pat[op.value()]
+			opValue := initOp.value()
 			pCounter := fp.extra(opValue)
-			minCount := int(pat[op.Value()+2])
-			maxCount := int(pat[op.Value()+3])
+			minCount := int(pat[op.value()+2])
+			maxCount := int(pat[op.value()+3])
 			*pCounter++
 			if *pCounter >= maxCount && maxCount != -1 {
 				break
@@ -628,11 +627,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 					pLastIntputIdx := fp.extra(opValue + 1)
 					if *pLastIntputIdx == *fp.inputIdx() {
 						break
-					} else {
-						*pLastIntputIdx = *fp.inputIdx()
 					}
+					*pLastIntputIdx = *fp.inputIdx()
 				}
-				fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx())
+				fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx())
 				if err != nil {
 					return err
 				}
@@ -646,26 +644,26 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				}
 			}
 
-			*fp.patIdx() = op.Value() + 4 // Loop back.
+			*fp.patIdx() = op.value() + 4 // Loop back.
 
-		case URX_CTR_INIT_NG:
-			*fp.extra(op.Value()) = 0 // Set the loop counter variable to zero
+		case urxCtrInitNg:
+			*fp.extra(op.value()) = 0 // Set the loop counter variable to zero
 
 			// Pick up the three extra operands that CTR_INIT_NG has, and
 			//    skip the pattern location counter past
 			instrOperandLoc := *fp.patIdx()
 			*fp.patIdx() += 3
-			loopLoc := pat[instrOperandLoc].Value()
-			minCount := pat[instrOperandLoc+1].Value()
-			maxCount := pat[instrOperandLoc+2].Value()
+			loopLoc := pat[instrOperandLoc].value()
+			minCount := pat[instrOperandLoc+1].value()
+			maxCount := pat[instrOperandLoc+2].value()
 
 			if maxCount == -1 {
-				*fp.extra(op.Value() + 1) = *fp.inputIdx() //  Save initial input index for loop breaking.
+				*fp.extra(op.value() + 1) = *fp.inputIdx() //  Save initial input index for loop breaking.
 			}
 
 			if minCount == 0 {
 				if maxCount != 0 {
-					fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx())
+					fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx())
 					if err != nil {
 						return err
 					}
@@ -673,11 +671,11 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				*fp.patIdx() = loopLoc + 1
 			}
 
-		case URX_CTR_LOOP_NG:
-			initOp := pat[op.Value()]
-			pCounter := fp.extra(initOp.Value())
-			minCount := int(pat[op.Value()+2])
-			maxCount := int(pat[op.Value()+3])
+		case urxCtrLoopNg:
+			initOp := pat[op.value()]
+			pCounter := fp.extra(initOp.value())
+			minCount := int(pat[op.value()+2])
+			maxCount := int(pat[op.value()+3])
 			*pCounter++
 			if *pCounter >= maxCount && maxCount != -1 {
 				// The loop has matched the maximum permitted number of times.
@@ -689,7 +687,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			if *pCounter < minCount {
 				// We haven't met the minimum number of matches yet.
 				//   Loop back for another one.
-				*fp.patIdx() = op.Value() + 4 // Loop back.
+				*fp.patIdx() = op.value() + 4 // Loop back.
 				// Increment time-out counter. (StateSave() does it if count >= minCount)
 				m.tickCounter--
 				if m.tickCounter <= 0 {
@@ -703,7 +701,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				// If there is no upper bound on the loop iterations, check that the input index
 				// is progressing, and stop the loop if it is not.
 				if maxCount == -1 {
-					lastInputIdx := fp.extra(initOp.Value() + 1)
+					lastInputIdx := fp.extra(initOp.value() + 1)
 					if *fp.inputIdx() == *lastInputIdx {
 						break
 					}
@@ -715,16 +713,16 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   (non-greedy, don't execute loop body first), but first do
 			//   a state save to the top of the loop, so that a match failure
 			//   in the following pattern will try another iteration of the loop.
-			fp, err = m.StateSave(*fp.inputIdx(), op.Value()+4)
+			fp, err = m.stateSave(*fp.inputIdx(), op.value()+4)
 			if err != nil {
 				return err
 			}
 
-		case URX_STO_SP:
-			m.data[op.Value()] = m.stack.len()
+		case urxStoSp:
+			m.data[op.value()] = m.stack.len()
 
-		case URX_LD_SP:
-			newStackSize := m.data[op.Value()]
+		case urxLdSp:
+			newStackSize := m.data[op.value()]
 			newFp := m.stack.offset(newStackSize)
 			if newFp.equals(fp) {
 				break
@@ -733,9 +731,9 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			fp = newFp
 
 			m.stack.setSize(newStackSize)
-		case URX_BACKREF:
-			groupStartIdx := *fp.extra(op.Value())
-			groupEndIdx := *fp.extra(op.Value() + 1)
+		case urxBackref:
+			groupStartIdx := *fp.extra(op.value())
+			groupEndIdx := *fp.extra(op.value() + 1)
 
 			if groupStartIdx < 0 {
 				// This capture group has not participated in the match thus far,
@@ -769,9 +767,9 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			if !success {
 				fp = m.stack.popFrame()
 			}
-		case URX_BACKREF_I:
-			groupStartIdx := *fp.extra(op.Value())
-			groupEndIdx := *fp.extra(op.Value() + 1)
+		case urxBackrefI:
+			groupStartIdx := *fp.extra(op.value())
+			groupEndIdx := *fp.extra(op.value() + 1)
 
 			if groupStartIdx < 0 {
 				// This capture group has not participated in the match thus far,
@@ -814,33 +812,33 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_STO_INP_LOC:
-			*fp.extra(op.Value()) = *fp.inputIdx()
+		case urxStoInpLoc:
+			*fp.extra(op.value()) = *fp.inputIdx()
 
-		case URX_JMPX:
+		case urxJmpx:
 			instrOperandLoc := *fp.patIdx()
 			*fp.patIdx()++
-			dataLoc := pat[instrOperandLoc].Value()
+			dataLoc := pat[instrOperandLoc].value()
 
 			saveInputIdx := *fp.extra(dataLoc)
 
 			if saveInputIdx < *fp.inputIdx() {
-				*fp.patIdx() = op.Value() // JMP
+				*fp.patIdx() = op.value() // JMP
 			} else {
 				fp = m.stack.popFrame() // FAIL, no progress in loop.
 			}
 
-		case URX_LA_START:
-			m.data[op.Value()] = m.stack.len()
-			m.data[op.Value()+1] = *fp.inputIdx()
-			m.data[op.Value()+2] = m.activeStart
-			m.data[op.Value()+3] = m.activeLimit
+		case urxLaStart:
+			m.data[op.value()] = m.stack.len()
+			m.data[op.value()+1] = *fp.inputIdx()
+			m.data[op.value()+2] = m.activeStart
+			m.data[op.value()+3] = m.activeLimit
 			m.activeStart = m.lookStart // Set the match region change for
 			m.activeLimit = m.lookLimit //   transparent bounds.
 
-		case URX_LA_END:
+		case urxLaEnd:
 			stackSize := m.stack.len()
-			newStackSize := m.data[op.Value()]
+			newStackSize := m.data[op.value()]
 			if stackSize > newStackSize {
 				// Copy the current top frame back to the new (cut back) top frame.
 				//   This makes the capture groups from within the look-ahead
@@ -851,18 +849,18 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				m.stack.setSize(newStackSize)
 			}
 
-			*fp.inputIdx() = m.data[op.Value()+1]
+			*fp.inputIdx() = m.data[op.value()+1]
 
-			m.activeStart = m.data[op.Value()+2]
-			m.activeLimit = m.data[op.Value()+3]
+			m.activeStart = m.data[op.value()+2]
+			m.activeLimit = m.data[op.value()+3]
 
-		case URX_ONECHAR_I:
+		case urcOnecharI:
 			// Case insensitive one char.  The char from the pattern is already case folded.
 			// Input text is not, but case folding the input can not reduce two or more code
 			// points to one.
 			if *fp.inputIdx() < m.activeLimit {
 				c := charAt(inputText, *fp.inputIdx())
-				if ucase.Fold(c) == op.Value32() {
+				if ucase.Fold(c) == op.value32() {
 					*fp.inputIdx()++
 					break
 				}
@@ -872,16 +870,16 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 
 			fp = m.stack.popFrame()
 
-		case URX_STRING_I:
+		case urxStringI:
 			// Case-insensitive test input against a literal string.
 			// Strings require two slots in the compiled pattern, one for the
 			//   offset to the string text, and one for the length.
 			//   The compiled string has already been case folded.
-			patternString := litText[op.Value():]
+			patternString := litText[op.value():]
 			var patternStringIdx int
 			nextOp := pat[*fp.patIdx()]
 			*fp.patIdx()++
-			patternStringLen := nextOp.Value()
+			patternStringLen := nextOp.value()
 
 			success := true
 
@@ -909,21 +907,21 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				fp = m.stack.popFrame()
 			}
 
-		case URX_LB_START:
+		case urxLbStart:
 			// Entering a look-behind block.
 			// Save Stack Ptr, Input Pos and active input region.
 			//   TODO:  implement transparent bounds.  Ticket #6067
-			m.data[op.Value()] = m.stack.len()
-			m.data[op.Value()+1] = *fp.inputIdx()
+			m.data[op.value()] = m.stack.len()
+			m.data[op.value()+1] = *fp.inputIdx()
 			// Save input string length, then reset to pin any matches to end at
 			//   the current position.
-			m.data[op.Value()+2] = m.activeStart
-			m.data[op.Value()+3] = m.activeLimit
+			m.data[op.value()+2] = m.activeStart
+			m.data[op.value()+3] = m.activeLimit
 			m.activeStart = m.regionStart
 			m.activeLimit = *fp.inputIdx()
 			// Init the variable containing the start index for attempted matches.
-			m.data[op.Value()+4] = -1
-		case URX_LB_CONT:
+			m.data[op.value()+4] = -1
+		case urxLbCont:
 			// Positive Look-Behind, at top of loop checking for matches of LB expression
 			//    at all possible input starting positions.
 
@@ -934,7 +932,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			maxML := pat[*fp.patIdx()]
 			*fp.patIdx()++
 
-			lbStartIdx := &m.data[op.Value()+4]
+			lbStartIdx := &m.data[op.value()+4]
 			if *lbStartIdx < 0 {
 				// First time through loop.
 				*lbStartIdx = *fp.inputIdx() - int(minML)
@@ -952,20 +950,20 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				//  getting a match.  Backtrack out, and out of the
 				//   Look Behind altogether.
 				fp = m.stack.popFrame()
-				m.activeStart = m.data[op.Value()+2]
-				m.activeLimit = m.data[op.Value()+3]
+				m.activeStart = m.data[op.value()+2]
+				m.activeLimit = m.data[op.value()+3]
 				break
 			}
 
 			//    Save state to this URX_LB_CONT op, so failure to match will repeat the loop.
 			//      (successful match will fall off the end of the loop.)
-			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()-3)
+			fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx()-3)
 			if err != nil {
 				return err
 			}
 			*fp.inputIdx() = *lbStartIdx
 
-		case URX_LB_END:
+		case urxLbEnd:
 			// End of a look-behind block, after a successful match.
 			if *fp.inputIdx() != m.activeLimit {
 				//  The look-behind expression matched, but the match did not
@@ -980,9 +978,9 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// Look-behind match is good.  Restore the orignal input string region,
 			//   which had been truncated to pin the end of the lookbehind match to the
 			//   position being looked-behind.
-			m.activeStart = m.data[op.Value()+2]
-			m.activeLimit = m.data[op.Value()+3]
-		case URX_LBN_CONT:
+			m.activeStart = m.data[op.value()+2]
+			m.activeLimit = m.data[op.value()+3]
+		case urxLbnCount:
 			// Negative Look-Behind, at top of loop checking for matches of LB expression
 			//    at all possible input starting positions.
 
@@ -992,10 +990,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			maxML := pat[*fp.patIdx()]
 			*fp.patIdx()++
 
-			continueLoc := pat[*fp.patIdx()].Value()
+			continueLoc := pat[*fp.patIdx()].value()
 			*fp.patIdx()++
 
-			lbStartIdx := &m.data[op.Value()+4]
+			lbStartIdx := &m.data[op.value()+4]
 
 			if *lbStartIdx < 0 {
 				// First time through loop.
@@ -1014,20 +1012,20 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				// We have tried all potential match starting points without
 				//  getting a match, which means that the negative lookbehind as
 				//  a whole has succeeded.  Jump forward to the continue location
-				m.activeStart = m.data[op.Value()+2]
-				m.activeLimit = m.data[op.Value()+3]
+				m.activeStart = m.data[op.value()+2]
+				m.activeLimit = m.data[op.value()+3]
 				*fp.patIdx() = continueLoc
 				break
 			}
 
 			//    Save state to this URX_LB_CONT op, so failure to match will repeat the loop.
 			//      (successful match will cause a FAIL out of the loop altogether.)
-			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()-4)
+			fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx()-4)
 			if err != nil {
 				return err
 			}
 			*fp.inputIdx() = *lbStartIdx
-		case URX_LBN_END:
+		case urxLbnEnd:
 			// End of a negative look-behind block, after a successful match.
 
 			if *fp.inputIdx() != m.activeLimit {
@@ -1046,23 +1044,23 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   Restore the orignal input string length, which had been truncated
 			//   inorder to pin the end of the lookbehind match
 			//   to the position being looked-behind.
-			m.activeStart = m.data[op.Value()+2]
-			m.activeLimit = m.data[op.Value()+3]
+			m.activeStart = m.data[op.value()+2]
+			m.activeLimit = m.data[op.value()+3]
 
 			// Restore original stack position, discarding any state saved
 			//   by the successful pattern match.
-			newStackSize := m.data[op.Value()]
+			newStackSize := m.data[op.value()]
 			m.stack.setSize(newStackSize)
 
 			//  FAIL, which will take control back to someplace
 			//  prior to entering the look-behind test.
 			fp = m.stack.popFrame()
-		case URX_LOOP_SR_I:
+		case urxLoopSrI:
 			// Loop Initialization for the optimized implementation of
 			//     [some character set]*
 			//   This op scans through all matching input.
 			//   The following LOOP_C op emulates stack unwinding if the following pattern fails.
-			s := sets[op.Value()]
+			s := sets[op.value()]
 
 			// Loop through input, until either the input is exhausted or
 			//   we reach a character that is not a member of the set.
@@ -1091,19 +1089,19 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   must follow.  It's operand is the stack location
 			//   that holds the starting input index for the match of this [set]*
 			loopcOp := pat[*fp.patIdx()]
-			stackLoc := loopcOp.Value()
+			stackLoc := loopcOp.value()
 			*fp.extra(stackLoc) = *fp.inputIdx()
 			*fp.inputIdx() = ix
 
 			// Save State to the URX_LOOP_C op that follows this one,
 			//   so that match failures in the following code will return to there.
 			//   Then bump the pattern idx so the LOOP_C is skipped on the way out of here.
-			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx())
+			fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx())
 			if err != nil {
 				return err
 			}
 			*fp.patIdx()++
-		case URX_LOOP_DOT_I:
+		case urxLoopDotI:
 			// Loop Initialization for the optimized implementation of .*
 			//   This op scans through all remaining input.
 			//   The following LOOP_C op emulates stack unwinding if the following pattern fails.
@@ -1111,7 +1109,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			// Loop through input until the input is exhausted (we reach an end-of-line)
 			// In DOTALL mode, we can just go straight to the end of the input.
 			var ix int
-			if (op.Value() & 1) == 1 {
+			if (op.value() & 1) == 1 {
 				// Dot-matches-All mode.  Jump straight to the end of the string.
 				ix = m.activeLimit
 				m.hitEnd = true
@@ -1127,7 +1125,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 					c := charAt(inputText, ix)
 					if (c & 0x7f) <= 0x29 { // Fast filter of non-new-line-s
 						if (c == 0x0a) || //  0x0a is newline in both modes.
-							(((op.Value() & 2) == 0) && // IF not UNIX_LINES mode
+							(((op.value() & 2) == 0) && // IF not UNIX_LINES mode
 								isLineTerminator(c)) {
 							//  char is a line ending.  Exit the scanning loop.
 							break
@@ -1148,21 +1146,21 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 			//   must follow.  It's operand is the stack location
 			//   that holds the starting input index for the match of this .*
 			loopcOp := pat[*fp.patIdx()]
-			stackLoc := loopcOp.Value()
+			stackLoc := loopcOp.value()
 			*fp.extra(stackLoc) = *fp.inputIdx()
 			*fp.inputIdx() = ix
 
 			// Save State to the URX_LOOP_C op that follows this one,
 			//   so that match failures in the following code will return to there.
 			//   Then bump the pattern idx so the LOOP_C is skipped on the way out of here.
-			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx())
+			fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx())
 			if err != nil {
 				return err
 			}
 			*fp.patIdx()++
 
-		case URX_LOOP_C:
-			backSearchIndex := *fp.extra(op.Value())
+		case urxLoopC:
+			backSearchIndex := *fp.extra(op.value())
 
 			if backSearchIndex == *fp.inputIdx() {
 				// We've backed up the input idx to the point that the loop started.
@@ -1184,13 +1182,13 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 				*fp.inputIdx() > backSearchIndex &&
 				twoPrevC == 0x0d {
 				prevOp := pat[*fp.patIdx()-2]
-				if prevOp.Type() == URX_LOOP_DOT_I {
+				if prevOp.typ() == urxLoopDotI {
 					// .*, stepping back over CRLF pair.
 					*fp.inputIdx()--
 				}
 			}
 
-			fp, err = m.StateSave(*fp.inputIdx(), *fp.patIdx()-1)
+			fp, err = m.stateSave(*fp.inputIdx(), *fp.patIdx()-1)
 			if err != nil {
 				return err
 			}
@@ -1237,10 +1235,10 @@ func (m *Matcher) isWordBoundary(pos int) bool {
 		m.hitEnd = true
 	} else {
 		c := charAt(m.input, pos)
-		if uprops.HasBinaryProperty(c, uprops.UCHAR_GRAPHEME_EXTEND) || uchar.CharType(c) == uchar.U_FORMAT_CHAR {
+		if uprops.HasBinaryProperty(c, uprops.UCharGraphemeExtend) || uchar.CharType(c) == uchar.FormatChar {
 			return false
 		}
-		cIsWord = staticPropertySets[URX_ISWORD_SET].ContainsRune(c)
+		cIsWord = staticPropertySets[urxIswordSet].ContainsRune(c)
 	}
 
 	prevCIsWord := false
@@ -1250,8 +1248,8 @@ func (m *Matcher) isWordBoundary(pos int) bool {
 		}
 		prevChar := charAt(m.input, pos-1)
 		pos--
-		if !(uprops.HasBinaryProperty(prevChar, uprops.UCHAR_GRAPHEME_EXTEND) || uchar.CharType(prevChar) == uchar.U_FORMAT_CHAR) {
-			prevCIsWord = staticPropertySets[URX_ISWORD_SET].ContainsRune(prevChar)
+		if !(uprops.HasBinaryProperty(prevChar, uprops.UCharGraphemeExtend) || uchar.CharType(prevChar) == uchar.FormatChar) {
+			prevCIsWord = staticPropertySets[urxIswordSet].ContainsRune(prevChar)
 			break
 		}
 	}
@@ -1292,14 +1290,14 @@ func (m *Matcher) isUWordBoundary(pos int) bool {
 	return false
 }
 
-func (m *Matcher) resetStack() StackFrame {
+func (m *Matcher) resetStack() stackFrame {
 	m.stack.reset()
 	frame, _ := m.stack.newFrame(0, nil, "")
 	frame.clearExtra()
 	return frame
 }
 
-func (m *Matcher) StateSave(inputIdx, savePatIdx int) (StackFrame, error) {
+func (m *Matcher) stateSave(inputIdx, savePatIdx int) (stackFrame, error) {
 	// push storage for a new frame.
 	newFP, err := m.stack.newFrame(inputIdx, m.input, m.pattern.pattern)
 	if err != nil {
@@ -1321,11 +1319,11 @@ func (m *Matcher) StateSave(inputIdx, savePatIdx int) (StackFrame, error) {
 }
 
 func (m *Matcher) incrementTime(inputIdx int) error {
-	m.tickCounter = TIMER_INITIAL_VALUE
+	m.tickCounter = timerInitialValue
 	m.time++
 	if m.timeLimit > 0 && m.time >= m.timeLimit {
 		return &MatchError{
-			Code:     uerror.U_REGEX_TIME_OUT,
+			Code:     uerror.TimeOut,
 			Pattern:  m.pattern.pattern,
 			Position: inputIdx,
 			Input:    m.input,
@@ -1339,7 +1337,7 @@ func (m *Matcher) isDecimalDigit(c rune) bool {
 }
 
 func (m *Matcher) isHorizWS(c rune) bool {
-	return uchar.CharType(c) == uchar.U_SPACE_SEPARATOR || c == 9
+	return uchar.CharType(c) == uchar.SpaceSeparator || c == 9
 }
 
 func (m *Matcher) followingGCBoundary(pos int) int {
@@ -1420,7 +1418,7 @@ func (m *Matcher) Find() (bool, error) {
 	}
 
 	switch m.pattern.startType {
-	case START_NO_INFO:
+	case startNoInfo:
 		// No optimization was found.
 		//  Try a match at each input position.
 		for {
@@ -1437,7 +1435,7 @@ func (m *Matcher) Find() (bool, error) {
 			}
 			startPos++
 		}
-	case START_SET:
+	case startSet:
 		// Match may start on any char from a pre-computed set.
 		for {
 			pos := startPos
@@ -1462,7 +1460,7 @@ func (m *Matcher) Find() (bool, error) {
 				return false, nil
 			}
 		}
-	case START_START:
+	case startStart:
 		// Matches are only possible at the start of the input string
 		//   (pattern begins with ^ or \A)
 		if startPos > m.activeStart {
@@ -1471,7 +1469,7 @@ func (m *Matcher) Find() (bool, error) {
 		}
 		err := m.MatchAt(startPos, false)
 		return m.match, err
-	case START_LINE:
+	case startLine:
 		var ch rune
 		if startPos == m.anchorStart {
 			err := m.MatchAt(startPos, false)
@@ -1487,7 +1485,7 @@ func (m *Matcher) Find() (bool, error) {
 			ch = charAt(m.input, startPos-1)
 		}
 
-		if m.pattern.flags&UREGEX_UNIX_LINES != 0 {
+		if m.pattern.flags&UnixLines != 0 {
 			for {
 				if ch == 0x0a {
 					err := m.MatchAt(startPos, false)
@@ -1529,7 +1527,7 @@ func (m *Matcher) Find() (bool, error) {
 				startPos++
 			}
 		}
-	case START_CHAR, START_STRING:
+	case startChar, startString:
 		// Match starts on exactly one char.
 		theChar := m.pattern.initialChar
 		for {
@@ -1585,7 +1583,7 @@ func (m *Matcher) resetPreserveRegion() {
 	m.hitEnd = false
 	m.requireEnd = false
 	m.time = 0
-	m.tickCounter = TIMER_INITIAL_VALUE
+	m.tickCounter = timerInitialValue
 }
 
 func (m *Matcher) GroupCount() int {

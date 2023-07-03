@@ -28,61 +28,38 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/ulayout"
 )
 
-type IntPropertyGetValue func(prop *IntProperty, c rune, which Property) int32
+type intPropertyGetValue func(prop *intProperty, c rune, which Property) int32
 
-type IntProperty struct {
-	column   PropertySource
+type intProperty struct {
+	column   propertySource
 	mask     uint32
 	shift    int32
-	getValue IntPropertyGetValue
+	getValue intPropertyGetValue
 }
 
 const (
-	UPROPS_BLOCK_MASK  = 0x0001ff00
-	UPROPS_BLOCK_SHIFT = 8
+	blockMask  = 0x0001ff00
+	blockShift = 8
 
-	UPROPS_EA_MASK  = 0x000e0000
-	UPROPS_EA_SHIFT = 17
+	eaMask  = 0x000e0000
+	eaShift = 17
 
-	UPROPS_LB_MASK  = 0x03f00000
-	UPROPS_LB_SHIFT = 20
+	lbMask  = 0x03f00000
+	lbShift = 20
 
-	UPROPS_SB_MASK  = 0x000f8000
-	UPROPS_SB_SHIFT = 15
+	sbMask  = 0x000f8000
+	sbShift = 15
 
-	UPROPS_WB_MASK  = 0x00007c00
-	UPROPS_WB_SHIFT = 10
+	wbMask  = 0x00007c00
+	wbShift = 10
 
-	UPROPS_GCB_MASK  = 0x000003e0
-	UPROPS_GCB_SHIFT = 5
+	gcbMask  = 0x000003e0
+	gcbShift = 5
 
-	UPROPS_DT_MASK = 0x0000001f
+	dtMask = 0x0000001f
 )
 
-type NormalizationCheckResult int32
-
-const (
-	/**
-	 * The input string is not in the normalization form.
-	 * @stable ICU 2.0
-	 */
-	UNORM_NO NormalizationCheckResult = iota
-	/**
-	 * The input string is in the normalization form.
-	 * @stable ICU 2.0
-	 */
-	UNORM_YES
-	/**
-	 * The input string may or may not be in the normalization form.
-	 * This value is only returned for composition forms like NFC and FCC,
-	 * when a backward-combining character is found for which the surrounding text
-	 * would have to be analyzed further.
-	 * @stable ICU 2.0
-	 */
-	UNORM_MAYBE
-)
-
-type NumericType int32
+type numericType int32
 
 /**
  * Numeric Type constants.
@@ -97,17 +74,17 @@ const (
 	 *     U_NT_<Unicode Numeric_Type value name>
 	 */
 
-	U_NT_NONE    NumericType = iota /*[None]*/
-	U_NT_DECIMAL                    /*[de]*/
-	U_NT_DIGIT                      /*[di]*/
-	U_NT_NUMERIC                    /*[nu]*/
+	ntNone    numericType = iota /*[None]*/
+	ntDecimal                    /*[de]*/
+	ntDigit                      /*[di]*/
+	ntNumeric                    /*[nu]*/
 	/**
 	 * One more than the highest normal UNumericType value.
 	 * The highest value is available via u_getIntPropertyMaxValue(UCHAR_NUMERIC_TYPE).
 	 *
 	 * @deprecated ICU 58 The numeric value may change over time, see ICU ticket #12420.
 	 */
-	U_NT_COUNT
+	ntCount
 )
 
 /**
@@ -117,7 +94,7 @@ const (
  * @stable ICU 2.6
  */
 
-type HangunSyllableType int32
+type hangunSyllableType int32
 
 const (
 	/*
@@ -126,22 +103,22 @@ const (
 	 *     U_HST_<Unicode Hangul_Syllable_Type value name>
 	 */
 
-	U_HST_NOT_APPLICABLE HangunSyllableType = iota /*[NA]*/
-	U_HST_LEADING_JAMO                             /*[L]*/
-	U_HST_VOWEL_JAMO                               /*[V]*/
-	U_HST_TRAILING_JAMO                            /*[T]*/
-	U_HST_LV_SYLLABLE                              /*[LV]*/
-	U_HST_LVT_SYLLABLE                             /*[LVT]*/
+	hstNotApplicable hangunSyllableType = iota /*[NA]*/
+	hstLeadingJamo                             /*[L]*/
+	hstVowelJamo                               /*[V]*/
+	hstTrailingJamo                            /*[T]*/
+	hstLvSyllable                              /*[LV]*/
+	hstLvtSyllable                             /*[LVT]*/
 	/**
 	 * One more than the highest normal UHangulSyllableType value.
 	 * The highest value is available via u_getIntPropertyMaxValue(UCHAR_HANGUL_SYLLABLE_TYPE).
 	 *
 	 * @deprecated ICU 58 The numeric value may change over time, see ICU ticket #12420.
 	 */
-	U_HST_COUNT
+	hstCount
 )
 
-var intProps = [UCHAR_INT_LIMIT - UCHAR_INT_START]*IntProperty{
+var intProps = [uCharIntLimit - UCharIntStart]*intProperty{
 	/*
 	 * column, mask and shift values for int-value properties from u_getUnicodeProperties().
 	 * Must be in order of corresponding UProperty,
@@ -150,139 +127,139 @@ var intProps = [UCHAR_INT_LIMIT - UCHAR_INT_START]*IntProperty{
 	 * Properties with mask==0 are handled in code.
 	 * For them, column is the UPropertySource value.
 	 */
-	{UPROPS_SRC_BIDI, 0, 0, getBiDiClass},
-	{0, UPROPS_BLOCK_MASK, UPROPS_BLOCK_SHIFT, defaultGetValue},
-	{UPROPS_SRC_NFC, 0, 0xff, getCombiningClass},
-	{2, UPROPS_DT_MASK, 0, defaultGetValue},
-	{0, UPROPS_EA_MASK, UPROPS_EA_SHIFT, defaultGetValue},
-	{UPROPS_SRC_CHAR, 0, uchar.U_CHAR_CATEGORY_COUNT - 1, getGeneralCategory},
-	{UPROPS_SRC_BIDI, 0, 0, getJoiningGroup},
-	{UPROPS_SRC_BIDI, 0, 0, getJoiningType},
-	{2, UPROPS_LB_MASK, UPROPS_LB_SHIFT, defaultGetValue},
-	{UPROPS_SRC_CHAR, 0, int32(U_NT_COUNT - 1), getNumericType},
-	{UPROPS_SRC_PROPSVEC, 0, 0, getScript},
-	{UPROPS_SRC_PROPSVEC, 0, int32(U_HST_COUNT - 1), getHangulSyllableType},
+	{srcBidi, 0, 0, getBiDiClass},
+	{0, blockMask, blockShift, defaultGetValue},
+	{srcNfc, 0, 0xff, getCombiningClass},
+	{2, dtMask, 0, defaultGetValue},
+	{0, eaMask, eaShift, defaultGetValue},
+	{srcChar, 0, int32(uchar.CharCategoryCount - 1), getGeneralCategory},
+	{srcBidi, 0, 0, getJoiningGroup},
+	{srcBidi, 0, 0, getJoiningType},
+	{2, lbMask, lbShift, defaultGetValue},
+	{srcChar, 0, int32(ntCount - 1), getNumericType},
+	{srcPropsvec, 0, 0, getScript},
+	{srcPropsvec, 0, int32(hstCount - 1), getHangulSyllableType},
 	// UCHAR_NFD_QUICK_CHECK: max=1=YES -- never "maybe", only "no" or "yes"
-	{UPROPS_SRC_NFC, 0, int32(UNORM_YES), getNormQuickCheck},
+	{srcNfc, 0, int32(normalizer.Yes), getNormQuickCheck},
 	// UCHAR_NFKD_QUICK_CHECK: max=1=YES -- never "maybe", only "no" or "yes"
-	{UPROPS_SRC_NFKC, 0, int32(UNORM_YES), getNormQuickCheck},
+	{srcNfkc, 0, int32(normalizer.Yes), getNormQuickCheck},
 	// UCHAR_NFC_QUICK_CHECK: max=2=MAYBE
-	{UPROPS_SRC_NFC, 0, int32(UNORM_MAYBE), getNormQuickCheck},
+	{srcNfc, 0, int32(normalizer.Maybe), getNormQuickCheck},
 	// UCHAR_NFKC_QUICK_CHECK: max=2=MAYBE
-	{UPROPS_SRC_NFKC, 0, int32(UNORM_MAYBE), getNormQuickCheck},
-	{UPROPS_SRC_NFC, 0, 0xff, getLeadCombiningClass},
-	{UPROPS_SRC_NFC, 0, 0xff, getTrailCombiningClass},
-	{2, UPROPS_GCB_MASK, UPROPS_GCB_SHIFT, defaultGetValue},
-	{2, UPROPS_SB_MASK, UPROPS_SB_SHIFT, defaultGetValue},
-	{2, UPROPS_WB_MASK, UPROPS_WB_SHIFT, defaultGetValue},
-	{UPROPS_SRC_BIDI, 0, 0, getBiDiPairedBracketType},
-	{UPROPS_SRC_INPC, 0, 0, getInPC},
-	{UPROPS_SRC_INSC, 0, 0, getInSC},
-	{UPROPS_SRC_VO, 0, 0, getVo},
+	{srcNfkc, 0, int32(normalizer.Maybe), getNormQuickCheck},
+	{srcNfc, 0, 0xff, getLeadCombiningClass},
+	{srcNfc, 0, 0xff, getTrailCombiningClass},
+	{2, gcbMask, gcbShift, defaultGetValue},
+	{2, sbMask, sbShift, defaultGetValue},
+	{2, wbMask, wbShift, defaultGetValue},
+	{srcBidi, 0, 0, getBiDiPairedBracketType},
+	{srcInpc, 0, 0, getInPC},
+	{srcInsc, 0, 0, getInSC},
+	{srcVo, 0, 0, getVo},
 }
 
-func getVo(prop *IntProperty, c rune, which Property) int32 {
+func getVo(_ *intProperty, c rune, _ Property) int32 {
 	return int32(ulayout.VoTrie().Get(c))
 }
 
-func getInSC(prop *IntProperty, c rune, which Property) int32 {
+func getInSC(_ *intProperty, c rune, _ Property) int32 {
 	return int32(ulayout.InscTrie().Get(c))
 }
 
-func getInPC(prop *IntProperty, c rune, which Property) int32 {
+func getInPC(_ *intProperty, c rune, _ Property) int32 {
 	return int32(ulayout.InpcTrie().Get(c))
 }
 
-func getBiDiPairedBracketType(prop *IntProperty, c rune, which Property) int32 {
+func getBiDiPairedBracketType(_ *intProperty, c rune, _ Property) int32 {
 	return int32(ubidi.PairedBracketType(c))
 }
 
-func getTrailCombiningClass(prop *IntProperty, c rune, which Property) int32 {
+func getTrailCombiningClass(_ *intProperty, c rune, _ Property) int32 {
 	return int32(normalizer.Nfc().GetFCD16(c) & 0xff)
 }
 
-func getLeadCombiningClass(prop *IntProperty, c rune, which Property) int32 {
-	return int32(normalizer.Nfc().GetFCD16(c) >> 8)
+func getLeadCombiningClass(_ *intProperty, c rune, _ Property) int32 {
+	val := int32(normalizer.Nfc().GetFCD16(c) >> 8)
+	return val
 }
 
-func getNormQuickCheck(prop *IntProperty, c rune, which Property) int32 {
-	return int32(normalizer.QuickCheck(c, normalizer.UNormalizationMode(int32(which)-int32(UCHAR_NFD_QUICK_CHECK)+int32(normalizer.UNORM_NFD))))
+func getNormQuickCheck(_ *intProperty, c rune, which Property) int32 {
+	return int32(normalizer.QuickCheck(c, normalizer.Mode(int32(which)-int32(UCharNfdQuickCheck)+int32(normalizer.NormNfd))))
 }
 
 /*
  * Map some of the Grapheme Cluster Break values to Hangul Syllable Types.
  * Hangul_Syllable_Type is fully redundant with a subset of Grapheme_Cluster_Break.
  */
-var gcbToHst = []HangunSyllableType{
-	U_HST_NOT_APPLICABLE, /* U_GCB_OTHER */
-	U_HST_NOT_APPLICABLE, /* U_GCB_CONTROL */
-	U_HST_NOT_APPLICABLE, /* U_GCB_CR */
-	U_HST_NOT_APPLICABLE, /* U_GCB_EXTEND */
-	U_HST_LEADING_JAMO,   /* U_GCB_L */
-	U_HST_NOT_APPLICABLE, /* U_GCB_LF */
-	U_HST_LV_SYLLABLE,    /* U_GCB_LV */
-	U_HST_LVT_SYLLABLE,   /* U_GCB_LVT */
-	U_HST_TRAILING_JAMO,  /* U_GCB_T */
-	U_HST_VOWEL_JAMO,     /* U_GCB_V */
+var gcbToHst = []hangunSyllableType{
+	hstNotApplicable, /* U_GCB_OTHER */
+	hstNotApplicable, /* U_GCB_CONTROL */
+	hstNotApplicable, /* U_GCB_CR */
+	hstNotApplicable, /* U_GCB_EXTEND */
+	hstLeadingJamo,   /* U_GCB_L */
+	hstNotApplicable, /* U_GCB_LF */
+	hstLvSyllable,    /* U_GCB_LV */
+	hstLvtSyllable,   /* U_GCB_LVT */
+	hstTrailingJamo,  /* U_GCB_T */
+	hstVowelJamo,     /* U_GCB_V */
 	/*
 	 * Omit GCB values beyond what we need for hst.
 	 * The code below checks for the array length.
 	 */
 }
 
-func getHangulSyllableType(prop *IntProperty, c rune, which Property) int32 {
+func getHangulSyllableType(_ *intProperty, c rune, _ Property) int32 {
 	/* see comments on gcbToHst[] above */
-	gcb := (int32(uchar.GetUnicodeProperties(c, 2)) & UPROPS_GCB_MASK) >> UPROPS_GCB_SHIFT
+	gcb := (int32(uchar.GetUnicodeProperties(c, 2)) & gcbMask) >> gcbShift
 
 	if gcb < int32(len(gcbToHst)) {
 		return int32(gcbToHst[gcb])
-	} else {
-		return int32(U_HST_NOT_APPLICABLE)
 	}
+	return int32(hstNotApplicable)
 }
 
-func getScript(_ *IntProperty, c rune, _ Property) int32 {
-	return GetScript(c)
+func getScript(_ *intProperty, c rune, _ Property) int32 {
+	return script(c)
 }
 
-func getNumericType(prop *IntProperty, c rune, which Property) int32 {
+func getNumericType(_ *intProperty, c rune, _ Property) int32 {
 	ntv := uchar.NumericTypeValue(c)
 	return int32(ntvGetType(ntv))
 }
 
-func getJoiningType(prop *IntProperty, c rune, which Property) int32 {
-	return int32(ubidi.JoiningType(c))
+func getJoiningType(_ *intProperty, c rune, _ Property) int32 {
+	return int32(ubidi.JoinType(c))
 }
 
-func getJoiningGroup(prop *IntProperty, c rune, which Property) int32 {
-	return int32(ubidi.JoiningGroup(c))
+func getJoiningGroup(_ *intProperty, c rune, _ Property) int32 {
+	return int32(ubidi.JoinGroup(c))
 }
 
-func getGeneralCategory(prop *IntProperty, c rune, which Property) int32 {
+func getGeneralCategory(_ *intProperty, c rune, _ Property) int32 {
 	return int32(uchar.CharType(c))
 }
 
-func getCombiningClass(prop *IntProperty, c rune, which Property) int32 {
+func getCombiningClass(_ *intProperty, c rune, _ Property) int32 {
 	return int32(normalizer.Nfc().CombiningClass(c))
 }
 
-func defaultGetValue(prop *IntProperty, c rune, which Property) int32 {
+func defaultGetValue(prop *intProperty, c rune, _ Property) int32 {
 	return int32(uchar.GetUnicodeProperties(c, int(prop.column))&prop.mask) >> prop.shift
 }
 
-func getBiDiClass(prop *IntProperty, c rune, which Property) int32 {
+func getBiDiClass(_ *intProperty, c rune, _ Property) int32 {
 	return int32(ubidi.Class(c))
 }
 
-func ntvGetType(ntv uint16) NumericType {
+func ntvGetType(ntv uint16) numericType {
 	switch {
-	case ntv == uchar.UPROPS_NTV_NONE:
-		return U_NT_NONE
-	case ntv < uchar.UPROPS_NTV_DIGIT_START:
-		return U_NT_DECIMAL
-	case ntv < uchar.UPROPS_NTV_NUMERIC_START:
-		return U_NT_DIGIT
+	case ntv == uchar.UPropsNtvNone:
+		return ntNone
+	case ntv < uchar.UPropsNtvDigitStart:
+		return ntDecimal
+	case ntv < uchar.UPropsNtvNumericStart:
+		return ntDigit
 	default:
-		return U_NT_NUMERIC
+		return ntNumeric
 	}
 }

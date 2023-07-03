@@ -61,27 +61,27 @@ var UNames []byte
 //go:embed uprops.icu
 var UProps []byte
 
-// NFC is the table for character normalization where canonical
+// Nfc is the table for character normalization where canonical
 // decomposition is done followed by canonical composition.
 // This is used for property checks of characters about composition.
 //
 //go:embed nfc.nrm
-var NFC []byte
+var Nfc []byte
 
-// NFKC is the table for character normalization where compatibility
+// Nfkc is the table for character normalization where compatibility
 // decomposition is done followed by canonical composition.
 // This is used for property checks of characters about composition.
 //
 //go:embed nfkc.nrm
-var NFKC []byte
+var Nfkc []byte
 
-// NFKC_CF is the table for character normalization where compatibility
+// NfkcCf is the table for character normalization where compatibility
 // decomposition is done followed by canonical composition with
 // case folding.
 // This is used for property checks of characters about composition.
 //
 //go:embed nfkc_cf.nrm
-var NFKC_CF []byte
+var NfkcCf []byte
 
 // BrkChar is used for matching against character break
 // characters in regular expressions.

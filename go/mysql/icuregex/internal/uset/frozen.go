@@ -130,9 +130,6 @@ func (f *frozen) findCodePoint(list []rune, c rune, lo, hi int32) int32 {
 }
 
 func (f *frozen) set32x64bits(table *[64]uint32, start, limit int32) {
-	// U_ASSERT(start < limit)
-	// U_ASSERT(limit <= 0x800)
-
 	lead := start >> 6    // Named for UTF-8 2-byte lead byte with upper 5 bits.
 	trail := start & 0x3f // Named for UTF-8 2-byte trail byte with lower 6 bits.
 

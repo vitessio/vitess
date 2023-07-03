@@ -39,13 +39,13 @@ func TestPerl(t *testing.T) {
 	defer f.Close()
 
 	flagPat := MustCompileString(`('?)(.*)\1(.*)`, 0)
-	flagMat := flagPat.Matcher()
+	flagMat := NewMatcher(flagPat)
 
 	groupsPat := MustCompileString(`\$([+\-])\[(\d+)\]`, 0)
-	groupsMat := groupsPat.Matcher()
+	groupsMat := NewMatcher(groupsPat)
 
 	cgPat := MustCompileString(`\$(\d+)`, 0)
-	cgMat := cgPat.Matcher()
+	cgMat := NewMatcher(cgPat)
 
 	group := func(m *Matcher, idx int) string {
 		g, _ := m.Group(idx)
@@ -85,18 +85,18 @@ func TestPerl(t *testing.T) {
 		flagStr, _ := flagMat.Group(3)
 		var flags RegexpFlag
 		if strings.IndexByte(flagStr, 'i') >= 0 {
-			flags |= UREGEX_CASE_INSENSITIVE
+			flags |= CaseInsensitive
 		}
 		if strings.IndexByte(flagStr, 'm') >= 0 {
-			flags |= UREGEX_MULTILINE
+			flags |= Multiline
 		}
 		if strings.IndexByte(flagStr, 'x') >= 0 {
-			flags |= UREGEX_COMMENTS
+			flags |= Comments
 		}
 
 		testPat, err := CompileString(pattern, flags)
 		if err != nil {
-			if cerr, ok := err.(*CompileError); ok && cerr.Code == uerror.U_REGEX_UNIMPLEMENTED {
+			if cerr, ok := err.(*CompileError); ok && cerr.Code == uerror.Unimplemented {
 				continue
 			}
 			if strings.IndexByte(fields[2], 'c') == -1 && strings.IndexByte(fields[2], 'i') == -1 {

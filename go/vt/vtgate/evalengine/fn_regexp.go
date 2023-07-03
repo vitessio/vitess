@@ -27,15 +27,15 @@ func evalRegexpFlags(env *ExpressionEnv, match Expr, flags icuregex.RegexpFlag) 
 		for _, b := range m.bytes {
 			switch b {
 			case 'c':
-				flags &= ^icuregex.UREGEX_CASE_INSENSITIVE
+				flags &= ^icuregex.CaseInsensitive
 			case 'i':
-				flags |= icuregex.UREGEX_CASE_INSENSITIVE
+				flags |= icuregex.CaseInsensitive
 			case 'm':
-				flags |= icuregex.UREGEX_MULTILINE
+				flags |= icuregex.Multiline
 			case 'n':
-				flags |= icuregex.UREGEX_DOTALL
+				flags |= icuregex.DotAll
 			case 'u':
-				flags |= icuregex.UREGEX_UNIX_LINES
+				flags |= icuregex.UnixLines
 			}
 		}
 	}
@@ -63,7 +63,7 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 	var flags icuregex.RegexpFlag
 	var collation = colid.Get()
 	if strings.Contains(collation.Name(), "_ci") {
-		flags |= icuregex.UREGEX_CASE_INSENSITIVE
+		flags |= icuregex.CaseInsensitive
 	}
 
 	if len(r.Arguments) > 2 {

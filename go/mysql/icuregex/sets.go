@@ -29,7 +29,7 @@ import (
 var staticPropertySets [13]*uset.UnicodeSet
 
 func init() {
-	staticPropertySets[URX_ISWORD_SET] = func() *uset.UnicodeSet {
+	staticPropertySets[urxIswordSet] = func() *uset.UnicodeSet {
 		s := uset.New()
 		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`\p{Alphabetic}`, 0))
 		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`\p{M}`, 0))
@@ -40,10 +40,10 @@ func init() {
 		return s.Freeze()
 	}()
 
-	staticPropertySets[URX_ISSPACE_SET] = uprops.MustNewUnicodeSetFomPattern(`\p{Whitespace}`, 0).Freeze()
+	staticPropertySets[urxIsspaceSet] = uprops.MustNewUnicodeSetFomPattern(`\p{Whitespace}`, 0).Freeze()
 
-	staticPropertySets[URX_GC_EXTEND] = uprops.MustNewUnicodeSetFomPattern(`\p{Grapheme_Extend}`, 0).Freeze()
-	staticPropertySets[URX_GC_CONTROL] = func() *uset.UnicodeSet {
+	staticPropertySets[urxGcExtend] = uprops.MustNewUnicodeSetFomPattern(`\p{Grapheme_Extend}`, 0).Freeze()
+	staticPropertySets[urxGcControl] = func() *uset.UnicodeSet {
 		s := uset.New()
 		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`[:Zl:]`, 0))
 		s.AddAll(uprops.MustNewUnicodeSetFomPattern(`[:Zp:]`, 0))
@@ -52,20 +52,20 @@ func init() {
 		s.RemoveAll(uprops.MustNewUnicodeSetFomPattern(`[:Grapheme_Extend:]`, 0))
 		return s.Freeze()
 	}()
-	staticPropertySets[URX_GC_L] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=L}`, 0).Freeze()
-	staticPropertySets[URX_GC_LV] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=LV}`, 0).Freeze()
-	staticPropertySets[URX_GC_LVT] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=LVT}`, 0).Freeze()
-	staticPropertySets[URX_GC_V] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=V}`, 0).Freeze()
-	staticPropertySets[URX_GC_T] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=T}`, 0).Freeze()
+	staticPropertySets[urxGcL] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=L}`, 0).Freeze()
+	staticPropertySets[urxGcLv] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=LV}`, 0).Freeze()
+	staticPropertySets[urxGcLvt] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=LVT}`, 0).Freeze()
+	staticPropertySets[urxGcV] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=V}`, 0).Freeze()
+	staticPropertySets[urxGcT] = uprops.MustNewUnicodeSetFomPattern(`\p{Hangul_Syllable_Type=T}`, 0).Freeze()
 
-	staticPropertySets[URX_GC_NORMAL] = func() *uset.UnicodeSet {
+	staticPropertySets[urxGcNormal] = func() *uset.UnicodeSet {
 		s := uset.New()
 		s.Complement()
 		s.RemoveRuneRange(0xac00, 0xd7a4)
-		s.RemoveAll(staticPropertySets[URX_GC_CONTROL])
-		s.RemoveAll(staticPropertySets[URX_GC_L])
-		s.RemoveAll(staticPropertySets[URX_GC_V])
-		s.RemoveAll(staticPropertySets[URX_GC_T])
+		s.RemoveAll(staticPropertySets[urxGcControl])
+		s.RemoveAll(staticPropertySets[urxGcL])
+		s.RemoveAll(staticPropertySets[urxGcV])
+		s.RemoveAll(staticPropertySets[urxGcT])
 		return s.Freeze()
 	}()
 }
@@ -77,13 +77,13 @@ var staticSetUnescape = func() *uset.UnicodeSet {
 }()
 
 const (
-	kRuleSetDigitChar   = 128
-	kRuleSetAsciiLetter = 129
-	kRuleSetRuleChar    = 130
-	kRuleSetCount       = 131 - 128
+	ruleSetDigitChar   = 128
+	ruleSetASCIILetter = 129
+	ruleSetRuleChar    = 130
+	ruleSetCount       = 131 - 128
 )
 
-var staticRuleSet = [kRuleSetCount]*uset.UnicodeSet{
+var staticRuleSet = [ruleSetCount]*uset.UnicodeSet{
 	func() *uset.UnicodeSet {
 		u := uset.New()
 		u.AddRuneRange('0', '9')

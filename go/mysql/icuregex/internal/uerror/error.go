@@ -25,39 +25,38 @@ import (
 	"errors"
 )
 
-type UErrorCode int32
+type Code int32
 
-var IllegalArgumentError = errors.New("illegal argument")
-var UnsupportedError = errors.New("unsupported")
+var ErrIllegalArgument = errors.New("illegal argument")
+var ErrUnsupported = errors.New("unsupported")
 
-type URegexCompileErrorCode int32
+type CompileErrorCode int32
 
 const (
-	U_REGEX_ZERO_ERROR                 URegexCompileErrorCode = iota
-	U_REGEX_INTERNAL_ERROR                                    /**< An internal error (bug) was detected.              */
-	U_REGEX_RULE_SYNTAX                                       /**< Syntax error in regexp pattern.                    */
-	U_REGEX_INVALID_STATE                                     /**< RegexMatcher in invalid state for requested operation */
-	U_REGEX_BAD_ESCAPE_SEQUENCE                               /**< Unrecognized backslash escape sequence in pattern  */
-	U_REGEX_PROPERTY_SYNTAX                                   /**< Incorrect Unicode property                         */
-	U_REGEX_UNIMPLEMENTED                                     /**< Use of regexp feature that is not yet implemented. */
-	U_REGEX_MISMATCHED_PAREN                                  /**< Incorrectly nested parentheses in regexp pattern.  */
-	U_REGEX_NUMBER_TOO_BIG                                    /**< Decimal number is too large.                       */
-	U_REGEX_BAD_INTERVAL                                      /**< Error in {min,max} interval                        */
-	U_REGEX_MAX_LT_MIN                                        /**< In {min,max}, max is less than min.                */
-	U_REGEX_INVALID_BACK_REF                                  /**< Back-reference to a non-existent capture group.    */
-	U_REGEX_INVALID_FLAG                                      /**< Invalid value for match mode flags.                */
-	U_REGEX_LOOK_BEHIND_LIMIT                                 /**< Look-Behind pattern matches must have a bounded maximum length.    */
-	U_REGEX_SET_CONTAINS_STRING                               /**< Regexps cannot have UnicodeSets containing strings.*/
-	U_REGEX_MISSING_CLOSE_BRACKET                             /**< Missing closing bracket on a bracket expression. */
-	U_REGEX_INVALID_RANGE                                     /**< In a character range [x-y], x is greater than y.   */
-	U_REGEX_PATTERN_TOO_BIG                                   /**< Pattern exceeds limits on size or complexity. @stable ICU 55 */
-	U_REGEX_INVALID_CAPTURE_GROUP_NAME                        /**< Invalid capture group name. @stable ICU 55 */
-	U_REGEX_UNSUPPORTED_ERROR                                 /**< Use of an unsupported feature. @stable ICU 55 */
+	ZeroError               CompileErrorCode = iota
+	InternalError                            /**< An internal error (bug) was detected.              */
+	RuleSyntax                               /**< Syntax error in regexp pattern.                    */
+	InvalidState                             /**< RegexMatcher in invalid state for requested operation */
+	BadEscapeSequence                        /**< Unrecognized backslash escape sequence in pattern  */
+	PropertySyntax                           /**< Incorrect Unicode property                         */
+	Unimplemented                            /**< Use of regexp feature that is not yet implemented. */
+	MismatchedParen                          /**< Incorrectly nested parentheses in regexp pattern.  */
+	NumberTooBig                             /**< Decimal number is too large.                       */
+	BadInterval                              /**< Error in {min,max} interval                        */
+	MaxLtMin                                 /**< In {min,max}, max is less than min.                */
+	InvalidBackRef                           /**< Back-reference to a non-existent capture group.    */
+	InvalidFlag                              /**< Invalid value for match mode flags.                */
+	LookBehindLimit                          /**< Look-Behind pattern matches must have a bounded maximum length.    */
+	SetContainsString                        /**< Regexps cannot have UnicodeSets containing strings.*/
+	MissingCloseBracket                      /**< Missing closing bracket on a bracket expression. */
+	InvalidRange                             /**< In a character range [x-y], x is greater than y.   */
+	PatternTooBig                            /**< Pattern exceeds limits on size or complexity. @stable ICU 55 */
+	InvalidCaptureGroupName                  /**< Invalid capture group name. @stable ICU 55 */
 )
 
-type URegexMatchErrorCode int32
+type MatchErrorCode int32
 
 const (
-	U_REGEX_STACK_OVERFLOW URegexMatchErrorCode = iota /**< Regular expression backtrack stack overflow.       */
-	U_REGEX_TIME_OUT                                   /**< Maximum allowed match time exceeded                */
+	StackOverflow MatchErrorCode = iota /**< Regular expression backtrack stack overflow.       */
+	TimeOut                             /**< Maximum allowed match time exceeded                */
 )

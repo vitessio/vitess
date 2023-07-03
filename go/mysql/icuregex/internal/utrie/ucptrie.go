@@ -22,39 +22,40 @@ limitations under the License.
 package utrie
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
 )
 
 type UcpTrie struct {
-	Index  []uint16
-	Data8  []uint8
-	Data16 []uint16
-	Data32 []uint32
+	index  []uint16
+	data8  []uint8
+	data16 []uint16
+	data32 []uint32
 
-	IndexLength, DataLength int32
+	indexLength, dataLength int32
 	/** Start of the last range which ends at U+10FFFF. @internal */
-	HighStart          rune
-	Shifted12HighStart uint16
+	highStart          rune
+	shifted12HighStart uint16
 
-	Type       UCPTrieType
-	ValueWidth UCPTrieValueWidth
+	typ        ucpTrieType
+	valueWidth ucpTrieValueWidth
 
 	/**
 	 * Internal index-3 null block offset.
 	 * Set to an impossibly high value (e.g., 0xffff) if there is no dedicated index-3 null block.
 	 * @internal
 	 */
-	Index3NullOffset uint16
+	index3NullOffset uint16
 	/**
 	 * Internal data null block offset, not shifted.
 	 * Set to an impossibly high value (e.g., 0xfffff) if there is no dedicated data null block.
 	 * @internal
 	 */
-	DataNullOffset int32
+	dataNullOffset int32
 
-	NullValue uint32
+	nullValue uint32
 }
 
 /**
@@ -66,7 +67,7 @@ type UcpTrie struct {
  * @see ucptrie_getType
  * @stable ICU 63
  */
-type UCPTrieType int8
+type ucpTrieType int8
 
 const (
 	/**
@@ -74,17 +75,17 @@ const (
 	 * ucptrie_getType() will return the actual type.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_TYPE_ANY UCPTrieType = iota - 1
+	typeAny ucpTrieType = iota - 1
 	/**
 	 * Fast/simple/larger BMP data structure. Use functions and "fast" macros.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_TYPE_FAST
+	typeFast
 	/**
 	 * Small/slower BMP data structure. Use functions and "small" macros.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_TYPE_SMALL
+	typeSmall
 )
 
 /**
@@ -95,7 +96,7 @@ const (
  * @see ucptrie_getValueWidth
  * @stable ICU 63
  */
-type UCPTrieValueWidth int8
+type ucpTrieValueWidth int8
 
 const (
 	/**
@@ -103,133 +104,126 @@ const (
 	 * ucptrie_getValueWidth() will return the actual data value width.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_VALUE_BITS_ANY UCPTrieValueWidth = iota - 1
+	valueBitsAny ucpTrieValueWidth = iota - 1
 	/**
 	 * The trie stores 16 bits per data value.
 	 * It returns them as unsigned values 0..0xffff=65535.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_VALUE_BITS_16
+	valueBits16
 	/**
 	 * The trie stores 32 bits per data value.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_VALUE_BITS_32
+	valueBits32
 	/**
 	 * The trie stores 8 bits per data value.
 	 * It returns them as unsigned values 0..0xff=255.
 	 * @stable ICU 63
 	 */
-	UCPTRIE_VALUE_BITS_8
+	valueBits8
 )
 
-const UCPTRIE_SIG = 0x54726933
-const UCPTRIE_OE_SIG = 0x33697254
+const ucpTrieSig = 0x54726933
+const ucpTrieOESig = 0x33697254
 
 /**
  * Constants for use with UCPTrieHeader.options.
  * @internal
  */
 const (
-	UCPTRIE_OPTIONS_DATA_LENGTH_MASK      = 0xf000
-	UCPTRIE_OPTIONS_DATA_NULL_OFFSET_MASK = 0xf00
-	UCPTRIE_OPTIONS_RESERVED_MASK         = 0x38
-	UCPTRIE_OPTIONS_VALUE_BITS_MASK       = 7
-	/**
-	 * Value for index3NullOffset which indicates that there is no index-3 null block.
-	 * Bit 15 is unused for this value because this bit is used if the index-3 contains
-	 * 18-bit indexes.
-	 */
-	UCPTRIE_NO_INDEX3_NULL_OFFSET = 0x7fff
-	UCPTRIE_NO_DATA_NULL_OFFSET   = 0xfffff
+	optionsDataLengthMask     = 0xf000
+	optionsDataNullOffsetMask = 0xf00
+	optionsReservedMask       = 0x38
+	optionsValueBitsMask      = 7
 )
 
 const (
 	/** @internal */
-	UCPTRIE_FAST_SHIFT = 6
+	fastShift = 6
 
 	/** Number of entries in a data block for code points below the fast limit. 64=0x40 @internal */
-	UCPTRIE_FAST_DATA_BLOCK_LENGTH = 1 << UCPTRIE_FAST_SHIFT
+	fastDataBlockLength = 1 << fastShift
 
 	/** Mask for getting the lower bits for the in-fast-data-block offset. @internal */
-	UCPTRIE_FAST_DATA_MASK = UCPTRIE_FAST_DATA_BLOCK_LENGTH - 1
+	fastDataMask = fastDataBlockLength - 1
 
 	/** @internal */
-	UCPTRIE_SMALL_MAX = 0xfff
+	smallMax = 0xfff
 
 	/**
 	 * Offset from dataLength (to be subtracted) for fetching the
 	 * value returned for out-of-range code points and ill-formed UTF-8/16.
 	 * @internal
 	 */
-	UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET = 1
+	errorValueNegDataOffset = 1
 	/**
 	 * Offset from dataLength (to be subtracted) for fetching the
 	 * value returned for code points highStart..U+10FFFF.
 	 * @internal
 	 */
-	UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET = 2
+	highValueNegDataOffset = 2
 )
 
 // Internal constants.
 const (
 	/** The length of the BMP index table. 1024=0x400 */
-	UCPTRIE_BMP_INDEX_LENGTH = 0x10000 >> UCPTRIE_FAST_SHIFT
+	bmpIndexLength = 0x10000 >> fastShift
 
-	UCPTRIE_SMALL_LIMIT        = 0x1000
-	UCPTRIE_SMALL_INDEX_LENGTH = UCPTRIE_SMALL_LIMIT >> UCPTRIE_FAST_SHIFT
+	smallLimit       = 0x1000
+	smallIndexLength = smallLimit >> fastShift
 
 	/** Shift size for getting the index-3 table offset. */
-	UCPTRIE_SHIFT_3 = 4
+	ucpShift3 = 4
 
 	/** Shift size for getting the index-2 table offset. */
-	UCPTRIE_SHIFT_2 = 5 + UCPTRIE_SHIFT_3
+	ucpShift2 = 5 + ucpShift3
 
 	/** Shift size for getting the index-1 table offset. */
-	UCPTRIE_SHIFT_1 = 5 + UCPTRIE_SHIFT_2
+	ucpShift1 = 5 + ucpShift2
 
 	/**
 	 * Difference between two shift sizes,
 	 * for getting an index-2 offset from an index-3 offset. 5=9-4
 	 */
-	UCPTRIE_SHIFT_2_3 = UCPTRIE_SHIFT_2 - UCPTRIE_SHIFT_3
+	ucpShift2Min3 = ucpShift2 - ucpShift3
 
 	/**
 	 * Difference between two shift sizes,
 	 * for getting an index-1 offset from an index-2 offset. 5=14-9
 	 */
-	UCPTRIE_SHIFT_1_2 = UCPTRIE_SHIFT_1 - UCPTRIE_SHIFT_2
+	ucpShift1Min2 = ucpShift1 - ucpShift2
 
 	/**
 	 * Number of index-1 entries for the BMP. (4)
 	 * This part of the index-1 table is omitted from the serialized form.
 	 */
-	UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH = 0x10000 >> UCPTRIE_SHIFT_1
+	ucpOmittedBmpIndex1Length = 0x10000 >> ucpShift1
 
 	/** Number of entries in an index-2 block. 32=0x20 */
-	UCPTRIE_INDEX_2_BLOCK_LENGTH = 1 << UCPTRIE_SHIFT_1_2
+	ucpIndex2BlockLength = 1 << ucpShift1Min2
 
 	/** Mask for getting the lower bits for the in-index-2-block offset. */
-	UCPTRIE_INDEX_2_MASK = UCPTRIE_INDEX_2_BLOCK_LENGTH - 1
+	ucpIndex2Mask = ucpIndex2BlockLength - 1
 
 	/** Number of code points per index-2 table entry. 512=0x200 */
-	UCPTRIE_CP_PER_INDEX_2_ENTRY = 1 << UCPTRIE_SHIFT_2
+	ucpCpPerIndex2Entry = 1 << ucpShift2
 
 	/** Number of entries in an index-3 block. 32=0x20 */
-	UCPTRIE_INDEX_3_BLOCK_LENGTH = 1 << UCPTRIE_SHIFT_2_3
+	ucpIndex3BlockLength = 1 << ucpShift2Min3
 
 	/** Mask for getting the lower bits for the in-index-3-block offset. */
-	UCPTRIE_INDEX_3_MASK = UCPTRIE_INDEX_3_BLOCK_LENGTH - 1
+	ucpIndex3Mask = ucpIndex3BlockLength - 1
 
 	/** Number of entries in a small data block. 16=0x10 */
-	UCPTRIE_SMALL_DATA_BLOCK_LENGTH = 1 << UCPTRIE_SHIFT_3
+	ucpSmallDataBlockLength = 1 << ucpShift3
 
 	/** Mask for getting the lower bits for the in-small-data-block offset. */
-	UCPTRIE_SMALL_DATA_MASK = UCPTRIE_SMALL_DATA_BLOCK_LENGTH - 1
+	ucpSmallDataMask = ucpSmallDataBlockLength - 1
 )
 
 func UcpTrieFromBytes(bytes *udata.Bytes) (*UcpTrie, error) {
-	type UcpHeader struct {
+	type ucpHeader struct {
 		/** "Tri3" in big-endian US-ASCII (0x54726933) */
 		signature uint32
 
@@ -262,13 +256,13 @@ func UcpTrieFromBytes(bytes *udata.Bytes) (*UcpTrie, error) {
 		shiftedHighStart uint16
 	}
 
-	var header UcpHeader
+	var header ucpHeader
 	header.signature = bytes.Uint32()
 
 	switch header.signature {
-	case UCPTRIE_SIG:
-	case UCPTRIE_OE_SIG:
-		return nil, fmt.Errorf("unsupported: BigEndian encoding")
+	case ucpTrieSig:
+	case ucpTrieOESig:
+		return nil, errors.New("unsupported: BigEndian encoding")
 	default:
 		return nil, fmt.Errorf("invalid signature for UcpTrie: 0x%08x", header.signature)
 	}
@@ -281,40 +275,40 @@ func UcpTrieFromBytes(bytes *udata.Bytes) (*UcpTrie, error) {
 	header.shiftedHighStart = bytes.Uint16()
 
 	typeInt := (header.options >> 6) & 3
-	valueWidthInt := header.options & UCPTRIE_OPTIONS_VALUE_BITS_MASK
-	if typeInt > uint16(UCPTRIE_TYPE_SMALL) || valueWidthInt > uint16(UCPTRIE_VALUE_BITS_8) ||
-		(header.options&UCPTRIE_OPTIONS_RESERVED_MASK) != 0 {
-		return nil, fmt.Errorf("invalid options for serialized UcpTrie")
+	valueWidthInt := header.options & optionsValueBitsMask
+	if typeInt > uint16(typeSmall) || valueWidthInt > uint16(valueBits8) ||
+		(header.options&optionsReservedMask) != 0 {
+		return nil, errors.New("invalid options for serialized UcpTrie")
 	}
-	actualType := UCPTrieType(typeInt)
-	actualValueWidth := UCPTrieValueWidth(valueWidthInt)
+	actualType := ucpTrieType(typeInt)
+	actualValueWidth := ucpTrieValueWidth(valueWidthInt)
 
 	trie := &UcpTrie{
-		IndexLength:      int32(header.indexLength),
-		DataLength:       int32(((header.options & UCPTRIE_OPTIONS_DATA_LENGTH_MASK) << 4) | header.dataLength),
-		Index3NullOffset: header.index3NullOffset,
-		DataNullOffset:   int32(((header.options & UCPTRIE_OPTIONS_DATA_NULL_OFFSET_MASK) << 8) | header.dataNullOffset),
-		HighStart:        rune(header.shiftedHighStart) << UCPTRIE_SHIFT_2,
-		Type:             actualType,
-		ValueWidth:       actualValueWidth,
+		indexLength:      int32(header.indexLength),
+		dataLength:       int32(((header.options & optionsDataLengthMask) << 4) | header.dataLength),
+		index3NullOffset: header.index3NullOffset,
+		dataNullOffset:   int32(((header.options & optionsDataNullOffsetMask) << 8) | header.dataNullOffset),
+		highStart:        rune(header.shiftedHighStart) << ucpShift2,
+		typ:              actualType,
+		valueWidth:       actualValueWidth,
 	}
-	nullValueOffset := trie.DataNullOffset
-	if nullValueOffset >= trie.DataLength {
-		nullValueOffset = trie.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+	nullValueOffset := trie.dataNullOffset
+	if nullValueOffset >= trie.dataLength {
+		nullValueOffset = trie.dataLength - highValueNegDataOffset
 	}
 
-	trie.Shifted12HighStart = uint16((trie.HighStart + 0xfff) >> 12)
-	trie.Index = bytes.Uint16Slice(int32(header.indexLength))
+	trie.shifted12HighStart = uint16((trie.highStart + 0xfff) >> 12)
+	trie.index = bytes.Uint16Slice(int32(header.indexLength))
 	switch actualValueWidth {
-	case UCPTRIE_VALUE_BITS_16:
-		trie.Data16 = bytes.Uint16Slice(trie.DataLength)
-		trie.NullValue = uint32(trie.Data16[nullValueOffset])
-	case UCPTRIE_VALUE_BITS_32:
-		trie.Data32 = bytes.Uint32Slice(trie.DataLength)
-		trie.NullValue = trie.Data32[nullValueOffset]
-	case UCPTRIE_VALUE_BITS_8:
-		trie.Data8 = bytes.Uint8Slice(trie.DataLength)
-		trie.NullValue = uint32(trie.Data8[nullValueOffset])
+	case valueBits16:
+		trie.data16 = bytes.Uint16Slice(trie.dataLength)
+		trie.nullValue = uint32(trie.data16[nullValueOffset])
+	case valueBits32:
+		trie.data32 = bytes.Uint32Slice(trie.dataLength)
+		trie.nullValue = trie.data32[nullValueOffset]
+	case valueBits8:
+		trie.data8 = bytes.Uint8Slice(trie.dataLength)
+		trie.nullValue = uint32(trie.data8[nullValueOffset])
 	}
 
 	return trie, nil
@@ -327,10 +321,10 @@ func (t *UcpTrie) Get(c rune) uint32 {
 		dataIndex = c
 	} else {
 		var fastMax rune
-		if t.Type == UCPTRIE_TYPE_FAST {
+		if t.typ == typeFast {
 			fastMax = 0xffff
 		} else {
-			fastMax = UCPTRIE_SMALL_MAX
+			fastMax = smallMax
 		}
 		dataIndex = t.cpIndex(fastMax, c)
 	}
@@ -338,13 +332,13 @@ func (t *UcpTrie) Get(c rune) uint32 {
 }
 
 func (t *UcpTrie) getValue(dataIndex int32) uint32 {
-	switch t.ValueWidth {
-	case UCPTRIE_VALUE_BITS_16:
-		return uint32(t.Data16[dataIndex])
-	case UCPTRIE_VALUE_BITS_32:
-		return t.Data32[dataIndex]
-	case UCPTRIE_VALUE_BITS_8:
-		return uint32(t.Data8[dataIndex])
+	switch t.valueWidth {
+	case valueBits16:
+		return uint32(t.data16[dataIndex])
+	case valueBits32:
+		return t.data32[dataIndex]
+	case valueBits8:
+		return uint32(t.data8[dataIndex])
 	default:
 		// Unreachable if the trie is properly initialized.
 		return 0xffffffff
@@ -353,39 +347,39 @@ func (t *UcpTrie) getValue(dataIndex int32) uint32 {
 
 /** Internal trie getter for a code point below the fast limit. Returns the data index. @internal */
 func (t *UcpTrie) fastIndex(c rune) int32 {
-	return int32(t.Index[c>>UCPTRIE_FAST_SHIFT]) + (c & UCPTRIE_FAST_DATA_MASK)
+	return int32(t.index[c>>fastShift]) + (c & fastDataMask)
 }
 
 /** Internal trie getter for a code point at or above the fast limit. Returns the data index. @internal */
 func (t *UcpTrie) smallIndex(c rune) int32 {
-	if c >= t.HighStart {
-		return t.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+	if c >= t.highStart {
+		return t.dataLength - highValueNegDataOffset
 	}
 	return t.internalSmallIndex(c)
 }
 
 func (t *UcpTrie) internalSmallIndex(c rune) int32 {
-	i1 := c >> UCPTRIE_SHIFT_1
-	if t.Type == UCPTRIE_TYPE_FAST {
-		i1 += UCPTRIE_BMP_INDEX_LENGTH - UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH
+	i1 := c >> ucpShift1
+	if t.typ == typeFast {
+		i1 += bmpIndexLength - ucpOmittedBmpIndex1Length
 	} else {
-		i1 += UCPTRIE_SMALL_INDEX_LENGTH
+		i1 += smallIndexLength
 	}
-	i3Block := int32(t.Index[int32(t.Index[i1])+((c>>UCPTRIE_SHIFT_2)&UCPTRIE_INDEX_2_MASK)])
-	i3 := (c >> UCPTRIE_SHIFT_3) & UCPTRIE_INDEX_3_MASK
+	i3Block := int32(t.index[int32(t.index[i1])+((c>>ucpShift2)&ucpIndex2Mask)])
+	i3 := (c >> ucpShift3) & ucpIndex3Mask
 	var dataBlock int32
 	if (i3Block & 0x8000) == 0 {
 		// 16-bit indexes
-		dataBlock = int32(t.Index[i3Block+i3])
+		dataBlock = int32(t.index[i3Block+i3])
 	} else {
 		// 18-bit indexes stored in groups of 9 entries per 8 indexes.
 		i3Block = (i3Block & 0x7fff) + (i3 & ^7) + (i3 >> 3)
 		i3 &= 7
-		dataBlock = int32(t.Index[i3Block]) << (2 + (2 * i3)) & 0x30000
+		dataBlock = int32(t.index[i3Block]) << (2 + (2 * i3)) & 0x30000
 		i3Block++
-		dataBlock |= int32(t.Index[i3Block+i3])
+		dataBlock |= int32(t.index[i3Block+i3])
 	}
-	return dataBlock + (c & UCPTRIE_SMALL_DATA_MASK)
+	return dataBlock + (c & ucpSmallDataMask)
 }
 
 /**
@@ -400,7 +394,7 @@ func (t *UcpTrie) cpIndex(fastMax, c rune) int32 {
 	if c <= 0x10ffff {
 		return t.smallIndex(c)
 	}
-	return t.DataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET
+	return t.dataLength - errorValueNegDataOffset
 }
 
 /**
@@ -412,7 +406,7 @@ func (t *UcpTrie) cpIndex(fastMax, c rune) int32 {
  * @see umutablecptrie_getRange
  * @stable ICU 63
  */
-type UCPMapRangeOption int8
+type UcpMapRangeOption int8
 
 const (
 	/**
@@ -420,7 +414,7 @@ const (
 	 * Most users should use this option.
 	 * @stable ICU 63
 	 */
-	UCPMAP_RANGE_NORMAL UCPMapRangeOption = iota
+	UcpMapRangeNormal UcpMapRangeOption = iota
 	/**
 	 * ucpmap_getRange() enumerates all same-value ranges as stored in the map,
 	 * except that lead surrogates (U+D800..U+DBFF) are treated as having the
@@ -436,7 +430,7 @@ const (
 	 * but those values are not to be associated with the lead surrogate code *points*.
 	 * @stable ICU 63
 	 */
-	UCPMAP_RANGE_FIXED_LEAD_SURROGATES
+	UcpMapRangeFixedLeadSurrogates
 	/**
 	 * ucpmap_getRange() enumerates all same-value ranges as stored in the map,
 	 * except that all surrogates (U+D800..U+DFFF) are treated as having the
@@ -452,7 +446,7 @@ const (
 	 * but those values are not to be associated with the lead surrogate code *points*.
 	 * @stable ICU 63
 	 */
-	UCPMAP_RANGE_FIXED_ALL_SURROGATES
+	UcpMapRangeFixedAllSurrogates
 )
 
 /**
@@ -469,7 +463,7 @@ const (
  * @return the modified value
  * @stable ICU 63
  */
-type UCPMapValueFilter func(value uint32) uint32
+type UcpMapValueFilter func(value uint32) uint32
 
 /**
  * GetRange returns the last code point such that all those from start to there have the same value.
@@ -507,13 +501,13 @@ type UCPMapValueFilter func(value uint32) uint32
  * @return the range end code point, or -1 if start is not a valid code point
  * @stable ICU 63
  */
-func (t *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateValue uint32, filter UCPMapValueFilter) (rune, uint32) {
-	if option == UCPMAP_RANGE_NORMAL {
+func (t *UcpTrie) GetRange(start rune, option UcpMapRangeOption, surrogateValue uint32, filter UcpMapValueFilter) (rune, uint32) {
+	if option == UcpMapRangeNormal {
 		return t.getRange(start, filter)
 	}
 
 	var surrEnd rune
-	if option == UCPMAP_RANGE_FIXED_ALL_SURROGATES {
+	if option == UcpMapRangeFixedAllSurrogates {
 		surrEnd = 0xdfff
 	} else {
 		surrEnd = 0xdbff
@@ -548,27 +542,27 @@ func (t *UcpTrie) GetRange(start rune, option UCPMapRangeOption, surrogateValue 
 	return surrEnd, value
 }
 
-const MAX_UNICODE = 0x10ffff
+const maxUnicode = 0x10ffff
 
-func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) {
-	if start > MAX_UNICODE {
+func (t *UcpTrie) getRange(start rune, filter UcpMapValueFilter) (rune, uint32) {
+	if start > maxUnicode {
 		return -1, 0
 	}
 
-	if start >= t.HighStart {
-		di := t.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+	if start >= t.highStart {
+		di := t.dataLength - highValueNegDataOffset
 		value := t.getValue(di)
 		if filter != nil {
 			value = filter(value)
 		}
-		return MAX_UNICODE, value
+		return maxUnicode, value
 	}
 
-	nullValue := t.NullValue
+	nullValue := t.nullValue
 	if filter != nil {
 		nullValue = filter(nullValue)
 	}
-	index := t.Index
+	index := t.index
 
 	prevI3Block := int32(-1)
 	prevBlock := int32(-1)
@@ -578,50 +572,50 @@ func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) 
 	haveValue := false
 	for {
 		var i3Block, i3, i3BlockLength, dataBlockLength int32
-		if c <= 0xffff && (t.Type == UCPTRIE_TYPE_FAST || c <= UCPTRIE_SMALL_MAX) {
+		if c <= 0xffff && (t.typ == typeFast || c <= smallMax) {
 			i3Block = 0
-			i3 = c >> UCPTRIE_FAST_SHIFT
-			if t.Type == UCPTRIE_TYPE_FAST {
-				i3BlockLength = UCPTRIE_BMP_INDEX_LENGTH
+			i3 = c >> fastShift
+			if t.typ == typeFast {
+				i3BlockLength = bmpIndexLength
 			} else {
-				i3BlockLength = UCPTRIE_SMALL_INDEX_LENGTH
+				i3BlockLength = smallIndexLength
 			}
-			dataBlockLength = UCPTRIE_FAST_DATA_BLOCK_LENGTH
+			dataBlockLength = fastDataBlockLength
 		} else {
 			// Use the multi-stage index.
-			i1 := c >> UCPTRIE_SHIFT_1
-			if t.Type == UCPTRIE_TYPE_FAST {
-				i1 += UCPTRIE_BMP_INDEX_LENGTH - UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH
+			i1 := c >> ucpShift1
+			if t.typ == typeFast {
+				i1 += bmpIndexLength - ucpOmittedBmpIndex1Length
 			} else {
-				i1 += UCPTRIE_SMALL_INDEX_LENGTH
+				i1 += smallIndexLength
 			}
-			shft := c >> UCPTRIE_SHIFT_2
-			idx := int32(t.Index[i1]) + (shft & UCPTRIE_INDEX_2_MASK)
-			i3Block = int32(t.Index[idx])
-			if i3Block == prevI3Block && (c-start) >= UCPTRIE_CP_PER_INDEX_2_ENTRY {
+			shft := c >> ucpShift2
+			idx := int32(t.index[i1]) + (shft & ucpIndex2Mask)
+			i3Block = int32(t.index[idx])
+			if i3Block == prevI3Block && (c-start) >= ucpCpPerIndex2Entry {
 				// The index-3 block is the same as the previous one, and filled with value.
-				c += UCPTRIE_CP_PER_INDEX_2_ENTRY
+				c += ucpCpPerIndex2Entry
 				continue
 			}
 			prevI3Block = i3Block
-			if i3Block == int32(t.Index3NullOffset) {
+			if i3Block == int32(t.index3NullOffset) {
 				// This is the index-3 null block.
 				if haveValue {
 					if nullValue != value {
 						return c - 1, value
 					}
 				} else {
-					trieValue = t.NullValue
+					trieValue = t.nullValue
 					value = nullValue
 					haveValue = true
 				}
-				prevBlock = t.DataNullOffset
-				c = (c + UCPTRIE_CP_PER_INDEX_2_ENTRY) & ^(UCPTRIE_CP_PER_INDEX_2_ENTRY - 1)
+				prevBlock = t.dataNullOffset
+				c = (c + ucpCpPerIndex2Entry) & ^(ucpCpPerIndex2Entry - 1)
 				continue
 			}
-			i3 = (c >> UCPTRIE_SHIFT_3) & UCPTRIE_INDEX_3_MASK
-			i3BlockLength = UCPTRIE_INDEX_3_BLOCK_LENGTH
-			dataBlockLength = UCPTRIE_SMALL_DATA_BLOCK_LENGTH
+			i3 = (c >> ucpShift3) & ucpIndex3Mask
+			i3BlockLength = ucpIndex3BlockLength
+			dataBlockLength = ucpSmallDataBlockLength
 		}
 
 		// Enumerate data blocks for one index-3 block.
@@ -643,14 +637,14 @@ func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) 
 			} else {
 				dataMask := dataBlockLength - 1
 				prevBlock = block
-				if block == t.DataNullOffset {
+				if block == t.dataNullOffset {
 					// This is the data null block.
 					if haveValue {
 						if nullValue != value {
 							return c - 1, value
 						}
 					} else {
-						trieValue = t.NullValue
+						trieValue = t.nullValue
 						value = nullValue
 						haveValue = true
 					}
@@ -660,14 +654,14 @@ func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) 
 					trieValue2 := t.getValue(di)
 					if haveValue {
 						if trieValue2 != trieValue {
-							if filter == nil || maybeFilterValue(trieValue2, t.NullValue, nullValue, filter) != value {
+							if filter == nil || maybeFilterValue(trieValue2, t.nullValue, nullValue, filter) != value {
 								return c - 1, value
 							}
 							trieValue = trieValue2 // may or may not help
 						}
 					} else {
 						trieValue = trieValue2
-						value = maybeFilterValue(trieValue2, t.NullValue, nullValue, filter)
+						value = maybeFilterValue(trieValue2, t.nullValue, nullValue, filter)
 						haveValue = true
 					}
 					for {
@@ -678,7 +672,7 @@ func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) 
 						di++
 						trieValue2 = t.getValue(di)
 						if trieValue2 != trieValue {
-							if filter == nil || maybeFilterValue(trieValue2, t.NullValue, nullValue, filter) != value {
+							if filter == nil || maybeFilterValue(trieValue2, t.nullValue, nullValue, filter) != value {
 								return c - 1, value
 							}
 							trieValue = trieValue2 // may or may not help
@@ -691,21 +685,20 @@ func (t *UcpTrie) getRange(start rune, filter UCPMapValueFilter) (rune, uint32) 
 				break
 			}
 		}
-		if c >= t.HighStart {
+		if c >= t.highStart {
 			break
 		}
 	}
 
-	di := t.DataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET
+	di := t.dataLength - highValueNegDataOffset
 	highValue := t.getValue(di)
-	if maybeFilterValue(highValue, t.NullValue, nullValue, filter) != value {
+	if maybeFilterValue(highValue, t.nullValue, nullValue, filter) != value {
 		return c - 1, value
-	} else {
-		return MAX_UNICODE, value
 	}
+	return maxUnicode, value
 }
 
-func maybeFilterValue(value uint32, trieNullValue uint32, nullValue uint32, filter UCPMapValueFilter) uint32 {
+func maybeFilterValue(value uint32, trieNullValue uint32, nullValue uint32, filter UcpMapValueFilter) uint32 {
 	if value == trieNullValue {
 		value = nullValue
 	} else if filter != nil {

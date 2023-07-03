@@ -29,7 +29,7 @@ import (
 )
 
 type CompileError struct {
-	Code    uerror.URegexCompileErrorCode
+	Code    uerror.CompileErrorCode
 	Line    int
 	Offset  int
 	Context string
@@ -38,41 +38,41 @@ type CompileError struct {
 func (e *CompileError) Error() string {
 	var out strings.Builder
 	switch e.Code {
-	case uerror.U_REGEX_INTERNAL_ERROR:
+	case uerror.InternalError:
 		out.WriteString("Internal Error")
-	case uerror.U_REGEX_RULE_SYNTAX:
+	case uerror.RuleSyntax:
 		out.WriteString("Syntax Error")
-	case uerror.U_REGEX_INVALID_STATE:
+	case uerror.InvalidState:
 		out.WriteString("Invalid State")
-	case uerror.U_REGEX_BAD_ESCAPE_SEQUENCE:
+	case uerror.BadEscapeSequence:
 		out.WriteString("Bad escape sequence")
-	case uerror.U_REGEX_PROPERTY_SYNTAX:
+	case uerror.PropertySyntax:
 		out.WriteString("Property syntax error")
-	case uerror.U_REGEX_UNIMPLEMENTED:
+	case uerror.Unimplemented:
 		out.WriteString("Unimplemented")
-	case uerror.U_REGEX_MISMATCHED_PAREN:
+	case uerror.MismatchedParen:
 		out.WriteString("Mismatched parentheses")
-	case uerror.U_REGEX_NUMBER_TOO_BIG:
+	case uerror.NumberTooBig:
 		out.WriteString("Number too big")
-	case uerror.U_REGEX_BAD_INTERVAL:
+	case uerror.BadInterval:
 		out.WriteString("Bad interval")
-	case uerror.U_REGEX_MAX_LT_MIN:
+	case uerror.MaxLtMin:
 		out.WriteString("Max less than min")
-	case uerror.U_REGEX_INVALID_BACK_REF:
+	case uerror.InvalidBackRef:
 		out.WriteString("Invalid back reference")
-	case uerror.U_REGEX_INVALID_FLAG:
+	case uerror.InvalidFlag:
 		out.WriteString("Invalid flag")
-	case uerror.U_REGEX_LOOK_BEHIND_LIMIT:
+	case uerror.LookBehindLimit:
 		out.WriteString("Look behind limit")
-	case uerror.U_REGEX_SET_CONTAINS_STRING:
+	case uerror.SetContainsString:
 		out.WriteString("Set contains string")
-	case uerror.U_REGEX_MISSING_CLOSE_BRACKET:
+	case uerror.MissingCloseBracket:
 		out.WriteString("Missing closing ]")
-	case uerror.U_REGEX_INVALID_RANGE:
+	case uerror.InvalidRange:
 		out.WriteString("Invalid range")
-	case uerror.U_REGEX_PATTERN_TOO_BIG:
+	case uerror.PatternTooBig:
 		out.WriteString("Pattern too big")
-	case uerror.U_REGEX_INVALID_CAPTURE_GROUP_NAME:
+	case uerror.InvalidCaptureGroupName:
 		out.WriteString("Invalid capture group name")
 	}
 	_, _ = fmt.Fprintf(&out, " at line %d, column %d: `%s`", e.Line, e.Offset, e.Context)
@@ -81,7 +81,7 @@ func (e *CompileError) Error() string {
 }
 
 type MatchError struct {
-	Code     uerror.URegexMatchErrorCode
+	Code     uerror.MatchErrorCode
 	Pattern  string
 	Position int
 	Input    []rune
@@ -92,9 +92,9 @@ const maxMatchInputLength = 20
 func (e *MatchError) Error() string {
 	var out strings.Builder
 	switch e.Code {
-	case uerror.U_REGEX_STACK_OVERFLOW:
+	case uerror.StackOverflow:
 		out.WriteString("Stack overflow")
-	case uerror.U_REGEX_TIME_OUT:
+	case uerror.TimeOut:
 		out.WriteString("Timeout")
 	}
 

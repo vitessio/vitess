@@ -86,7 +86,7 @@ func IsUnprintable(c rune) bool {
 }
 
 // "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-var DIGITS = [...]byte{
+var digits = [...]byte{
 	48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
 	65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
 	75, 76, 77, 78, 79, 80, 81, 82, 83, 84,
@@ -97,15 +97,15 @@ func EscapeUnprintable(w *strings.Builder, c rune) {
 	w.WriteByte('\\')
 	if (c & ^0xFFFF) != 0 {
 		w.WriteByte('U')
-		w.WriteByte(DIGITS[0xF&(c>>28)])
-		w.WriteByte(DIGITS[0xF&(c>>24)])
-		w.WriteByte(DIGITS[0xF&(c>>20)])
-		w.WriteByte(DIGITS[0xF&(c>>16)])
+		w.WriteByte(digits[0xF&(c>>28)])
+		w.WriteByte(digits[0xF&(c>>24)])
+		w.WriteByte(digits[0xF&(c>>20)])
+		w.WriteByte(digits[0xF&(c>>16)])
 	} else {
 		w.WriteByte('u')
 	}
-	w.WriteByte(DIGITS[0xF&(c>>12)])
-	w.WriteByte(DIGITS[0xF&(c>>8)])
-	w.WriteByte(DIGITS[0xF&(c>>4)])
-	w.WriteByte(DIGITS[0xF&c])
+	w.WriteByte(digits[0xF&(c>>12)])
+	w.WriteByte(digits[0xF&(c>>8)])
+	w.WriteByte(digits[0xF&(c>>4)])
+	w.WriteByte(digits[0xF&c])
 }

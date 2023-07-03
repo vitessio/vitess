@@ -92,7 +92,7 @@ func Fold(c rune) rune {
 		pe := getExceptions(props)
 		excWord := pe[0]
 		pe = pe[1:]
-		if (excWord & UCASE_EXC_CONDITIONAL_FOLD) != 0 {
+		if (excWord & excConditionalFold) != 0 {
 			/* special case folding mappings, hardcoded */
 			/* default mappings */
 			if c == 0x49 {
@@ -103,23 +103,23 @@ func Fold(c rune) rune {
 				return c
 			}
 		}
-		if (excWord & UCASE_EXC_NO_SIMPLE_CASE_FOLDING) != 0 {
+		if (excWord & excNoSimpleCaseFolding) != 0 {
 			return c
 		}
-		if hasSlot(excWord, UCASE_EXC_DELTA) && isUpperOrTitle(props) {
+		if hasSlot(excWord, excDelta) && isUpperOrTitle(props) {
 			var delta int32
-			delta, _ = getSlotValue(excWord, UCASE_EXC_DELTA, pe)
-			if excWord&UCASE_EXC_DELTA_IS_NEGATIVE == 0 {
+			delta, _ = getSlotValue(excWord, excDelta, pe)
+			if excWord&excDeltaIsNegative == 0 {
 				return c + delta
 			}
 			return c - delta
 		}
 
 		var idx int32
-		if hasSlot(excWord, UCASE_EXC_FOLD) {
-			idx = UCASE_EXC_FOLD
-		} else if hasSlot(excWord, UCASE_EXC_LOWER) {
-			idx = UCASE_EXC_LOWER
+		if hasSlot(excWord, excFold) {
+			idx = excFold
+		} else if hasSlot(excWord, excLower) {
+			idx = excLower
 		} else {
 			return c
 		}
@@ -144,7 +144,7 @@ func FullFolding(c rune) (rune, []uint16) {
 	pe = pe[1:]
 	var idx int32
 
-	if excWord&UCASE_EXC_CONDITIONAL_FOLD != 0 {
+	if excWord&excConditionalFold != 0 {
 		/* use hardcoded conditions and mappings */
 		/* default mappings */
 		if c == 0x49 {
@@ -154,14 +154,14 @@ func FullFolding(c rune) (rune, []uint16) {
 			/* 0130; F; 0069 0307; # LATIN CAPITAL LETTER I WITH DOT ABOVE */
 			return -1, []uint16{0x69, 0x307}
 		}
-	} else if hasSlot(excWord, UCASE_EXC_FULL_MAPPINGS) {
-		full, pe := getSlotValue(excWord, UCASE_EXC_FULL_MAPPINGS, pe)
+	} else if hasSlot(excWord, excFullMappings) {
+		full, pe := getSlotValue(excWord, excFullMappings, pe)
 
 		/* start of full case mapping strings */
 		pe = pe[1:]
 
 		/* skip the lowercase result string */
-		pe = pe[full&UCASE_FULL_LOWER:]
+		pe = pe[full&fullLower:]
 		full = (full >> 4) & 0xf
 
 		if full != 0 {
@@ -170,20 +170,20 @@ func FullFolding(c rune) (rune, []uint16) {
 		}
 	}
 
-	if excWord&UCASE_EXC_NO_SIMPLE_CASE_FOLDING != 0 {
+	if excWord&excNoSimpleCaseFolding != 0 {
 		return result, nil
 	}
-	if hasSlot(excWord, UCASE_EXC_DELTA) && isUpperOrTitle(props) {
-		delta, _ := getSlotValue(excWord, UCASE_EXC_DELTA, pe)
-		if excWord&UCASE_EXC_DELTA_IS_NEGATIVE == 0 {
+	if hasSlot(excWord, excDelta) && isUpperOrTitle(props) {
+		delta, _ := getSlotValue(excWord, excDelta, pe)
+		if excWord&excDeltaIsNegative == 0 {
 			return c + delta, nil
 		}
 		return c - delta, nil
 	}
-	if hasSlot(excWord, UCASE_EXC_FOLD) {
-		idx = UCASE_EXC_FOLD
-	} else if hasSlot(excWord, UCASE_EXC_LOWER) {
-		idx = UCASE_EXC_LOWER
+	if hasSlot(excWord, excFold) {
+		idx = excFold
+	} else if hasSlot(excWord, excLower) {
+		idx = excLower
 	} else {
 		return c, nil
 	}
@@ -192,26 +192,25 @@ func FullFolding(c rune) (rune, []uint16) {
 }
 
 const (
-	UCASE_EXC_LOWER = iota
-	UCASE_EXC_FOLD
-	UCASE_EXC_UPPER
-	UCASE_EXC_TITLE
-	UCASE_EXC_DELTA
-	UCASE_EXC_5 /* reserved */
-	UCASE_EXC_CLOSURE
-	UCASE_EXC_FULL_MAPPINGS
-	UCASE_EXC_ALL_SLOTS /* one past the last slot */
+	excLower = iota
+	excFold
+	excUpper
+	excTitle
+	excDelta
+	exc5 /* reserved */
+	excClosure
+	excFullMappings
 )
 
 const (
 	/* complex/conditional mappings */
-	UCASE_EXC_CONDITIONAL_SPECIAL    = 0x4000
-	UCASE_EXC_CONDITIONAL_FOLD       = 0x8000
-	UCASE_EXC_NO_SIMPLE_CASE_FOLDING = 0x200
-	UCASE_EXC_DELTA_IS_NEGATIVE      = 0x400
-	UCASE_EXC_SENSITIVE              = 0x800
+	excConditionalSpecial  = 0x4000
+	excConditionalFold     = 0x8000
+	excNoSimpleCaseFolding = 0x200
+	excDeltaIsNegative     = 0x400
+	excSensitive           = 0x800
 
-	UCASE_EXC_DOUBLE_SLOTS = 0x100
+	excDoubleSlots = 0x100
 )
 
 func isUpperOrTitle(props uint16) bool {
@@ -235,7 +234,7 @@ func slotOffset(flags uint16, idx int32) int {
 }
 
 func getSlotValue(excWord uint16, idx int32, pExc16 []uint16) (int32, []uint16) {
-	if excWord&UCASE_EXC_DOUBLE_SLOTS == 0 {
+	if excWord&excDoubleSlots == 0 {
 		pExc16 = pExc16[slotOffset(excWord, idx):]
 		return int32(pExc16[0]), pExc16
 	}
