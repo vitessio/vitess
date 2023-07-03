@@ -249,7 +249,7 @@ func (t *txThrottler) Open() (err error) {
 	}
 	log.Info("txThrottler: opening")
 	t.throttlerRunning.Set(1)
-	t.state, err = newTxThrottlerState(t.topoServer, t.config, t.target.Keyspace, t.target.Shard, t.target.Cell)
+	t.state, err = newTxThrottlerState(t.topoServer, t.config, t.target)
 	return err
 }
 
@@ -294,7 +294,7 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 	return result
 }
 
-func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
+func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
 
 	t, err := throttlerFactory(
@@ -325,8 +325,8 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, key
 				topoServer,
 				result.healthCheck, /* LegacyTabletRecorder */
 				cell,
-				keyspace,
-				shard,
+				target.Keyspace,
+				target.Shard,
 				discovery.DefaultTopologyWatcherRefreshInterval,
 				discovery.DefaultTopoReadConcurrency))
 	}
