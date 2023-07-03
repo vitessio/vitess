@@ -444,6 +444,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `INTERVAL(0, 0, 0, -1, NULL, NULL, 1)`,
 			result:     `INT64(5)`,
 		},
+		{
+			expression: `REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_general_ci)`,
+			result:     `VARCHAR("X def ghi")`,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
-	"vitess.io/vitess/go/mysql/icuregex/internal/uerror"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
@@ -1323,7 +1322,7 @@ func (m *Matcher) incrementTime(inputIdx int) error {
 	m.time++
 	if m.timeLimit > 0 && m.time >= m.timeLimit {
 		return &MatchError{
-			Code:     uerror.TimeOut,
+			Code:     TimeOut,
 			Pattern:  m.pattern.pattern,
 			Position: inputIdx,
 			Input:    m.input,
@@ -1633,6 +1632,14 @@ func (m *Matcher) Group(i int) (string, bool) {
 		return "", false
 	}
 	return string(m.input[start:end]), true
+}
+
+func (m *Matcher) End() int {
+	if !m.match {
+		return -1
+	}
+
+	return m.matchEnd
 }
 
 // Test for any of the Unicode line terminating characters.

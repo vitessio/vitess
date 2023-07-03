@@ -558,7 +558,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var col collations.ID
+	var col collations.TypedCollation
 	left, right, col, err = mergeAndCoerceCollations(left, right)
 	if err != nil {
 		return nil, err
@@ -567,11 +567,11 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	var matched bool
 	switch {
 	case typeIsTextual(left.SQLType()) && typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col)
+		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col.Collation)
 	case typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col)
+		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col.Collation)
 	case typeIsTextual(left.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col)
+		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col.Collation)
 	default:
 		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
 	}

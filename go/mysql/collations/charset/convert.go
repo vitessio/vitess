@@ -19,6 +19,8 @@ package charset
 import (
 	"fmt"
 	"unicode/utf8"
+
+	"vitess.io/vitess/go/hack"
 )
 
 func failedConversionError(from, to Charset, input []byte) error {
@@ -155,6 +157,46 @@ func Expand(dst []rune, src []byte, srcCharset Charset) []rune {
 			dst = append(dst, cp)
 		}
 		return dst
+	}
+}
+
+func Collapse(dst []byte, src []rune, dstCharset Charset) []byte {
+	switch dstCharset := dstCharset.(type) {
+	case Charset_utf8mb3, Charset_utf8mb4:
+		if dst == nil {
+			return hack.StringBytes(string(src))
+		}
+		return append(dst, hack.StringBytes(string(src))...)
+	case Charset_binary:
+		if dst == nil {
+			dst = make([]byte, 0, len(src))
+		}
+		for _, b := range src {
+			dst = append(dst, byte(b))
+		}
+		return dst
+	default:
+		nDst := 0
+		if dst == nil {
+			dst = make([]byte, len(src)*dstCharset.MaxWidth())
+		} else {
+			dst = dst[:cap(dst)]
+		}
+		for _, c := range src {
+			if len(dst)-nDst < 4 {
+				newDst := make([]byte, len(dst)*2)
+				copy(newDst, dst[:nDst])
+				dst = newDst
+			}
+			w := dstCharset.EncodeRune(dst[nDst:], c)
+			if w < 0 {
+				if w = dstCharset.EncodeRune(dst[nDst:], '?'); w < 0 {
+					break
+				}
+			}
+			nDst += w
+		}
+		return dst[:nDst]
 	}
 }
 

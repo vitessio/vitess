@@ -24,12 +24,10 @@ package icuregex
 import (
 	"fmt"
 	"strings"
-
-	"vitess.io/vitess/go/mysql/icuregex/internal/uerror"
 )
 
 type CompileError struct {
-	Code    uerror.CompileErrorCode
+	Code    CompileErrorCode
 	Line    int
 	Offset  int
 	Context string
@@ -38,41 +36,37 @@ type CompileError struct {
 func (e *CompileError) Error() string {
 	var out strings.Builder
 	switch e.Code {
-	case uerror.InternalError:
+	case InternalError:
 		out.WriteString("Internal Error")
-	case uerror.RuleSyntax:
+	case RuleSyntax:
 		out.WriteString("Syntax Error")
-	case uerror.InvalidState:
-		out.WriteString("Invalid State")
-	case uerror.BadEscapeSequence:
+	case BadEscapeSequence:
 		out.WriteString("Bad escape sequence")
-	case uerror.PropertySyntax:
+	case PropertySyntax:
 		out.WriteString("Property syntax error")
-	case uerror.Unimplemented:
+	case Unimplemented:
 		out.WriteString("Unimplemented")
-	case uerror.MismatchedParen:
+	case MismatchedParen:
 		out.WriteString("Mismatched parentheses")
-	case uerror.NumberTooBig:
+	case NumberTooBig:
 		out.WriteString("Number too big")
-	case uerror.BadInterval:
+	case BadInterval:
 		out.WriteString("Bad interval")
-	case uerror.MaxLtMin:
+	case MaxLtMin:
 		out.WriteString("Max less than min")
-	case uerror.InvalidBackRef:
+	case InvalidBackRef:
 		out.WriteString("Invalid back reference")
-	case uerror.InvalidFlag:
+	case InvalidFlag:
 		out.WriteString("Invalid flag")
-	case uerror.LookBehindLimit:
+	case LookBehindLimit:
 		out.WriteString("Look behind limit")
-	case uerror.SetContainsString:
-		out.WriteString("Set contains string")
-	case uerror.MissingCloseBracket:
+	case MissingCloseBracket:
 		out.WriteString("Missing closing ]")
-	case uerror.InvalidRange:
+	case InvalidRange:
 		out.WriteString("Invalid range")
-	case uerror.PatternTooBig:
+	case PatternTooBig:
 		out.WriteString("Pattern too big")
-	case uerror.InvalidCaptureGroupName:
+	case InvalidCaptureGroupName:
 		out.WriteString("Invalid capture group name")
 	}
 	_, _ = fmt.Fprintf(&out, " at line %d, column %d: `%s`", e.Line, e.Offset, e.Context)
@@ -81,7 +75,7 @@ func (e *CompileError) Error() string {
 }
 
 type MatchError struct {
-	Code     uerror.MatchErrorCode
+	Code     MatchErrorCode
 	Pattern  string
 	Position int
 	Input    []rune
@@ -92,9 +86,9 @@ const maxMatchInputLength = 20
 func (e *MatchError) Error() string {
 	var out strings.Builder
 	switch e.Code {
-	case uerror.StackOverflow:
+	case StackOverflow:
 		out.WriteString("Stack overflow")
-	case uerror.TimeOut:
+	case TimeOut:
 		out.WriteString("Timeout")
 	}
 
@@ -123,3 +117,33 @@ func (e *MatchError) Error() string {
 
 	return out.String()
 }
+
+type Code int32
+
+type CompileErrorCode int32
+
+const (
+	InternalError           CompileErrorCode = iota + 1 /**< An internal error (bug) was detected.              */
+	RuleSyntax                                          /**< Syntax error in regexp pattern.                    */
+	BadEscapeSequence                                   /**< Unrecognized backslash escape sequence in pattern  */
+	PropertySyntax                                      /**< Incorrect Unicode property                         */
+	Unimplemented                                       /**< Use of regexp feature that is not yet implemented. */
+	MismatchedParen                                     /**< Incorrectly nested parentheses in regexp pattern.  */
+	NumberTooBig                                        /**< Decimal number is too large.                       */
+	BadInterval                                         /**< Error in {min,max} interval                        */
+	MaxLtMin                                            /**< In {min,max}, max is less than min.                */
+	InvalidBackRef                                      /**< Back-reference to a non-existent capture group.    */
+	InvalidFlag                                         /**< Invalid value for match mode flags.                */
+	LookBehindLimit                                     /**< Look-Behind pattern matches must have a bounded maximum length.    */
+	MissingCloseBracket                                 /**< Missing closing bracket on a bracket expression. */
+	InvalidRange                                        /**< In a character range [x-y], x is greater than y.   */
+	PatternTooBig                                       /**< Pattern exceeds limits on size or complexity. @stable ICU 55 */
+	InvalidCaptureGroupName                             /**< Invalid capture group name. @stable ICU 55 */
+)
+
+type MatchErrorCode int32
+
+const (
+	StackOverflow MatchErrorCode = iota /**< Regular expression backtrack stack overflow.       */
+	TimeOut                             /**< Maximum allowed match time exceeded                */
+)

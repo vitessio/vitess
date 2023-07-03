@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/pattern"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
-	"vitess.io/vitess/go/mysql/icuregex/internal/uerror"
 	"vitess.io/vitess/go/mysql/icuregex/internal/unames"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uset"
@@ -226,7 +225,7 @@ func (c *compiler) nextChar(ch *reChar) {
 
 				ch.char, c.p = pattern.UnescapeAt(beforeEscape)
 				if ch.char < 0 {
-					c.error(uerror.BadEscapeSequence)
+					c.error(BadEscapeSequence)
 				}
 				c.charNum += len(beforeEscape) - len(c.p)
 			} else if c.peekCharLL() == chDigit0 {
@@ -244,7 +243,7 @@ func (c *compiler) nextChar(ch *reChar) {
 					if ch2 < chDigit0 || ch2 > chDigit7 {
 						if index == 0 {
 							// \0 is not followed by any octal digits.
-							c.error(uerror.BadEscapeSequence)
+							c.error(BadEscapeSequence)
 						}
 						break
 					}
@@ -371,7 +370,7 @@ func (c *compiler) compile(pat string) error {
 		if table[0].pushState != 0 {
 			c.stackPtr++
 			if c.stackPtr >= stackSize {
-				c.error(uerror.InternalError)
+				c.error(InternalError)
 				c.stackPtr--
 			}
 			c.stack[c.stackPtr] = uint16(table[0].pushState)
@@ -388,7 +387,7 @@ func (c *compiler) compile(pat string) error {
 			c.stackPtr--
 			if c.stackPtr < 0 {
 				c.stackPtr++
-				c.error(uerror.MismatchedParen)
+				c.error(MismatchedParen)
 			}
 		}
 	}
@@ -437,7 +436,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		c.handleCloseParen()
 		if len(c.parenStack) > 0 {
 			// Missing close paren in pattern.
-			c.error(uerror.MismatchedParen)
+			c.error(MismatchedParen)
 		}
 
 		// add the END operation to the compiled pattern.
@@ -491,7 +490,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		c.captureName.WriteRune(c.c.char)
 
 	case doBadNamedCapture:
-		c.error(uerror.InvalidCaptureGroupName)
+		c.error(InvalidCaptureGroupName)
 
 	case doOpenCaptureParen:
 		// Open Capturing Paren, possibly named.
@@ -539,7 +538,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 			c.captureName = nil
 
 			if _, ok := c.out.namedCaptureMap[captureName]; ok {
-				c.error(uerror.InvalidCaptureGroupName)
+				c.error(InvalidCaptureGroupName)
 			}
 			c.out.namedCaptureMap[captureName] = groupNumber
 		}
@@ -768,22 +767,22 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 	case doConditionalExpr, doPerlInline:
 		// Conditionals such as (?(1)a:b)
 		// Perl inline-condtionals.  (?{perl code}a|b) We're not perl, no way to do them.
-		c.error(uerror.Unimplemented)
+		c.error(Unimplemented)
 
 	case doCloseParen:
 		c.handleCloseParen()
 		if len(c.parenStack) == 0 {
 			//  Extra close paren, or missing open paren.
-			c.error(uerror.MismatchedParen)
+			c.error(MismatchedParen)
 		}
 
 	case doNOP:
 
 	case doBadOpenParenType, doRuleError:
-		c.error(uerror.RuleSyntax)
+		c.error(RuleSyntax)
 
 	case doMismatchedParenErr:
-		c.error(uerror.MismatchedParen)
+		c.error(MismatchedParen)
 
 	case doPlus:
 		//  Normal '+'  compiles to
@@ -999,7 +998,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		digitValue := uCharDigitValue(c.c.char)
 		val := int64(c.intervalLow)*10 + digitValue
 		if val > math.MaxInt32 {
-			c.error(uerror.NumberTooBig)
+			c.error(NumberTooBig)
 		} else {
 			c.intervalLow = int(val)
 		}
@@ -1012,7 +1011,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		digitValue := uCharDigitValue(c.c.char)
 		val := int64(c.intervalUpper)*10 + digitValue
 		if val > math.MaxInt32 {
-			c.error(uerror.NumberTooBig)
+			c.error(NumberTooBig)
 		} else {
 			c.intervalUpper = int(val)
 		}
@@ -1066,7 +1065,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		c.compileInterval(urxCtrInitNg, urxCtrLoopNg)
 
 	case doIntervalError:
-		c.error(uerror.BadInterval)
+		c.error(BadInterval)
 
 	case doLiteralChar:
 		// We've just scanned a "normal" character from the pattern,
@@ -1076,7 +1075,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		// We've just scanned an backslashed escaped character with  no
 		//   special meaning.  It represents itself.
 		if (c.modeFlags&ErrorOnUnknownEscapes) != 0 && ((c.c.char >= 0x41 && c.c.char <= 0x5A) || /* in [A-Z] */ (c.c.char >= 0x61 && c.c.char <= 0x7a)) { // in [a-z]
-			c.error(uerror.BadEscapeSequence)
+			c.error(BadEscapeSequence)
 		}
 		c.literalChar(c.c.char)
 
@@ -1122,7 +1121,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 	case doBackslashB:
 		if !BreakIteration {
 			if (c.modeFlags & UWord) != 0 {
-				c.error(uerror.Unimplemented)
+				c.error(Unimplemented)
 			}
 		}
 		c.fixLiterals(false)
@@ -1135,7 +1134,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 	case doBackslashb:
 		if !BreakIteration {
 			if (c.modeFlags & UWord) != 0 {
-				c.error(uerror.Unimplemented)
+				c.error(Unimplemented)
 			}
 		}
 		c.fixLiterals(false)
@@ -1196,7 +1195,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 	case doBackslashX:
 		if !BreakIteration {
 			// Grapheme Cluster Boundary requires ICU break iteration.
-			c.error(uerror.Unimplemented)
+			c.error(Unimplemented)
 		}
 		c.fixLiterals(false)
 		c.appendOp(urxBackslashX, 0)
@@ -1210,7 +1209,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		c.appendOp(urxBackslashZ, 0)
 
 	case doEscapeError:
-		c.error(uerror.BadEscapeSequence)
+		c.error(BadEscapeSequence)
 
 	case doExit:
 		c.fixLiterals(false)
@@ -1279,7 +1278,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 				// Group name has not been defined.
 				//   Could be a forward reference. If we choose to support them at some
 				//   future time, extra mechanism will be required at this point.
-				c.error(uerror.InvalidCaptureGroupName)
+				c.error(InvalidCaptureGroupName)
 			} else {
 				// Given the number, handle identically to a \n numbered back reference.
 				// See comments above, under doBackRef
@@ -1448,7 +1447,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		c.modeFlags = c.newModeFlags
 
 	case doBadModeFlag:
-		c.error(uerror.InvalidFlag)
+		c.error(InvalidFlag)
 
 	case doSuppressComments:
 		// We have just scanned a '(?'.  We now need to prevent the character scanner from
@@ -1619,7 +1618,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		if (c.modeFlags&ErrorOnUnknownEscapes) != 0 &&
 			((c.c.char >= 0x41 && c.c.char <= 0x5A) || // in [A-Z]
 				(c.c.char >= 0x61 && c.c.char <= 0x7a)) { // in [a-z]
-			c.error(uerror.BadEscapeSequence)
+			c.error(BadEscapeSequence)
 		}
 		c.setEval(setUnion)
 		set := c.setStack[len(c.setStack)-1]
@@ -1644,7 +1643,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		//        and ICU UnicodeSet behavior.
 		ch := c.scanNamedChar()
 		if c.err == nil && (c.lastSetLiteral == -1 || c.lastSetLiteral > ch) {
-			c.error(uerror.InvalidRange)
+			c.error(InvalidRange)
 		}
 		set := c.setStack[len(c.setStack)-1]
 		set.AddRuneRange(c.lastSetLiteral, ch)
@@ -1668,10 +1667,10 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		}
 
 	case doSetNoCloseError:
-		c.error(uerror.MissingCloseBracket)
+		c.error(MissingCloseBracket)
 
 	case doSetOpError:
-		c.error(uerror.RuleSyntax) //  -- or && at the end of a set.  Illegal.
+		c.error(RuleSyntax) //  -- or && at the end of a set.  Illegal.
 
 	case doSetPosixProp:
 		if set := c.scanPosixProp(); set != nil {
@@ -1692,7 +1691,7 @@ func (c *compiler) doParseActions(action patternParseAction) bool {
 		//        and ICU UnicodeSet behavior.
 
 		if c.lastSetLiteral == -1 || c.lastSetLiteral > c.c.char {
-			c.error(uerror.InvalidRange)
+			c.error(InvalidRange)
 		}
 		c.setStack[len(c.setStack)-1].AddRuneRange(c.lastSetLiteral, c.c.char)
 
@@ -1719,7 +1718,7 @@ func stackPop[T any](stack []T) (T, []T) {
 	return out, stack
 }
 
-func (c *compiler) error(e uerror.CompileErrorCode) {
+func (c *compiler) error(e CompileErrorCode) {
 	c.err = &CompileError{
 		Code:    e,
 		Line:    c.lineNum,
@@ -1778,7 +1777,7 @@ func (c *compiler) stripNOPs() {
 		case urxBackref, urxBackrefI:
 			where := op.value()
 			if where > len(c.out.groupMap) {
-				c.error(uerror.InvalidBackRef)
+				c.error(InvalidBackRef)
 				break
 			}
 
@@ -2294,7 +2293,7 @@ func (c *compiler) buildOp(typ opcode, val int) instruction {
 
 func (c *compiler) handleCloseParen() {
 	if len(c.parenStack) == 0 {
-		c.error(uerror.MismatchedParen)
+		c.error(MismatchedParen)
 		return
 	}
 
@@ -2398,7 +2397,7 @@ func (c *compiler) handleCloseParen() {
 		maxML := c.maxMatchLength(c.matchOpenParen, patEnd)
 
 		if maxML == math.MaxInt32 {
-			c.error(uerror.LookBehindLimit)
+			c.error(LookBehindLimit)
 			break
 		}
 		if minML == math.MaxInt32 {
@@ -2428,11 +2427,11 @@ func (c *compiler) handleCloseParen() {
 		maxML := c.maxMatchLength(c.matchOpenParen, patEnd)
 
 		if instruction(maxML).typ() != 0 {
-			c.error(uerror.LookBehindLimit)
+			c.error(LookBehindLimit)
 			break
 		}
 		if maxML == math.MaxInt32 {
-			c.error(uerror.LookBehindLimit)
+			c.error(LookBehindLimit)
 			break
 		}
 		if minML == math.MaxInt32 {
@@ -2489,7 +2488,7 @@ func (c *compiler) fixLiterals(split bool) {
 		}
 	} else {
 		if len(c.literalChars) > 0x00ffffff || len(c.out.literalText) > 0x00ffffff {
-			c.error(uerror.PatternTooBig)
+			c.error(PatternTooBig)
 		}
 		if c.modeFlags&CaseInsensitive != 0 {
 			c.appendOp(urxStringI, len(c.out.literalText))
@@ -2512,14 +2511,14 @@ func (c *compiler) allocateData(size int) int {
 		return 0
 	}
 	if size <= 0 || size > 0x100 || c.out.dataSize < 0 {
-		c.error(uerror.InternalError)
+		c.error(InternalError)
 		return 0
 	}
 
 	dataIndex := c.out.dataSize
 	c.out.dataSize += size
 	if c.out.dataSize >= 0x00fffff0 {
-		c.error(uerror.InternalError)
+		c.error(InternalError)
 	}
 	return dataIndex
 }
@@ -2529,13 +2528,13 @@ func (c *compiler) allocateStackData(size int) int {
 		return 0
 	}
 	if size <= 0 || size > 0x100 || c.out.frameSize < 0 {
-		c.error(uerror.InternalError)
+		c.error(InternalError)
 		return 0
 	}
 	dataIndex := c.out.frameSize
 	c.out.frameSize += size
 	if c.out.frameSize >= 0x00fffff0 {
-		c.error(uerror.InternalError)
+		c.error(InternalError)
 	}
 	return dataIndex
 }
@@ -2698,18 +2697,18 @@ func (c *compiler) compileInterval(init opcode, loop opcode) {
 	c.appendOp(loop, topOfBlock)
 
 	if (c.intervalLow&0xff000000) != 0 || (c.intervalUpper > 0 && (c.intervalUpper&0xff000000) != 0) {
-		c.error(uerror.NumberTooBig)
+		c.error(NumberTooBig)
 	}
 
 	if c.intervalLow > c.intervalUpper && c.intervalUpper != -1 {
-		c.error(uerror.MaxLtMin)
+		c.error(MaxLtMin)
 	}
 }
 
 func (c *compiler) scanNamedChar() rune {
 	c.nextChar(&c.c)
 	if c.c.char != chLBrace {
-		c.error(uerror.PropertySyntax)
+		c.error(PropertySyntax)
 		return 0
 	}
 
@@ -2720,7 +2719,7 @@ func (c *compiler) scanNamedChar() rune {
 			break
 		}
 		if c.c.char == -1 {
-			c.error(uerror.PropertySyntax)
+			c.error(PropertySyntax)
 			return 0
 		}
 		charName = append(charName, c.c.char)
@@ -2730,13 +2729,13 @@ func (c *compiler) scanNamedChar() rune {
 		// All Unicode character names have only invariant characters.
 		// The API to get a character, given a name, accepts only char *, forcing us to convert,
 		//   which requires this error check
-		c.error(uerror.PropertySyntax)
+		c.error(PropertySyntax)
 		return 0
 	}
 
 	theChar := unames.CharForName(unames.UnicodeCharName, string(charName))
 	if c.err != nil {
-		c.error(uerror.PropertySyntax)
+		c.error(PropertySyntax)
 	}
 
 	c.nextChar(&c.c) // Continue overall regex pattern processing with char after the '}'
@@ -3312,7 +3311,7 @@ func (c *compiler) scanProp() *uset.UnicodeSet {
 
 	c.nextChar(&c.c)
 	if c.c.char != chLBrace {
-		c.error(uerror.PropertySyntax)
+		c.error(PropertySyntax)
 		return nil
 	}
 
@@ -3323,7 +3322,7 @@ func (c *compiler) scanProp() *uset.UnicodeSet {
 			break
 		}
 		if c.c.char == -1 {
-			c.error(uerror.PropertySyntax)
+			c.error(PropertySyntax)
 			return nil
 		}
 		propertyName.WriteRune(c.c.char)
@@ -3373,7 +3372,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	if strings.HasPrefix(propName, "In") && len(propName) >= 3 {
 		set = uset.New()
 		if uprops.ApplyPropertyAlias(set, "Block", propName[2:]) != nil {
-			c.error(uerror.PropertySyntax)
+			c.error(PropertySyntax)
 		}
 		goto done
 	}
@@ -3384,7 +3383,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 	if strings.HasPrefix(propName, "Is") && len(propName) >= 3 {
 		mPropName := propName[2:]
 		if strings.IndexByte(mPropName, '=') >= 0 {
-			c.error(uerror.PropertySyntax)
+			c.error(PropertySyntax)
 			goto done
 		}
 
@@ -3397,7 +3396,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 
 		set, err = uprops.NewUnicodeSetFomPattern("\\p{"+mPropName+"}", 0)
 		if err != nil {
-			c.error(uerror.PropertySyntax)
+			c.error(PropertySyntax)
 		} else if !set.IsEmpty() && (usetFlags&uset.CaseInsensitive) != 0 {
 			set.CloseOver(uset.CaseInsensitive)
 		}
@@ -3511,7 +3510,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			set.AddRuneRange(9, 0x0d)
 			set.AddRuneRange(0x1c, 0x1f)
 		} else {
-			c.error(uerror.PropertySyntax)
+			c.error(PropertySyntax)
 		}
 
 		if c.err == nil && !set.IsEmpty() && (usetFlags&uset.CaseInsensitive) != 0 {
@@ -3522,7 +3521,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 
 	// Unrecognized property. ICU didn't like it as it was, and none of the Java compatibility
 	// extensions matched it.
-	c.error(uerror.PropertySyntax)
+	c.error(PropertySyntax)
 
 done:
 	if c.err != nil {

@@ -26,12 +26,12 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/icuregex/errors"
 	"vitess.io/vitess/go/mysql/icuregex/internal/normalizer"
 	"vitess.io/vitess/go/mysql/icuregex/internal/pattern"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ubidi"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
-	"vitess.io/vitess/go/mysql/icuregex/internal/uerror"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ulayout"
 	"vitess.io/vitess/go/mysql/icuregex/internal/unames"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uset"
@@ -65,9 +65,9 @@ func getInclusionsForSource(src propertySource) (*uset.UnicodeSet, error) {
 	case srcNfkc:
 		normalizer.Nfkc().AddPropertyStarts(u)
 	case srcNfkcCf:
-		return nil, uerror.ErrUnsupported
+		return nil, errors.ErrUnsupported
 	case srcNfcCanonIter:
-		return nil, uerror.ErrUnsupported
+		return nil, errors.ErrUnsupported
 	case srcCase:
 		ucase.AddPropertyStarts(u)
 	case srcBidi:
@@ -75,7 +75,7 @@ func getInclusionsForSource(src propertySource) (*uset.UnicodeSet, error) {
 	case srcInpc, srcInsc, srcVo:
 		AddULayoutPropertyStarts(src, u)
 	default:
-		return nil, uerror.ErrUnsupported
+		return nil, errors.ErrUnsupported
 	}
 
 	inclusionsForSource[src] = u
@@ -205,7 +205,7 @@ func ApplyIntPropertyValue(u *uset.UnicodeSet, prop Property, value int32) error
 			return getIntPropertyValue(ch, prop) == value
 		})
 	default:
-		return uerror.ErrUnsupported
+		return errors.ErrUnsupported
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func mungeCharName(charname string) string {
 
 func ApplyPropertyPattern(u *uset.UnicodeSet, pat string) error {
 	if len(pat) < 5 {
-		return uerror.ErrIllegalArgument
+		return errors.ErrIllegalArgument
 	}
 
 	var posix, isName, invert bool
@@ -242,11 +242,11 @@ func ApplyPropertyPattern(u *uset.UnicodeSet, pat string) error {
 		isName = c == 'N'
 		pat = pattern.SkipWhitespace(pat[2:])
 		if len(pat) == 0 || pat[0] != '{' {
-			return uerror.ErrIllegalArgument
+			return errors.ErrIllegalArgument
 		}
 		pat = pat[1:]
 	} else {
-		return uerror.ErrIllegalArgument
+		return errors.ErrIllegalArgument
 	}
 
 	var closePos int
@@ -256,7 +256,7 @@ func ApplyPropertyPattern(u *uset.UnicodeSet, pat string) error {
 		closePos = strings.IndexByte(pat, '}')
 	}
 	if closePos < 0 {
-		return uerror.ErrIllegalArgument
+		return errors.ErrIllegalArgument
 	}
 
 	equals := strings.IndexByte(pat, '=')
@@ -301,7 +301,7 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 	if len(value) > 0 {
 		p = getPropertyEnum(prop)
 		if p == -1 {
-			return uerror.ErrIllegalArgument
+			return errors.ErrIllegalArgument
 		}
 		if p == UCharGeneralCategory {
 			p = UCharGeneralCategoryMask
@@ -318,11 +318,11 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 					p == UCharLeadCanonicalCombiningClass {
 					val, err := strconv.ParseUint(value, 10, 8)
 					if err != nil {
-						return uerror.ErrIllegalArgument
+						return errors.ErrIllegalArgument
 					}
 					v = int32(val)
 				} else {
-					return uerror.ErrIllegalArgument
+					return errors.ErrIllegalArgument
 				}
 			}
 		} else {
@@ -330,7 +330,7 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 			case UCharNumericValue:
 				val, err := strconv.ParseFloat(value, 64)
 				if err != nil {
-					return uerror.ErrIllegalArgument
+					return errors.ErrIllegalArgument
 				}
 				incl, err := getInclusionsForProperty(p)
 				if err != nil {
@@ -346,7 +346,7 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 				charName := mungeCharName(value)
 				ch := unames.CharForName(unames.ExtendedCharName, charName)
 				if ch < 0 {
-					return uerror.ErrIllegalArgument
+					return errors.ErrIllegalArgument
 				}
 				u.Clear()
 				u.AddRune(ch)
@@ -367,12 +367,12 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 			case UCharScriptExtensions:
 				v = getPropertyValueEnum(UCharScript, value)
 				if v == -1 {
-					return uerror.ErrIllegalArgument
+					return errors.ErrIllegalArgument
 				}
 			default:
 				// p is a non-binary, non-enumerated property that we
 				// don't support (yet).
-				return uerror.ErrIllegalArgument
+				return errors.ErrIllegalArgument
 			}
 		}
 	} else {
@@ -401,7 +401,7 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 					v = int32(uchar.GcCnMask)
 					invert = true
 				} else {
-					return uerror.ErrIllegalArgument
+					return errors.ErrIllegalArgument
 				}
 			}
 		}

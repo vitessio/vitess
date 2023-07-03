@@ -25,7 +25,6 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
-	"vitess.io/vitess/go/mysql/icuregex/internal/uerror"
 	"vitess.io/vitess/go/mysql/icuregex/internal/utf16"
 )
 
@@ -295,7 +294,7 @@ func (s *stack) sp() int {
 func (s *stack) newFrame(inputIdx int, input []rune, pattern string) (stackFrame, error) {
 	if s.stackLimit != 0 && len(s.ary)+s.frameSize > s.stackLimit {
 		return nil, &MatchError{
-			Code:     uerror.StackOverflow,
+			Code:     StackOverflow,
 			Pattern:  pattern,
 			Position: inputIdx,
 			Input:    input,

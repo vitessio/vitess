@@ -27,8 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/mysql/icuregex/internal/uerror"
 )
 
 func TestPerl(t *testing.T) {
@@ -96,7 +94,7 @@ func TestPerl(t *testing.T) {
 
 		testPat, err := CompileString(pattern, flags)
 		if err != nil {
-			if cerr, ok := err.(*CompileError); ok && cerr.Code == uerror.Unimplemented {
+			if cerr, ok := err.(*CompileError); ok && cerr.Code == Unimplemented {
 				continue
 			}
 			if strings.IndexByte(fields[2], 'c') == -1 && strings.IndexByte(fields[2], 'i') == -1 {
