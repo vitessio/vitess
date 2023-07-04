@@ -263,7 +263,7 @@ func TestConnectionFromListener(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0, false)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -292,7 +292,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -325,7 +325,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -358,7 +358,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -396,7 +396,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false)
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -422,7 +422,7 @@ func TestClientFoundRows(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -471,7 +471,7 @@ func TestConnCounts(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -503,12 +503,12 @@ func TestConnCounts(t *testing.T) {
 
 	// Test after closing connections. time.Sleep lets it work, but seems flakey.
 	c.Close()
-	//time.Sleep(10 * time.Millisecond)
-	//checkCountsForUser(t, user, 1)
+	// time.Sleep(10 * time.Millisecond)
+	// checkCountsForUser(t, user, 1)
 
 	c2.Close()
-	//time.Sleep(10 * time.Millisecond)
-	//checkCountsForUser(t, user, 0)
+	// time.Sleep(10 * time.Millisecond)
+	// checkCountsForUser(t, user, 0)
 }
 
 func checkCountsForUser(t *testing.T, user string, expected int64) {
@@ -528,7 +528,7 @@ func TestServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	defer l.Close()
@@ -628,7 +628,7 @@ func TestServerStats(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	defer l.Close()
@@ -702,7 +702,7 @@ func TestClearTextServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -775,7 +775,7 @@ func TestDialogServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Store(true)
 	defer l.Close()
@@ -818,7 +818,7 @@ func TestTLSServer(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -870,7 +870,7 @@ func TestTLSServer(t *testing.T) {
 
 	// Run a 'select rows' command with results.
 	conn, err := Connect(context.Background(), params)
-	//output, ok := runMysql(t, params, "select rows")
+	// output, ok := runMysql(t, params, "select rows")
 	require.NoError(t, err)
 	results, err := conn.ExecuteFetch("select rows", 1000, true)
 	require.NoError(t, err)
@@ -916,7 +916,7 @@ func TestTLSRequired(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -1005,7 +1005,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -1099,7 +1099,7 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -1168,7 +1168,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -1210,7 +1210,7 @@ func TestErrorCodes(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1388,7 +1388,7 @@ func TestListenerShutdown(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1461,7 +1461,7 @@ func TestServerFlush(t *testing.T) {
 
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()

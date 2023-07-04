@@ -196,6 +196,9 @@ type Listener struct {
 	// connBufferPooling configures if vtgate server pools connection buffers
 	connBufferPooling bool
 
+	// connKeepAlivePeriod is period between tcp keep-alives.
+	connKeepAlivePeriod time.Duration
+
 	// shutdown indicates that Shutdown method was called.
 	shutdown atomic.Bool
 
@@ -218,15 +221,17 @@ func NewFromListener(
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
 	connBufferPooling bool,
+	keepAlivePeriod time.Duration,
 ) (*Listener, error) {
 	cfg := ListenerConfig{
-		Listener:           l,
-		AuthServer:         authServer,
-		Handler:            handler,
-		ConnReadTimeout:    connReadTimeout,
-		ConnWriteTimeout:   connWriteTimeout,
-		ConnReadBufferSize: connBufferSize,
-		ConnBufferPooling:  connBufferPooling,
+		Listener:            l,
+		AuthServer:          authServer,
+		Handler:             handler,
+		ConnReadTimeout:     connReadTimeout,
+		ConnWriteTimeout:    connWriteTimeout,
+		ConnReadBufferSize:  connBufferSize,
+		ConnBufferPooling:   connBufferPooling,
+		ConnKeepAlivePeriod: keepAlivePeriod,
 	}
 	return NewListenerWithConfig(cfg)
 }
@@ -240,6 +245,7 @@ func NewListener(
 	connWriteTimeout time.Duration,
 	proxyProtocol bool,
 	connBufferPooling bool,
+	keepAlivePeriod time.Duration,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
@@ -247,24 +253,25 @@ func NewListener(
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
 type ListenerConfig struct {
 	// Protocol-Address pair and Listener are mutually exclusive parameters
-	Protocol           string
-	Address            string
-	Listener           net.Listener
-	AuthServer         AuthServer
-	Handler            Handler
-	ConnReadTimeout    time.Duration
-	ConnWriteTimeout   time.Duration
-	ConnReadBufferSize int
-	ConnBufferPooling  bool
+	Protocol            string
+	Address             string
+	Listener            net.Listener
+	AuthServer          AuthServer
+	Handler             Handler
+	ConnReadTimeout     time.Duration
+	ConnWriteTimeout    time.Duration
+	ConnReadBufferSize  int
+	ConnBufferPooling   bool
+	ConnKeepAlivePeriod time.Duration
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -282,15 +289,16 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 	}
 
 	return &Listener{
-		authServer:         cfg.AuthServer,
-		handler:            cfg.Handler,
-		listener:           l,
-		ServerVersion:      servenv.AppVersion.MySQLVersion(),
-		connectionID:       1,
-		connReadTimeout:    cfg.ConnReadTimeout,
-		connWriteTimeout:   cfg.ConnWriteTimeout,
-		connReadBufferSize: cfg.ConnReadBufferSize,
-		connBufferPooling:  cfg.ConnBufferPooling,
+		authServer:          cfg.AuthServer,
+		handler:             cfg.Handler,
+		listener:            l,
+		ServerVersion:       servenv.AppVersion.MySQLVersion(),
+		connectionID:        1,
+		connReadTimeout:     cfg.ConnReadTimeout,
+		connWriteTimeout:    cfg.ConnWriteTimeout,
+		connReadBufferSize:  cfg.ConnReadBufferSize,
+		connBufferPooling:   cfg.ConnBufferPooling,
+		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
 	}, nil
 }
 
@@ -336,6 +344,12 @@ func (l *Listener) Accept() {
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
 func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
+
+	// Enable KeepAlive on TCP connections and change keep-alive period if provided.
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		setTcpConnProperties(tcpConn, l.connKeepAlivePeriod)
+	}
+
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
 		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
 	}
@@ -528,6 +542,21 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if !kontinue {
 			return
 		}
+	}
+}
+
+func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) {
+	if err := conn.SetKeepAlive(true); err != nil {
+		log.Errorf("unable to enable keepalive on tcp connection: %v", err)
+		return
+	}
+
+	if keepAlivePeriod <= 0 {
+		return
+	}
+
+	if err := conn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+		log.Errorf("unable to set keepalive period on tcp connection: %v", err)
 	}
 }
 

@@ -62,6 +62,7 @@ var (
 	mysqlSslServerCA                  string
 	mysqlTLSMinVersion                string
 
+	mysqlKeepAlivePeriod          time.Duration
 	mysqlConnReadTimeout          time.Duration
 	mysqlConnWriteTimeout         time.Duration
 	mysqlQueryTimeout             time.Duration
@@ -94,6 +95,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlConnWriteTimeout, "mysql_server_write_timeout", mysqlConnWriteTimeout, "connection write timeout")
 	fs.DurationVar(&mysqlQueryTimeout, "mysql_server_query_timeout", mysqlQueryTimeout, "mysql query timeout")
 	fs.BoolVar(&mysqlConnBufferPooling, "mysql-server-pool-conn-read-buffers", mysqlConnBufferPooling, "If set, the server will pool incoming connection read buffers")
+	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 }
 
@@ -475,6 +477,7 @@ func initMySQLProtocol() {
 			mysqlConnWriteTimeout,
 			mysqlProxyProtocol,
 			mysqlConnBufferPooling,
+			mysqlKeepAlivePeriod,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -525,6 +528,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		mysqlConnWriteTimeout,
 		false,
 		mysqlConnBufferPooling,
+		mysqlKeepAlivePeriod,
 	)
 
 	switch err := err.(type) {
@@ -556,6 +560,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			mysqlConnWriteTimeout,
 			false,
 			mysqlConnBufferPooling,
+			mysqlKeepAlivePeriod,
 		)
 		return listener, listenerErr
 	default:
