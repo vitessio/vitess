@@ -199,3 +199,116 @@ func UnescapeAt(str string) (rune, string) {
 
 	return c, str
 }
+
+func UnescapeAtRunes(str []rune) (rune, []rune) {
+	if len(str) == 0 {
+		return -1, str
+	}
+
+	c := str[0]
+	str = str[1:]
+	if c == utf8.RuneError {
+		return -1, str
+	}
+
+	var minDig, maxDig, n int
+	var braces bool
+	var bitsPerDigit = 4
+	var result rune
+
+	switch c {
+	case 'u':
+		minDig = 4
+		maxDig = 4
+	case 'U':
+		minDig = 8
+		maxDig = 8
+	case 'x':
+		minDig = 1
+		if len(str) > 0 && str[0] == '{' {
+			str = str[1:]
+			braces = true
+			maxDig = 8
+		} else {
+			maxDig = 2
+		}
+	default:
+		if dig := _digit8(c); dig >= 0 {
+			minDig = 1
+			maxDig = 4
+			n = 1
+			bitsPerDigit = 3
+			result = dig
+		}
+	}
+
+	if minDig != 0 {
+		for n < maxDig && len(str) > 0 {
+			c = str[0]
+			if c == utf8.RuneError {
+				return -1, str
+			}
+
+			var dig rune
+			if bitsPerDigit == 3 {
+				dig = _digit8(c)
+			} else {
+				dig = _digit16(c)
+			}
+			if dig < 0 {
+				break
+			}
+			result = (result << bitsPerDigit) | dig
+			str = str[1:]
+			n++
+		}
+		if n < minDig {
+			return -1, str
+		}
+		if braces {
+			if c != '}' {
+				return -1, str
+			}
+			str = str[1:]
+		}
+		if result < 0 || result > utf8.MaxRune {
+			return -1, str
+		}
+		if len(str) > 0 && utf16.IsLead(result) {
+			c = str[0]
+			if c == utf8.RuneError {
+				return -1, str
+			}
+			if c == '\\' {
+				var str2 []rune
+				c, str2 = UnescapeAtRunes(str[1:])
+				if utf16.IsTrail(c) {
+					result = utf16.DecodeRune(result, c)
+					str = str2
+				}
+			}
+		}
+		return result, str
+	}
+
+	if c < utf8.RuneSelf {
+		for i := 0; i < len(unscapeMap); i += 2 {
+			if byte(c) == unscapeMap[i] {
+				return rune(unscapeMap[i+1]), str
+			}
+			if byte(c) < unscapeMap[i] {
+				break
+			}
+		}
+	}
+
+	if c == 'c' && len(str) > 0 {
+		c = str[0]
+		if c == utf8.RuneError {
+			return -1, str
+		}
+		return 0x1f & c, str[1:]
+	}
+
+	return c, str
+}

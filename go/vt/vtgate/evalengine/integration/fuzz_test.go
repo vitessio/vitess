@@ -98,6 +98,9 @@ var (
 		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
 		regexp.MustCompile(`Illegal mix of collations`),
 		regexp.MustCompile(`Incorrect (DATE|DATETIME) value`),
+		regexp.MustCompile(`Syntax error in regular expression`),
+		regexp.MustCompile(`The regular expression contains an unclosed bracket expression`),
+		regexp.MustCompile(`Illegal argument to a regular expression`),
 	}
 )
 

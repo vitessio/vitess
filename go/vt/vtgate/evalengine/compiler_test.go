@@ -444,6 +444,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `INTERVAL(0, 0, 0, -1, NULL, NULL, 1)`,
 			result:     `INT64(5)`,
 		},
+		{
+			expression: `REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 0)`,
+			result:     `TEXT("X X X")`,
+		},
 	}
 
 	for _, tc := range testCases {

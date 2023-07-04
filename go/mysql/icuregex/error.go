@@ -37,9 +37,9 @@ func (e *CompileError) Error() string {
 	var out strings.Builder
 	switch e.Code {
 	case InternalError:
-		out.WriteString("Internal Error")
+		out.WriteString("Internal error")
 	case RuleSyntax:
-		out.WriteString("Syntax Error")
+		out.WriteString("Syntax error")
 	case BadEscapeSequence:
 		out.WriteString("Bad escape sequence")
 	case PropertySyntax:
@@ -69,7 +69,7 @@ func (e *CompileError) Error() string {
 	case InvalidCaptureGroupName:
 		out.WriteString("Invalid capture group name")
 	}
-	_, _ = fmt.Fprintf(&out, " at line %d, column %d: `%s`", e.Line, e.Offset, e.Context)
+	_, _ = fmt.Fprintf(&out, " in regular expression on line %d, character %d: `%s`", e.Line, e.Offset, e.Context)
 
 	return out.String()
 }

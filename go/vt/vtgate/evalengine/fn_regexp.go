@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/icuregex"
@@ -15,12 +14,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func evalRegexpFlags(env *ExpressionEnv, match Expr, flags icuregex.RegexpFlag) (icuregex.RegexpFlag, error) {
-	m, err := match.eval(env)
-	if err != nil || m == nil {
-		return flags, err
-	}
-
+func regexpFlags(m eval, flags icuregex.RegexpFlag, f string) (icuregex.RegexpFlag, error) {
 	switch m := m.(type) {
 	case *evalBytes:
 		for _, b := range m.bytes {
@@ -36,57 +30,111 @@ func evalRegexpFlags(env *ExpressionEnv, match Expr, flags icuregex.RegexpFlag) 
 			case 'u':
 				flags |= icuregex.UnixLines
 			default:
-				return flags, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to regexp_instr.")
+				return flags, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to %s.", f)
 			}
 		}
 	default:
-		return flags, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to regexp_instr.")
+		return flags, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to %s.", f)
 	}
 
 	return flags, nil
 }
 
-func evalOccurrence(env *ExpressionEnv, expr Expr) (int64, error) {
-	occExpr, err := expr.eval(env)
-	if err != nil {
-		return 0, err
+func occurrence(e *evalInt64, min int64) int64 {
+	if e.i < min {
+		return min
 	}
-	return evalToInt64(occExpr).i, nil
+	return e.i
 }
 
-func evalReturnOption(env *ExpressionEnv, expr Expr) (int64, error) {
-	retExpr, err := expr.eval(env)
-	if err != nil {
-		return 0, err
-	}
-	returnOption := evalToInt64(retExpr).i
-	switch returnOption {
+func returnOption(val *evalInt64, f string) (int64, error) {
+	switch val.i {
 	case 0, 1:
 		// Valid return options.
-		return returnOption, nil
+		return val.i, nil
 	}
-	return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to regexp_instr: return_option must be 1 or 0.")
+	return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to %s: return_option must be 1 or 0.", f)
 }
 
-func evalPosition(env *ExpressionEnv, expr Expr, limit int64) (int64, error) {
-	posExpr, err := expr.eval(env)
-	if err != nil {
-		return 0, err
-	}
-	pos := evalToInt64(posExpr).i
+func position(val *evalInt64, limit int64) (int64, error) {
+	pos := val.i
 	if pos < 1 || pos > limit {
 		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIndexOutOfBounds, "Index out of bounds in regular expression search.")
 	}
 	return pos, nil
 }
 
-func compileRegex(pat eval, c collations.Charset, flags icuregex.RegexpFlag) (*icuregex.Pattern, error) {
-	patUtf8, err := charset.Convert(nil, &charset.Charset_utf8mb4{}, pat.ToRawBytes(), c)
-	if err != nil {
-		return nil, err
+func evalRegexpCollation(input, pat eval, f string) (eval, eval, collations.TypedCollation, icuregex.RegexpFlag, error) {
+	var typedCol collations.TypedCollation
+	var err error
+
+	if inputBytes, ok := input.(*evalBytes); ok {
+		if patBytes, ok := pat.(*evalBytes); ok {
+			inputCol := inputBytes.col.Collation
+			patCol := patBytes.col.Collation
+			if (inputCol == collations.CollationBinaryID && patCol != collations.CollationBinaryID) ||
+				(inputCol != collations.CollationBinaryID && patCol == collations.CollationBinaryID) {
+				inputColName := inputCol.Get().Name()
+				patColName := patCol.Get().Name()
+				return nil, nil, typedCol, 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CharacterSetMismatch, "Character set '%s' cannot be used in conjunction with '%s' in call to %s.", inputColName, patColName, f)
+			}
+		}
 	}
 
-	regexp, err := icuregex.CompileString(hack.String(patUtf8), flags)
+	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat)
+	if err != nil {
+		return nil, nil, collations.TypedCollation{}, 0, err
+	}
+
+	var flags icuregex.RegexpFlag
+	var collation = typedCol.Collation.Get()
+	if strings.Contains(collation.Name(), "_ci") {
+		flags |= icuregex.CaseInsensitive
+	}
+
+	return input, pat, typedCol, flags, nil
+}
+
+func compileRegexpCollation(input, pat ctype, f string) (collations.TypedCollation, icuregex.RegexpFlag, error) {
+	var merged collations.TypedCollation
+	var err error
+
+	if input.isTextual() && pat.isTextual() {
+		inputCol := input.Col.Collation
+		patCol := pat.Col.Collation
+		if (inputCol == collations.CollationBinaryID && patCol != collations.CollationBinaryID) ||
+			(inputCol != collations.CollationBinaryID && patCol == collations.CollationBinaryID) {
+			inputColName := inputCol.Get().Name()
+			patColName := patCol.Get().Name()
+			return input.Col, 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CharacterSetMismatch, "Character set '%s' cannot be used in conjunction with '%s' in call to %s.", inputColName, patColName, f)
+		}
+	}
+
+	if input.Col.Collation != pat.Col.Collation {
+		merged, _, _, err = mergeCollations(input.Col, pat.Col, input.Type, pat.Type)
+	} else {
+		merged = input.Col
+	}
+	if err != nil {
+		return input.Col, 0, err
+	}
+
+	var flags icuregex.RegexpFlag
+	var collation = merged.Collation.Get()
+	if strings.Contains(collation.Name(), "_ci") {
+		flags |= icuregex.CaseInsensitive
+	}
+	return merged, flags, nil
+}
+
+func compileRegex(pat eval, c collations.Charset, flags icuregex.RegexpFlag) (*icuregex.Pattern, error) {
+	patRunes := charset.Expand(nil, pat.ToRawBytes(), c)
+
+	if len(patRunes) == 0 {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIllegalArgument, " Illegal argument to a regular expression.")
+	}
+
+	regexp, err := icuregex.Compile(patRunes, flags)
 	if err == nil {
 		return regexp, nil
 	}
@@ -136,6 +184,17 @@ func compileRegex(pat eval, c collations.Charset, flags icuregex.RegexpFlag) (*i
 	return nil, err
 }
 
+// resultCollation returns the collation to use for the result of a regexp.
+// This falls back to latin1_swedish if the input collation is binary. This
+// seems to be a side effect of how MySQL also works. Probably due to how it
+// is using ICU and converting there.
+func resultCollation(in collations.TypedCollation) collations.TypedCollation {
+	if in.Collation == collationBinary.Collation {
+		return collationRegexpFallback
+	}
+	return in
+}
+
 type builtinRegexpLike struct {
 	CallExpr
 	Negate bool
@@ -152,20 +211,18 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var typedCol collations.TypedCollation
-	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat)
+	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_like")
 	if err != nil {
 		return nil, err
 	}
-
-	var flags icuregex.RegexpFlag
-	var collation = typedCol.Collation.Get()
-	if strings.Contains(collation.Name(), "_ci") {
-		flags |= icuregex.CaseInsensitive
-	}
+	collation := typedCol.Collation.Get()
 
 	if len(r.Arguments) > 2 {
-		flags, err = evalRegexpFlags(env, r.Arguments[2], flags)
+		m, err := r.Arguments[2].eval(env)
+		if err != nil || m == nil {
+			return nil, err
+		}
+		flags, err = regexpFlags(m, flags, "regexp_like")
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +237,7 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 	m := icuregex.NewMatcher(regexp)
 	m.Reset(inputRunes)
 
-	ok, err := m.Matches()
+	ok, err := m.Find()
 	if err != nil {
 		return nil, err
 	}
@@ -193,11 +250,95 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 func (r *builtinRegexpLike) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f1 := r.Arguments[0].typeof(env, fields)
 	_, f2 := r.Arguments[1].typeof(env, fields)
-	return sqltypes.Int64, f1 | f2 | flagIsBoolean
+	var f3 typeFlag
+	if len(r.Arguments) > 2 {
+		_, f3 = r.Arguments[2].typeof(env, fields)
+	}
+	return sqltypes.Int64, f1 | f2 | f3 | flagIsBoolean
+}
+
+func (r *builtinRegexpLike) compileSlow(c *compiler, input, pat, fl ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
+	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
+	}
+
+	c.asm.Fn_REGEXP_LIKE_slow(r.Negate, merged.Collation.Get().Charset(), flags, len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | fl.Flag | flagIsBoolean}, nil
 }
 
 func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(r)
+	input, err := r.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	var skips []*jump
+	skips = append(skips, c.compileNullCheckArg(input, 0))
+
+	pat, err := r.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skips = append(skips, c.compileNullCheckArg(pat, 1))
+
+	var f ctype
+
+	if len(r.Arguments) > 2 {
+		f, err = r.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(f, 2))
+	}
+
+	merged, flags, err := compileRegexpCollation(input, pat, "regexp_like")
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if !input.isTextual() || input.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
+	}
+
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	pattern, ok := r.Arguments[1].(*Literal)
+	if !ok {
+		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+	}
+	inner, ok := pattern.inner.(*evalBytes)
+	if !ok {
+		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+	}
+	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
+		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+	}
+
+	if len(r.Arguments) > 2 {
+		fl, ok := r.Arguments[2].(*Literal)
+		if !ok {
+			return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+		}
+		fe, ok := fl.inner.(*evalBytes)
+		if !ok {
+			return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+		}
+
+		flags, err = regexpFlags(fe, flags, "regexp_like")
+		if err != nil {
+			return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+		}
+	}
+
+	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	if err != nil {
+		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
+	}
+
+	c.asm.Fn_REGEXP_LIKE(icuregex.NewMatcher(p), r.Negate, merged.Collation.Get().Charset(), len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | f.Flag | flagIsBoolean}, nil
 }
 
 var _ Expr = (*builtinRegexpLike)(nil)
@@ -217,46 +358,54 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var typedCol collations.TypedCollation
-	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat)
+	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_instr")
 	if err != nil {
 		return nil, err
 	}
 
-	var flags icuregex.RegexpFlag
-	var collation = typedCol.Collation.Get()
-	if strings.Contains(collation.Name(), "_ci") {
-		flags |= icuregex.CaseInsensitive
-	}
+	collation := typedCol.Collation.Get()
 
 	pos := int64(1)
-	occurrence := int64(1)
-	returnOption := int64(0)
+	occ := int64(1)
+	returnOpt := int64(0)
 	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
 
 	if len(r.Arguments) > 2 {
-		pos, err = evalPosition(env, r.Arguments[2], int64(len(inputRunes)))
+		posExpr, err := r.Arguments[2].eval(env)
+		if err != nil || posExpr == nil {
+			return nil, err
+		}
+		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)))
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if len(r.Arguments) > 3 {
-		occurrence, err = evalOccurrence(env, r.Arguments[3])
-		if err != nil {
+		occExpr, err := r.Arguments[3].eval(env)
+		if err != nil || occExpr == nil {
 			return nil, err
 		}
+		occ = occurrence(evalToInt64(occExpr), occ)
 	}
 
 	if len(r.Arguments) > 4 {
-		returnOption, err = evalReturnOption(env, r.Arguments[4])
+		retExpr, err := r.Arguments[4].eval(env)
+		if err != nil || retExpr == nil {
+			return nil, err
+		}
+		returnOpt, err = returnOption(evalToInt64(retExpr), "regexp_instr")
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if len(r.Arguments) > 5 {
-		flags, err = evalRegexpFlags(env, r.Arguments[5], flags)
+		m, err := r.Arguments[5].eval(env)
+		if err != nil || m == nil {
+			return nil, err
+		}
+		flags, err = regexpFlags(m, flags, "regexp_instr")
 		if err != nil {
 			return nil, err
 		}
@@ -271,7 +420,7 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 	m.Reset(inputRunes[pos-1:])
 
 	found := false
-	for i := int64(0); i < occurrence; i++ {
+	for i := int64(0); i < occ; i++ {
 		found, err = m.Find()
 		if err != nil {
 			return nil, err
@@ -283,7 +432,7 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 	if !found {
 		return newEvalInt64(0), nil
 	}
-	if returnOption == 0 {
+	if returnOpt == 0 {
 		return newEvalInt64(int64(m.Start()) + pos), nil
 	}
 	return newEvalInt64(int64(m.End()) + pos), nil
@@ -292,11 +441,138 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 func (r *builtinRegexpInstr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f1 := r.Arguments[0].typeof(env, fields)
 	_, f2 := r.Arguments[1].typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
+	var f3, f4, f5, f6 typeFlag
+	if len(r.Arguments) > 2 {
+		_, f3 = r.Arguments[2].typeof(env, fields)
+	}
+	if len(r.Arguments) > 3 {
+		_, f4 = r.Arguments[3].typeof(env, fields)
+	}
+	if len(r.Arguments) > 4 {
+		_, f5 = r.Arguments[4].typeof(env, fields)
+	}
+	if len(r.Arguments) > 5 {
+		_, f6 = r.Arguments[5].typeof(env, fields)
+	}
+	return sqltypes.Int64, f1 | f2 | f3 | f4 | f5 | f6
+}
+
+func (r *builtinRegexpInstr) compileSlow(c *compiler, input, pat, pos, occ, returnOption, matchType ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
+	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
+	}
+
+	c.asm.Fn_REGEXP_INSTR_slow(merged.Collation.Get().Charset(), flags, len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | returnOption.Flag | matchType.Flag}, nil
 }
 
 func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(r)
+	input, err := r.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	var skips []*jump
+	skips = append(skips, c.compileNullCheckArg(input, 0))
+
+	pat, err := r.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skips = append(skips, c.compileNullCheckArg(input, 1))
+
+	var pos ctype
+	if len(r.Arguments) > 2 {
+		pos, err = r.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 2))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var occ ctype
+	if len(r.Arguments) > 3 {
+		occ, err = r.Arguments[3].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 3))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var returnOpt ctype
+	if len(r.Arguments) > 4 {
+		returnOpt, err = r.Arguments[4].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 4))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var matchType ctype
+	if len(r.Arguments) > 5 {
+		matchType, err = r.Arguments[5].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 5))
+		switch {
+		case matchType.isTextual():
+		default:
+			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		}
+	}
+
+	merged, flags, err := compileRegexpCollation(input, pat, "regexp_instr")
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if !input.isTextual() || input.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
+	}
+
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	pattern, ok := r.Arguments[1].(*Literal)
+	if !ok {
+		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+	}
+	inner, ok := pattern.inner.(*evalBytes)
+	if !ok {
+		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+	}
+	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
+		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+	}
+
+	if len(r.Arguments) > 5 {
+		fl, ok := r.Arguments[5].(*Literal)
+		if !ok {
+			return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+		}
+		fe, ok := fl.inner.(*evalBytes)
+		if !ok {
+			return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+		}
+
+		flags, err = regexpFlags(fe, flags, "regexp_instr")
+		if err != nil {
+			return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+		}
+	}
+
+	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	if err != nil {
+		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
+	}
+
+	c.asm.Fn_REGEXP_INSTR(icuregex.NewMatcher(p), merged.Collation.Get().Charset(), len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | flagIsBoolean}, nil
 }
 
 var _ Expr = (*builtinRegexpInstr)(nil)
@@ -316,38 +592,42 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var typedCol collations.TypedCollation
-	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat)
+	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_substr")
 	if err != nil {
 		return nil, err
 	}
 
-	var flags icuregex.RegexpFlag
-	var collation = typedCol.Collation.Get()
-	if strings.Contains(collation.Name(), "_ci") {
-		flags |= icuregex.CaseInsensitive
-	}
+	collation := typedCol.Collation.Get()
 
 	pos := int64(1)
-	occurrence := int64(1)
+	occ := int64(1)
 	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
 
 	if len(r.Arguments) > 2 {
-		pos, err = evalPosition(env, r.Arguments[2], int64(len(inputRunes)))
+		posExpr, err := r.Arguments[2].eval(env)
+		if err != nil || posExpr == nil {
+			return nil, err
+		}
+		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)))
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if len(r.Arguments) > 3 {
-		occurrence, err = evalOccurrence(env, r.Arguments[3])
-		if err != nil {
+		occExpr, err := r.Arguments[3].eval(env)
+		if err != nil || occExpr == nil {
 			return nil, err
 		}
+		occ = occurrence(evalToInt64(occExpr), occ)
 	}
 
 	if len(r.Arguments) > 4 {
-		flags, err = evalRegexpFlags(env, r.Arguments[4], flags)
+		m, err := r.Arguments[4].eval(env)
+		if err != nil || m == nil {
+			return nil, err
+		}
+		flags, err = regexpFlags(m, flags, "regexp_substr")
 		if err != nil {
 			return nil, err
 		}
@@ -362,7 +642,7 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 	m.Reset(inputRunes[pos-1:])
 
 	found := false
-	for i := int64(0); i < occurrence; i++ {
+	for i := int64(0); i < occ; i++ {
 		found, err = m.Find()
 		if err != nil {
 			return nil, err
@@ -375,24 +655,190 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	out := inputRunes[int64(m.Start())+pos-1 : int64(m.End())+pos-1]
-	bytes := charset.Collapse(nil, out, collation.Charset())
-	return newEvalText(bytes, typedCol), nil
+	b := charset.Collapse(nil, out, collation.Charset())
+	return newEvalText(b, resultCollation(typedCol)), nil
 }
 
 func (r *builtinRegexpSubstr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f1 := r.Arguments[0].typeof(env, fields)
 	_, f2 := r.Arguments[1].typeof(env, fields)
-	return sqltypes.VarChar, f1 | f2
+	var f3, f4, f5 typeFlag
+	if len(r.Arguments) > 2 {
+		_, f3 = r.Arguments[2].typeof(env, fields)
+	}
+	if len(r.Arguments) > 3 {
+		_, f4 = r.Arguments[3].typeof(env, fields)
+	}
+	if len(r.Arguments) > 4 {
+		_, f5 = r.Arguments[4].typeof(env, fields)
+	}
+	return sqltypes.VarChar, f1 | f2 | f3 | f4 | f5
+}
+
+func (r *builtinRegexpSubstr) compileSlow(c *compiler, input, pat, pos, occ, matchType ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
+	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
+	}
+
+	c.asm.Fn_REGEXP_SUBSTR_slow(merged, flags, len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
 }
 
 func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(r)
+	input, err := r.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	var skips []*jump
+	skips = append(skips, c.compileNullCheckArg(input, 0))
+
+	pat, err := r.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skips = append(skips, c.compileNullCheckArg(input, 1))
+
+	var pos ctype
+	if len(r.Arguments) > 2 {
+		pos, err = r.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 2))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var occ ctype
+	if len(r.Arguments) > 3 {
+		occ, err = r.Arguments[3].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 3))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var matchType ctype
+	if len(r.Arguments) > 4 {
+		matchType, err = r.Arguments[4].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 4))
+		switch {
+		case matchType.isTextual():
+		default:
+			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		}
+	}
+
+	merged, flags, err := compileRegexpCollation(input, pat, "regexp_substr")
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if !input.isTextual() || input.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
+	}
+
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	pattern, ok := r.Arguments[1].(*Literal)
+	if !ok {
+		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+	}
+	inner, ok := pattern.inner.(*evalBytes)
+	if !ok {
+		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+	}
+	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
+		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+	}
+
+	if len(r.Arguments) > 4 {
+		fl, ok := r.Arguments[4].(*Literal)
+		if !ok {
+			return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+		}
+		fe, ok := fl.inner.(*evalBytes)
+		if !ok {
+			return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+		}
+
+		flags, err = regexpFlags(fe, flags, "regexp_substr")
+		if err != nil {
+			return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+		}
+	}
+
+	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	if err != nil {
+		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
+	}
+
+	c.asm.Fn_REGEXP_SUBSTR(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
 }
 
 var _ Expr = (*builtinRegexpSubstr)(nil)
 
 type builtinRegexpReplace struct {
 	CallExpr
+}
+
+func regexpReplace(m *icuregex.Matcher, inputRunes, replRunes []rune, pos, occ int64, c collations.Charset) ([]byte, bool, error) {
+	var err error
+	found := false
+	if occ > 0 {
+		for i := int64(0); i < occ; i++ {
+			found, err = m.Find()
+			if err != nil {
+				return nil, false, err
+			}
+			if !found {
+				break
+			}
+		}
+		if !found {
+			return nil, false, nil
+		}
+
+		out := append(inputRunes[:int64(m.Start())+pos-1], replRunes...)
+		out = append(out, inputRunes[int64(m.End())+pos-1:]...)
+		return charset.Collapse(nil, out, c), true, nil
+	}
+
+	found, err = m.Find()
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !found {
+		return nil, false, nil
+	}
+
+	start := int64(m.Start()) + pos - 1
+	out := append(inputRunes[:start], replRunes...)
+	end := int64(m.End()) + pos - 1
+	for {
+		found, err = m.Find()
+		if err != nil {
+			return nil, false, err
+		}
+		if !found {
+			break
+		}
+		nextStart := int64(m.Start()) + pos - 1
+		out = append(out, inputRunes[end:nextStart]...)
+		out = append(out, replRunes...)
+		end = int64(m.End()) + pos - 1
+	}
+
+	out = append(out, inputRunes[end:]...)
+	return charset.Collapse(nil, out, c), true, nil
 }
 
 func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
@@ -411,11 +857,12 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var typedCol collations.TypedCollation
-	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat)
+	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_replace")
 	if err != nil {
 		return nil, err
 	}
+
+	collation := typedCol.Collation.Get()
 
 	repl, ok := replArg.(*evalBytes)
 	if !ok {
@@ -424,35 +871,37 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 	}
-
 	replRunes := charset.Expand(nil, repl.ToRawBytes(), repl.col.Collation.Get().Charset())
 
-	var flags icuregex.RegexpFlag
-	var collation = typedCol.Collation.Get()
-	if strings.Contains(collation.Name(), "_ci") {
-		flags |= icuregex.CaseInsensitive
-	}
-
 	pos := int64(1)
-	occurrence := int64(0)
+	occ := int64(0)
 	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
 
 	if len(r.Arguments) > 3 {
-		pos, err = evalPosition(env, r.Arguments[3], int64(len(inputRunes)))
+		posExpr, err := r.Arguments[3].eval(env)
+		if err != nil || posExpr == nil {
+			return nil, err
+		}
+		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)))
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if len(r.Arguments) > 4 {
-		occurrence, err = evalOccurrence(env, r.Arguments[4])
-		if err != nil {
+		occExpr, err := r.Arguments[4].eval(env)
+		if err != nil || occExpr == nil {
 			return nil, err
 		}
+		occ = occurrence(evalToInt64(occExpr), occ)
 	}
 
 	if len(r.Arguments) > 5 {
-		flags, err = evalRegexpFlags(env, r.Arguments[5], flags)
+		m, err := r.Arguments[5].eval(env)
+		if err != nil || m == nil {
+			return nil, err
+		}
+		flags, err = regexpFlags(m, flags, "regexp_replace")
 		if err != nil {
 			return nil, err
 		}
@@ -466,68 +915,149 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 	m := icuregex.NewMatcher(regexp)
 	m.Reset(inputRunes[pos-1:])
 
-	found := false
-	if occurrence > 0 {
-		for i := int64(0); i < occurrence; i++ {
-			found, err = m.Find()
-			if err != nil {
-				return nil, err
-			}
-			if !found {
-				break
-			}
-		}
-		if !found {
-			return newEvalRaw(sqltypes.Text, input.ToRawBytes(), typedCol), nil
-		}
-
-		out := append(inputRunes[:int64(m.Start())+pos-1], replRunes...)
-		out = append(out, inputRunes[int64(m.End())+pos-1:]...)
-		bytes := charset.Collapse(nil, out, collation.Charset())
-		return newEvalRaw(sqltypes.Text, bytes, typedCol), nil
-	}
-
-	found, err = m.Find()
+	bytes, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, collation.Charset())
 	if err != nil {
 		return nil, err
 	}
-
-	if !found {
-		return newEvalRaw(sqltypes.Text, input.ToRawBytes(), typedCol), nil
+	if !replaced {
+		return newEvalRaw(sqltypes.Text, input.ToRawBytes(), resultCollation(typedCol)), nil
 	}
-
-	start := int64(m.Start()) + pos - 1
-	out := append(inputRunes[:start], replRunes...)
-	end := int64(m.End()) + pos - 1
-	for {
-		found, err = m.Find()
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			break
-		}
-		nextStart := int64(m.Start()) + pos - 1
-		out = append(out, inputRunes[end:nextStart]...)
-		out = append(out, replRunes...)
-		end = int64(m.End()) + pos - 1
-	}
-
-	out = append(out, inputRunes[end:]...)
-
-	bytes := charset.Collapse(nil, out, collation.Charset())
-	return newEvalRaw(sqltypes.Text, bytes, typedCol), nil
+	return newEvalRaw(sqltypes.Text, bytes, resultCollation(typedCol)), nil
 }
 
 func (r *builtinRegexpReplace) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f1 := r.Arguments[0].typeof(env, fields)
 	_, f2 := r.Arguments[1].typeof(env, fields)
 	_, f3 := r.Arguments[2].typeof(env, fields)
-	return sqltypes.Text, f1 | f2 | f3
+	var f4, f5, f6 typeFlag
+	if len(r.Arguments) > 3 {
+		_, f4 = r.Arguments[3].typeof(env, fields)
+	}
+	if len(r.Arguments) > 4 {
+		_, f5 = r.Arguments[4].typeof(env, fields)
+	}
+	if len(r.Arguments) > 5 {
+		_, f6 = r.Arguments[5].typeof(env, fields)
+	}
+	return sqltypes.Text, f1 | f2 | f3 | f4 | f5 | f6
+}
+
+func (r *builtinRegexpReplace) compileSlow(c *compiler, input, pat, repl, pos, occ, matchType ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
+	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
+	}
+
+	c.asm.Fn_REGEXP_REPLACE_slow(merged, flags, len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
 }
 
 func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(r)
+	input, err := r.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	var skips []*jump
+	skips = append(skips, c.compileNullCheckArg(input, 0))
+
+	pat, err := r.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skips = append(skips, c.compileNullCheckArg(input, 1))
+
+	repl, err := r.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skips = append(skips, c.compileNullCheckArg(input, 2))
+
+	var pos ctype
+	if len(r.Arguments) > 3 {
+		pos, err = r.Arguments[3].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 3))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var occ ctype
+	if len(r.Arguments) > 4 {
+		occ, err = r.Arguments[4].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 4))
+		_ = c.compileToInt64(pos, 1)
+	}
+
+	var matchType ctype
+	if len(r.Arguments) > 5 {
+		matchType, err = r.Arguments[5].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skips = append(skips, c.compileNullCheckArg(input, 5))
+		switch {
+		case matchType.isTextual():
+		default:
+			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		}
+	}
+
+	merged, flags, err := compileRegexpCollation(input, pat, "regexp_replace")
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if !input.isTextual() || input.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
+	}
+
+	if !repl.isTextual() || repl.Col.Collation != merged.Collation {
+		c.asm.Convert_xce(len(r.Arguments)-2, sqltypes.VarChar, merged.Collation)
+	}
+
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	pattern, ok := r.Arguments[1].(*Literal)
+	if !ok {
+		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+	}
+	inner, ok := pattern.inner.(*evalBytes)
+	if !ok {
+		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+	}
+	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
+		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+	}
+
+	if len(r.Arguments) > 5 {
+		fl, ok := r.Arguments[5].(*Literal)
+		if !ok {
+			return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+		}
+		fe, ok := fl.inner.(*evalBytes)
+		if !ok {
+			return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+		}
+
+		flags, err = regexpFlags(fe, flags, "regexp_replace")
+		if err != nil {
+			return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+		}
+	}
+
+	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	if err != nil {
+		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
+	}
+
+	c.asm.Fn_REGEXP_REPLACE(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
+	c.asm.jumpDestination(skips...)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
 }
 
 var _ Expr = (*builtinRegexpReplace)(nil)

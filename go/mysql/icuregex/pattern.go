@@ -67,10 +67,19 @@ func MustCompileString(in string, flags RegexpFlag) *Pattern {
 	return pat
 }
 
-func CompileString(in string, flags RegexpFlag) (*Pattern, error) {
+func Compile(in []rune, flags RegexpFlag) (*Pattern, error) {
 	pat := NewPattern(flags)
 	cmp := newCompiler(pat)
 	if err := cmp.compile(in); err != nil {
+		return nil, err
+	}
+	return pat, nil
+}
+
+func CompileString(in string, flags RegexpFlag) (*Pattern, error) {
+	pat := NewPattern(flags)
+	cmp := newCompiler(pat)
+	if err := cmp.compile([]rune(in)); err != nil {
 		return nil, err
 	}
 	return pat, nil

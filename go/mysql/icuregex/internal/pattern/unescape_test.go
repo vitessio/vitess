@@ -36,3 +36,13 @@ func TestUnescapeAt(t *testing.T) {
 	assert.Equal(t, rune(0x00010000), r)
 	assert.Equal(t, "", str)
 }
+
+func TestUnescapeAtRunes(t *testing.T) {
+	r, str := UnescapeAtRunes([]rune("ud800\\ud800\\udc00"))
+	assert.Equal(t, rune(0xd800), r)
+	assert.Equal(t, []rune("\\ud800\\udc00"), str)
+
+	r, str = UnescapeAtRunes(str[1:])
+	assert.Equal(t, rune(0x00010000), r)
+	assert.Equal(t, []rune(""), str)
+}

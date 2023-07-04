@@ -586,6 +586,8 @@ const (
 	ERRegexpInvalidCaptureGroup = ErrorCode(3887)
 	ERRegexpInvalidFlag         = ErrorCode(3900)
 
+	ERCharacterSetMismatch = ErrorCode(3995)
+
 	// max execution time exceeded
 	ERQueryTimeout = ErrorCode(3024)
 

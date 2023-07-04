@@ -1915,6 +1915,8 @@ func RegexpLike(yield Query) {
 		`REGEXP_LIKE('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
 		`REGEXP_LIKE('abc', 'ABC'`,
 		`REGEXP_LIKE('abc', 'ABC', 'c')`,
+		`REGEXP_LIKE(1234, 12)`,
+		`REGEXP_LIKE(1234, 12, 'c')`,
 		`' '  REGEXP '[[:blank:]]'`,
 		`'\t' REGEXP '[[:blank:]]'`,
 		`' '  REGEXP '[[:space:]]'`,
@@ -1938,10 +1940,23 @@ func RegexpLike(yield Query) {
 		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
 		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
 		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+		`0xff REGEXP 0xff`,
+		`0xff REGEXP 0xfe`,
+		`cast(time '12:34:58' as json) REGEXP 0xff`,
 	}
 
 	for _, q := range mysqlDocSamples {
 		yield(q, nil)
+	}
+
+	for _, i := range regexInputs {
+		for _, p := range regexInputs {
+			yield(fmt.Sprintf("%s REGEXP %s", i, p), nil)
+			yield(fmt.Sprintf("%s NOT REGEXP %s", i, p), nil)
+			for _, m := range regexMatchStrings {
+				yield(fmt.Sprintf("REGEXP_LIKE(%s, %s, %s)", i, p, m), nil)
+			}
+		}
 	}
 }
 
@@ -1954,6 +1969,7 @@ func RegexpInstr(yield Query) {
 		`REGEXP_INSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
 		`REGEXP_INSTR('abc', 'ABC'`,
 		`REGEXP_INSTR('abc', 'ABC', 'c')`,
+		`REGEXP_INSTR('0', '0', 1, 0)`,
 		`REGEXP_INSTR(' ', '[[:blank:]]')`,
 		`REGEXP_INSTR('\t', '[[:blank:]]')`,
 		`REGEXP_INSTR(' ', '[[:space:]]')`,
@@ -1991,7 +2007,12 @@ func RegexpInstr(yield Query) {
 		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'c')`,
 		`REGEXP_INSTR('aa aaa aaaa', 'a{2}')`,
 		`REGEXP_INSTR('aa aaa aaaa', 'a{4}')`,
-		`REGEXP_INSTR(123, 123)`,
+		`REGEXP_INSTR(1234, 12)`,
+		`REGEXP_INSTR(1234, 12, 1)`,
+		`REGEXP_INSTR(1234, 12, 100)`,
+		`REGEXP_INSTR(1234, 12, 1, 1)`,
+		`REGEXP_INSTR(1234, 12, 1, 1, 1)`,
+		`REGEXP_INSTR(1234, 12, 1, 1, 1, 'c')`,
 	}
 
 	for _, q := range mysqlDocSamples {
@@ -2034,6 +2055,11 @@ func RegexpSubstr(yield Query) {
 		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'c')`,
 		`REGEXP_SUBSTR('aa aaa aaaa', 'a{2}')`,
 		`REGEXP_SUBSTR('aa aaa aaaa', 'a{4}')`,
+		`REGEXP_SUBSTR(1234, 12)`,
+		`REGEXP_SUBSTR(1234, 12, 1)`,
+		`REGEXP_SUBSTR(1234, 12, 100)`,
+		`REGEXP_SUBSTR(1234, 12, 1, 1)`,
+		`REGEXP_SUBSTR(1234, 12, 1, 1, 'c')`,
 	}
 
 	for _, q := range mysqlDocSamples {
@@ -2064,6 +2090,11 @@ func RegexpReplace(yield Query) {
 		`REGEXP_REPLACE('a', '\\p{Uppercase_letter}', 'X')`,
 		`REGEXP_REPLACE('A', '\\p{Lowercase_letter}', 'X')`,
 		`REGEXP_REPLACE('A', '\\p{Uppercase_letter}', 'X')`,
+		`REGEXP_REPLACE(1234, 12, 6)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1)`,
+		`REGEXP_REPLACE(1234, 12, 6, 100)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1, 1)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1, 1, 'c')`,
 	}
 
 	for _, q := range mysqlDocSamples {

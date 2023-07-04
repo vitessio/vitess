@@ -404,18 +404,19 @@ func TestCornerCases(t *testing.T) {
 func TestOne(t *testing.T) {
 	icuregex.Dumper = os.Stderr
 
-	const Pattern = `\p{CaseIgnorable}`
-	const Input = "foo.bar"
+	pattern := []rune{55296, 56320}
+	input := []rune{'𐀀'}
 	const Flags = 0
 
-	re, err := icuregex.CompileString(Pattern, Flags)
+	re, err := icuregex.Compile(pattern, Flags)
 	if err != nil {
 		t.Fatalf("compilation failed: %v", err)
 	}
 
 	re.Dump(os.Stderr)
 
-	m := re.Match(Input)
+	m := icuregex.NewMatcher(re)
+	m.Reset(input)
 	found, err := m.Find()
 	require.NoError(t, err)
 	t.Logf("match = %v", found)

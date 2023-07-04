@@ -110,6 +110,8 @@ const (
 	RegexpInvalidCaptureGroup
 	RegexpInvalidFlag
 
+	CharacterSetMismatch
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )

@@ -54,6 +54,12 @@ var collationUtf8mb3 = collations.TypedCollation{
 	Repertoire:   collations.RepertoireUnicode,
 }
 
+var collationRegexpFallback = collations.TypedCollation{
+	Collation:    collations.CollationLatin1Swedish,
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 type (
 	CollateExpr struct {
 		UnaryExpr

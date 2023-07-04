@@ -73,7 +73,7 @@ const (
 type compiler struct {
 	err error
 	out *Pattern
-	p   string
+	p   []rune
 
 	scanIndex        int
 	quoteMode        bool
@@ -130,10 +130,13 @@ func (c *compiler) nextCharLL() (ch rune) {
 		ch, c.peekChar = c.peekChar, -1
 		return
 	}
-	var w int
-	ch, w = utf8.DecodeRuneInString(c.p)
-	c.p = c.p[w:]
-	if ch == utf8.RuneError && (w == 0 || w == 1) {
+	if len(c.p) == 0 {
+		return -1
+	}
+
+	ch = c.p[0]
+	c.p = c.p[1:]
+	if ch == utf8.RuneError {
 		return -1
 	}
 
@@ -223,7 +226,7 @@ func (c *compiler) nextChar(ch *reChar) {
 				c.nextCharLL() // get & discard the peeked char.
 				ch.quoted = true
 
-				ch.char, c.p = pattern.UnescapeAt(beforeEscape)
+				ch.char, c.p = pattern.UnescapeAtRunes(beforeEscape)
 				if ch.char < 0 {
 					c.error(BadEscapeSequence)
 				}
@@ -302,7 +305,7 @@ const (
 	chDash      = 0x2d   // '-'
 )
 
-func (c *compiler) compile(pat string) error {
+func (c *compiler) compile(pat []rune) error {
 	if c.err != nil {
 		return c.err
 	}
@@ -310,7 +313,7 @@ func (c *compiler) compile(pat string) error {
 		panic("cannot reuse pattern")
 	}
 
-	c.out.pattern = pat
+	c.out.pattern = string(pat)
 	c.p = pat
 
 	var state uint16 = 1
