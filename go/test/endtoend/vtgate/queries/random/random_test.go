@@ -208,8 +208,8 @@ func TestRandom(t *testing.T) {
 
 	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
-		{name: sqlparser.NewTableName("emp")},
-		{name: sqlparser.NewTableName("dept")},
+		{tableExpr: sqlparser.NewTableName("emp")},
+		{tableExpr: sqlparser.NewTableName("dept")},
 	}
 	schemaTables[0].addColumns([]column{
 		{name: "empno", typ: "bigint"},

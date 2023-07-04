@@ -41,41 +41,55 @@ type (
 	}
 	tableT struct {
 		// the tableT struct can be used to represent the schema of a table or a derived table
-		// in the former case name will be a sqlparser.TableName, in the latter a sqlparser.DerivedTable
-		// in order to create a query with a derived table, its AST form is retrieved from name
-		// once the derived table is aliased, name is replaced by a sqlparser.TableName with that alias
-		name sqlparser.SimpleTableExpr
-		cols []column
+		// in the former case tableExpr will be a sqlparser.TableName, in the latter a sqlparser.DerivedTable
+		// in order to create a query with a derived table, its AST form is retrieved from tableExpr
+		// once the derived table is aliased, alias is updated
+		tableExpr sqlparser.SimpleTableExpr
+		alias     string
+		cols      []column
 	}
 )
 
 var _ sqlparser.ExprGenerator = (*tableT)(nil)
 
-func (t *tableT) Generate(config sqlparser.ExprGeneratorConfig) sqlparser.Expr {
-	tableCopy := t.clone()
+// var _ sqlparser.ExprGenerator = column{}
 
-	for len(tableCopy.cols) > 0 {
-		idx := rand.Intn(len(tableCopy.cols))
-		randCol := tableCopy.cols[idx]
+func (t *tableT) Generate(config sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+	colsCopy := slices.Clone(t.cols)
+
+	for len(colsCopy) > 0 {
+		idx := rand.Intn(len(colsCopy))
+		randCol := colsCopy[idx]
 		if randCol.typ == config.Type {
-			newTableName := ""
-			if tName, ok := tableCopy.name.(sqlparser.TableName); ok {
-				newTableName = sqlparser.String(tName.Name)
-			}
+			newTableName := t.getName()
 			return sqlparser.NewColNameWithQualifier(randCol.name, sqlparser.NewTableName(newTableName))
 		}
 
-		// delete randCol from table.columns
-		tableCopy.cols[idx] = tableCopy.cols[len(tableCopy.cols)-1]
-		tableCopy.cols = tableCopy.cols[:len(tableCopy.cols)-1]
+		// delete randCol from colsCopy
+		colsCopy[idx] = colsCopy[len(colsCopy)-1]
+		colsCopy = colsCopy[:len(colsCopy)-1]
 	}
 
 	return nil
 }
 
+// getName returns the alias if it is nonempty
+// if the alias is nonempty and tableExpr is of type sqlparser.TableName,
+// then getName returns Name from tableExpr
+// otherwise getName returns an empty string
+func (t *tableT) getName() string {
+	if t.alias != "" {
+		return t.alias
+	} else if tName, ok := t.tableExpr.(*sqlparser.TableName); ok {
+		return tName.Name.String()
+	}
+
+	return ""
+}
+
 // setName sets the alias for t, as well as setting the tableName for all columns in cols
 func (t *tableT) setName(newName string) {
-	t.name = sqlparser.NewTableName(newName)
+	t.alias = newName
 	for i := range t.cols {
 		t.cols[i].tableName = newName
 	}
@@ -88,24 +102,12 @@ func (t *tableT) setColumns(col ...column) {
 	t.addColumns(col...)
 }
 
-// addColumns adds columns to t, and automatically assigns tableName
-// this makes it unnatural (but still possible as cols is exportable) to modify tableName
+// addColumns adds columns to t, and automatically assigns each column.tableName
+// this makes it unnatural to modify tableName
 func (t *tableT) addColumns(col ...column) {
 	for i := range col {
-		// only change the Col's tableName if t is of type tableName
-		if tName, ok := t.name.(sqlparser.TableName); ok {
-			col[i].tableName = sqlparser.String(tName.Name)
-		}
-
+		col[i].tableName = t.getName()
 		t.cols = append(t.cols, col[i])
-	}
-}
-
-// clone returns a deep copy of t
-func (t *tableT) clone() *tableT {
-	return &tableT{
-		name: t.name,
-		cols: slices.Clone(t.cols),
 	}
 }
 
@@ -245,7 +247,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	newTable.addColumns(aggregates...)
 
 	// add new table to schemaTables
-	newTable.name = sqlparser.NewDerivedTable(false, sel)
+	newTable.tableExpr = sqlparser.NewDerivedTable(false, sel)
 	schemaTables = append(schemaTables, newTable)
 
 	// derived tables (partially unsupported)
@@ -275,18 +277,11 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 	// TODO: outer joins produce mismatched results
 	isJoin := rand.Intn(2) < 1 && testFailingQueries
 	if isJoin {
+		// TODO: do nested joins
 		newTable := randomEl(schemaTables)
 		tables = append(tables, newTable)
 
-		// create the join before aliasing
-		newJoinTableExpr := createJoin(tables, sel)
-
-		// alias
-		tables[numTables+1].setName(fmt.Sprintf("tbl%d", numTables+1))
-
-		// create the condition after aliasing
-		newJoinTableExpr.Condition = sqlparser.NewJoinCondition(sqlparser.AndExpressions(createWherePredicates(tables, true)...), nil)
-		sel.From[numTables] = newJoinTableExpr
+		createJoin(tables, sel)
 	}
 
 	return tables, isJoin
@@ -294,13 +289,17 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 
 // creates a left join (without the condition) between the last table in sel and newTable
 // tables should have one more table than sel
-func createJoin(tables []tableT, sel *sqlparser.Select) *sqlparser.JoinTableExpr {
+func createJoin(tables []tableT, sel *sqlparser.Select) {
 	n := len(sel.From)
 	if len(tables) != n+1 {
 		log.Fatalf("sel has %d tables and tables has %d tables", len(sel.From), n)
 	}
 
-	return sqlparser.NewJoinTableExpr(sel.From[n-1], sqlparser.LeftJoinType, newAliasedTable(tables[n], fmt.Sprintf("tbl%d", n)), nil)
+	// alias
+	tables[n].setName(fmt.Sprintf("tbl%d", n))
+
+	newJoinCondition := sqlparser.NewJoinCondition(sqlparser.AndExpressions(createWherePredicates(tables, true)...), nil)
+	sel.From[n-1] = sqlparser.NewJoinTableExpr(sel.From[n-1], sqlparser.LeftJoinType, newAliasedTable(tables[n], fmt.Sprintf("tbl%d", n)), newJoinCondition)
 }
 
 // returns the grouping columns as three types: sqlparser.GroupBy, sqlparser.SelectExprs, []column
@@ -484,7 +483,7 @@ func getRandomExpr(tables []tableT) sqlparser.Expr {
 }
 
 func newAliasedTable(tbl tableT, alias string) *sqlparser.AliasedTableExpr {
-	return sqlparser.NewAliasedTableExpr(tbl.name, alias)
+	return sqlparser.NewAliasedTableExpr(tbl.tableExpr, alias)
 }
 
 func newAliasedColumn(col column, alias string) *sqlparser.AliasedExpr {

@@ -55,20 +55,20 @@ func (genConfig ExprGeneratorConfig) anyTypeConfig() ExprGeneratorConfig {
 
 func NewGenerator(seed int64, maxDepth int, exprGenerators ...ExprGenerator) *Generator {
 	g := Generator{
-		seed:          seed,
-		r:             rand.New(rand.NewSource(seed)),
-		maxDepth:      maxDepth,
-		exprGenerator: exprGenerators,
+		seed:           seed,
+		r:              rand.New(rand.NewSource(seed)),
+		maxDepth:       maxDepth,
+		exprGenerators: exprGenerators,
 	}
 	return &g
 }
 
 type Generator struct {
-	seed          int64
-	r             *rand.Rand
-	depth         int
-	maxDepth      int
-	exprGenerator []ExprGenerator
+	seed           int64
+	r              *rand.Rand
+	depth          int
+	maxDepth       int
+	exprGenerators []ExprGenerator
 }
 
 // enter should be called whenever we are producing an intermediate node. it should be followed by a `defer g.exit()`
@@ -157,15 +157,19 @@ func (g *Generator) intExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.caseExpr(genConfig) },
 	}
 
-	for _, generator := range g.exprGenerator {
+	// TODO: this adds two identical functions to options, both of which use the last element in g.exprGenerators
+	for i := range g.exprGenerators {
 		options = append(options, func() Expr {
-			expr := generator.Generate(genConfig)
+			//fmt.Printf("index: %d", i)
+			expr := g.exprGenerators[i].Generate(genConfig)
 			if expr == nil {
 				return g.intLiteral()
 			}
 			return expr
 		})
 	}
+	//fmt.Printf("options: %v\n", options)
+	//fmt.Printf("expr generators: %v\n", g.exprGenerators)
 
 	return g.randomOf(options)
 }
@@ -182,7 +186,7 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.caseExpr(genConfig) },
 	}
 
-	for _, generator := range g.exprGenerator {
+	for _, generator := range g.exprGenerators {
 		options = append(options, func() Expr {
 			expr := generator.Generate(genConfig)
 			if expr == nil {
