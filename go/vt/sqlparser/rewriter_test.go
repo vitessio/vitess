@@ -26,7 +26,7 @@ import (
 
 func BenchmarkVisitLargeExpression(b *testing.B) {
 	gen := NewGenerator(1, 5)
-	exp := gen.Expression()
+	exp := gen.Expression(ExprGeneratorConfig{})
 
 	depth := 0
 	for i := 0; i < b.N; i++ {

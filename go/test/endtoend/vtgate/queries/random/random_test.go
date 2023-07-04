@@ -84,6 +84,12 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
+
+	// EOF
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1, tbl1.deptno as crandom0 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
+
+	// mismatched results
 	// limit >= 9 works
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) = sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8")
 
@@ -131,6 +137,10 @@ func TestKnownFailures(t *testing.T) {
 
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
+
+	// vitess error: vttablet: rpc error: code = InvalidArgument desc = BIGINT UNSIGNED value is out of range in '(-(273) + (-(15) & 124))'
+	// mysql error: <nil>
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ -273 + (-15 & 124) as crandom0 from emp as tbl0, emp as tbl1 where tbl1.sal >= tbl1.mgr")
 
 	// cannot compare strings, collation is unknown or unsupported (collation ID: 0)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl1.dname) as caggr1 from dept as tbl0, dept as tbl1 group by tbl1.dname order by tbl1.dname asc")
@@ -217,7 +227,7 @@ func TestRandom(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	endBy := time.Now().Add(1 * time.Second)
+	endBy := time.Now().Add(10 * time.Second)
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true

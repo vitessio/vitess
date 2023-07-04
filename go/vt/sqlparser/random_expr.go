@@ -25,10 +25,33 @@ import (
 
 type (
 	ExprGenerator interface {
-		IntExpr() Expr
-		StringExpr() Expr
+		Generate(config ExprGeneratorConfig) Expr
+	}
+
+	ExprGeneratorConfig struct {
+		Type string
 	}
 )
+
+func (genConfig ExprGeneratorConfig) boolTypeConfig() ExprGeneratorConfig {
+	genConfig.Type = "tinyint"
+	return genConfig
+}
+
+func (genConfig ExprGeneratorConfig) intTypeConfig() ExprGeneratorConfig {
+	genConfig.Type = "bigint"
+	return genConfig
+}
+
+func (genConfig ExprGeneratorConfig) stringTypeConfig() ExprGeneratorConfig {
+	genConfig.Type = "varchar"
+	return genConfig
+}
+
+func (genConfig ExprGeneratorConfig) anyTypeConfig() ExprGeneratorConfig {
+	genConfig.Type = ""
+	return genConfig
+}
 
 func NewGenerator(seed int64, maxDepth int, exprGenerators ...ExprGenerator) *Generator {
 	g := Generator{
@@ -78,58 +101,92 @@ func (g *Generator) atMaxDepth() bool {
 Note: It's important to update this method so that it produces all expressions that need precedence checking.
 It's currently missing function calls and string operators
 */
-func (g *Generator) Expression() Expr {
-	if g.randomBool() {
-		return g.booleanExpr()
+func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
+	switch genConfig.Type {
+	case "bigint":
+		return g.intExpr(genConfig)
+	case "varchar":
+		return g.stringExpr(genConfig)
+	case "tinyint":
+		return g.booleanExpr(genConfig)
 	}
 
 	options := []exprF{
-		func() Expr { return g.intExpr() },
-		func() Expr { return g.stringExpr() },
-		func() Expr { return g.booleanExpr() },
+		func() Expr { return g.intExpr(genConfig) },
+		func() Expr { return g.stringExpr(genConfig) },
+		func() Expr { return g.booleanExpr(genConfig) },
 	}
 
 	return g.randomOf(options)
 }
 
-func (g *Generator) booleanExpr() Expr {
+func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 	if g.atMaxDepth() {
 		return g.booleanLiteral()
 	}
 
+	genConfig.Type = "tinyint"
+
 	options := []exprF{
-		func() Expr { return g.andExpr() },
-		func() Expr { return g.xorExpr() },
-		func() Expr { return g.orExpr() },
-		func() Expr { return g.comparison(g.intExpr) },
-		func() Expr { return g.comparison(g.stringExpr) },
-		//func() Expr { return g.comparison(g.booleanExpr) }, // this is not accepted by the parser
-		func() Expr { return g.inExpr() },
-		func() Expr { return g.between() },
-		func() Expr { return g.isExpr() },
-		func() Expr { return g.notExpr() },
-		func() Expr { return g.likeExpr() },
+		func() Expr { return g.andExpr(genConfig) },
+		func() Expr { return g.xorExpr(genConfig) },
+		func() Expr { return g.orExpr(genConfig) },
+		func() Expr { return g.comparison(genConfig.intTypeConfig()) },
+		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
+		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
+		func() Expr { return g.inExpr(genConfig.intTypeConfig()) },
+		func() Expr { return g.between(genConfig.intTypeConfig()) },
+		func() Expr { return g.isExpr(genConfig) },
+		func() Expr { return g.notExpr(genConfig) },
+		func() Expr { return g.likeExpr(genConfig.stringTypeConfig()) },
 	}
 
 	return g.randomOf(options)
 }
 
-func (g *Generator) intExpr() Expr {
+func (g *Generator) intExpr(genConfig ExprGeneratorConfig) Expr {
 	if g.atMaxDepth() {
 		return g.intLiteral()
 	}
 
+	genConfig.Type = "bigint"
+
 	options := []exprF{
-		func() Expr { return g.arithmetic() },
+		func() Expr { return g.arithmetic(genConfig) },
 		func() Expr { return g.intLiteral() },
-		func() Expr { return g.caseExpr(g.intExpr) },
+		func() Expr { return g.caseExpr(genConfig) },
 	}
 
 	for _, generator := range g.exprGenerator {
 		options = append(options, func() Expr {
-			expr := generator.IntExpr()
+			expr := generator.Generate(genConfig)
 			if expr == nil {
 				return g.intLiteral()
+			}
+			return expr
+		})
+	}
+
+	return g.randomOf(options)
+}
+
+func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
+	if g.atMaxDepth() {
+		return g.stringLiteral()
+	}
+
+	genConfig.Type = "varchar"
+
+	options := []exprF{
+		func() Expr { return g.stringLiteral() },
+		func() Expr { return g.caseExpr(genConfig) },
+	}
+
+	for _, generator := range g.exprGenerator {
+		options = append(options, func() Expr {
+			expr := generator.Generate(genConfig)
+			if expr == nil {
+				return g.stringLiteral()
 			}
 			return expr
 		})
@@ -158,77 +215,54 @@ func (g *Generator) stringLiteral() Expr {
 	return NewStrLiteral(g.randomOfS(words))
 }
 
-func (g *Generator) stringExpr() Expr {
-	if g.atMaxDepth() {
-		return g.stringLiteral()
-	}
-
-	options := []exprF{
-		func() Expr { return g.stringLiteral() },
-		func() Expr { return g.caseExpr(g.stringExpr) },
-	}
-
-	for _, generator := range g.exprGenerator {
-		options = append(options, func() Expr {
-			expr := generator.StringExpr()
-			if expr == nil {
-				return g.stringLiteral()
-			}
-			return expr
-		})
-	}
-
-	return g.randomOf(options)
-}
-
-func (g *Generator) likeExpr() Expr {
+func (g *Generator) likeExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 	return &ComparisonExpr{
 		Operator: LikeOp,
-		Left:     g.stringExpr(),
-		Right:    g.stringExpr(),
+		Left:     g.Expression(genConfig),
+		Right:    g.Expression(genConfig),
 	}
 }
 
 var comparisonOps = []ComparisonExprOperator{EqualOp, LessThanOp, GreaterThanOp, LessEqualOp, GreaterEqualOp, NotEqualOp, NullSafeEqualOp}
 
-func (g *Generator) comparison(f func() Expr) Expr {
+func (g *Generator) comparison(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
 	cmp := &ComparisonExpr{
 		Operator: comparisonOps[g.r.Intn(len(comparisonOps))],
-		Left:     f(),
-		Right:    f(),
+		Left:     g.Expression(genConfig),
+		Right:    g.Expression(genConfig),
 	}
 	return cmp
 }
 
-func (g *Generator) caseExpr(valueF func() Expr) Expr {
+func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
 	var exp Expr
 	var elseExpr Expr
 	if g.randomBool() {
-		exp = valueF()
+		exp = g.Expression(genConfig.anyTypeConfig())
 	}
 	if g.randomBool() {
-		elseExpr = valueF()
+		elseExpr = g.Expression(genConfig)
 	}
 
-	size := g.r.Intn(5) + 2
+	size := g.r.Intn(2) + 2
 	var whens []*When
 	for i := 0; i < size; i++ {
 		var cond Expr
 		if exp == nil {
-			cond = g.booleanExpr()
+			cond = g.Expression(genConfig.boolTypeConfig())
 		} else {
-			cond = g.Expression()
+			cond = g.Expression(genConfig.anyTypeConfig())
 		}
 
-		val := g.Expression()
+		val := g.Expression(genConfig)
 		whens = append(whens, &When{
 			Cond: cond,
 			Val:  val,
@@ -244,7 +278,7 @@ func (g *Generator) caseExpr(valueF func() Expr) Expr {
 
 var arithmeticOps = []BinaryExprOperator{BitAndOp, BitOrOp, BitXorOp, PlusOp, MinusOp, MultOp, DivOp, IntDivOp, ModOp, ShiftRightOp, ShiftLeftOp}
 
-func (g *Generator) arithmetic() Expr {
+func (g *Generator) arithmetic(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
@@ -252,8 +286,8 @@ func (g *Generator) arithmetic() Expr {
 
 	return &BinaryExpr{
 		Operator: op,
-		Left:     g.intExpr(),
-		Right:    g.intExpr(),
+		Left:     g.Expression(genConfig),
+		Right:    g.Expression(genConfig),
 	}
 }
 
@@ -267,48 +301,48 @@ func (g *Generator) randomOfS(options []string) string {
 	return options[g.r.Intn(len(options))]
 }
 
-func (g *Generator) andExpr() Expr {
+func (g *Generator) andExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 	return &AndExpr{
-		Left:  g.booleanExpr(),
-		Right: g.booleanExpr(),
+		Left:  g.Expression(genConfig),
+		Right: g.Expression(genConfig),
 	}
 }
 
-func (g *Generator) orExpr() Expr {
+func (g *Generator) orExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 	return &OrExpr{
-		Left:  g.booleanExpr(),
-		Right: g.booleanExpr(),
+		Left:  g.Expression(genConfig),
+		Right: g.Expression(genConfig),
 	}
 }
 
-func (g *Generator) xorExpr() Expr {
+func (g *Generator) xorExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 	return &XorExpr{
-		Left:  g.booleanExpr(),
-		Right: g.booleanExpr(),
+		Left:  g.Expression(genConfig),
+		Right: g.Expression(genConfig),
 	}
 }
 
-func (g *Generator) notExpr() Expr {
+func (g *Generator) notExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
-	return &NotExpr{g.booleanExpr()}
+	return &NotExpr{g.Expression(genConfig)}
 }
 
-func (g *Generator) inExpr() Expr {
+func (g *Generator) inExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
-	expr := g.intExpr()
-	size := g.r.Intn(5) + 2
+	expr := g.Expression(genConfig)
+	size := g.r.Intn(3) + 2
 	tuples := ValTuple{}
 	for i := 0; i < size; i++ {
-		tuples = append(tuples, g.intExpr())
+		tuples = append(tuples, g.Expression(genConfig))
 	}
 	op := InOp
 	if g.randomBool() {
@@ -322,7 +356,7 @@ func (g *Generator) inExpr() Expr {
 	}
 }
 
-func (g *Generator) between() Expr {
+func (g *Generator) between(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
@@ -335,13 +369,13 @@ func (g *Generator) between() Expr {
 
 	return &BetweenExpr{
 		IsBetween: IsBetween,
-		Left:      g.intExpr(),
-		From:      g.intExpr(),
-		To:        g.intExpr(),
+		Left:      g.Expression(genConfig),
+		From:      g.Expression(genConfig),
+		To:        g.Expression(genConfig),
 	}
 }
 
-func (g *Generator) isExpr() Expr {
+func (g *Generator) isExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
@@ -349,6 +383,6 @@ func (g *Generator) isExpr() Expr {
 
 	return &IsExpr{
 		Right: ops[g.r.Intn(len(ops))],
-		Left:  g.booleanExpr(),
+		Left:  g.Expression(genConfig),
 	}
 }

@@ -224,7 +224,7 @@ func TestRandom(t *testing.T) {
 			break
 		}
 		// Given a random expression
-		randomExpr := g.Expression()
+		randomExpr := g.Expression(ExprGeneratorConfig{})
 		inputQ := "select " + String(randomExpr) + " from t"
 
 		// When it's parsed and unparsed
