@@ -58,6 +58,11 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 	return tm.QueryServiceControl.ReloadSchema(ctx)
 }
 
+// ResetSequences will reset the auto-inc counters on the specified tables.
+func (tm *TabletManager) ResetSequences(ctx context.Context, tables []string) error {
+	return tm.QueryServiceControl.SchemaEngine().ResetSequences(tables)
+}
+
 // PreflightSchema will try out the schema changes in "changes".
 func (tm *TabletManager) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if err := tm.lock(ctx); err != nil {

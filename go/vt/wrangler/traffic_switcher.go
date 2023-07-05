@@ -581,6 +581,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return 0, nil, err
 		}
 
+		ts.Logger().Infof("Resetting sequences")
+		if err := sw.resetSequences(ctx); err != nil {
+			ts.Logger().Errorf("resetSequences failed: %v", err)
+			sw.cancelMigration(ctx, sm)
+			return 0, nil, err
+		}
+
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
@@ -1867,4 +1874,52 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		}
 	}
 	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+}
+
+func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, error) {
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return false, err
+	}
+	if vschema == nil || vschema.Tables == nil {
+		return false, nil
+	}
+	sequenceFound := false
+	for _, table := range ts.Tables() {
+		vs, ok := vschema.Tables[table]
+		if !ok || vs == nil {
+			continue
+		}
+		if vs.Type == vindexes.TypeSequence {
+			sequenceFound = true
+			break
+		}
+	}
+	return sequenceFound, nil
+}
+
+func (ts *trafficSwitcher) mustResetSequences(ctx context.Context) (bool, error) {
+	switch ts.workflowType {
+	case binlogdatapb.VReplicationWorkflowType_Migrate,
+		binlogdatapb.VReplicationWorkflowType_MoveTables:
+		return ts.isSequenceParticipating(ctx)
+	default:
+		return false, nil
+	}
+}
+
+func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
+	var err error
+	mustReset := false
+	if mustReset, err = ts.mustResetSequences(ctx); err != nil {
+		return err
+	}
+	if !mustReset {
+		return nil
+	}
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		ts.Logger().Infof("Resetting sequences for source shard %s.%s on tablet %s",
+			source.GetShard().Keyspace(), source.GetShard().ShardName(), source.GetPrimary().String())
+		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
+	})
 }
