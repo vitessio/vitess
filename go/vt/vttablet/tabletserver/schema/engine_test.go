@@ -447,20 +447,18 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), ""))
 	// rejecting the impossible query
-	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", errors.New("The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)"))
+	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", mysql.NewSQLErrorFromError(errors.New("ERROR 1449 (HY000): The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	// failed load should not return any error, instead should be logged.
-	require.NoError(t, err)
+	assert.ErrorContains(t, err, "Row count exceeded")
 
 	logs := tl.GetAllLogs()
 	logOutput := strings.Join(logs, ":::")
-	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_table")
-	assert.Contains(t, logOutput, "Row count exceeded")
 	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_view")
-	assert.Contains(t, logOutput, "The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
+	assert.Contains(t, logOutput, "ERROR 1449 (HY000): The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
 }
 
 func TestExportVars(t *testing.T) {
