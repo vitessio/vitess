@@ -211,6 +211,45 @@ func compileRegex(pat eval, c collations.Charset, flags icuregex.RegexpFlag) (*i
 	return nil, err
 }
 
+func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collations.TypedCollation, flags icuregex.RegexpFlag, f string) (*icuregex.Pattern, error) {
+	pattern := args[pat]
+	if !pattern.constant() {
+		return nil, c.unsupported(pattern)
+	}
+	var err error
+	staticEnv := EmptyExpressionEnv()
+	pattern, err = simplifyExpr(staticEnv, pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(args) > mt {
+		fl := args[mt]
+		if !fl.constant() {
+			return nil, c.unsupported(fl)
+		}
+		fl, err = simplifyExpr(staticEnv, fl)
+		if err != nil {
+			return nil, err
+		}
+		flags, err = regexpFlags(fl.(*Literal).inner, flags, f)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if pattern.(*Literal).inner == nil {
+		return nil, c.unsupported(pattern)
+	}
+
+	innerPat, err := evalToVarchar(pattern.(*Literal).inner, cs.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return compileRegex(innerPat, cs.Collation.Get().Charset(), flags)
+}
+
 // resultCollation returns the collation to use for the result of a regexp.
 // This falls back to latin1_swedish if the input collation is binary. This
 // seems to be a side effect of how MySQL also works. Probably due to how it
@@ -329,35 +368,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 
 	// We optimize for the case where the pattern is a constant. If not,
 	// we fall back to the slow path.
-	pattern, ok := r.Arguments[1].(*Literal)
-	if !ok {
-		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
-	}
-	inner, ok := pattern.inner.(*evalBytes)
-	if !ok {
-		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
-	}
-	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
-		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
-	}
-
-	if len(r.Arguments) > 2 {
-		fl, ok := r.Arguments[2].(*Literal)
-		if !ok {
-			return r.compileSlow(c, input, pat, f, merged, flags, skips...)
-		}
-		fe, ok := fl.inner.(*evalBytes)
-		if !ok {
-			return r.compileSlow(c, input, pat, f, merged, flags, skips...)
-		}
-
-		flags, err = regexpFlags(fe, flags, "regexp_like")
-		if err != nil {
-			return r.compileSlow(c, input, pat, f, merged, flags, skips...)
-		}
-	}
-
-	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	p, err := compileConstantRegex(c, r.Arguments, 1, 2, merged, flags, "regexp_like")
 	if err != nil {
 		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
 	}
@@ -583,35 +594,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 
 	// We optimize for the case where the pattern is a constant. If not,
 	// we fall back to the slow path.
-	pattern, ok := r.Arguments[1].(*Literal)
-	if !ok {
-		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
-	}
-	inner, ok := pattern.inner.(*evalBytes)
-	if !ok {
-		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
-	}
-	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
-		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
-	}
-
-	if len(r.Arguments) > 5 {
-		fl, ok := r.Arguments[5].(*Literal)
-		if !ok {
-			return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
-		}
-		fe, ok := fl.inner.(*evalBytes)
-		if !ok {
-			return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
-		}
-
-		flags, err = regexpFlags(fe, flags, "regexp_instr")
-		if err != nil {
-			return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
-		}
-	}
-
-	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	p, err := compileConstantRegex(c, r.Arguments, 1, 5, merged, flags, "regexp_instr")
 	if err != nil {
 		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
 	}
@@ -804,35 +787,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 
 	// We optimize for the case where the pattern is a constant. If not,
 	// we fall back to the slow path.
-	pattern, ok := r.Arguments[1].(*Literal)
-	if !ok {
-		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
-	}
-	inner, ok := pattern.inner.(*evalBytes)
-	if !ok {
-		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
-	}
-	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
-		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
-	}
-
-	if len(r.Arguments) > 4 {
-		fl, ok := r.Arguments[4].(*Literal)
-		if !ok {
-			return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
-		}
-		fe, ok := fl.inner.(*evalBytes)
-		if !ok {
-			return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
-		}
-
-		flags, err = regexpFlags(fe, flags, "regexp_substr")
-		if err != nil {
-			return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
-		}
-	}
-
-	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	p, err := compileConstantRegex(c, r.Arguments, 1, 4, merged, flags, "regexp_substr")
 	if err != nil {
 		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
 	}
@@ -1093,35 +1048,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 
 	// We optimize for the case where the pattern is a constant. If not,
 	// we fall back to the slow path.
-	pattern, ok := r.Arguments[1].(*Literal)
-	if !ok {
-		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
-	}
-	inner, ok := pattern.inner.(*evalBytes)
-	if !ok {
-		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
-	}
-	if !merged.Collation.Get().Charset().IsSuperset(inner.col.Collation.Get().Charset()) {
-		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
-	}
-
-	if len(r.Arguments) > 5 {
-		fl, ok := r.Arguments[5].(*Literal)
-		if !ok {
-			return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
-		}
-		fe, ok := fl.inner.(*evalBytes)
-		if !ok {
-			return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
-		}
-
-		flags, err = regexpFlags(fe, flags, "regexp_replace")
-		if err != nil {
-			return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
-		}
-	}
-
-	p, err := compileRegex(inner, merged.Collation.Get().Charset(), flags)
+	p, err := compileConstantRegex(c, r.Arguments, 1, 5, merged, flags, "regexp_replace")
 	if err != nil {
 		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
 	}

@@ -1929,6 +1929,12 @@ func RegexpLike(yield Query) {
 		`_koi8r  0xF7 regexp _koi8r  '[[:alpha:]]'`,
 		`_latin1'a' regexp _latin1'A' collate latin1_general_ci`,
 		`_latin1'a' regexp _latin1'A' collate latin1_bin`,
+
+		`_latin1 'ÿ' regexp _utf8mb4 'ÿ'`,
+		`_utf8mb4 'ÿ' regexp _latin1 'ÿ'`,
+		`convert('ÿ' as char character set latin1) regexp _utf8mb4 'ÿ'`,
+		`_utf8mb4 'ÿ' regexp convert('ÿ' as char character set latin1)`,
+
 		`'a' regexp '\\p{alphabetic}'`,
 		`'a' regexp '\\P{alphabetic}'`,
 		`'👌🏾regexp '\\p{Emoji}\\p{Emoji_modifier}'`,
