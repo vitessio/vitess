@@ -6,6 +6,9 @@ function stop_vtadmin() {
   local name="$1"
   local file="$2"
 
+  if [[ -z ${1} || -z ${2} ]]; then
+    fail "A binary name and PID file must be specified when attempting to shutdown vtadmin"
+  fi
   if [[ -e "$file" ]]; then
     echo "Stopping $name..."
     local pid=$(cat "$file")
