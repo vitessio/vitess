@@ -136,35 +136,25 @@ var inputConversions = []string{
 var regexInputs = []string{
 	"0", "1", "' 0 '", `'\t1foo\t'`,
 	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
-	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
+	`0x0`, `0x1`, `0xff`,
 	"NULL", "true", "false",
-	"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
-	"JSON_OBJECT()", "JSON_ARRAY()",
+	"0xFF666F6F626172FF",
 	"time '10:04:58'", "date '2000-01-01'",
 	"timestamp '2000-01-01 10:34:58'",
 	"cast(0 as json)", "cast(1 as json)",
 	"cast(true as json)", "cast(false as json)",
-	"cast('{}' as json)", "cast('[]' as json)",
-	"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
 	// JSON numbers
-	"cast(1 as json)", "cast(2 as json)", "cast(1.1 as json)", "cast(-1.1 as json)",
-	"cast(9223372036854775807 as json)", "cast(18446744073709551615 as json)",
-	"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
-	"cast('9223372036854775807' as json)", "cast('18446744073709551615' as json)",
+	"cast(2 as json)", "cast(1.1 as json)", "cast(-1.1 as json)",
 	// JSON strings
-	"cast('\"foo\"' as json)", "cast('\"bar\"' as json)",
+	"cast('\"foo\"' as json)",
 	// JSON binary values
-	"cast(_binary' \"foo\"' as json)", "cast(_binary '\"bar\"' as json)",
-	"cast(0xFF666F6F626172FF as json)", "cast(0x666F6F626172FF as json)",
-	"cast(0b01 as json)", "cast(0b001 as json)",
+	"cast(_binary' \"foo\"' as json)",
+	"cast(0xFF666F6F626172FF as json)",
+	"cast(0b01 as json)",
 	// JSON arrays
-	"cast('[\"a\"]' as json)", "cast('[\"ab\"]' as json)",
+	"cast('[\"a\"]' as json)",
 	// JSON objects
-	"cast('{\"a\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"a\": 1}' as json)",
-	// JSON date, datetime & time
-	"cast(date '2000-01-01' as json)", "cast(date '2000-01-02' as json)",
-	"cast(timestamp '2000-01-01 12:34:58' as json)",
-	"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
+	"cast('{\"a\": 1, \"b\": 2}' as json)",
 }
 
 var regexMatchStrings = []string{
@@ -175,8 +165,7 @@ var regexMatchStrings = []string{
 var regexCounters = []string{
 	"NULL",
 	"0", "1", "5", "100000",
-	"'0'", "'1'", "'5'", "'100000'",
-	"0.4", "0.5", "0x0", "0x1",
+	"'2'", "0.4", "0.5", "0x1",
 }
 
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"

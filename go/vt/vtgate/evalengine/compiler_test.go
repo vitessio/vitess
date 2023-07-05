@@ -445,8 +445,8 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(5)`,
 		},
 		{
-			expression: `REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 0)`,
-			result:     `TEXT("X X X")`,
+			expression: `REGEXP_REPLACE(1234, 12, 6, 1)`,
+			result:     `TEXT("634")`,
 		},
 	}
 

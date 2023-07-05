@@ -588,6 +588,8 @@ const (
 
 	ERCharacterSetMismatch = ErrorCode(3995)
 
+	ERWrongParametersToNativeFct = ErrorCode(1583)
+
 	// max execution time exceeded
 	ERQueryTimeout = ErrorCode(3024)
 

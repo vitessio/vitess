@@ -56,9 +56,20 @@ func returnOption(val *evalInt64, f string) (int64, error) {
 	return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to %s: return_option must be 1 or 0.", f)
 }
 
-func position(val *evalInt64, limit int64) (int64, error) {
+func positionInstr(val *evalInt64, limit int64) (int64, error) {
 	pos := val.i
 	if pos < 1 || pos > limit {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIndexOutOfBounds, "Index out of bounds in regular expression search.")
+	}
+	return pos, nil
+}
+
+func position(val *evalInt64, limit int64, f string) (int64, error) {
+	pos := val.i
+	if pos < 1 {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongParametersToNativeFct, "Incorrect parameters in the call to native function '%s'", f)
+	}
+	if pos-1 > limit {
 		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIndexOutOfBounds, "Index out of bounds in regular expression search.")
 	}
 	return pos, nil
@@ -131,7 +142,7 @@ func compileRegex(pat eval, c collations.Charset, flags icuregex.RegexpFlag) (*i
 	patRunes := charset.Expand(nil, pat.ToRawBytes(), c)
 
 	if len(patRunes) == 0 {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIllegalArgument, " Illegal argument to a regular expression.")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIllegalArgument, "Illegal argument to a regular expression.")
 	}
 
 	regexp, err := icuregex.Compile(patRunes, flags)
@@ -363,49 +374,46 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
+	var posExpr eval
+	if len(r.Arguments) > 2 {
+		posExpr, err = r.Arguments[2].eval(env)
+		if err != nil || posExpr == nil {
+			return nil, err
+		}
+	}
+
+	var occExpr eval
+	if len(r.Arguments) > 3 {
+		occExpr, err = r.Arguments[3].eval(env)
+		if err != nil || occExpr == nil {
+			return nil, err
+		}
+	}
+
+	var retExpr eval
+	if len(r.Arguments) > 4 {
+		retExpr, err = r.Arguments[4].eval(env)
+		if err != nil || retExpr == nil {
+			return nil, err
+		}
+	}
+
+	var mtExpr eval
+	if len(r.Arguments) > 5 {
+		mtExpr, err = r.Arguments[5].eval(env)
+		if err != nil || mtExpr == nil {
+			return nil, err
+		}
+	}
+
 	collation := typedCol.Collation.Get()
 
 	pos := int64(1)
 	occ := int64(1)
 	returnOpt := int64(0)
-	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
 
-	if len(r.Arguments) > 2 {
-		posExpr, err := r.Arguments[2].eval(env)
-		if err != nil || posExpr == nil {
-			return nil, err
-		}
-		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)))
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if len(r.Arguments) > 3 {
-		occExpr, err := r.Arguments[3].eval(env)
-		if err != nil || occExpr == nil {
-			return nil, err
-		}
-		occ = occurrence(evalToInt64(occExpr), occ)
-	}
-
-	if len(r.Arguments) > 4 {
-		retExpr, err := r.Arguments[4].eval(env)
-		if err != nil || retExpr == nil {
-			return nil, err
-		}
-		returnOpt, err = returnOption(evalToInt64(retExpr), "regexp_instr")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if len(r.Arguments) > 5 {
-		m, err := r.Arguments[5].eval(env)
-		if err != nil || m == nil {
-			return nil, err
-		}
-		flags, err = regexpFlags(m, flags, "regexp_instr")
+	if mtExpr != nil {
+		flags, err = regexpFlags(mtExpr, flags, "regexp_instr")
 		if err != nil {
 			return nil, err
 		}
@@ -414,6 +422,29 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 	regexp, err := compileRegex(pat, collation.Charset(), flags)
 	if err != nil {
 		return nil, err
+	}
+
+	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
+	if len(inputRunes) == 0 {
+		return newEvalInt64(0), nil
+	}
+
+	if posExpr != nil {
+		pos, err = positionInstr(evalToInt64(posExpr), int64(len(inputRunes)))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if occExpr != nil {
+		occ = occurrence(evalToInt64(occExpr), occ)
+	}
+
+	if retExpr != nil {
+		returnOpt, err = returnOption(evalToInt64(retExpr), "regexp_instr")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	m := icuregex.NewMatcher(regexp)
@@ -479,7 +510,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-	skips = append(skips, c.compileNullCheckArg(input, 1))
+	skips = append(skips, c.compileNullCheckArg(pat, 1))
 
 	var pos ctype
 	if len(r.Arguments) > 2 {
@@ -487,7 +518,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 2))
+		skips = append(skips, c.compileNullCheckArg(pos, 2))
 		_ = c.compileToInt64(pos, 1)
 	}
 
@@ -497,8 +528,8 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 3))
-		_ = c.compileToInt64(pos, 1)
+		skips = append(skips, c.compileNullCheckArg(occ, 3))
+		_ = c.compileToInt64(occ, 1)
 	}
 
 	var returnOpt ctype
@@ -507,8 +538,8 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 4))
-		_ = c.compileToInt64(pos, 1)
+		skips = append(skips, c.compileNullCheckArg(returnOpt, 4))
+		_ = c.compileToInt64(returnOpt, 1)
 	}
 
 	var matchType ctype
@@ -517,7 +548,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 5))
+		skips = append(skips, c.compileNullCheckArg(matchType, 5))
 		switch {
 		case matchType.isTextual():
 		default:
@@ -597,37 +628,50 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	collation := typedCol.Collation.Get()
+	var posExpr eval
+	// For some reason this gets checked before NULL checks of the other values
+	if len(r.Arguments) > 2 {
+		posExpr, err = r.Arguments[2].eval(env)
+		if err != nil || posExpr == nil {
+			return nil, err
+		}
+	}
 
+	var occExpr eval
+	if len(r.Arguments) > 3 {
+		occExpr, err = r.Arguments[3].eval(env)
+		if err != nil || occExpr == nil {
+			return nil, err
+		}
+	}
+
+	var mtExpr eval
+	if len(r.Arguments) > 4 {
+		mtExpr, err = r.Arguments[4].eval(env)
+		if err != nil || mtExpr == nil {
+			return nil, err
+		}
+	}
+
+	collation := typedCol.Collation.Get()
 	pos := int64(1)
 	occ := int64(1)
 	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
 
-	if len(r.Arguments) > 2 {
-		posExpr, err := r.Arguments[2].eval(env)
-		if err != nil || posExpr == nil {
-			return nil, err
-		}
-		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)))
+	if posExpr != nil {
+		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)), "regexp_substr")
 		if err != nil {
 			return nil, err
 		}
+
 	}
 
-	if len(r.Arguments) > 3 {
-		occExpr, err := r.Arguments[3].eval(env)
-		if err != nil || occExpr == nil {
-			return nil, err
-		}
+	if occExpr != nil {
 		occ = occurrence(evalToInt64(occExpr), occ)
 	}
 
-	if len(r.Arguments) > 4 {
-		m, err := r.Arguments[4].eval(env)
-		if err != nil || m == nil {
-			return nil, err
-		}
-		flags, err = regexpFlags(m, flags, "regexp_substr")
+	if mtExpr != nil {
+		flags, err = regexpFlags(mtExpr, flags, "regexp_substr")
 		if err != nil {
 			return nil, err
 		}
@@ -697,7 +741,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-	skips = append(skips, c.compileNullCheckArg(input, 1))
+	skips = append(skips, c.compileNullCheckArg(pat, 1))
 
 	var pos ctype
 	if len(r.Arguments) > 2 {
@@ -705,7 +749,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 2))
+		skips = append(skips, c.compileNullCheckArg(pos, 2))
 		_ = c.compileToInt64(pos, 1)
 	}
 
@@ -715,8 +759,8 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 3))
-		_ = c.compileToInt64(pos, 1)
+		skips = append(skips, c.compileNullCheckArg(occ, 3))
+		_ = c.compileToInt64(occ, 1)
 	}
 
 	var matchType ctype
@@ -725,7 +769,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 4))
+		skips = append(skips, c.compileNullCheckArg(matchType, 4))
 		switch {
 		case matchType.isTextual():
 		default:
@@ -853,13 +897,38 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	replArg, err := r.Arguments[2].eval(env)
-	if err != nil || pat == nil {
+	if err != nil || replArg == nil {
 		return nil, err
 	}
 
 	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_replace")
 	if err != nil {
 		return nil, err
+	}
+
+	var posExpr eval
+	// For some reason this gets checked before NULL checks of the other values
+	if len(r.Arguments) > 3 {
+		posExpr, err = r.Arguments[3].eval(env)
+		if err != nil || posExpr == nil {
+			return nil, err
+		}
+	}
+
+	var occExpr eval
+	if len(r.Arguments) > 4 {
+		occExpr, err = r.Arguments[4].eval(env)
+		if err != nil || occExpr == nil {
+			return nil, err
+		}
+	}
+
+	var mtExpr eval
+	if len(r.Arguments) > 5 {
+		mtExpr, err = r.Arguments[5].eval(env)
+		if err != nil || mtExpr == nil {
+			return nil, err
+		}
 	}
 
 	collation := typedCol.Collation.Get()
@@ -871,37 +940,24 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 	}
-	replRunes := charset.Expand(nil, repl.ToRawBytes(), repl.col.Collation.Get().Charset())
-
 	pos := int64(1)
 	occ := int64(0)
 	inputRunes := charset.Expand(nil, input.ToRawBytes(), collation.Charset())
+	replRunes := charset.Expand(nil, repl.ToRawBytes(), repl.col.Collation.Get().Charset())
 
-	if len(r.Arguments) > 3 {
-		posExpr, err := r.Arguments[3].eval(env)
-		if err != nil || posExpr == nil {
-			return nil, err
-		}
-		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)))
+	if posExpr != nil {
+		pos, err = position(evalToInt64(posExpr), int64(len(inputRunes)), "regexp_replace")
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if len(r.Arguments) > 4 {
-		occExpr, err := r.Arguments[4].eval(env)
-		if err != nil || occExpr == nil {
-			return nil, err
-		}
+	if occExpr != nil {
 		occ = occurrence(evalToInt64(occExpr), occ)
 	}
 
-	if len(r.Arguments) > 5 {
-		m, err := r.Arguments[5].eval(env)
-		if err != nil || m == nil {
-			return nil, err
-		}
-		flags, err = regexpFlags(m, flags, "regexp_replace")
+	if mtExpr != nil {
+		flags, err = regexpFlags(mtExpr, flags, "regexp_replace")
 		if err != nil {
 			return nil, err
 		}
@@ -964,13 +1020,13 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-	skips = append(skips, c.compileNullCheckArg(input, 1))
+	skips = append(skips, c.compileNullCheckArg(pat, 1))
 
 	repl, err := r.Arguments[2].compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
-	skips = append(skips, c.compileNullCheckArg(input, 2))
+	skips = append(skips, c.compileNullCheckArg(repl, 2))
 
 	var pos ctype
 	if len(r.Arguments) > 3 {
@@ -978,7 +1034,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 3))
+		skips = append(skips, c.compileNullCheckArg(pos, 3))
 		_ = c.compileToInt64(pos, 1)
 	}
 
@@ -988,8 +1044,8 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 4))
-		_ = c.compileToInt64(pos, 1)
+		skips = append(skips, c.compileNullCheckArg(occ, 4))
+		_ = c.compileToInt64(occ, 1)
 	}
 
 	var matchType ctype
@@ -998,7 +1054,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(input, 5))
+		skips = append(skips, c.compileNullCheckArg(matchType, 5))
 		switch {
 		case matchType.isTextual():
 		default:

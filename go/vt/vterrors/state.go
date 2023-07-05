@@ -111,6 +111,7 @@ const (
 	RegexpInvalidFlag
 
 	CharacterSetMismatch
+	WrongParametersToNativeFct
 
 	// No state should be added below NumOfStates
 	NumOfStates

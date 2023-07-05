@@ -2013,6 +2013,20 @@ func RegexpInstr(yield Query) {
 		`REGEXP_INSTR(1234, 12, 1, 1)`,
 		`REGEXP_INSTR(1234, 12, 1, 1, 1)`,
 		`REGEXP_INSTR(1234, 12, 1, 1, 1, 'c')`,
+		`REGEXP_INSTR('', ' ', 1000)`,
+		`REGEXP_INSTR(' ', ' ', 1000)`,
+		`REGEXP_INSTR(NULL, 'DOG', 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', NULL, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, NULL, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, NULL, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, NULL)`,
+
+		`REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', NULL, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, NULL, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, NULL, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, 1, NULL)`,
 	}
 
 	for _, q := range mysqlDocSamples {
@@ -2060,6 +2074,26 @@ func RegexpSubstr(yield Query) {
 		`REGEXP_SUBSTR(1234, 12, 100)`,
 		`REGEXP_SUBSTR(1234, 12, 1, 1)`,
 		`REGEXP_SUBSTR(1234, 12, 1, 1, 'c')`,
+
+		`REGEXP_SUBSTR(NULL, 'DOG', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', NULL, 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', NULL, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, NULL, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, NULL)`,
+
+		`REGEXP_SUBSTR(NULL, '[', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', NULL, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', 1, NULL, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', 1, 1, NULL)`,
+
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 0, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', -1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 100, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 0)`,
+
+		`REGEXP_SUBSTR(' ', ' ', 1)`,
+		`REGEXP_SUBSTR(' ', ' ', 2)`,
+		`REGEXP_SUBSTR(' ', ' ', 3)`,
 	}
 
 	for _, q := range mysqlDocSamples {
@@ -2095,6 +2129,51 @@ func RegexpReplace(yield Query) {
 		`REGEXP_REPLACE(1234, 12, 6, 100)`,
 		`REGEXP_REPLACE(1234, 12, 6, 1, 1)`,
 		`REGEXP_REPLACE(1234, 12, 6, 1, 1, 'c')`,
+
+		`REGEXP_REPLACE(NULL, 'DOG', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', NULL, 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, 1, NULL)`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', '1', '1', 0)`,
+
+		`REGEXP_REPLACE(NULL, _latin1'DOG', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, 1, NULL)`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', '1', '1', 0)`,
+
+		`REGEXP_REPLACE(NULL, '[', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, 1, NULL)`,
+
+		`REGEXP_REPLACE(NULL, _latin1'[', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', 'bar', 1, 1, NULL)`,
+
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 0, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('', 'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('', 'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, 1, 0)`,
+
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 0, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('', _latin1'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('', _latin1'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, 1, 0)`,
+
+		`REGEXP_REPLACE(' ', ' ', 'x', 1)`,
+		`REGEXP_REPLACE(' ', ' ', 'x', 2)`,
+		`REGEXP_REPLACE(' ', ' ', 'x', 3)`,
+
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 1)`,
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 2)`,
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 3)`,
 	}
 
 	for _, q := range mysqlDocSamples {

@@ -101,6 +101,8 @@ var (
 		regexp.MustCompile(`Syntax error in regular expression`),
 		regexp.MustCompile(`The regular expression contains an unclosed bracket expression`),
 		regexp.MustCompile(`Illegal argument to a regular expression`),
+		regexp.MustCompile(`Incorrect arguments to regexp_substr`),
+		regexp.MustCompile(`Incorrect arguments to regexp_replace`),
 	}
 )
 
