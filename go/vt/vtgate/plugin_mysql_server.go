@@ -75,7 +75,7 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
-	mysqlConnBufferPooling = flag.Bool("mysql_server_pool_conn_read_buffers", false, "If set, the server will pool incoming connection read buffers")
+	mysqlConnBufferPooling = flag.Bool("mysql-server-pool-conn-read-buffers", false, "If set, the server will pool incoming connection read buffers")
 
 	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
 	mysqlDefaultWorkload     int32
