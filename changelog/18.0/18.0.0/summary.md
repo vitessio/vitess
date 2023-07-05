@@ -37,7 +37,7 @@ in https://nodejs.org/en/blog/release/v18.0.0, but none apply to VTAdmin. Full d
 
 Throttler related `vttablet` flags:
 
-- `--enable-lag-throttler` is now removed after being depcrecated in `v17.0`
+- `--enable-lag-throttler` is now removed after being deprecated in `v17.0`
 - `--throttle_threshold` is deprecated and will be removed in `v19.0`
 - `--throttle_metrics_query` is deprecated and will be removed in `v19.0`
 - `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
