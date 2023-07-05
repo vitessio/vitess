@@ -238,8 +238,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, (select aa from `user` where 1 != 1) as `user` where 1 != 1",
-        "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, (select aa from `user` where `user`.id = 1) as `user`",
+        "FieldQuery": "select ambiguous_ref_with_source.col from (select aa from `user` where 1 != 1) as `user`, ambiguous_ref_with_source where 1 != 1",
+        "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
         "Table": "`user`, ambiguous_ref_with_source",
         "Values": [
           "INT64(1)"

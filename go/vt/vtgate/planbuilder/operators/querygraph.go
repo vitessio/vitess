@@ -65,8 +65,8 @@ type (
 
 var _ ops.Operator = (*QueryGraph)(nil)
 
-// Introduces implements the TableIDIntroducer interface
-func (qg *QueryGraph) Introduces() semantics.TableSet {
+// Introduces implements the tableIDIntroducer interface
+func (qg *QueryGraph) introducesTableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
 		ts = ts.Merge(table.ID)

@@ -161,3 +161,21 @@ func (code AggregateOpcode) Type(typ *querypb.Type) (querypb.Type, bool) {
 		panic(code.String()) // we have a unit test checking we never reach here
 	}
 }
+
+func (code AggregateOpcode) NeedsComparableValues() bool {
+	switch code {
+	case AggregateCountDistinct, AggregateSumDistinct, AggregateMin, AggregateMax:
+		return true
+	default:
+		return false
+	}
+}
+
+func (code AggregateOpcode) IsDistinct() bool {
+	switch code {
+	case AggregateCountDistinct, AggregateSumDistinct:
+		return true
+	default:
+		return false
+	}
+}

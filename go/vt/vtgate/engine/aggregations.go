@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -41,7 +43,6 @@ type AggregateParams struct {
 	// These are used only for distinct opcodes.
 	KeyCol      int
 	WCol        int
-	WAssigned   bool
 	CollationID collations.ID
 
 	Alias    string `json:",omitempty"`
@@ -53,22 +54,26 @@ type AggregateParams struct {
 	OrigOpcode AggregateOpcode
 }
 
-func (ap *AggregateParams) isDistinct() bool {
-	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
+func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *AggregateParams {
+	out := &AggregateParams{
+		Opcode: opcode,
+		Col:    col,
+		Alias:  alias,
+		WCol:   -1,
+	}
+	if opcode.NeedsComparableValues() {
+		out.KeyCol = col
+	}
+	return out
 }
 
-func (ap *AggregateParams) preProcess() bool {
-	switch ap.Opcode {
-	case AggregateCountDistinct, AggregateSumDistinct, AggregateGtid, AggregateCount, AggregateGroupConcat:
-		return true
-	default:
-		return false
-	}
+func (ap *AggregateParams) WAssigned() bool {
+	return ap.WCol >= 0
 }
 
 func (ap *AggregateParams) String() string {
 	keyCol := strconv.Itoa(ap.Col)
-	if ap.WAssigned {
+	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if ap.CollationID != collations.Unknown {
@@ -161,7 +166,7 @@ func merge(
 ) ([]sqltypes.Value, []sqltypes.Value, error) {
 	result := sqltypes.CopyRow(row1)
 	for index, aggr := range aggregates {
-		if aggr.isDistinct() {
+		if aggr.Opcode.IsDistinct() {
 			if row2[aggr.KeyCol].IsNull() {
 				continue
 			}
@@ -194,8 +199,14 @@ func merge(
 			}
 			result[aggr.Col], err = evalengine.NullSafeAdd(value, v2, fields[aggr.Col].Type)
 		case AggregateMin:
+			if aggr.WAssigned() && !row2[aggr.Col].IsComparable() {
+				return minMaxWeightStringError()
+			}
 			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col], aggr.CollationID)
 		case AggregateMax:
+			if aggr.WAssigned() && !row2[aggr.Col].IsComparable() {
+				return minMaxWeightStringError()
+			}
 			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col], aggr.CollationID)
 		case AggregateCountDistinct:
 			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
@@ -241,6 +252,10 @@ func merge(
 	return result, curDistincts, nil
 }
 
+func minMaxWeightStringError() ([]sqltypes.Value, []sqltypes.Value, error) {
+	return nil, nil, vterrors.VT12001("min/max on types that are not comparable is not supported")
+}
+
 func convertFinal(current []sqltypes.Value, aggregates []*AggregateParams) ([]sqltypes.Value, error) {
 	result := sqltypes.CopyRow(current)
 	for _, aggr := range aggregates {
@@ -270,17 +285,13 @@ func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb
 		if aggr.Alias != "" {
 			fields[aggr.Col].Name = aggr.Alias
 		}
-		if aggr.isDistinct() {
-			// TODO: this should move to plan time
-			aggr.KeyCol = aggr.Col
-		}
 	}
 	return fields
 }
 
 func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) sqltypes.Value {
 	curDistinct := row[aggr.KeyCol]
-	if aggr.WAssigned && !curDistinct.IsComparable() {
+	if aggr.WAssigned() && !curDistinct.IsComparable() {
 		aggr.KeyCol = aggr.WCol
 		curDistinct = row[aggr.KeyCol]
 	}
