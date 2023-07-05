@@ -36,6 +36,10 @@ import (
 // LoadTable creates a Table from the schema info in the database.
 func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string, comment string) (*Table, error) {
 	ta := NewTable(tableName, NoType)
+	sqlTableName := sqlparser.String(ta.Name)
+	if err := fetchColumns(ta, conn, databaseName, sqlTableName); err != nil {
+		return nil, err
+	}
 	switch {
 	case strings.Contains(comment, "vitess_sequence"):
 		ta.Type = Sequence
@@ -45,12 +49,8 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string,
 			return nil, err
 		}
 		ta.Type = Message
-	case tableType == tmutils.TableView:
+	case strings.Contains(tableType, tmutils.TableView):
 		ta.Type = View
-	}
-	sqlTableName := sqlparser.String(ta.Name)
-	if err := fetchColumns(ta, conn, databaseName, sqlTableName); err != nil {
-		return nil, err
 	}
 	return ta, nil
 }
