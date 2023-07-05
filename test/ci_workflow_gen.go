@@ -76,11 +76,7 @@ var (
 		"18",
 		"xb_backup",
 		"backup_pitr",
-<<<<<<< HEAD
-		"backup_restore_to_time",
-=======
 		"backup_pitr_xtrabackup",
->>>>>>> main
 		"21",
 		"22",
 		"mysql_server_vault",
@@ -177,11 +173,7 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "backup_pitr":
 		return allMySQLVersions
-<<<<<<< HEAD
-	case clusterName == "backup_restore_to_time":
-=======
 	case clusterName == "backup_pitr_xtrabackup":
->>>>>>> main
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
