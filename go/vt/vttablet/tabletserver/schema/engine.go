@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/acl"
@@ -495,13 +497,23 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		}
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[1].String(), row[3].ToString())
-		var emptyColumnsError mysqlctl.EmptyColumnsErr
-		if errors.As(err, &emptyColumnsError) && table.Type == View {
-			log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
-			continue
-		}
+		tableType := row[1].String()
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
 		if err != nil {
+			isView := strings.Contains(tableType, tmutils.TableView)
+			var emptyColumnsError mysqlctl.EmptyColumnsErr
+			if errors.As(err, &emptyColumnsError) && isView {
+				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
+				continue
+			}
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchUser && isView {
+				// A VIEW that has an invalid DEFINER, leading to:
+				// ERROR 1449 (HY000): The user specified as a definer (...) does not exist
+				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
+				continue
+			}
+			// Non recoverable error:
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
