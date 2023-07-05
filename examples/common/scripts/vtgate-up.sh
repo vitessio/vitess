@@ -24,7 +24,7 @@ grpc_port=15991
 mysql_server_port=15306
 mysql_server_socket_path="/tmp/mysql.sock"
 
-# Start vtgate.
+echo "Starting vtgate..."
 # shellcheck disable=SC2086
 vtgate \
   $TOPOLOGY_FLAGS \
@@ -45,7 +45,6 @@ vtgate \
 # Block waiting for vtgate to be listening
 # Not the same as healthy
 
-echo "Waiting for vtgate to be up..."
 while true; do
  curl -I "http://$hostname:$web_port/debug/status" >/dev/null 2>&1 && break
  sleep 0.1
