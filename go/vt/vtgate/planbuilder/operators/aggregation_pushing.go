@@ -508,6 +508,8 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 	case opcode.AggregateGtid:
 		// this is only used for SHOW GTID queries that will never contain joins
 		return vterrors.VT13001("cannot do join with vgtid")
+	case opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+		return errAbortAggrPushing
 	default:
 		return errHorizonNotPlanned()
 	}
