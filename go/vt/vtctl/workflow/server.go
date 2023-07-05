@@ -2473,6 +2473,13 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return 0, nil, err
 		}
 
+		ts.Logger().Infof("Resetting sequences")
+		if err := sw.resetSequences(ctx); err != nil {
+			ts.Logger().Errorf("resetSequences failed: %v", err)
+			sw.cancelMigration(ctx, sm)
+			return 0, nil, err
+		}
+
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
