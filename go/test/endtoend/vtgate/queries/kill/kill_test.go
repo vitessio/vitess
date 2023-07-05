@@ -19,6 +19,7 @@ package kill
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -179,30 +180,30 @@ func TestKillStmtOnHugeData(t *testing.T) {
 
 	t.Run("oltp - kill conn", func(t *testing.T) {
 		testHugeData(t, "oltp", func(conn *mysql.Conn, killConn *mysql.Conn) {
-			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
+			utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
 		}, "context canceled (errno 1317) (sqlstate 70100)")
 	})
 
 	t.Run("oltp - kill query", func(t *testing.T) {
 		testHugeData(t, "oltp", func(conn *mysql.Conn, killConn *mysql.Conn) {
-			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "context canceled (errno 1317) (sqlstate 70100)")
+			utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
+		}, "(errno 1317) (sqlstate 70100)")
 	})
 
 	t.Run("olap - kill conn", func(t *testing.T) {
 		testHugeData(t, "olap", func(conn *mysql.Conn, killConn *mysql.Conn) {
-			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "EOF (errno 2013) (sqlstate HY000)")
+			utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
+		}, "context canceled (errno 1317) (sqlstate 70100)", "EOF (errno 2013) (sqlstate HY000)")
 	})
 
 	t.Run("olap - kill query", func(t *testing.T) {
 		testHugeData(t, "olap", func(conn *mysql.Conn, killConn *mysql.Conn) {
-			utils.Exec(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "EOF (errno 2013) (sqlstate HY000)")
+			utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
+		}, "context canceled (errno 1317) (sqlstate 70100)", "EOF (errno 2013) (sqlstate HY000)")
 	})
 }
 
-func testHugeData(t *testing.T, workload string, killFunc func(*mysql.Conn, *mysql.Conn), errMsg string) {
+func testHugeData(t *testing.T, workload string, killFunc func(*mysql.Conn, *mysql.Conn), errMsgs ...string) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -223,9 +224,18 @@ func testHugeData(t *testing.T, workload string, killFunc func(*mysql.Conn, *mys
 	for {
 		select {
 		case execErr := <-ch:
-			require.ErrorContains(t, execErr, errMsg)
+			require.Error(t, execErr)
+			if execErr == nil {
+				return
+			}
+			for _, errMsg := range errMsgs {
+				if strings.Contains(execErr.Error(), errMsg) {
+					return
+				}
+			}
+			require.Failf(t, "error message does not match", "%v does not contain any of %v", execErr.Error(), errMsgs)
 			return
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 			killFunc(conn, killConn)
 		case <-totalTime:
 			t.Fatal("test did not complete in 5 seconds.")

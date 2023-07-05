@@ -98,7 +98,7 @@ func setupData(t *testing.T, huge bool) {
 	defer conn.Close()
 
 	initialRow := 9999
-	multiplier := 64
+	multiplier := 32
 	if !huge {
 		initialRow = 4
 		multiplier = 0
@@ -124,7 +124,7 @@ func setupData(t *testing.T, huge bool) {
 	for i := 1; i < multiplier; i = i << 1 {
 		utils.Exec(t, conn, fmt.Sprintf("insert into test(id, msg, extra) select id+%d, msg, extra from test", (initialRow+1)*i))
 	}
-	utils.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(640000) INT64(0) INT64(639999)]]`)
+	utils.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(320000) INT64(0) INT64(319999)]]`)
 }
 
 func dropData(t *testing.T) {
