@@ -941,6 +941,8 @@ max_rate_approach_threshold: 0.9
 	Default priority assigned to queries that lack priority information.
   --tx-throttler-healthcheck-cells value
 	Synonym to -tx_throttler_healthcheck_cells
+  --tx-throttler-tablet-types value
+	A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly. (default replica)
   --tx_throttler_config string
 	The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message (default target_replication_lag_sec: 2
 max_replication_lag_sec: 10

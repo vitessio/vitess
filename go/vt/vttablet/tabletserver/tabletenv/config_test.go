@@ -27,6 +27,9 @@ import (
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -240,6 +243,11 @@ func TestFlags(t *testing.T) {
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
 
+	// HACK: expect default ("replica") only after .Init() because topoproto.TabletTypeListVar(...)
+	// defaults dont work and it's fixed later in .Init()
+	Init()
+	want.TxThrottlerTabletTypes = []topodatapb.TabletType{topodatapb.TabletType_REPLICA}
+
 	// Simple Init.
 	Init()
 	want.OlapReadPool.IdleTimeoutSeconds = 1800
@@ -362,4 +370,38 @@ func TestFlags(t *testing.T) {
 	Init()
 	want.SanitizeLogMessages = true
 	assert.Equal(t, want, currentConfig)
+}
+
+func TestVerifyTxThrottlerConfig(t *testing.T) {
+	{
+		// default config (replica)
+		Init()
+		assert.Nil(t, currentConfig.verifyTxThrottlerConfig())
+		assert.Equal(t, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, currentConfig.TxThrottlerTabletTypes)
+	}
+	{
+		// replica + rdonly (allowed)
+		Init()
+		currentConfig.TxThrottlerTabletTypes = []topodatapb.TabletType{
+			topodatapb.TabletType_REPLICA,
+			topodatapb.TabletType_RDONLY,
+		}
+		assert.Nil(t, currentConfig.verifyTxThrottlerConfig())
+	}
+	{
+		// no tablet types
+		Init()
+		currentConfig.TxThrottlerTabletTypes = []topodatapb.TabletType{}
+		err := currentConfig.verifyTxThrottlerConfig()
+		assert.NotNil(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	}
+	{
+		// disallowed tablet type
+		Init()
+		currentConfig.TxThrottlerTabletTypes = []topodatapb.TabletType{topodatapb.TabletType_DRAINED}
+		err := currentConfig.verifyTxThrottlerConfig()
+		assert.NotNil(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	}
 }

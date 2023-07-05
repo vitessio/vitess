@@ -158,6 +158,8 @@ type txThrottlerConfig struct {
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for
 	// replication lag.
 	healthCheckCells []string
+
+	tabletTypes []topodatapb.TabletType
 }
 
 // txThrottlerState holds the state of an open TxThrottler object.
@@ -214,6 +216,7 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*txThrott
 
 	return newTxThrottler(env, topoServer, &txThrottlerConfig{
 		enabled:          true,
+		tabletTypes:      env.Config().TxThrottlerTabletTypes,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
 	})
@@ -312,6 +315,7 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		return nil, err
 	}
 	result := &txThrottlerState{
+		config:    config,
 		throttler: t,
 	}
 	result.healthCheck = healthCheckFactory()
@@ -362,16 +366,18 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.throttler = nil
 }
 
-// StatsUpdate is part of the LegacyHealthCheckStatsListener interface.
+// StatsUpdate updates the health of a tablet with the given healthcheck.
 func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.LegacyTabletStats) {
-	// Ignore PRIMARY and RDONLY stats.
-	// We currently do not monitor RDONLY tablets for replication lag. RDONLY tablets are not
-	// candidates for becoming primary during failover, and it's acceptable to serve somewhat
-	// stale date from these.
-	// TODO(erez): If this becomes necessary, we can add a configuration option that would
-	// determine whether we consider RDONLY tablets here, as well.
-	if tabletStats.Target.TabletType != topodatapb.TabletType_REPLICA {
+	if ts.config.tabletTypes == nil {
 		return
 	}
-	ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+
+	// Monitor tablets for replication lag if they have a tablet
+	// type specified by the --tx_throttler_tablet_types flag.
+	for _, expectedTabletType := range ts.config.tabletTypes {
+		if tabletStats.Target.TabletType == expectedTabletType {
+			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+			return
+		}
+	}
 }
