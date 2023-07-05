@@ -18,5 +18,5 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-echo "Stopping vtctld..."
-kill -9 `cat $VTDATAROOT/tmp/vtctld.pid`
+stop_process "vtctld" "$VTDATAROOT/tmp/vtctld.pid"
+
