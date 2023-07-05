@@ -959,3 +959,6 @@ func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Cont
 func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
+func (itmc *internalTabletManagerClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}

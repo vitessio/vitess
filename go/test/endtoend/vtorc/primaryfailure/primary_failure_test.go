@@ -209,7 +209,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// Parse log file and find out how much time it took for DeadPrimary to recover.
 	logFile := path.Join(vtOrcProcess.LogDir, vtOrcProcess.LogFileName)
 	// log prefix printed at the end of analysis where we conclude we have DeadPrimary
-	t1 := extractTimeFromLog(t, logFile, "Proceeding with DeadPrimary recovery validation after acquiring shard lock")
+	t1 := extractTimeFromLog(t, logFile, "Proceeding with DeadPrimary recovery")
 	// log prefix printed at the end of recovery
 	t2 := extractTimeFromLog(t, logFile, "auditType:recover-dead-primary")
 	curr := time.Now().Format("2006-01-02")

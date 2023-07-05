@@ -644,6 +644,37 @@ var shardedVSchema = `
 }
 `
 
+var shardedVSchemaUnknownParams = `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash",
+			"params": {
+				"hello": "world",
+				"goodbye": "world"
+			}
+		},
+		"binary_index": {
+			"type": "binary",
+			"params": {
+				"foo": "bar"
+			}
+		}
+	},
+	"tables": {
+		"sp_tbl": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				}
+			]
+		}
+	}
+}
+`
+
 func TestMultiInternalSavepointVtGate(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.ShardSpec = "-40-80-"
@@ -735,4 +766,31 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
 	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
 	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
+}
+
+func TestVSchemaVindexUnknownParams(t *testing.T) {
+	s := createSandbox(KsTestSharded)
+	s.ShardSpec = "-40-80-"
+
+	s.VSchema = shardedVSchema
+	srvSchema := getSandboxSrvVSchema()
+	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
+	hcVTGateTest.Reset()
+
+	unknownParams := vindexUnknownParams.Get()
+	require.Equal(t, int64(0), unknownParams)
+
+	s.VSchema = shardedVSchemaUnknownParams
+	srvSchema = getSandboxSrvVSchema()
+	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
+
+	unknownParams = vindexUnknownParams.Get()
+	require.Equal(t, int64(3), unknownParams)
+
+	s.VSchema = shardedVSchema
+	srvSchema = getSandboxSrvVSchema()
+	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
+
+	unknownParams = vindexUnknownParams.Get()
+	require.Equal(t, int64(0), unknownParams)
 }

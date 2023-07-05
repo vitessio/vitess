@@ -362,6 +362,18 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Table
 	return err
 }
 
+func (client *Client) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.ResetSequences(ctx, &tabletmanagerdatapb.ResetSequencesRequest{
+		Tables: tables,
+	})
+	return err
+}
+
 // PreflightSchema is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
