@@ -18,5 +18,5 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-echo "Stopping etcd..."
-kill -9 `cat $VTDATAROOT/tmp/etcd.pid` 
+stop_process "vttablet" "$VTDATAROOT/tmp/etcd.pid"
+

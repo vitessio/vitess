@@ -16,5 +16,5 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-stop_vtadmin_process "vtadmin-web" "$VTDATAROOT/tmp/vtadmin-web.pid"
-stop_vtadmin_process "vtadmin-api" "$VTDATAROOT/tmp/vtadmin-api.pid"
+stop_process "vtadmin-web" "$VTDATAROOT/tmp/vtadmin-web.pid"
+stop_process "vtadmin-api" "$VTDATAROOT/tmp/vtadmin-api.pid"
