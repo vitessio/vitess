@@ -129,6 +129,7 @@ function stop_process() {
 		pid=$(cat "${pidfile}")
 		echo "Stopping ${binary_name}..."
 		kill "${pid}"
+
 		# Wait for the process to terminate
 		for _ in $(seq 1 ${wait_secs}); do
 			if ! ps -p "${pid}" > /dev/null; then
@@ -136,13 +137,12 @@ function stop_process() {
 			fi
 			sleep 1
 		done
+		if ps -p "${pid}" > /dev/null; then
+			fail "Timed out after ${wait_secs} seconds waiting for the ${binary_name} using PID file ${pidfile} to terminate"
+		fi
 	else
 		echo "Skipping stopping ${binary_name} because the specified PID file (${pidfile}) does not exist."
 	fi
-
-        if ps -p "${pid}" > /dev/null; then
-                fail "Timed out after ${wait_secs} seconds waiting for the ${binary_name} using PID file ${pidfile} to terminate"
-        fi
 }
 
 # Print error message and exit with error code.
