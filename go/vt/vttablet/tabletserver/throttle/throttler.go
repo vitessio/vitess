@@ -69,12 +69,6 @@ var (
 	// flag vars
 	defaultThrottleLagThreshold = 5 * time.Second
 	throttleTabletTypes         = "replica"
-
-	deprecatedThrottlerConfigViaTopo    = false // unused. Remove in v19
-	deprecatedThrottleThreshold         time.Duration
-	deprecatedThrottleMetricQuery       string
-	deprecatedThrottleMetricThreshold   = math.MaxFloat64
-	deprecatedThrottlerCheckAsCheckSelf = false
 )
 
 func init() {
@@ -85,11 +79,11 @@ func init() {
 func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
 
-	fs.DurationVar(&deprecatedThrottleThreshold, "throttle_threshold", deprecatedThrottleThreshold, "Replication lag threshold for default lag throttling")
-	fs.StringVar(&deprecatedThrottleMetricQuery, "throttle_metrics_query", deprecatedThrottleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	fs.Float64Var(&deprecatedThrottleMetricThreshold, "throttle_metrics_threshold", deprecatedThrottleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
-	fs.BoolVar(&deprecatedThrottlerCheckAsCheckSelf, "throttle_check_as_check_self", deprecatedThrottlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-	fs.BoolVar(&deprecatedThrottlerConfigViaTopo, "throttler-config-via-topo", deprecatedThrottlerConfigViaTopo, "Deprecated, will be removed in v19. Assumed to be 'true'")
+	fs.MarkDeprecated("throttle_threshold", "Replication lag threshold for default lag throttling")
+	fs.MarkDeprecated("throttle_metrics_query", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	fs.MarkDeprecated("throttle_metrics_threshold", "Override default throttle threshold, respective to --throttle_metrics_query")
+	fs.MarkDeprecated("throttle_check_as_check_self", "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+	fs.MarkDeprecated("throttler-config-via-topo", "Assumed to be 'true'")
 }
 
 var (
@@ -419,23 +413,6 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
-	// TODO: remove flag in v19
-	if deprecatedThrottlerConfigViaTopo {
-		log.Warningf("The flag `--throttler_config_via_topo` is deprecated and will be removed in v19. Throttler config is always read from topo.")
-	}
-	if deprecatedThrottleThreshold != 0 {
-		log.Warningf("The flag `--throttle_threshold` is deprecated and will be removed in v19. Throttler config is always read from topo.")
-	}
-	if deprecatedThrottleMetricQuery != "" {
-		log.Warningf("The flag `--throttle_metrics_query` is deprecated and will be removed in v19. Throttler config is always read from topo.")
-	}
-	if deprecatedThrottleMetricThreshold != 0 {
-		log.Warningf("The flag `--throttle_metrics_threshold` is deprecated and will be removed in v19. Throttler config is always read from topo.")
-	}
-	if deprecatedThrottlerCheckAsCheckSelf {
-		log.Warningf("The flag `--throttle_check_as_check_self` is deprecated and will be removed in v19. Throttler config is always read from topo.")
-	}
-
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
