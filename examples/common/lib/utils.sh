@@ -117,7 +117,7 @@ function wait_for_healthy_shard() {
 #  stop_process "vtadmin-web" "$VTDATAROOT/tmp/vtadmin-web.pid"
 function stop_process() {
 	if [[ -z ${1} || -z ${2} ]]; then
-		fail "A binary name and PID file must be specified when attempting to shutdown vtadmin"
+		fail "A binary name and PID file must be specified when attempting to shutdown a process"
 	fi
 
 	local binary_name="${1}"
