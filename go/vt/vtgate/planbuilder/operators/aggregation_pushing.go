@@ -39,16 +39,10 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	case *ApplyJoin:
 		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
-			if applyResult != rewrite.SameTree && aggregator.Original {
-				aggregator.aggregateTheAggregates()
-			}
 		}
 	case *Filter:
 		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
-			if applyResult != rewrite.SameTree && aggregator.Original {
-				aggregator.aggregateTheAggregates()
-			}
 		}
 	default:
 		return aggregator, rewrite.SameTree, nil
@@ -183,7 +177,7 @@ withNextColumn:
 		// by splitting one and pushing under a join, we can get rid of this one
 		return aggregator.Source, rewrite.NewTree("push aggregation under filter - remove original", aggregator), nil
 	}
-
+	aggregator.aggregateTheAggregates()
 	return aggregator, rewrite.NewTree("push aggregation under filter - keep original", aggregator), nil
 }
 
@@ -331,6 +325,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		return output, rewrite.NewTree("push Aggregation under join - keep original", rootAggr), nil
 	}
 
+	rootAggr.aggregateTheAggregates()
 	rootAggr.Source = output
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
