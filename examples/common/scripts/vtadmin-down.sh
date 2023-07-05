@@ -6,7 +6,7 @@ function stop_vtadmin() {
   local name="$1"
   local file="$2"
 
-  if test -e "$file"; then
+  if [[ -e "$file" ]]; then
     echo "Stopping $name..."
     kill -9 "$(cat "$file")"
   else
