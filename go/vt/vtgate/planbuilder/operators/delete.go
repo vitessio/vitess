@@ -37,7 +37,7 @@ type Delete struct {
 }
 
 // Introduces implements the PhysicalOperator interface
-func (d *Delete) Introduces() semantics.TableSet {
+func (d *Delete) introducesTableID() semantics.TableSet {
 	return d.QTable.ID
 }
 

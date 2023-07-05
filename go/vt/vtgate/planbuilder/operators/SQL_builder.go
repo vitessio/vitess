@@ -246,7 +246,7 @@ func (ts *tableSorter) Swap(i, j int) {
 }
 
 func (h *Horizon) toSQL(qb *queryBuilder) error {
-	err := stripDownQuery(h.Select, qb.sel)
+	err := stripDownQuery(h.Query, qb.sel)
 	if err != nil {
 		return err
 	}
@@ -318,9 +318,10 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildApplyJoin(op, qb)
 	case *Filter:
 		return buildFilter(op, qb)
-	case *Derived:
-		return buildDerived(op, qb)
 	case *Horizon:
+		if op.TableId != nil {
+			return buildDerived(op, qb)
+		}
 		return buildHorizon(op, qb)
 	case *Limit:
 		return buildLimit(op, qb)
@@ -457,7 +458,7 @@ func buildFilter(op *Filter, qb *queryBuilder) error {
 	return nil
 }
 
-func buildDerived(op *Derived, qb *queryBuilder) error {
+func buildDerived(op *Horizon, qb *queryBuilder) error {
 	err := buildQuery(op.Source, qb)
 	if err != nil {
 		return err
@@ -486,7 +487,7 @@ func buildHorizon(op *Horizon, qb *queryBuilder) error {
 		return err
 	}
 
-	err = stripDownQuery(op.Select, qb.sel)
+	err = stripDownQuery(op.Query, qb.sel)
 	if err != nil {
 		return err
 	}

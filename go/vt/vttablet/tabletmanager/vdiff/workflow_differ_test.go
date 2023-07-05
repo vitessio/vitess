@@ -437,13 +437,10 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
 				Direction: sqlparser.AscOrder,
 			}},
-			aggregates: []*engine.AggregateParams{{
-				Opcode: opcode.AggregateSum,
-				Col:    2,
-			}, {
-				Opcode: opcode.AggregateSum,
-				Col:    3,
-			}},
+			aggregates: []*engine.AggregateParams{
+				engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
+			},
 		},
 	}, {
 		// date conversion on import.

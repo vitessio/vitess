@@ -1860,8 +1860,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from `user` as u, (select user_id from user_extra where 1 != 1) as eu where 1 != 1",
-        "Query": "select * from `user` as u, (select user_id from user_extra where user_id = 5) as eu where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
+        "FieldQuery": "select * from (select user_id from user_extra where 1 != 1) as eu, `user` as u where 1 != 1",
+        "Query": "select * from (select user_id from user_extra where user_id = 5) as eu, `user` as u where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
         "Table": "`user`, user_extra",
         "Values": [
           "INT64(5)"
@@ -3303,13 +3303,13 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
-                "Aggregates": "min(1) AS min(a.id)",
+                "Aggregates": "min(1|3) AS min(a.id)",
                 "GroupBy": "(0|2)",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "L:1,L:0,L:2",
+                    "JoinColumnIndexes": "L:1,L:0,L:2,L:3",
                     "JoinVars": {
                       "a_tcol1": 1
                     },
@@ -3322,9 +3322,9 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select min(a.id), a.tcol1, weight_string(a.tcol1) from `user` as a where 1 != 1 group by a.tcol1, weight_string(a.tcol1)",
+                        "FieldQuery": "select min(a.id), a.tcol1, weight_string(a.tcol1), weight_string(a.id) from `user` as a where 1 != 1 group by a.tcol1, weight_string(a.tcol1), weight_string(a.id)",
                         "OrderBy": "(1|2) ASC",
-                        "Query": "select min(a.id), a.tcol1, weight_string(a.tcol1) from `user` as a group by a.tcol1, weight_string(a.tcol1) order by a.tcol1 asc",
+                        "Query": "select min(a.id), a.tcol1, weight_string(a.tcol1), weight_string(a.id) from `user` as a group by a.tcol1, weight_string(a.tcol1), weight_string(a.id) order by a.tcol1 asc",
                         "Table": "`user`"
                       },
                       {
