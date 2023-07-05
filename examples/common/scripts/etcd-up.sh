@@ -21,6 +21,8 @@ source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 cell=${CELL:-'test'}
 export ETCDCTL_API=2
 
+echo "Starting etcd..."
+
 # Check that etcd is not already running
 curl "http://${ETCD_SERVER}" > /dev/null 2>&1 && fail "etcd is already running. Exiting."
 
@@ -46,6 +48,6 @@ vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo \
   $cell
 set -e
 
-echo "etcd start done..."
+echo "etcd is running!"
 
 
