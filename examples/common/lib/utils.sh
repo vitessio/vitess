@@ -133,7 +133,7 @@ function stop_process() {
 		# Wait for the process to terminate
 		for _ in $(seq 1 ${wait_secs}); do
 			if ! ps -p "${pid}" > /dev/null; then
-      				break
+				break
 			fi
 			sleep 1
 		done
