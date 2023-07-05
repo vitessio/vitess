@@ -146,7 +146,7 @@ type Throttler struct {
 
 	metricsQuery     atomic.Value
 	MetricsThreshold atomic.Uint64
-	checkAsCheckSelf int64
+	checkAsCheckSelf atomic.Bool
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -340,11 +340,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
-	if throttlerConfig.CheckAsCheckSelf {
-		atomic.StoreInt64(&throttler.checkAsCheckSelf, 1)
-	} else {
-		atomic.StoreInt64(&throttler.checkAsCheckSelf, 0)
-	}
+	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
@@ -1096,7 +1092,7 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 	case ThrottleCheckPrimaryWrite:
-		if atomic.LoadInt64(&throttler.checkAsCheckSelf) != 0 {
+		if throttler.checkAsCheckSelf.Load() {
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
