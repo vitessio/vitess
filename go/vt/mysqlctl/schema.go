@@ -309,7 +309,7 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	}
 	if qr == nil || len(qr.Rows) == 0 {
 		err := &EmptyColumnsErr{dbName: dbName, tableName: tableName, query: query}
-		log.Errorf(err.Error())
+		log.Error(err.Error())
 		return "", err
 	}
 	selectColumns := ""
