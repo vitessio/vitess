@@ -8,7 +8,12 @@ function stop_vtadmin() {
 
   if [[ -e "$file" ]]; then
     echo "Stopping $name..."
-    kill -9 "$(cat "$file")"
+    local pid=$(cat "$file")
+    kill $pid
+    # Wait for the process to terminate
+    while ps -p $pid > /dev/null; do
+      sleep 1
+    done
   else
     echo "Skipping stopping $name because no pid file."
   fi
