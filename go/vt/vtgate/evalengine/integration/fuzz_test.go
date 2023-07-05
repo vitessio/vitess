@@ -177,6 +177,12 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 const syntaxErr = `You have an error in your SQL syntax; (errno 1064) (sqlstate 42000) during query: SQL`
 const localSyntaxErr = `You have an error in your SQL syntax;`
 
+type GoldenTest struct {
+	Query string
+	Value string `json:",omitempty"`
+	Error string `json:",omitempty"`
+}
+
 func TestGenerateFuzzCases(t *testing.T) {
 	if fuzzMaxFailures <= 0 {
 		t.Skipf("skipping fuzz test generation")
@@ -254,12 +260,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 		return
 	}
 
-	type evaltest struct {
-		Query string
-		Value string `json:",omitempty"`
-		Error string `json:",omitempty"`
-	}
-	var golden []evaltest
+	var golden []GoldenTest
 
 	for _, fail := range failures {
 		failErr := fail.Error()
@@ -276,18 +277,22 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 		query := "SELECT " + sqlparser.String(simplified)
 		if fail.remoteErr != nil {
-			golden = append(golden, evaltest{
+			golden = append(golden, GoldenTest{
 				Query: query,
 				Error: fail.remoteErr.Error(),
 			})
 		} else {
-			golden = append(golden, evaltest{
+			golden = append(golden, GoldenTest{
 				Query: query,
 				Value: fail.remoteVal.String(),
 			})
 		}
 	}
 
+	writeGolden(t, golden)
+}
+
+func writeGolden(t *testing.T, golden []GoldenTest) {
 	out, err := os.Create(fmt.Sprintf("testdata/mysql_golden_%d.json", time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)

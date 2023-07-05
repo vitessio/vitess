@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -489,28 +491,26 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 			}
 		}
 
-		glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
-		for _, filepath := range glob {
-			cmds, err := LoadSQLFile(filepath, schemaDir)
-			if err != nil {
-				return err
-			}
-
-			// One single vschema migration per file
-			if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
-				if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+		if shouldRunDatabaseMigrations {
+			glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
+			for _, filepath := range glob {
+				cmds, err := LoadSQLFile(filepath, schemaDir)
+				if err != nil {
 					return err
 				}
-				continue
-			}
 
-			if !shouldRunDatabaseMigrations {
-				continue
-			}
+				// One single vschema migration per file
+				if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
+					if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+						return err
+					}
+					continue
+				}
 
-			for _, dbname := range db.shardNames(kpb) {
-				if err := db.Execute(cmds, dbname); err != nil {
-					return err
+				for _, dbname := range db.shardNames(kpb) {
+					if err := db.Execute(cmds, dbname); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -759,4 +759,29 @@ func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	}
 
 	return sql, nil
+}
+
+func (db *LocalCluster) VTProcess() *VtProcess {
+	return db.vt
+}
+
+// ReadVSchema reads the vschema from the vtgate endpoint for it and returns
+// a pointer to the interface. To read this vschema, the caller must convert it to a map
+func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", "127.0.0.1", vt.Port))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var results interface{}
+	err = json.Unmarshal(res, &results)
+	if err != nil {
+		return nil, err
+	}
+	return &results, nil
 }

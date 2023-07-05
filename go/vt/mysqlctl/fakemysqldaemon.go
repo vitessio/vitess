@@ -464,7 +464,6 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if stopReplicationBefore {
 		cmds = append(cmds, "STOP SLAVE")
 	}
-	cmds = append(cmds, "RESET SLAVE ALL")
 	cmds = append(cmds, "FAKE SET MASTER")
 	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")

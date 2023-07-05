@@ -153,10 +153,11 @@ type Throttler struct {
 
 	lastCheckTimeNano int64
 
-	initMutex           sync.Mutex
-	enableMutex         sync.Mutex
-	cancelEnableContext context.CancelFunc
-	throttledAppsMutex  sync.Mutex
+	initMutex            sync.Mutex
+	enableMutex          sync.Mutex
+	cancelEnableContext  context.CancelFunc
+	throttledAppsMutex   sync.Mutex
+	watchSrvKeyspaceOnce sync.Once
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -246,10 +247,6 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
-
-	if throttlerConfigViaTopo {
-		throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
-	}
 }
 
 func (throttler *Throttler) GetMetricsQuery() string {
@@ -479,8 +476,14 @@ func (throttler *Throttler) Open() error {
 					throttler.initMutex.Lock()
 					defer throttler.initMutex.Unlock()
 					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+					go throttler.watchSrvKeyspaceOnce.Do(func() {
+						// We start watching SrvKeyspace only after we know it's been created. Now is that time!
+						throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+					})
 					return
 				}
+				// It's possible, especially in CI, that this throttler opened before the SrvKeyspace entry is created in topo.
+				// We thus retry until the entry is found.
 				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
 				<-retryTicker.C
 			}

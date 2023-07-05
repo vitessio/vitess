@@ -19,6 +19,7 @@ package vindexes
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -69,6 +70,22 @@ type (
 		// NeedsVCursor returns true if the Vindex makes calls into the
 		// VCursor. Such vindexes cannot be used by vreplication.
 		NeedsVCursor() bool
+	}
+
+	// ParamValidating is an optional interface that Vindexes may implement to
+	// report errors about unknown params encountered during Vindex creation.
+	ParamValidating interface {
+		// UnknownParams returns a slice of param names that were provided
+		// during Vindex creation, but were not known and therefore ignored by
+		// the Vindex.
+		UnknownParams() []string
+	}
+
+	// ParamValidationOpts may be used by Vindexes that accept params to
+	// validate params with ValidateParams(params, opts).
+	ParamValidationOpts struct {
+		// Params contains param names known by the vindex.
+		Params []string
 	}
 
 	// SingleColumn defines the interface for a single column vindex.
@@ -166,7 +183,7 @@ type (
 
 var registry = make(map[string]NewVindexFunc)
 
-// Register registers a vindex under the specified vindexType.
+// Register registers a vindex factory under the specified vindexType.
 // A duplicate vindexType will generate a panic.
 // New vindexes will be created using these functions at the
 // time of vschema loading.
@@ -179,7 +196,7 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 
 // CreateVindex creates a vindex of the specified type using the
 // supplied params. The type must have been previously registered.
-func CreateVindex(vindexType, name string, params map[string]string) (Vindex, error) {
+func CreateVindex(vindexType, name string, params map[string]string) (vindex Vindex, err error) {
 	f, ok := registry[vindexType]
 	if !ok {
 		return nil, fmt.Errorf("vindexType %q not found", vindexType)
@@ -215,4 +232,20 @@ func firstColsOnly(rowsColValues [][]sqltypes.Value) []sqltypes.Value {
 		firstCols = append(firstCols, val[0])
 	}
 	return firstCols
+}
+
+// FindUnknownParams a sorted slice of keys in params that are not present in knownParams.
+func FindUnknownParams(params map[string]string, knownParams []string) []string {
+	var unknownParams []string
+	knownParamsByName := make(map[string]struct{})
+	for _, knownParam := range knownParams {
+		knownParamsByName[knownParam] = struct{}{}
+	}
+	for name := range params {
+		if _, ok := knownParamsByName[name]; !ok {
+			unknownParams = append(unknownParams, name)
+		}
+	}
+	sort.Strings(unknownParams)
+	return unknownParams
 }

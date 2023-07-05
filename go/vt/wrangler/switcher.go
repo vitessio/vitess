@@ -140,3 +140,7 @@ func (r *switcher) dropTargetShards(ctx context.Context) error {
 func (r *switcher) logs() *[]string {
 	return nil
 }
+
+func (r *switcher) resetSequences(ctx context.Context) error {
+	return r.ts.resetSequences(ctx)
+}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -41,8 +42,7 @@ import (
 
 // cheapVindex is a Functional, Unique Vindex.
 type cheapVindex struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *cheapVindex) String() string   { return v.name }
@@ -56,16 +56,15 @@ func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Val
 	return nil, nil
 }
 
-func NewCheapVindex(name string, params map[string]string) (Vindex, error) {
-	return &cheapVindex{name: name, Params: params}, nil
+func newCheapVindex(name string, _ map[string]string) (Vindex, error) {
+	return &cheapVindex{name: name}, nil
 }
 
 var _ SingleColumn = (*stFU)(nil)
 
 // stFU is a Functional, Unique Vindex.
 type stFU struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stFU) String() string   { return v.name }
@@ -79,16 +78,15 @@ func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]
 	return nil, nil
 }
 
-func NewSTFU(name string, params map[string]string) (Vindex, error) {
-	return &stFU{name: name, Params: params}, nil
+func newSTFU(name string, _ map[string]string) (Vindex, error) {
+	return &stFU{name: name}, nil
 }
 
 var _ SingleColumn = (*stFU)(nil)
 
 // stFN is a Functional, NonUnique Vindex.
 type stFN struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stFN) String() string   { return v.name }
@@ -102,16 +100,15 @@ func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]
 	return nil, nil
 }
 
-func NewSTFN(name string, params map[string]string) (Vindex, error) {
-	return &stFN{name: name, Params: params}, nil
+func newSTFN(name string, _ map[string]string) (Vindex, error) {
+	return &stFN{name: name}, nil
 }
 
 var _ SingleColumn = (*stFN)(nil)
 
 // stLN is a Lookup, NonUnique Vindex.
 type stLN struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stLN) String() string   { return v.name }
@@ -130,8 +127,8 @@ func (*stLN) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltyp
 	return nil
 }
 
-func NewSTLN(name string, params map[string]string) (Vindex, error) {
-	return &stLN{name: name, Params: params}, nil
+func newSTLN(name string, _ map[string]string) (Vindex, error) {
+	return &stLN{name: name}, nil
 }
 
 var _ SingleColumn = (*stLN)(nil)
@@ -139,8 +136,7 @@ var _ Lookup = (*stLN)(nil)
 
 // stLU is a Lookup, Unique Vindex.
 type stLU struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stLU) String() string   { return v.name }
@@ -159,8 +155,8 @@ func (*stLU) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltyp
 	return nil
 }
 
-func NewSTLU(name string, params map[string]string) (Vindex, error) {
-	return &stLU{name: name, Params: params}, nil
+func newSTLU(name string, _ map[string]string) (Vindex, error) {
+	return &stLU{name: name}, nil
 }
 
 var _ SingleColumn = (*stLO)(nil)
@@ -197,7 +193,7 @@ func (v *stLO) SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierC
 	return nil
 }
 
-func NewSTLO(name string, _ map[string]string) (Vindex, error) {
+func newSTLO(name string, _ map[string]string) (Vindex, error) {
 	return &stLO{name: name}, nil
 }
 
@@ -206,8 +202,7 @@ var _ Lookup = (*stLO)(nil)
 
 // mcFU is a multi-column Functional, Unique Vindex.
 type mcFU struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *mcFU) String() string   { return v.name }
@@ -222,25 +217,25 @@ func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltype
 }
 func (*mcFU) PartialVindex() bool { return false }
 
-func NewMCFU(name string, params map[string]string) (Vindex, error) {
-	return &mcFU{name: name, Params: params}, nil
+func newMCFU(name string, _ map[string]string) (Vindex, error) {
+	return &mcFU{name: name}, nil
 }
 
 var _ MultiColumn = (*mcFU)(nil)
 
 func init() {
-	Register("cheap", NewCheapVindex)
-	Register("stfu", NewSTFU)
-	Register("stfn", NewSTFN)
-	Register("stln", NewSTLN)
-	Register("stlu", NewSTLU)
-	Register("stlo", NewSTLO)
-	Register("region_experimental_test", NewRegionExperimental)
-	Register("mcfu", NewMCFU)
+	Register("cheap", newCheapVindex)
+	Register("stfu", newSTFU)
+	Register("stfn", newSTFN)
+	Register("stln", newSTLN)
+	Register("stlu", newSTLU)
+	Register("stlo", newSTLO)
+	Register("region_experimental_test", newRegionExperimental)
+	Register("mcfu", newMCFU)
 }
 
 func TestUnshardedVSchemaValid(t *testing.T) {
-	err := ValidateKeyspace(&vschemapb.Keyspace{
+	_, err := BuildKeyspace(&vschemapb.Keyspace{
 		Sharded:  false,
 		Vindexes: make(map[string]*vschemapb.Vindex),
 		Tables:   make(map[string]*vschemapb.Table),
@@ -406,10 +401,9 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1"},
-						Owner: "t1"},
+						Type:   "stfu",
+						Params: map[string]string{},
+						Owner:  "t1"},
 					"stln1": {
 						Type:  "stln",
 						Owner: "t1"}},
@@ -429,10 +423,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	t1, err := got.FindTable("sharded", "t1")
 	require.NoError(t, err)
 
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1"}}
+	vindex1 := &stFU{name: "stfu1"}
 	assertVindexMatches(t, t1.ColumnVindexes[0], vindex1, "stfu1", false)
 
 	vindex2 := &stLN{name: "stln1"}
@@ -876,12 +867,7 @@ func TestFindVindexForSharding(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex1 := &stFU{name: "stfu1"}
 	vindex2 := &stLN{name: "stln1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
@@ -959,12 +945,7 @@ func TestFindVindexForSharding2(t *testing.T) {
 		Sharded: true,
 	}
 	vindex1 := &stLU{name: "stlu1"}
-	vindex2 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex2 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
@@ -1002,10 +983,9 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1"},
-						Owner: "t1"}},
+						Type:   "stfu",
+						Params: map[string]string{},
+						Owner:  "t1"}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
@@ -1019,12 +999,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex1 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
@@ -1889,10 +1864,8 @@ func TestSequence(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1",
-						},
+						Type:   "stfu",
+						Params: map[string]string{},
 					},
 				},
 				Tables: map[string]*vschemapb.Table{
@@ -1943,12 +1916,7 @@ func TestSequence(t *testing.T) {
 		Keyspace: ksu,
 		Type:     "sequence",
 	}
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex1 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: kss,
@@ -2168,10 +2136,8 @@ func TestFindTable(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1",
-						},
+						Type:   "stfu",
+						Params: map[string]string{},
 					},
 				},
 				Tables: map[string]*vschemapb.Table{
@@ -2467,7 +2433,7 @@ func TestValidate(t *testing.T) {
 			"t2": {},
 		},
 	}
-	err := ValidateKeyspace(good)
+	_, err := BuildKeyspace(good)
 	require.NoError(t, err)
 	bad := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2480,7 +2446,7 @@ func TestValidate(t *testing.T) {
 			"t2": {},
 		},
 	}
-	err = ValidateKeyspace(bad)
+	_, err = BuildKeyspace(bad)
 	want := `vindexType "absent" not found`
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Validate: %v, must start with %s", err, want)
@@ -2552,11 +2518,15 @@ func TestVSchemaPBJSON(t *testing.T) {
 }
 
 func TestVSchemaJSON(t *testing.T) {
-	lkp, _ := NewLookupHash("n2", map[string]string{
+	lkp, err := newLookupHash("n2", map[string]string{
 		"from":  "f",
 		"table": "t",
 		"to":    "2",
 	})
+	unknownParams := lkp.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
+	require.NoError(t, err)
+
 	in := map[string]*KeyspaceSchema{
 		"unsharded": {
 			Keyspace: &Keyspace{
@@ -2894,6 +2864,135 @@ func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
 	vs := BuildVSchema(&input)
 	_, err := vs.FindTable("", "t1")
 	require.Error(t, err)
+}
+
+// TestFindTableWithSequences tests tables with an autoincrement column that are associated with a sequence.
+// It validates that sequences obey routing rules, which might be set, for example, during a MoveTables
+// when sequence tables are being migrated to a new cluster.
+func TestFindTableWithSequences(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{{
+				FromTable: "seq3",
+				ToTables:  []string{"ksb.seq3"},
+			},
+				{
+					FromTable: "seq4",
+					ToTables:  []string{"ksb.seq4"},
+				}},
+		},
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "seq1",
+						},
+					},
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c2",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c2",
+							Sequence: "seq2",
+						},
+					},
+					"t3": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c3",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c3",
+							Sequence: "seq3",
+						},
+					},
+					"t4": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c4",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c4",
+							Sequence: "ksa.seq4",
+						},
+					},
+					"seq1": {
+						Type: "sequence",
+					},
+					"seq2": {
+						Type: "sequence",
+					},
+					"seq3": {
+						Type: "sequence",
+					},
+					"seq4": {
+						Type: "sequence",
+					},
+				},
+			},
+			"ksb": {
+				Tables: map[string]*vschemapb.Table{
+					"seq2": {
+						Type: "sequence",
+					},
+					"seq3": {
+						Type: "sequence",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+
+	notFoundError := func(table string) string {
+		return fmt.Sprintf("table %s not found", table)
+	}
+
+	type testCase struct {
+		name          string
+		keyspace      string
+		table         string
+		mustError     bool
+		errorContains string
+	}
+	testCases := []testCase{
+		{"unambiguous", "", "t1", false, ""},
+		{"ambiguous", "", "t2", true, notFoundError("t2")},
+		{"routed unambiguous", "", "t3", false, ""},
+		{"routed qualified unambiguous", "", "t4", false, ""},
+		{"keyspace specified", "ksa", "t2", false, ""},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := vschema.FindTableOrVindex(tc.keyspace, tc.table, topodatapb.TabletType_PRIMARY)
+			if tc.mustError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.errorContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func vindexNames(vindexes []*ColumnVindex) (result []string) {

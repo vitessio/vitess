@@ -685,6 +685,106 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 	}
 }
 
+// NewTableName makes a new TableName
+func NewTableName(name string) TableName {
+	return TableName{
+		Name: NewIdentifierCS(name),
+	}
+}
+
+// NewTableNameWithQualifier makes a new TableName with a qualifier
+func NewTableNameWithQualifier(name, qualifier string) TableName {
+	return TableName{
+		Name:      NewIdentifierCS(name),
+		Qualifier: NewIdentifierCS(qualifier),
+	}
+}
+
+// NewAliasedTableExpr makes a new AliasedTableExpr with an alias
+func NewAliasedTableExpr(simpleTableExpr SimpleTableExpr, alias string) *AliasedTableExpr {
+	return &AliasedTableExpr{
+		Expr: simpleTableExpr,
+		As:   NewIdentifierCS(alias),
+	}
+}
+
+// NewJoinTableExpr makes a new JoinTableExpr
+func NewJoinTableExpr(leftExpr TableExpr, join JoinType, rightExpr TableExpr, condition *JoinCondition) *JoinTableExpr {
+	return &JoinTableExpr{
+		LeftExpr:  leftExpr,
+		Join:      join,
+		RightExpr: rightExpr,
+		Condition: condition,
+	}
+}
+
+// NewJoinCondition makes a new JoinCondition
+func NewJoinCondition(on Expr, using Columns) *JoinCondition {
+	return &JoinCondition{
+		On:    on,
+		Using: using,
+	}
+}
+
+// NewAliasedExpr makes a new AliasedExpr
+func NewAliasedExpr(expr Expr, alias string) *AliasedExpr {
+	return &AliasedExpr{
+		Expr: expr,
+		As:   NewIdentifierCI(alias),
+	}
+}
+
+// NewOrder makes a new Order
+func NewOrder(expr Expr, direction OrderDirection) *Order {
+	return &Order{
+		Expr:      expr,
+		Direction: direction,
+	}
+}
+
+// NewComparisonExpr makes a new ComparisonExpr
+func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr) *ComparisonExpr {
+	return &ComparisonExpr{
+		Operator: operator,
+		Left:     left,
+		Right:    right,
+		Escape:   escape,
+	}
+}
+
+// NewLimit makes a new Limit
+func NewLimit(offset, rowCount int) *Limit {
+	return &Limit{
+		Offset: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(offset),
+		},
+		Rowcount: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(rowCount),
+		},
+	}
+}
+
+// NewLimitWithoutOffset makes a new Limit without an offset
+func NewLimitWithoutOffset(rowCount int) *Limit {
+	return &Limit{
+		Offset: nil,
+		Rowcount: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(rowCount),
+		},
+	}
+}
+
+// NewDerivedTable makes a new DerivedTable
+func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+	return &DerivedTable{
+		Lateral: lateral,
+		Select:  selectStatement,
+	}
+}
+
 // NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where, windows NamedWindows) *Select {
 	var cache *bool
@@ -950,6 +1050,10 @@ func compliantName(in string) string {
 		buf.WriteRune(c)
 	}
 	return buf.String()
+}
+
+func (node *Select) AddSelectExprs(selectExprs SelectExprs) {
+	node.SelectExprs = append(node.SelectExprs, selectExprs...)
 }
 
 // AddOrder adds an order by element
@@ -1715,54 +1819,6 @@ func (ty VExplainType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty IntervalTypes) ToString() string {
-	switch ty {
-	case IntervalYear:
-		return YearStr
-	case IntervalQuarter:
-		return QuarterStr
-	case IntervalMonth:
-		return MonthStr
-	case IntervalWeek:
-		return WeekStr
-	case IntervalDay:
-		return DayStr
-	case IntervalHour:
-		return HourStr
-	case IntervalMinute:
-		return MinuteStr
-	case IntervalSecond:
-		return SecondStr
-	case IntervalMicrosecond:
-		return MicrosecondStr
-	case IntervalYearMonth:
-		return YearMonthStr
-	case IntervalDayHour:
-		return DayHourStr
-	case IntervalDayMinute:
-		return DayMinuteStr
-	case IntervalDaySecond:
-		return DaySecondStr
-	case IntervalHourMinute:
-		return HourMinuteStr
-	case IntervalHourSecond:
-		return HourSecondStr
-	case IntervalMinuteSecond:
-		return MinuteSecondStr
-	case IntervalDayMicrosecond:
-		return DayMicrosecondStr
-	case IntervalHourMicrosecond:
-		return HourMicrosecondStr
-	case IntervalMinuteMicrosecond:
-		return MinuteMicrosecondStr
-	case IntervalSecondMicrosecond:
-		return SecondMicrosecondStr
-	default:
-		return "Unknown IntervalType"
-	}
-}
-
-// ToString returns the type as a string
 func (sel SelectIntoType) ToString() string {
 	switch sel {
 	case IntoOutfile:
@@ -2406,4 +2462,54 @@ func getAliasedTableExprFromTableName(tblName TableName) *AliasedTableExpr {
 	return &AliasedTableExpr{
 		Expr: tblName,
 	}
+}
+
+func (node *IntervalDateExpr) IsSubtraction() bool {
+	switch node.Syntax {
+	case IntervalDateExprDateAdd, IntervalDateExprAdddate, IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft, IntervalDateExprTimestampadd:
+		return false
+	case IntervalDateExprDateSub, IntervalDateExprSubdate, IntervalDateExprBinarySub:
+		return true
+	default:
+		panic("invalid IntervalDateExpr syntax")
+	}
+}
+
+func (node *IntervalDateExpr) NormalizedUnit() IntervalType {
+	if node.Unit == IntervalNone {
+		if node.Syntax == IntervalDateExprAdddate || node.Syntax == IntervalDateExprSubdate {
+			return IntervalDay
+		}
+		panic("IntervalDateExpr.Unit is not set")
+	}
+	return node.Unit
+}
+
+func (node *IntervalDateExpr) FnName() string {
+	switch node.Syntax {
+	case IntervalDateExprDateAdd:
+		return "date_add"
+	case IntervalDateExprDateSub:
+		return "date_sub"
+	case IntervalDateExprAdddate:
+		return "adddate"
+	case IntervalDateExprSubdate:
+		return "subdate"
+	case IntervalDateExprTimestampadd:
+		return "timestampadd"
+	case IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft:
+		return "<arithmetic interval addition>"
+	case IntervalDateExprBinarySub:
+		return "<arithmetic interval subtraction>"
+	default:
+		return "<unknown>"
+	}
+}
+
+func IsDistinct(f AggrFunc) bool {
+	da, ok := f.(DistinctableAggr)
+	if !ok {
+		return false
+	}
+	return da.IsDistinct()
 }

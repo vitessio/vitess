@@ -122,6 +122,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Argument:
 		b, ok := inB.(*Argument)
 		if !ok {
@@ -344,18 +350,6 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
-	case *DateAddExpr:
-		b, ok := inB.(*DateAddExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateAddExpr(a, b)
-	case *DateSubExpr:
-		b, ok := inB.(*DateSubExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateSubExpr(a, b)
 	case *DeallocateStmt:
 		b, ok := inB.(*DeallocateStmt)
 		if !ok {
@@ -638,6 +632,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -1436,12 +1436,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfTablespaceOperation(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -1828,6 +1828,17 @@ func (cmp *Comparator) RefOfAndExpr(a, b *AndExpr) bool {
 	}
 	return cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right)
+}
+
+// RefOfAnyValue does deep equals between the two objects.
+func (cmp *Comparator) RefOfAnyValue(a, b *AnyValue) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Arg, b.Arg)
 }
 
 // RefOfArgument does deep equals between the two objects.
@@ -2292,34 +2303,6 @@ func (cmp *Comparator) RefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 
-// RefOfDateAddExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfDateAddExpr(a, b *DateAddExpr) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type &&
-		cmp.Expr(a.Date, b.Date) &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr, b.Expr)
-}
-
-// RefOfDateSubExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfDateSubExpr(a, b *DateSubExpr) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type &&
-		cmp.Expr(a.Date, b.Date) &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr, b.Expr)
-}
-
 // RefOfDeallocateStmt does deep equals between the two objects.
 func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	if a == b {
@@ -2519,7 +2502,7 @@ func (cmp *Comparator) RefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IntervalTypes == b.IntervalTypes &&
+	return a.IntervalType == b.IntervalType &&
 		cmp.Expr(a.Expr, b.Expr)
 }
 
@@ -2926,6 +2909,20 @@ func (cmp *Comparator) RefOfInsertExpr(a, b *InsertExpr) bool {
 		cmp.Expr(a.Pos, b.Pos) &&
 		cmp.Expr(a.Len, b.Len) &&
 		cmp.Expr(a.NewStr, b.NewStr)
+}
+
+// RefOfIntervalDateExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfIntervalDateExpr(a, b *IntervalDateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Syntax == b.Syntax &&
+		cmp.Expr(a.Date, b.Date) &&
+		cmp.Expr(a.Interval, b.Interval) &&
+		a.Unit == b.Unit
 }
 
 // RefOfIntervalFuncExpr does deep equals between the two objects.
@@ -4542,18 +4539,17 @@ func (cmp *Comparator) RefOfTablespaceOperation(a, b *TablespaceOperation) bool 
 	return a.Import == b.Import
 }
 
-// RefOfTimestampFuncExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfTimestampFuncExpr(a, b *TimestampFuncExpr) bool {
+// RefOfTimestampDiffExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfTimestampDiffExpr(a, b *TimestampDiffExpr) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr1, b.Expr1) &&
-		cmp.Expr(a.Expr2, b.Expr2)
+	return cmp.Expr(a.Expr1, b.Expr1) &&
+		cmp.Expr(a.Expr2, b.Expr2) &&
+		a.Unit == b.Unit
 }
 
 // RefOfTrimFuncExpr does deep equals between the two objects.
@@ -4937,6 +4933,12 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Avg:
 		b, ok := inB.(*Avg)
 		if !ok {
@@ -5201,6 +5203,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -5249,18 +5257,6 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
-	case *DateAddExpr:
-		b, ok := inB.(*DateAddExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateAddExpr(a, b)
-	case *DateSubExpr:
-		b, ok := inB.(*DateSubExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateSubExpr(a, b)
 	case *ExtractFuncExpr:
 		b, ok := inB.(*ExtractFuncExpr)
 		if !ok {
@@ -5363,6 +5359,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -5639,12 +5641,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfSum(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -5873,6 +5875,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Argument:
 		b, ok := inB.(*Argument)
 		if !ok {
@@ -5999,18 +6007,6 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
-	case *DateAddExpr:
-		b, ok := inB.(*DateAddExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateAddExpr(a, b)
-	case *DateSubExpr:
-		b, ok := inB.(*DateSubExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateSubExpr(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -6131,6 +6127,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -6491,12 +6493,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfSum(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {

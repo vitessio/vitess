@@ -54,6 +54,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAlterVschema(parent, node, replacer)
 	case *AndExpr:
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
+	case *AnyValue:
+		return a.rewriteRefOfAnyValue(parent, node, replacer)
 	case *Argument:
 		return a.rewriteRefOfArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
@@ -128,10 +130,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
-	case *DateAddExpr:
-		return a.rewriteRefOfDateAddExpr(parent, node, replacer)
-	case *DateSubExpr:
-		return a.rewriteRefOfDateSubExpr(parent, node, replacer)
 	case *DeallocateStmt:
 		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
 	case *Default:
@@ -226,6 +224,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -492,8 +492,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfTableSpec(parent, node, replacer)
 	case *TablespaceOperation:
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
-	case *TimestampFuncExpr:
-		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TimestampDiffExpr:
+		return a.rewriteRefOfTimestampDiffExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *TruncateTable:
@@ -1055,6 +1055,33 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Right = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*AnyValue).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -2171,70 +2198,6 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Name = newNode.(IdentifierCI)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfDateAddExpr(parent SQLNode, node *DateAddExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
-		parent.(*DateAddExpr).Date = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*DateAddExpr).Expr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfDateSubExpr(parent SQLNode, node *DateSubExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
-		parent.(*DateSubExpr).Date = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*DateSubExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3783,6 +3746,38 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}
 	if !a.rewriteExpr(node, node.NewStr, func(newNode, parent SQLNode) {
 		parent.(*InsertExpr).NewStr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *IntervalDateExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
+		parent.(*IntervalDateExpr).Date = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Interval, func(newNode, parent SQLNode) {
+		parent.(*IntervalDateExpr).Interval = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7964,7 +7959,7 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 	}
 	return true
 }
-func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *TimestampDiffExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -7977,12 +7972,12 @@ func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *Timest
 		}
 	}
 	if !a.rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
-		parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
+		parent.(*TimestampDiffExpr).Expr1 = newNode.(Expr)
 	}) {
 		return false
 	}
 	if !a.rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
-		parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
+		parent.(*TimestampDiffExpr).Expr2 = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -8995,6 +8990,8 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return true
 	}
 	switch node := node.(type) {
+	case *AnyValue:
+		return a.rewriteRefOfAnyValue(parent, node, replacer)
 	case *Avg:
 		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *BitAnd:
@@ -9093,6 +9090,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return true
 	}
 	switch node := node.(type) {
+	case *AnyValue:
+		return a.rewriteRefOfAnyValue(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *Avg:
@@ -9109,10 +9108,6 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
-	case *DateAddExpr:
-		return a.rewriteRefOfDateAddExpr(parent, node, replacer)
-	case *DateSubExpr:
-		return a.rewriteRefOfDateSubExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
 	case *ExtractValueExpr:
@@ -9147,6 +9142,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *JSONArrayExpr:
@@ -9239,8 +9236,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
-	case *TimestampFuncExpr:
-		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TimestampDiffExpr:
+		return a.rewriteRefOfTimestampDiffExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UpdateXMLExpr:
@@ -9347,6 +9344,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 	switch node := node.(type) {
 	case *AndExpr:
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
+	case *AnyValue:
+		return a.rewriteRefOfAnyValue(parent, node, replacer)
 	case *Argument:
 		return a.rewriteRefOfArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
@@ -9389,10 +9388,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
-	case *DateAddExpr:
-		return a.rewriteRefOfDateAddExpr(parent, node, replacer)
-	case *DateSubExpr:
-		return a.rewriteRefOfDateSubExpr(parent, node, replacer)
 	case *Default:
 		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *ExistsExpr:
@@ -9433,6 +9428,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -9553,8 +9550,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
-	case *TimestampFuncExpr:
-		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TimestampDiffExpr:
+		return a.rewriteRefOfTimestampDiffExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:

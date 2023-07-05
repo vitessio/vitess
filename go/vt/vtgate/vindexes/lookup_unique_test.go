@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -36,18 +35,21 @@ func TestLookupUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, _ := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	vindex, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
+	require.NoError(t, err)
+	require.Empty(t, vindex.(ParamValidating).UnknownParams())
+
 	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	_, err = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -57,13 +59,6 @@ func TestLookupUniqueNew(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
-}
-
-func TestLookupUniqueInfo(t *testing.T) {
-	lookupUnique := createLookup(t, "lookup_unique", false)
-	assert.Equal(t, 10, lookupUnique.Cost())
-	assert.Equal(t, "lookup_unique", lookupUnique.String())
-	assert.True(t, lookupUnique.IsUnique())
 }
 
 func TestLookupUniqueMap(t *testing.T) {
@@ -163,6 +158,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, lookupUnique.(ParamValidating).UnknownParams())
 	vc := &vcursor{}
 
 	err = lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)

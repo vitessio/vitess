@@ -56,13 +56,6 @@ if [ "${TOPO}" = "zk2" ]; then
     TOPOLOGY_FLAGS="--topo_implementation zk2 --topo_global_server_address ${ZK_SERVER} --topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"
-elif [ "${TOPO}" = "k8s" ]; then
-    # Set topology environment parameters.
-    K8S_ADDR="localhost"
-    K8S_PORT="8443"
-    K8S_KUBECONFIG=$VTDATAROOT/tmp/k8s.kubeconfig
-    # shellcheck disable=SC2034
-    TOPOLOGY_FLAGS="--topo_implementation k8s --topo_k8s_kubeconfig ${K8S_KUBECONFIG} --topo_global_server_address ${K8S_ADDR}:${K8S_PORT} --topo_global_root /vitess/global"
 elif [ "${TOPO}" = "consul" ]; then
     # Set up topology environment parameters.
     CONSUL_SERVER=127.0.0.1

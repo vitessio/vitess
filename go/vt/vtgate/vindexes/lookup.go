@@ -27,27 +27,41 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+const (
+	lookupParamNoVerify  = "no_verify"
+	lookupParamWriteOnly = "write_only"
+)
+
 var (
-	_ SingleColumn   = (*LookupUnique)(nil)
-	_ Lookup         = (*LookupUnique)(nil)
-	_ LookupPlanable = (*LookupUnique)(nil)
-	_ SingleColumn   = (*LookupNonUnique)(nil)
-	_ Lookup         = (*LookupNonUnique)(nil)
-	_ LookupPlanable = (*LookupNonUnique)(nil)
+	_ SingleColumn    = (*LookupUnique)(nil)
+	_ Lookup          = (*LookupUnique)(nil)
+	_ LookupPlanable  = (*LookupUnique)(nil)
+	_ ParamValidating = (*LookupUnique)(nil)
+	_ SingleColumn    = (*LookupNonUnique)(nil)
+	_ Lookup          = (*LookupNonUnique)(nil)
+	_ LookupPlanable  = (*LookupNonUnique)(nil)
+	_ ParamValidating = (*LookupNonUnique)(nil)
+
+	lookupParams = append(
+		append(make([]string, 0), lookupCommonParams...),
+		lookupParamNoVerify,
+		lookupParamWriteOnly,
+	)
 )
 
 func init() {
-	Register("lookup", NewLookup)
-	Register("lookup_unique", NewLookupUnique)
+	Register("lookup", newLookup)
+	Register("lookup_unique", newLookupUnique)
 }
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
 // It's NonUnique and a Lookup.
 type LookupNonUnique struct {
-	name      string
-	writeOnly bool
-	noVerify  bool
-	lkp       lookupInternal
+	name          string
+	writeOnly     bool
+	noVerify      bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
 func (ln *LookupNonUnique) GetCommitOrder() vtgatepb.CommitOrder {
@@ -172,7 +186,12 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 	return ln.lkp.query()
 }
 
-// NewLookup creates a LookupNonUnique vindex.
+// UnknownParams implements the ParamValidating interface.
+func (ln *LookupNonUnique) UnknownParams() []string {
+	return ln.unknownParams
+}
+
+// newLookup creates a LookupNonUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -184,19 +203,22 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 //	no_verify: in this mode, Verify will always succeed.
-func NewLookup(name string, m map[string]string) (Vindex, error) {
-	lookup := &LookupNonUnique{name: name}
+func newLookup(name string, m map[string]string) (Vindex, error) {
+	lookup := &LookupNonUnique{
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupParams),
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	lookup.writeOnly, err = boolFromMap(m, "write_only")
+	lookup.writeOnly, err = boolFromMap(m, lookupParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
 
-	lookup.noVerify, err = boolFromMap(m, "no_verify")
+	lookup.noVerify, err = boolFromMap(m, lookupParamNoVerify)
 	if err != nil {
 		return nil, err
 	}
@@ -223,10 +245,11 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type LookupUnique struct {
-	name      string
-	writeOnly bool
-	noVerify  bool
-	lkp       lookupInternal
+	name          string
+	writeOnly     bool
+	noVerify      bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
 func (lu *LookupUnique) GetCommitOrder() vtgatepb.CommitOrder {
@@ -241,7 +264,7 @@ func (lu *LookupUnique) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
-// NewLookupUnique creates a LookupUnique vindex.
+// newLookupUnique creates a LookupUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -252,19 +275,22 @@ func (lu *LookupUnique) AutoCommitEnabled() bool {
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
-	lu := &LookupUnique{name: name}
+func newLookupUnique(name string, m map[string]string) (Vindex, error) {
+	lu := &LookupUnique{
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupParams),
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	lu.writeOnly, err = boolFromMap(m, "write_only")
+	lu.writeOnly, err = boolFromMap(m, lookupParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
 
-	lu.noVerify, err = boolFromMap(m, "no_verify")
+	lu.noVerify, err = boolFromMap(m, lookupParamNoVerify)
 	if err != nil {
 		return nil, err
 	}
@@ -374,4 +400,9 @@ func (lu *LookupUnique) LookupQuery() (string, error) {
 
 func (lu *LookupUnique) Query() (string, []string) {
 	return lu.lkp.query()
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (ln *LookupUnique) UnknownParams() []string {
+	return ln.unknownParams
 }

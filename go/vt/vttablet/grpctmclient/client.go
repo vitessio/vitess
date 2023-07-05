@@ -69,7 +69,6 @@ var _binaries = []string{ // binaries that require the flags in this package
 	"vtctl",
 	"vtctld",
 	"vtctldclient",
-	"vtgr",
 	"vtorc",
 	"vttablet",
 	"vttestserver",
@@ -359,6 +358,18 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Table
 	defer closer.Close()
 	_, err = c.ReloadSchema(ctx, &tabletmanagerdatapb.ReloadSchemaRequest{
 		WaitPosition: waitPosition,
+	})
+	return err
+}
+
+func (client *Client) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.ResetSequences(ctx, &tabletmanagerdatapb.ResetSequencesRequest{
+		Tables: tables,
 	})
 	return err
 }

@@ -29,20 +29,25 @@ import (
 )
 
 var (
-	_ SingleColumn = (*Numeric)(nil)
-	_ Reversible   = (*Numeric)(nil)
-	_ Hashing      = (*Numeric)(nil)
+	_ SingleColumn    = (*Numeric)(nil)
+	_ Reversible      = (*Numeric)(nil)
+	_ Hashing         = (*Numeric)(nil)
+	_ ParamValidating = (*Numeric)(nil)
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
 // It's Unique and Reversible.
 type Numeric struct {
-	name string
+	name          string
+	unknownParams []string
 }
 
-// NewNumeric creates a Numeric vindex.
-func NewNumeric(name string, _ map[string]string) (Vindex, error) {
-	return &Numeric{name: name}, nil
+// newNumeric creates a Numeric vindex.
+func newNumeric(name string, m map[string]string) (Vindex, error) {
+	return &Numeric{
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -105,6 +110,11 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 	return reverseIds, nil
 }
 
+// UnknownParams implements the ParamValidating interface.
+func (vind *Numeric) UnknownParams() []string {
+	return vind.unknownParams
+}
+
 func (*Numeric) Hash(id sqltypes.Value) ([]byte, error) {
 	num, err := evalengine.ToUint64(id)
 	if err != nil {
@@ -116,5 +126,5 @@ func (*Numeric) Hash(id sqltypes.Value) ([]byte, error) {
 }
 
 func init() {
-	Register("numeric", NewNumeric)
+	Register("numeric", newNumeric)
 }

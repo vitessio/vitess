@@ -64,7 +64,7 @@ func TestDeleteUnsharded(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -96,7 +96,7 @@ func TestDeleteEqual(t *testing.T) {
 }
 
 func TestDeleteEqualMultiCol(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -128,7 +128,7 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 }
 
 func TestDeleteEqualNoRoute(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -160,7 +160,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 
 func TestDeleteEqualNoScatter(t *testing.T) {
 	t.Skip("planner does not produces this plan anymore")
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table":      "lkp",
 		"from":       "from",
 		"to":         "toc",
@@ -555,7 +555,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 }
 
 func TestDeleteEqualSubshard(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
