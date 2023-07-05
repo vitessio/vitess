@@ -84,6 +84,8 @@ type Matcher struct {
 	//   Kept separately from fTime to keep as much
 	//   code as possible out of the inline
 	//   StateSave function.
+
+	dumper io.Writer
 }
 
 func NewMatcher(pat *Pattern) *Matcher {
@@ -100,8 +102,6 @@ func NewMatcher(pat *Pattern) *Matcher {
 	return m
 }
 
-var Dumper io.Writer
-
 func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 	//--------------------------------------------------------------------------------
 	//
@@ -114,10 +114,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 	var err error
 	var isMatch bool // True if the we have a match.
 
-	if Dumper != nil {
-		fmt.Fprintf(Dumper, "MatchAt(startIdx=%d)\n", startIdx)
-		fmt.Fprintf(Dumper, "Original Pattern: \"%s\"\n", m.pattern.pattern)
-		fmt.Fprintf(Dumper, "Input String:     \"%s\"\n\n", string(m.input))
+	if m.dumper != nil {
+		fmt.Fprintf(m.dumper, "MatchAt(startIdx=%d)\n", startIdx)
+		fmt.Fprintf(m.dumper, "Original Pattern: \"%s\"\n", m.pattern.pattern)
+		fmt.Fprintf(m.dumper, "Input String:     \"%s\"\n\n", string(m.input))
 	}
 
 	pat := m.pattern.compiledPat
@@ -135,10 +135,10 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 	for {
 		op := pat[*fp.patIdx()]
 
-		if Dumper != nil {
-			fmt.Fprintf(Dumper, "inputIdx=%d   inputChar=%x   sp=%3d   activeLimit=%d ", *fp.inputIdx(),
+		if m.dumper != nil {
+			fmt.Fprintf(m.dumper, "inputIdx=%d   inputChar=%x   sp=%3d   activeLimit=%d ", *fp.inputIdx(),
 				charAt(inputText, *fp.inputIdx()), m.stack.sp(), m.activeLimit)
-			m.pattern.dumpOp(Dumper, *fp.patIdx())
+			m.pattern.dumpOp(m.dumper, *fp.patIdx())
 		}
 
 		*fp.patIdx()++
@@ -1206,11 +1206,11 @@ breakFromLoop:
 		m.matchEnd = *fp.inputIdx()
 	}
 
-	if Dumper != nil {
+	if m.dumper != nil {
 		if isMatch {
-			fmt.Fprintf(Dumper, "Match.  start=%d   end=%d\n\n", m.matchStart, m.matchEnd)
+			fmt.Fprintf(m.dumper, "Match.  start=%d   end=%d\n\n", m.matchStart, m.matchEnd)
 		} else {
-			fmt.Fprintf(Dumper, "No match\n\n")
+			fmt.Fprintf(m.dumper, "No match\n\n")
 		}
 	}
 
@@ -1640,6 +1640,10 @@ func (m *Matcher) End() int {
 	}
 
 	return m.matchEnd
+}
+
+func (m *Matcher) Dumper(out io.Writer) {
+	m.dumper = out
 }
 
 // Test for any of the Unicode line terminating characters.
