@@ -77,33 +77,8 @@ func (this *RowData) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cells)
 }
 
-func (this *RowData) Args() []any {
-	result := make([]any, len(*this))
-	for i := range *this {
-		result[i] = (*(*this)[i].NullString())
-	}
-	return result
-}
-
-// ResultData is an ordered row set of RowData
-type ResultData []RowData
-type NamedResultData struct {
-	Columns []string
-	Data    ResultData
-}
-
-var EmptyResultData = ResultData{}
-
 func (this *RowMap) GetString(key string) string {
 	return (*this)[key].String
-}
-
-// GetStringD returns a string from the map, or a default value if the key does not exist
-func (this *RowMap) GetStringD(key string, def string) string {
-	if cell, ok := (*this)[key]; ok {
-		return cell.String
-	}
-	return def
 }
 
 func (this *RowMap) GetInt64(key string) int64 {
@@ -130,37 +105,13 @@ func (this *RowMap) GetInt(key string) int {
 	return res
 }
 
-func (this *RowMap) GetIntD(key string, def int) int {
-	res, err := strconv.Atoi(this.GetString(key))
-	if err != nil {
-		return def
-	}
-	return res
-}
-
 func (this *RowMap) GetUint(key string) uint {
 	res, _ := strconv.ParseUint(this.GetString(key), 10, 0)
 	return uint(res)
 }
 
-func (this *RowMap) GetUintD(key string, def uint) uint {
-	res, err := strconv.ParseUint(this.GetString(key), 10, 0)
-	if err != nil {
-		return def
-	}
-	return uint(res)
-}
-
 func (this *RowMap) GetUint64(key string) uint64 {
 	res, _ := strconv.ParseUint(this.GetString(key), 10, 64)
-	return res
-}
-
-func (this *RowMap) GetUint64D(key string, def uint64) uint64 {
-	res, err := strconv.ParseUint(this.GetString(key), 10, 64)
-	if err != nil {
-		return def
-	}
 	return res
 }
 
@@ -181,7 +132,7 @@ func (this *RowMap) GetTime(key string) time.Time {
 }
 
 // knownDBs is a DB cache by uri
-var knownDBs map[string]*sql.DB = make(map[string]*sql.DB)
+var knownDBs = make(map[string]*sql.DB)
 var knownDBsMutex = &sync.Mutex{}
 
 // GetGenericDB returns a DB instance based on uri.
@@ -201,12 +152,6 @@ func GetGenericDB(driverName, dataSourceName string) (*sql.DB, bool, error) {
 		}
 	}
 	return knownDBs[dataSourceName], exists, nil
-}
-
-// GetDB returns a MySQL DB instance based on uri.
-// bool result indicates whether the DB was returned from cache; err
-func GetDB(mysql_uri string) (*sql.DB, bool, error) {
-	return GetGenericDB("mysql", mysql_uri)
 }
 
 // GetSQLiteDB returns a SQLite DB instance based on DB file name.

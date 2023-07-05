@@ -41,15 +41,13 @@ import (
 
 var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 
-// executeSchemaCommands executes some SQL commands, using the mysql
-// command line tool. It uses the dba connection parameters, with credentials.
-func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
+// executeSchemaCommands executes some SQL commands. It uses the dba connection parameters, with credentials.
+func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) error {
 	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	if err != nil {
 		return err
 	}
-
-	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
+	return mysqld.executeMysqlScript(ctx, params, sql)
 }
 
 func encodeEntityName(name string) string {
@@ -427,7 +425,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 			initialCopySQL += s + ";\n"
 		}
 	}
-	if err = mysqld.executeSchemaCommands(initialCopySQL); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, initialCopySQL); err != nil {
 		return nil, err
 	}
 
@@ -443,7 +441,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 		sql := "SET sql_log_bin = 0;\n"
 		sql += "USE _vt_preflight;\n"
 		sql += change
-		if err = mysqld.executeSchemaCommands(sql); err != nil {
+		if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
 			return nil, err
 		}
 
@@ -459,7 +457,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	// and clean up the extra database
 	dropSQL := "SET sql_log_bin = 0;\n"
 	dropSQL += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeSchemaCommands(dropSQL); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, dropSQL); err != nil {
 		return nil, err
 	}
 
@@ -519,7 +517,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.executeSchemaCommands(sql); err != nil {
+	if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
 		return nil, err
 	}
 

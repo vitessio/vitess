@@ -51,8 +51,6 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformSubQueryPlan(ctx, op)
 	case *operators.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryPlan(ctx, op)
-	case *operators.Derived:
-		return transformDerivedPlan(ctx, op)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
@@ -89,16 +87,13 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		if aggr.OpCode == opcode.AggregateUnassigned {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:      aggr.OpCode,
-			Col:         aggr.ColOffset,
-			Alias:       aggr.Alias,
-			Expr:        aggr.Func,
-			Original:    aggr.Original,
-			OrigOpcode:  aggr.OriginalOpCode,
-			WCol:        aggr.WSOffset,
-			CollationID: aggr.GetCollation(ctx),
-		})
+		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias)
+		aggrParam.Expr = aggr.Func
+		aggrParam.Original = aggr.Original
+		aggrParam.OrigOpcode = aggr.OriginalOpCode
+		aggrParam.WCol = aggr.WSOffset
+		aggrParam.CollationID = aggr.GetCollation(ctx)
+		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
@@ -274,11 +269,14 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 }
 
 func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
+	if op.IsDerived() {
+		return transformDerivedPlan(ctx, op)
+	}
 	source, err := transformToLogicalPlan(ctx, op.Source, isRoot)
 	if err != nil {
 		return nil, err
 	}
-	switch node := op.Select.(type) {
+	switch node := op.Query.(type) {
 	case *sqlparser.Select:
 		hp := horizonPlanning{
 			sel: node,
@@ -865,7 +863,7 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []co
 	return colls
 }
 
-func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Derived) (logicalPlan, error) {
+func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizon) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased

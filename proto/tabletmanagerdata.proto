@@ -632,3 +632,10 @@ message UpdateVReplicationWorkflowRequest {
 message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
+
+message ResetSequencesRequest {
+  repeated string tables = 1;
+}
+
+message ResetSequencesResponse {
+}

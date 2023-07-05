@@ -74,6 +74,11 @@ func (fra *fakeRPCTM) UpdateVReplicationWorkflow(ctx context.Context, req *table
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	//TODO implement me
 	panic("implement me")

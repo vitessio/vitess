@@ -572,7 +572,7 @@ func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodat
 	return nil, fmt.Errorf("no output set for FullStatus")
 }
 
-// GetPermission is part of the tmclient.TabletManagerClient interface.
+// GetPermissions is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
 	if fake.GetPermissionsResults == nil {
 		return nil, assert.AnError

@@ -132,34 +132,28 @@ func TestDistinctAggregationFunc(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
 
 	// count on primary vindex
-	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, count(distinct id) from t2 group by tcol1`,
-		`[[VARCHAR("A") INT64(3)] [VARCHAR("B") INT64(3)] [VARCHAR("C") INT64(2)]]`)
+	mcmp.Exec(`select tcol1, count(distinct id) from t2 group by tcol1`)
 
 	// count on any column
-	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, count(distinct tcol2) from t2 group by tcol1`,
-		`[[VARCHAR("A") INT64(2)] [VARCHAR("B") INT64(2)] [VARCHAR("C") INT64(1)]]`)
+	mcmp.Exec(`select tcol1, count(distinct tcol2) from t2 group by tcol1`)
 
 	// sum of columns
-	utils.AssertMatches(t, mcmp.VtConn, `select sum(id), sum(tcol1) from t2`,
-		`[[DECIMAL(36) FLOAT64(0)]]`)
+	mcmp.Exec(`select sum(id), sum(tcol1) from t2`)
 
 	// sum on primary vindex
-	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, sum(distinct id) from t2 group by tcol1`,
-		`[[VARCHAR("A") DECIMAL(9)] [VARCHAR("B") DECIMAL(15)] [VARCHAR("C") DECIMAL(12)]]`)
+	mcmp.Exec(`select tcol1, sum(distinct id) from t2 group by tcol1`)
 
 	// sum on any column
-	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, sum(distinct tcol2) from t2 group by tcol1`,
-		`[[VARCHAR("A") DECIMAL(0)] [VARCHAR("B") DECIMAL(0)] [VARCHAR("C") DECIMAL(0)]]`)
+	mcmp.Exec(`select tcol1, sum(distinct tcol2) from t2 group by tcol1`)
 
 	// insert more data to get values on sum
-	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (9, 'AA', null),(10, 'AA', '4'),(11, 'AA', '4'),(12, null, '5'),(13, null, '6'),(14, 'BB', '10'),(15, 'BB', '20'),(16, 'BB', 'X')`)
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (9, 'AA', null),(10, 'AA', '4'),(11, 'AA', '4'),(12, null, '5'),(13, null, '6'),(14, 'BB', '10'),(15, 'BB', '20'),(16, 'BB', 'X')`)
 
 	// multi distinct
-	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, count(distinct tcol2), sum(distinct tcol2) from t2 group by tcol1`,
-		`[[NULL INT64(2) DECIMAL(11)] [VARCHAR("A") INT64(2) DECIMAL(0)] [VARCHAR("AA") INT64(1) DECIMAL(4)] [VARCHAR("B") INT64(2) DECIMAL(0)] [VARCHAR("BB") INT64(3) DECIMAL(30)] [VARCHAR("C") INT64(1) DECIMAL(0)]]`)
+	mcmp.Exec(`select tcol1, count(distinct tcol2), sum(distinct tcol2) from t2 group by tcol1`)
 }
 
 func TestDistinct(t *testing.T) {

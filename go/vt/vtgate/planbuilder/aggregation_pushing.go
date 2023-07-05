@@ -425,8 +425,8 @@ func isMinOrMax(in popcode.AggregateOpcode) bool {
 	}
 }
 
-func isRandom(in popcode.AggregateOpcode) bool {
-	return in == popcode.AggregateRandom
+func isAnyValue(in popcode.AggregateOpcode) bool {
+	return in == popcode.AggregateAnyValue
 }
 
 func splitAggregationsToLeftAndRight(
@@ -444,7 +444,7 @@ func splitAggregationsToLeftAndRight(
 			deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 			var other *operators.Aggr
 			// if we are sending down min/max/random, we don't have to multiply the results with anything
-			if !isMinOrMax(aggr.OpCode) && !isRandom(aggr.OpCode) {
+			if !isMinOrMax(aggr.OpCode) && !isAnyValue(aggr.OpCode) {
 				other = countStarAggr()
 			}
 			switch {

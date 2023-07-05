@@ -67,11 +67,10 @@ type CellInfo struct {
 
 // VTOrcClusterInfo stores the information for a cluster. This is supposed to be used only for VTOrc tests.
 type VTOrcClusterInfo struct {
-	ClusterInstance     *cluster.LocalProcessCluster
-	Ts                  *topo.Server
-	CellInfos           []*CellInfo
-	VtctldClientProcess *cluster.VtctldClientProcess
-	lastUsedValue       int
+	ClusterInstance *cluster.LocalProcessCluster
+	Ts              *topo.Server
+	CellInfos       []*CellInfo
+	lastUsedValue   int
 }
 
 // CreateClusterAndStartTopo starts the cluster and topology service
@@ -100,17 +99,13 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VTOrcClusterInfo, error)
 		return nil, err
 	}
 
-	// store the vtctldclient process
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	return &VTOrcClusterInfo{
-		ClusterInstance:     clusterInstance,
-		Ts:                  ts,
-		CellInfos:           cellInfos,
-		lastUsedValue:       100,
-		VtctldClientProcess: vtctldClientProcess,
+		ClusterInstance: clusterInstance,
+		Ts:              ts,
+		CellInfos:       cellInfos,
+		lastUsedValue:   100,
 	}, err
 }
 
@@ -307,7 +302,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	if durability == "" {
 		durability = "none"
 	}
-	out, err := clusterInfo.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)
 
 	// start vtorc
@@ -829,20 +824,17 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 		require.NoError(t, err)
 	}
 
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-
-	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 	clusterInfo := &VTOrcClusterInfo{
-		ClusterInstance:     clusterInstance,
-		Ts:                  ts,
-		CellInfos:           nil,
-		lastUsedValue:       100,
-		VtctldClientProcess: vtctldClientProcess,
+		ClusterInstance: clusterInstance,
+		Ts:              ts,
+		CellInfos:       nil,
+		lastUsedValue:   100,
 	}
 	return clusterInfo
 }

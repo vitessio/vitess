@@ -947,6 +947,13 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 		vschemaCounters.Add("Reload", 1)
 	}
 
+	if vindexUnknownParams != nil {
+		var unknownParams int
+		for _, ks := range stats.Keyspaces {
+			unknownParams += ks.VindexUnknownParamsCount
+		}
+		vindexUnknownParams.Set(int64(unknownParams))
+	}
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

@@ -115,7 +115,7 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.001) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
 }
 
@@ -302,4 +302,14 @@ func TestPrepareStatements(t *testing.T) {
 
 	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
+}
+
+func TestBuggyOuterJoin(t *testing.T) {
+	// We found a couple of inconsistencies around outer joins, adding these tests to stop regressions
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+
+	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
 }

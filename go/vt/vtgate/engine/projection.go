@@ -129,7 +129,7 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	qr.Fields, err = p.evalFields(env, nil)
+	qr.Fields, err = p.evalFields(env, qr.Fields)
 	if err != nil {
 		return nil, err
 	}
