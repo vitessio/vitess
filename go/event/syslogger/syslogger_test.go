@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/vt/log"
 )
 
 type TestEvent struct {
@@ -63,60 +62,6 @@ func (fw *fakeWriter) Info(msg string) error    { return fw.write(syslog.LOG_INF
 func (fw *fakeWriter) Notice(msg string) error  { return fw.write(syslog.LOG_NOTICE, msg) }
 func (fw *fakeWriter) Warning(msg string) error { return fw.write(syslog.LOG_WARNING, msg) }
 
-type loggerMsg struct {
-	msg   string
-	level string
-}
-type testLogger struct {
-	logs          []loggerMsg
-	savedInfof    func(format string, args ...any)
-	savedWarningf func(format string, args ...any)
-	savedErrorf   func(format string, args ...any)
-}
-
-func newTestLogger() *testLogger {
-	tl := &testLogger{
-		savedInfof:    log.Infof,
-		savedWarningf: log.Warningf,
-		savedErrorf:   log.Errorf,
-	}
-	log.Infof = tl.recordInfof
-	log.Warningf = tl.recordWarningf
-	log.Errorf = tl.recordErrorf
-	return tl
-}
-
-func (tl *testLogger) Close() {
-	log.Infof = tl.savedInfof
-	log.Warningf = tl.savedWarningf
-	log.Errorf = tl.savedErrorf
-}
-
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logs = append(tl.logs, loggerMsg{msg, "INFO"})
-	tl.savedInfof(msg)
-}
-
-func (tl *testLogger) recordWarningf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logs = append(tl.logs, loggerMsg{msg, "WARNING"})
-	tl.savedWarningf(msg)
-}
-
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logs = append(tl.logs, loggerMsg{msg, "ERROR"})
-	tl.savedErrorf(msg)
-}
-
-func (tl *testLogger) getLog() loggerMsg {
-	if len(tl.logs) > 0 {
-		return tl.logs[len(tl.logs)-1]
-	}
-	return loggerMsg{"no logs!", "ERROR"}
-}
-
 // TestSyslog checks that our callback works.
 func TestSyslog(t *testing.T) {
 	writer = &fakeWriter{}
@@ -132,7 +77,7 @@ func TestSyslog(t *testing.T) {
 // TestBadWriter verifies we are still triggering (to normal logs) if
 // the syslog connection failed
 func TestBadWriter(t *testing.T) {
-	tl := newTestLogger()
+	tl := NewTestLogger()
 	defer tl.Close()
 
 	writer = nil

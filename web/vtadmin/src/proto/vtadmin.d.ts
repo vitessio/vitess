@@ -26691,6 +26691,194 @@ export namespace tabletmanagerdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a ResetSequencesRequest. */
+    interface IResetSequencesRequest {
+
+        /** ResetSequencesRequest tables */
+        tables?: (string[]|null);
+    }
+
+    /** Represents a ResetSequencesRequest. */
+    class ResetSequencesRequest implements IResetSequencesRequest {
+
+        /**
+         * Constructs a new ResetSequencesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IResetSequencesRequest);
+
+        /** ResetSequencesRequest tables. */
+        public tables: string[];
+
+        /**
+         * Creates a new ResetSequencesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ResetSequencesRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IResetSequencesRequest): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Encodes the specified ResetSequencesRequest message. Does not implicitly {@link tabletmanagerdata.ResetSequencesRequest.verify|verify} messages.
+         * @param message ResetSequencesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IResetSequencesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ResetSequencesRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ResetSequencesRequest.verify|verify} messages.
+         * @param message ResetSequencesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IResetSequencesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ResetSequencesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ResetSequencesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Decodes a ResetSequencesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ResetSequencesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Verifies a ResetSequencesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ResetSequencesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ResetSequencesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Creates a plain object from a ResetSequencesRequest message. Also converts values to other types if specified.
+         * @param message ResetSequencesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ResetSequencesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ResetSequencesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetSequencesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ResetSequencesResponse. */
+    interface IResetSequencesResponse {
+    }
+
+    /** Represents a ResetSequencesResponse. */
+    class ResetSequencesResponse implements IResetSequencesResponse {
+
+        /**
+         * Constructs a new ResetSequencesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IResetSequencesResponse);
+
+        /**
+         * Creates a new ResetSequencesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ResetSequencesResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IResetSequencesResponse): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Encodes the specified ResetSequencesResponse message. Does not implicitly {@link tabletmanagerdata.ResetSequencesResponse.verify|verify} messages.
+         * @param message ResetSequencesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IResetSequencesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ResetSequencesResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ResetSequencesResponse.verify|verify} messages.
+         * @param message ResetSequencesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IResetSequencesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ResetSequencesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ResetSequencesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Decodes a ResetSequencesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ResetSequencesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Verifies a ResetSequencesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ResetSequencesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ResetSequencesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Creates a plain object from a ResetSequencesResponse message. Also converts values to other types if specified.
+         * @param message ResetSequencesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ResetSequencesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ResetSequencesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetSequencesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace binlogdata. */

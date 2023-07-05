@@ -97,8 +97,6 @@ type Instance struct {
 	Problems []string
 
 	LastDiscoveryLatency time.Duration
-
-	seed bool // Means we force this instance to be written to backend, even if it's invalid, empty or forgotten
 }
 
 // NewInstance creates a new, empty instance
@@ -129,46 +127,9 @@ func (instance *Instance) MajorVersion() []string {
 	return MajorVersion(instance.Version)
 }
 
-// MajorVersion returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
+// MajorVersionString returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
 func (instance *Instance) MajorVersionString() string {
 	return strings.Join(instance.MajorVersion(), ".")
-}
-
-func (instance *Instance) IsMySQL51() bool {
-	return instance.MajorVersionString() == "5.1"
-}
-
-func (instance *Instance) IsMySQL55() bool {
-	return instance.MajorVersionString() == "5.5"
-}
-
-func (instance *Instance) IsMySQL56() bool {
-	return instance.MajorVersionString() == "5.6"
-}
-
-func (instance *Instance) IsMySQL57() bool {
-	return instance.MajorVersionString() == "5.7"
-}
-
-func (instance *Instance) IsMySQL80() bool {
-	return instance.MajorVersionString() == "8.0"
-}
-
-// IsSmallerBinlogFormat returns true when this instance's binlgo format is
-// "smaller" than the other's, i.e. binary logs cannot flow from the other instance to this one
-func (instance *Instance) IsSmallerBinlogFormat(other *Instance) bool {
-	return IsSmallerBinlogFormat(instance.BinlogFormat, other.BinlogFormat)
-}
-
-// IsSmallerMajorVersion tests this instance against another and returns true if this instance is of a smaller "major" varsion.
-// e.g. 5.5.36 is NOT a smaller major version as comapred to 5.5.36, but IS as compared to 5.6.9
-func (instance *Instance) IsSmallerMajorVersion(other *Instance) bool {
-	return IsSmallerMajorVersion(instance.Version, other.Version)
-}
-
-// IsSmallerMajorVersionByString checks if this instance has a smaller major version number than given one
-func (instance *Instance) IsSmallerMajorVersionByString(otherVersion string) bool {
-	return IsSmallerMajorVersion(instance.Version, otherVersion)
 }
 
 // IsMariaDB checks whether this is any version of MariaDB
@@ -179,11 +140,6 @@ func (instance *Instance) IsMariaDB() bool {
 // IsPercona checks whether this is any version of Percona Server
 func (instance *Instance) IsPercona() bool {
 	return strings.Contains(instance.VersionComment, "Percona")
-}
-
-// isNDB check whether this is NDB Cluster (aka MySQL Cluster)
-func (instance *Instance) IsNDB() bool {
-	return strings.Contains(instance.Version, "-ndb-")
 }
 
 // IsBinlogServer checks whether this is any type of a binlog server
@@ -203,13 +159,6 @@ func (instance *Instance) IsOracleMySQL() bool {
 		return false
 	}
 	return true
-}
-
-func (instance *Instance) SetSeed() {
-	instance.seed = true
-}
-func (instance *Instance) IsSeed() bool {
-	return instance.seed
 }
 
 // applyFlavorName

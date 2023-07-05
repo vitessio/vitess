@@ -345,12 +345,12 @@ func restartReplication(replicaAlias string) error {
 	defer cancel()
 	err = tmc.StopReplication(ctx, replicaTablet)
 	if err != nil {
-		log.Info("Could not stop replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		log.Info("Could not stop replication on %v", replicaAlias)
 		return err
 	}
 	err = tmc.StartReplication(ctx, replicaTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
 	if err != nil {
-		log.Info("Could not start replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		log.Info("Could not start replication on %v", replicaAlias)
 		return err
 	}
 	return nil

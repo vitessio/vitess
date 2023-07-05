@@ -62,31 +62,21 @@ func (cached *Binary) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
-//go:nocheckptr
 func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
-	// field params map[string]string
-	if cached.params != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.params)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
-		if len(cached.params) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
-		}
-		for k, v := range cached.params {
-			size += hack.RuntimeAllocSize(int64(len(k)))
-			size += hack.RuntimeAllocSize(int64(len(v)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	return size
