@@ -872,6 +872,9 @@ func VisitRefOfAvg(in *Avg, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfBegin(in *Begin, f Visit) error {
@@ -926,6 +929,9 @@ func VisitRefOfBitAnd(in *BitAnd, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfBitOr(in *BitOr, f Visit) error {
@@ -938,6 +944,9 @@ func VisitRefOfBitOr(in *BitOr, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfBitXor(in *BitXor, f Visit) error {
@@ -948,6 +957,9 @@ func VisitRefOfBitXor(in *BitXor, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -1236,6 +1248,9 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCountStar(in *CountStar, f Visit) error {
@@ -1243,6 +1258,9 @@ func VisitRefOfCountStar(in *CountStar, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -2660,6 +2678,9 @@ func VisitRefOfMax(in *Max, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
@@ -2685,6 +2706,9 @@ func VisitRefOfMin(in *Min, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3674,6 +3698,9 @@ func VisitRefOfStd(in *Std, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfStdDev(in *StdDev, f Visit) error {
@@ -3684,6 +3711,9 @@ func VisitRefOfStdDev(in *StdDev, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3698,6 +3728,9 @@ func VisitRefOfStdPop(in *StdPop, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
@@ -3708,6 +3741,9 @@ func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3833,6 +3869,9 @@ func VisitRefOfSum(in *Sum, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -4197,6 +4236,9 @@ func VisitRefOfVarPop(in *VarPop, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
@@ -4207,6 +4249,9 @@ func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -4231,6 +4276,9 @@ func VisitRefOfVariance(in *Variance, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil

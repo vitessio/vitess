@@ -789,6 +789,7 @@ func CloneRefOfAvg(n *Avg) *Avg {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -832,6 +833,7 @@ func CloneRefOfBitAnd(n *BitAnd) *BitAnd {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -842,6 +844,7 @@ func CloneRefOfBitOr(n *BitOr) *BitOr {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -852,6 +855,7 @@ func CloneRefOfBitXor(n *BitXor) *BitXor {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -1067,6 +1071,7 @@ func CloneRefOfCount(n *Count) *Count {
 	}
 	out := *n
 	out.Args = CloneExprs(n.Args)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -1076,6 +1081,7 @@ func CloneRefOfCountStar(n *CountStar) *CountStar {
 		return nil
 	}
 	out := *n
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2111,6 +2117,7 @@ func CloneRefOfMax(n *Max) *Max {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2132,6 +2139,7 @@ func CloneRefOfMin(n *Min) *Min {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2882,6 +2890,7 @@ func CloneRefOfStd(n *Std) *Std {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2892,6 +2901,7 @@ func CloneRefOfStdDev(n *StdDev) *StdDev {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2902,6 +2912,7 @@ func CloneRefOfStdPop(n *StdPop) *StdPop {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2912,6 +2923,7 @@ func CloneRefOfStdSamp(n *StdSamp) *StdSamp {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3005,6 +3017,7 @@ func CloneRefOfSum(n *Sum) *Sum {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3274,6 +3287,7 @@ func CloneRefOfVarPop(n *VarPop) *VarPop {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3284,6 +3298,7 @@ func CloneRefOfVarSamp(n *VarSamp) *VarSamp {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3304,6 +3319,7 @@ func CloneRefOfVariance(n *Variance) *Variance {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 

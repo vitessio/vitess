@@ -3530,10 +3530,18 @@ func (node *Count) formatFast(buf *TrackedBuffer) {
 	}
 	node.Args.formatFast(buf)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *CountStar) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("count(*)")
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *AnyValue) formatFast(buf *TrackedBuffer) {
@@ -3549,6 +3557,10 @@ func (node *Avg) formatFast(buf *TrackedBuffer) {
 	}
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *Max) formatFast(buf *TrackedBuffer) {
@@ -3558,6 +3570,10 @@ func (node *Max) formatFast(buf *TrackedBuffer) {
 	}
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *Min) formatFast(buf *TrackedBuffer) {
@@ -3567,6 +3583,10 @@ func (node *Min) formatFast(buf *TrackedBuffer) {
 	}
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *Sum) formatFast(buf *TrackedBuffer) {
@@ -3576,66 +3596,110 @@ func (node *Sum) formatFast(buf *TrackedBuffer) {
 	}
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *BitAnd) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("bit_and(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *BitOr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("bit_or(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *BitXor) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("bit_xor(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *Std) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("std(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *StdDev) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("stddev(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *StdPop) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("stddev_pop(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *StdSamp) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("stddev_samp(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *VarPop) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("var_pop(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *VarSamp) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("var_samp(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 func (node *Variance) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("variance(")
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.

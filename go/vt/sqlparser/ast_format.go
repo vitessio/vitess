@@ -2672,10 +2672,16 @@ func (node *Count) Format(buf *TrackedBuffer) {
 		buf.literal(DistinctStr)
 	}
 	buf.astPrintf(node, "%v)", node.Args)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *CountStar) Format(buf *TrackedBuffer) {
 	buf.WriteString("count(*)")
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *AnyValue) Format(buf *TrackedBuffer) {
@@ -2688,6 +2694,9 @@ func (node *Avg) Format(buf *TrackedBuffer) {
 		buf.literal(DistinctStr)
 	}
 	buf.astPrintf(node, "%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *Max) Format(buf *TrackedBuffer) {
@@ -2696,6 +2705,9 @@ func (node *Max) Format(buf *TrackedBuffer) {
 		buf.literal(DistinctStr)
 	}
 	buf.astPrintf(node, "%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *Min) Format(buf *TrackedBuffer) {
@@ -2704,6 +2716,9 @@ func (node *Min) Format(buf *TrackedBuffer) {
 		buf.literal(DistinctStr)
 	}
 	buf.astPrintf(node, "%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *Sum) Format(buf *TrackedBuffer) {
@@ -2712,46 +2727,79 @@ func (node *Sum) Format(buf *TrackedBuffer) {
 		buf.literal(DistinctStr)
 	}
 	buf.astPrintf(node, "%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *BitAnd) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "bit_and(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *BitOr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "bit_or(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *BitXor) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "bit_xor(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *Std) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "std(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *StdDev) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "stddev(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *StdPop) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "stddev_pop(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *StdSamp) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "stddev_samp(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *VarPop) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "var_pop(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *VarSamp) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "var_samp(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 func (node *Variance) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "variance(%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
 }
 
 // Format formats the node.

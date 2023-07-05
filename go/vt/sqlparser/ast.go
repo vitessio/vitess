@@ -2862,12 +2862,14 @@ type (
 	}
 
 	Count struct {
-		Args     Exprs
-		Distinct bool
+		Args       Exprs
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	CountStar struct {
-		_ bool
+		_          bool
+		OverClause *OverClause
 		// TL;DR; This makes sure that reference equality checks works as expected
 		//
 		// You're correct that this might seem a bit strange at first glance.
@@ -2897,63 +2899,77 @@ type (
 	}
 
 	Avg struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Max struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Min struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Sum struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	BitAnd struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	BitOr struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	BitXor struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	Std struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdDev struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdPop struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdSamp struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	VarPop struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	VarSamp struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	Variance struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
