@@ -1505,15 +1505,10 @@ func TestServerFlush(t *testing.T) {
 }
 
 func TestTcpKeepAlive(t *testing.T) {
-	var origFunc func(*net.TCPConn, time.Duration) error
 	th := &testHandler{}
 	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0)
 	require.NoError(t, err)
-	origFunc = l.TcpPropFunc
-	defer func() {
-		l.TcpPropFunc = origFunc
-		l.Close()
-	}()
+	defer l.Close()
 	go l.Accept()
 
 	host, port := getHostPort(t, l.Addr())
@@ -1522,20 +1517,11 @@ func TestTcpKeepAlive(t *testing.T) {
 		Port: port,
 	}
 
-	var called bool
-	l.TcpPropFunc = func(conn *net.TCPConn, duration time.Duration) error {
-		called = true
-		return nil
-	}
-
 	// on connect, the tcp method should be called.
 	c, err := Connect(context.Background(), params)
 	require.NoError(t, err)
 	defer c.Close()
-	require.True(t, called, "tcp property method not called")
-
-	// move to original method
-	l.TcpPropFunc = origFunc
+	require.True(t, th.lastConn.keepAliveOn, "tcp property method not called")
 
 	// close the connection
 	th.lastConn.Close()

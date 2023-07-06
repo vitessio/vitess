@@ -199,6 +199,10 @@ type Conn struct {
 	// enableQueryInfo controls whether we parse the INFO field in QUERY_OK packets
 	// See: ConnParams.EnableQueryInfo
 	enableQueryInfo bool
+
+	// keepAliveOn marks when keep alive is active on the connection.
+	// This is currently used for testing.
+	keepAliveOn bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -246,10 +250,21 @@ func newConn(conn net.Conn) *Conn {
 // the server is shutting down, and has the ability to control buffer
 // size for reads.
 func newServerConn(conn net.Conn, listener *Listener) *Conn {
+	// Enable KeepAlive on TCP connections and change keep-alive period if provided.
+	enabledKeepAlive := false
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		if err := setTcpConnProperties(tcpConn, listener.connKeepAlivePeriod); err != nil {
+			log.Errorf("error in setting tcp properties: %v", err)
+		} else {
+			enabledKeepAlive = true
+		}
+	}
+
 	c := &Conn{
 		conn:        conn,
 		listener:    listener,
 		PrepareData: make(map[uint32]*PrepareData),
+		keepAliveOn: enabledKeepAlive,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -265,6 +280,22 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 
 	return c
+}
+
+func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) error {
+	if err := conn.SetKeepAlive(true); err != nil {
+		return vterrors.Wrapf(err, "unable to enable keepalive on tcp connection")
+	}
+
+	if keepAlivePeriod <= 0 {
+		return nil
+	}
+
+	if err := conn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+		return vterrors.Wrapf(err, "unable to set keepalive period on tcp connection")
+	}
+
+	return nil
 }
 
 // startWriterBuffering starts using buffered writes. This should
@@ -767,7 +798,7 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 
 	bytes, pos := c.startEphemeralPacketWithHeader(length)
 	data := &coder{data: bytes, pos: pos}
-	data.writeByte(headerType) //header - OK or EOF
+	data.writeByte(headerType) // header - OK or EOF
 	data.writeLenEncInt(packetOk.affectedRows)
 	data.writeLenEncInt(packetOk.lastInsertID)
 	data.writeUint16(packetOk.statusFlags)

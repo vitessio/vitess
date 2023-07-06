@@ -211,8 +211,6 @@ type Listener struct {
 	// handled further by the MySQL handler. An non-nil error will stop
 	// processing the connection by the MySQL handler.
 	PreHandleFunc func(context.Context, net.Conn, uint32) (net.Conn, error)
-
-	TcpPropFunc func(*net.TCPConn, time.Duration) error
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -301,7 +299,6 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadBufferSize:  cfg.ConnReadBufferSize,
 		connBufferPooling:   cfg.ConnBufferPooling,
 		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
-		TcpPropFunc:         setTcpConnProperties,
 	}, nil
 }
 
@@ -347,14 +344,6 @@ func (l *Listener) Accept() {
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
 func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
-
-	// Enable KeepAlive on TCP connections and change keep-alive period if provided.
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		if err := l.TcpPropFunc(tcpConn, l.connKeepAlivePeriod); err != nil {
-			log.Errorf("error in setting tcp properties: %v", err)
-		}
-	}
-
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
 		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
 	}
@@ -548,22 +537,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			return
 		}
 	}
-}
-
-func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) error {
-	if err := conn.SetKeepAlive(true); err != nil {
-		return vterrors.Wrapf(err, "unable to enable keepalive on tcp connection")
-	}
-
-	if keepAlivePeriod <= 0 {
-		return nil
-	}
-
-	if err := conn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-		return vterrors.Wrapf(err, "unable to set keepalive period on tcp connection")
-	}
-
-	return nil
 }
 
 // Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
