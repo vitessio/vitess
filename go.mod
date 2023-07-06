@@ -103,6 +103,7 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+	github.com/spf13/afero v1.9.3
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201
@@ -160,7 +161,6 @@ require (
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect
-	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
