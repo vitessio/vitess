@@ -152,7 +152,7 @@ var (
 const (
 	customThreshold         = 5
 	throttlerEnabledTimeout = 60 * time.Second
-	useDefaultQuery         = ""
+	noCustomQuery           = ""
 )
 
 func TestMain(m *testing.M) {
@@ -247,7 +247,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 	})
 	t.Run("updating throttler config", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, useDefaultQuery)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, noCustomQuery)
 		require.NoError(t, err)
 	})
 
