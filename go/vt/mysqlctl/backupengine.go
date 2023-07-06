@@ -73,22 +73,25 @@ type BackupParams struct {
 	IncrementalFromPos string
 	// Stats let's backup engines report detailed backup timings.
 	Stats backupstats.Stats
+	// UpgradeSafe indicates whether the backup is safe for upgrade and created with innodb_fast_shutdown=0
+	UpgradeSafe bool
 }
 
-func (b BackupParams) Copy() BackupParams {
+func (b *BackupParams) Copy() BackupParams {
 	return BackupParams{
-		b.Cnf,
-		b.Mysqld,
-		b.Logger,
-		b.Concurrency,
-		b.HookExtraEnv,
-		b.TopoServer,
-		b.Keyspace,
-		b.Shard,
-		b.TabletAlias,
-		b.BackupTime,
-		b.IncrementalFromPos,
-		b.Stats,
+		Cnf:                b.Cnf,
+		Mysqld:             b.Mysqld,
+		Logger:             b.Logger,
+		Concurrency:        b.Concurrency,
+		HookExtraEnv:       b.HookExtraEnv,
+		TopoServer:         b.TopoServer,
+		Keyspace:           b.Keyspace,
+		Shard:              b.Shard,
+		TabletAlias:        b.TabletAlias,
+		BackupTime:         b.BackupTime,
+		IncrementalFromPos: b.IncrementalFromPos,
+		Stats:              b.Stats,
+		UpgradeSafe:        b.UpgradeSafe,
 	}
 }
 
@@ -123,21 +126,21 @@ type RestoreParams struct {
 	Stats backupstats.Stats
 }
 
-func (p RestoreParams) Copy() RestoreParams {
+func (p *RestoreParams) Copy() RestoreParams {
 	return RestoreParams{
-		p.Cnf,
-		p.Mysqld,
-		p.Logger,
-		p.Concurrency,
-		p.HookExtraEnv,
-		p.DeleteBeforeRestore,
-		p.DbName,
-		p.Keyspace,
-		p.Shard,
-		p.StartTime,
-		p.RestoreToPos,
-		p.DryRun,
-		p.Stats,
+		Cnf:                 p.Cnf,
+		Mysqld:              p.Mysqld,
+		Logger:              p.Logger,
+		Concurrency:         p.Concurrency,
+		HookExtraEnv:        p.HookExtraEnv,
+		DeleteBeforeRestore: p.DeleteBeforeRestore,
+		DbName:              p.DbName,
+		Keyspace:            p.Keyspace,
+		Shard:               p.Shard,
+		StartTime:           p.StartTime,
+		RestoreToPos:        p.RestoreToPos,
+		DryRun:              p.DryRun,
+		Stats:               p.Stats,
 	}
 }
 

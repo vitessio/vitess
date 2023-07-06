@@ -25377,6 +25377,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupRequest upgrade_safe */
+        upgrade_safe?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -25396,6 +25399,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupRequest upgrade_safe. */
+        public upgrade_safe: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -42773,6 +42779,9 @@ export namespace vtctldata {
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupRequest upgrade_safe */
+        upgrade_safe?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -42795,6 +42804,9 @@ export namespace vtctldata {
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupRequest upgrade_safe. */
+        public upgrade_safe: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -43003,6 +43015,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest concurrency */
         concurrency?: (number|Long|null);
+
+        /** BackupShardRequest upgrade_safe */
+        upgrade_safe?: (boolean|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -43025,6 +43040,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest concurrency. */
         public concurrency: (number|Long);
+
+        /** BackupShardRequest upgrade_safe. */
+        public upgrade_safe: boolean;
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

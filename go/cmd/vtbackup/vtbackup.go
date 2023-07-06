@@ -134,7 +134,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&minRetentionCount, "min_retention_count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
 	fs.BoolVar(&initialBackup, "initial_backup", initialBackup, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	fs.BoolVar(&allowFirstBackup, "allow_first_backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
-	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
+	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. This is useful when you want to use this backup for a MySQL upgrade.")
 	// vttablet-like flags
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")

@@ -418,6 +418,13 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 
+	// check if we need to set innodb_fast_shutdown=0 for a backup safe for upgrades
+	if params.UpgradeSafe {
+		if _, err := params.Mysqld.FetchSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
+			return false, vterrors.Wrapf(err, "failed to disable fast shutdown")
+		}
+	}
+
 	// shutdown mysqld
 	shutdownCtx, cancel := context.WithTimeout(ctx, BuiltinBackupMysqldTimeout)
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
