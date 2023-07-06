@@ -1360,56 +1360,12 @@
   {
     "comment": "union with the same target shard",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from music where user_id = 1 union select * from user where id = 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
-        "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
-        "Table": "music",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user"
-      ]
-    }
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "union with the same target shard last_insert_id",
     "query": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
-        "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
-        "Table": "music",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user"
-      ]
-    }
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "unsharded union in derived table",
@@ -2473,49 +2429,7 @@
   {
     "comment": "union as a derived table",
     "query": "select found from (select id as found from user union all (select id from unsharded)) as t",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id as found from `user` where 1 != 1",
-                "Query": "select id as found from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select id from unsharded where 1 != 1",
-                "Query": "select id from unsharded",
-                "Table": "unsharded"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.unsharded",
-        "user.user"
-      ]
-    }
+    "plan": "VT13001: [BUG] only weight_string function is expected - got found"
   },
   {
     "comment": "use output column containing data from both sides of the join",

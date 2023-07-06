@@ -27,11 +27,50 @@ import (
 )
 
 func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
-	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
+
+	switch sel := horizon.selectStatement().(type) {
+	case *sqlparser.Select:
+		return expandSelectHorizon(ctx, horizon, sel)
+	case *sqlparser.Union:
+		return expandUnionHorizon(ctx, horizon, sel)
 	}
 
+	panic("the switch should be exhaustive")
+}
+
+func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	op := horizon.Source
+
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if union.Distinct {
+		op = &Distinct{
+			Source: op,
+			QP:     qp,
+		}
+	}
+
+	if len(qp.OrderExprs) > 0 {
+		op = &Ordering{
+			Source: op,
+			Order:  qp.OrderExprs,
+		}
+	}
+
+	if union.Limit != nil {
+		op = &Limit{
+			Source: op,
+			AST:    union.Limit,
+		}
+	}
+
+	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
+}
+
+func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, nil, err

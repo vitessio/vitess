@@ -100,9 +100,12 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		return nil, err
 	}
 
+	lexprs := sqlparser.GetFirstSelect(node.Left).SelectExprs
+	rexprs := sqlparser.GetFirstSelect(node.Right).SelectExprs
 	union := &Union{
 		Distinct: node.Distinct,
 		Sources:  []ops.Operator{opLHS, opRHS},
+		Selects:  []sqlparser.SelectExprs{lexprs, rexprs},
 	}
 	return &Horizon{Source: union, Query: node}, nil
 }

@@ -48,3 +48,17 @@ func Map[From, To any](in []From, f func(From) To) []To {
 	}
 	return result
 }
+
+func MapWithError[From, To any](in []From, f func(From) (To, error)) (result []To, err error) {
+	if in == nil {
+		return nil, nil
+	}
+	result = make([]To, len(in))
+	for i, col := range in {
+		result[i], err = f(col)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return
+}

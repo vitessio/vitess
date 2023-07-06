@@ -1067,6 +1067,11 @@ func (node *Select) MakeDistinct() {
 	node.Distinct = true
 }
 
+// IsDistinct implements the SelectStatement interface
+func (node *Select) IsDistinct() bool {
+	return node.Distinct
+}
+
 // GetColumnCount return SelectExprs count.
 func (node *Select) GetColumnCount() int {
 	return len(node.SelectExprs)
@@ -1190,6 +1195,11 @@ func (node *Union) SetWith(with *With) {
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.Distinct = true
+}
+
+// IsDistinct implements the SelectStatement interface
+func (node *Union) IsDistinct() bool {
+	return node.Distinct
 }
 
 // GetColumnCount implements the SelectStatement interface

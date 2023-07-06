@@ -145,9 +145,6 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 	}
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
-	}
 
 	qp, err := in.getQP(ctx)
 	if err != nil {
@@ -155,7 +152,14 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
+	hasHaving := isSel && sel.Having != nil
+
+	canPushDown := isRoute &&
+		!hasHaving &&
+		!needsOrdering &&
+		!qp.NeedsAggregation() &&
+		!in.selectStatement().IsDistinct() &&
+		in.selectStatement().GetLimit() == nil
 
 	if canPushDown {
 		return rewrite.Swap(in, rb, "push horizon into route")

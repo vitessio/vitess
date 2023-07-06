@@ -17,6 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -26,18 +30,20 @@ import (
 
 type Union struct {
 	Sources  []ops.Operator
+	Selects  []sqlparser.SelectExprs
 	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
 	Ordering []ops.OrderBy
 
-	noColumns
+	offsetPlanned bool
 }
 
 // Clone implements the Operator interface
 func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
 	newOp.Sources = inputs
+	newOp.Selects = slices.Clone(u.Selects)
 	return &newOp
 }
 
@@ -188,8 +194,99 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 	return u, anythingChanged, nil
 }
 
+func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	err := u.planOffsets(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	cols, err := u.GetColumns()
+	if err != nil {
+		return nil, 0, err
+	}
+	for idx, col := range cols {
+		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, col.Expr) {
+			return u, idx, nil
+		}
+	}
+
+	ws, isWeightString := ae.Expr.(*sqlparser.WeightStringFuncExpr)
+	if !isWeightString {
+		return nil, 0, vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(ae)))
+	}
+
+	newSrc, offset, err := u.Sources[0].AddColumn(ctx, ae, true, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	u.Sources[0] = newSrc
+
+	// we are adding a weight_string function. let's find the offset of the argument to it
+	argIdx := slices.IndexFunc(u.Selects[0], func(se sqlparser.SelectExpr) bool {
+		ae, ok := se.(*sqlparser.AliasedExpr)
+		if !ok {
+			err = vterrors.VT12001("can't handle star expressions inside UNION")
+			return false
+		}
+		return ctx.SemTable.EqualsExprWithDeps(ae.Expr, ws.Expr)
+	})
+	if argIdx == -1 {
+		return nil, 0, vterrors.VT13001(fmt.Sprintf("could not find the actual expression to add weight_string function: %s", sqlparser.String(ws.Expr)))
+	}
+
+	for i := 1; i < len(u.Sources); i++ {
+		exprs := u.Selects[i]
+		selectExpr := exprs[argIdx]
+		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, 0, vterrors.VT09015()
+		}
+		newSrc, this, err := u.Sources[i].AddColumn(ctx, aeWrap(weightStringFor(ae.Expr)), true, false)
+		if err != nil {
+			return nil, 0, err
+		}
+		if this != offset {
+			panic("uh oh")
+		}
+		u.Sources[i] = newSrc
+	}
+	return u, offset, nil
+}
+
+func (u *Union) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return u.Sources[0].GetColumns()
+}
+
+func (u *Union) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return u.Sources[0].GetSelectExprs()
+}
+
 func (u *Union) NoLHSTableSet() {}
 
 func (u *Union) ShortDescription() string {
 	return ""
+}
+
+func (u *Union) planOffsets(ctx *plancontext.PlanningContext) error {
+	if u.offsetPlanned {
+		return nil
+	}
+	u.offsetPlanned = true
+
+	for idx, source := range u.Sources {
+		for eIdx, expr := range u.Selects[idx] {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				return vterrors.VT09015()
+			}
+			newOp, offset, err := source.AddColumn(ctx, ae, false, false)
+			if err != nil {
+				return err
+			}
+			if offset != eIdx {
+				return vterrors.VT13001(fmt.Sprintf("index mismatch while pushing the column for '%s'", sqlparser.String(ae)))
+			}
+			u.Sources[idx] = newOp
+		}
+	}
+	return nil
 }
