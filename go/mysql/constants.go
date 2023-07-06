@@ -565,6 +565,31 @@ const (
 	ERJSONValueTooBig              = ErrorCode(3150)
 	ERJSONDocumentTooDeep          = ErrorCode(3157)
 
+	ERRegexpStringNotTerminated = ErrorCode(3684)
+	ERRegexpBufferOverflow      = ErrorCode(3684)
+	ERRegexpIllegalArgument     = ErrorCode(3685)
+	ERRegexpIndexOutOfBounds    = ErrorCode(3686)
+	ERRegexpInternal            = ErrorCode(3687)
+	ERRegexpRuleSyntax          = ErrorCode(3688)
+	ERRegexpBadEscapeSequence   = ErrorCode(3689)
+	ERRegexpUnimplemented       = ErrorCode(3690)
+	ERRegexpMismatchParen       = ErrorCode(3691)
+	ERRegexpBadInterval         = ErrorCode(3692)
+	ERRRegexpMaxLtMin           = ErrorCode(3693)
+	ERRegexpInvalidBackRef      = ErrorCode(3694)
+	ERRegexpLookBehindLimit     = ErrorCode(3695)
+	ERRegexpMissingCloseBracket = ErrorCode(3696)
+	ERRegexpInvalidRange        = ErrorCode(3697)
+	ERRegexpStackOverflow       = ErrorCode(3698)
+	ERRegexpTimeOut             = ErrorCode(3699)
+	ERRegexpPatternTooBig       = ErrorCode(3700)
+	ERRegexpInvalidCaptureGroup = ErrorCode(3887)
+	ERRegexpInvalidFlag         = ErrorCode(3900)
+
+	ERCharacterSetMismatch = ErrorCode(3995)
+
+	ERWrongParametersToNativeFct = ErrorCode(1583)
+
 	// max execution time exceeded
 	ERQueryTimeout = ErrorCode(3024)
 
