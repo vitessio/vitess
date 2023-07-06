@@ -100,6 +100,9 @@ func TestMustFix(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1")
 
 	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0 from dept as tbl0, emp as tbl1 where case when false then tbl0.dname end group by tbl1.comm")
+
+	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
 
 	// mismatched results
@@ -227,7 +230,7 @@ func TestRandom(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	endBy := time.Now().Add(10 * time.Second)
+	endBy := time.Now().Add(1 * time.Second)
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true

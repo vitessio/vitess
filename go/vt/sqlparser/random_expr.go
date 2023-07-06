@@ -157,19 +157,20 @@ func (g *Generator) intExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.caseExpr(genConfig) },
 	}
 
-	// TODO: this adds two identical functions to options, both of which use the last element in g.exprGenerators
 	for i := range g.exprGenerators {
+		generator := g.exprGenerators[i]
+		if generator == nil {
+			continue
+		}
+
 		options = append(options, func() Expr {
-			//fmt.Printf("index: %d", i)
-			expr := g.exprGenerators[i].Generate(genConfig)
+			expr := generator.Generate(genConfig)
 			if expr == nil {
 				return g.intLiteral()
 			}
 			return expr
 		})
 	}
-	//fmt.Printf("options: %v\n", options)
-	//fmt.Printf("expr generators: %v\n", g.exprGenerators)
 
 	return g.randomOf(options)
 }
@@ -186,7 +187,12 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.caseExpr(genConfig) },
 	}
 
-	for _, generator := range g.exprGenerators {
+	for i := range g.exprGenerators {
+		generator := g.exprGenerators[i]
+		if generator == nil {
+			continue
+		}
+
 		options = append(options, func() Expr {
 			expr := generator.Generate(genConfig)
 			if expr == nil {
