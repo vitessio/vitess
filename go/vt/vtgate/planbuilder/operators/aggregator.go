@@ -42,6 +42,9 @@ type (
 		Grouping     []GroupBy
 		Aggregations []Aggr
 
+		// We support a single distinct aggregation per aggregator. It is stored here
+		DistinctExpr sqlparser.Expr
+
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
 		Pushed        bool
 		offsetPlanned bool
@@ -58,17 +61,12 @@ type (
 )
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
-	return &Aggregator{
-		Source:        inputs[0],
-		Columns:       slices.Clone(a.Columns),
-		Grouping:      slices.Clone(a.Grouping),
-		Aggregations:  slices.Clone(a.Aggregations),
-		Pushed:        a.Pushed,
-		offsetPlanned: a.offsetPlanned,
-		Original:      a.Original,
-		ResultColumns: a.ResultColumns,
-		QP:            a.QP,
-	}
+	kopy := *a
+	kopy.Source = inputs[0]
+	kopy.Columns = slices.Clone(a.Columns)
+	kopy.Grouping = slices.Clone(a.Grouping)
+	kopy.Aggregations = slices.Clone(a.Aggregations)
+	return &kopy
 }
 
 func (a *Aggregator) Inputs() []ops.Operator {
@@ -117,13 +115,39 @@ func (a *Aggregator) isDerived() bool {
 	return a.TableID != nil
 }
 
-func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("did not expect to add group by here")
+func (a *Aggregator) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	if a.isDerived() {
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
+		if err != nil {
+			return 0, err
+		}
+		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
 	}
+	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
+		return offset, nil
+	}
+	return -1, nil
+}
+
+func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	offset, err := a.findCol(ctx, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset >= 0 {
+		return a, offset, nil
+	}
+	if a.isDerived() {
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
+		if err != nil {
+			return nil, 0, err
+		}
+		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, derivedTBL)
+	}
+
 	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
-	err := a.planOffsets(ctx)
+	err = a.planOffsets(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -136,6 +160,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		if isColName && colName.Name.EqualString(col.As.String()) {
 			return a, i, nil
 		}
+	}
+
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("did not expect to add group by here")
 	}
 
 	// If weight string function is received from above operator. Then check if we have a group on the expression used.
@@ -175,6 +203,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 }
 
 func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
+		return a.Columns, nil
+	}
+
 	// we update the incoming columns, so we know about any new columns that have been added
 	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
 	// Aggregator should be made aware of these to truncate them in final result.
@@ -191,10 +223,17 @@ func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return a.Columns, nil
 }
 
+func (a *Aggregator) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(a)
+}
+
 func (a *Aggregator) ShortDescription() string {
-	columnns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
+	columns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
 		return sqlparser.String(from)
 	})
+	if a.Alias != "" {
+		columns = append([]string{"derived[" + a.Alias + "]"}, columns...)
+	}
 
 	org := ""
 	if a.Original {
@@ -202,7 +241,7 @@ func (a *Aggregator) ShortDescription() string {
 	}
 
 	if len(a.Grouping) == 0 {
-		return fmt.Sprintf("%s%s", org, strings.Join(columnns, ", "))
+		return fmt.Sprintf("%s%s", org, strings.Join(columns, ", "))
 	}
 
 	var grouping []string
@@ -210,7 +249,7 @@ func (a *Aggregator) ShortDescription() string {
 		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
 	}
 
-	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columnns, ", "), strings.Join(grouping, ","))
+	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
 }
 
 func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
@@ -248,7 +287,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	for idx, aggr := range a.Aggregations {
-		if !aggr.NeedWeightString(ctx) {
+		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
 		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
@@ -312,6 +351,9 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 			return 0, err
 		}
 		if aggr.ColOffset != offset {
+			if _, srcIsAlsoAggr := a.Source.(*Aggregator); srcIsAlsoAggr {
+				return 0, vterrors.VT12001("aggregation on top of aggregation not supported")
+			}
 			return -1, vterrors.VT13001(fmt.Sprintf("aggregation column on wrong index: want: %d, got: %d", colIdx, offset))
 		}
 
@@ -327,7 +369,7 @@ func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colId
 			continue
 		}
 
-		newSrc, offset, err := a.Source.AddColumn(ctx, a.Columns[colIdx], false, false)
+		newSrc, offset, err := a.Source.AddColumn(ctx, a.Columns[colIdx], false, true)
 		if err != nil {
 			return -1, err
 		}
@@ -365,7 +407,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
-		if aggr.WSOffset != -1 || !aggr.NeedWeightString(ctx) {
+		if aggr.WSOffset != -1 || !aggr.NeedsWeightString(ctx) {
 			continue
 		}
 
@@ -393,6 +435,25 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 		a.Columns = append(a.Columns, aliasedExpr)
 	}
 	return offset, nil
+}
+
+// SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
+// This is used when we are splitting the aggregation so one part is done
+// at the mysql level and one part at the vtgate level
+func (a *Aggregator) SplitAggregatorBelowRoute(input []ops.Operator) *Aggregator {
+	newOp := a.Clone(input).(*Aggregator)
+	newOp.Pushed = false
+	newOp.Original = false
+	newOp.Alias = ""
+	newOp.TableID = nil
+	return newOp
+}
+
+func (a *Aggregator) introducesTableID() semantics.TableSet {
+	if a.TableID == nil {
+		return semantics.EmptyTableSet()
+	}
+	return *a.TableID
 }
 
 var _ ops.Operator = (*Aggregator)(nil)

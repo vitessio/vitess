@@ -592,7 +592,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 }
 
 func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := operators.CreateQPFromUnion(ctx, union)
+	qp, err := operators.CreateQPFromSelectStatement(ctx, union)
 	if err != nil {
 		return nil, err
 	}

@@ -38,7 +38,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		var err error
 		switch op := in.(type) {
-		case *Derived, *Horizon:
+		case *Horizon:
 			return nil, nil, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
 		case offsettable:
 			err = op.planOffsets(ctx)
@@ -110,7 +110,12 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 	}
 
 	getColumns := func() []*sqlparser.AliasedExpr { return columns }
-	visitor := getVisitor(ctx, getColumns, found, notFound)
+	findCol := func(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+		return slices.IndexFunc(getColumns(), func(expr *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+		}), nil
+	}
+	visitor := getVisitor(ctx, findCol, found, notFound)
 
 	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
 	up := func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -137,10 +142,6 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			return in, rewrite.SameTree, nil
 		}
 
-		columns, err := filter.GetColumns()
-		if err != nil {
-			return nil, nil, err
-		}
 		proj, areOnTopOfProj := filter.Source.(selectExpressions)
 		if !areOnTopOfProj {
 			// not much we can do here
@@ -152,19 +153,12 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			_, addToGroupBy := e.(*sqlparser.ColName)
 			proj.addColumnWithoutPushing(aeWrap(e), addToGroupBy)
 			addedColumns = true
-			columns, err = proj.GetColumns()
 			return nil
 		}
-		getColumns := func() []*sqlparser.AliasedExpr {
-			return columns
-		}
-		visitor := getVisitor(ctx, getColumns, found, notFound)
+		visitor := getVisitor(ctx, proj.findCol, found, notFound)
 
 		for _, expr := range filter.Predicates {
-			sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopyDependenciesOnSQLNodes)
-			if err != nil {
-				return nil, nil, err
-			}
+			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopyDependenciesOnSQLNodes)
 		}
 		if addedColumns {
 			return in, rewrite.NewTree("added columns because filter needs it", in), nil
@@ -178,7 +172,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 
 func getVisitor(
 	ctx *plancontext.PlanningContext,
-	getColumns func() []*sqlparser.AliasedExpr,
+	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error),
 	found func(sqlparser.Expr, int),
 	notFound func(sqlparser.Expr) error,
 ) func(node, parent sqlparser.SQLNode) bool {
@@ -191,10 +185,11 @@ func getVisitor(
 		if !ok {
 			return true
 		}
-		offset := slices.IndexFunc(getColumns(), func(expr *sqlparser.AliasedExpr) bool {
-			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
-		})
-
+		var offset int
+		offset, err = findCol(ctx, e)
+		if err != nil {
+			return false
+		}
 		if offset >= 0 {
 			found(e, offset)
 			return false
