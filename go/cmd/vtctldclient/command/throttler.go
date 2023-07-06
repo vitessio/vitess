@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
@@ -42,7 +42,7 @@ var (
 
 var (
 	updateThrottlerConfigOptions vtctldatapb.UpdateThrottlerConfigRequest
-	throttledAppRule             topodata.ThrottledAppRule
+	throttledAppRule             topodatapb.ThrottledAppRule
 	throttledAppDuration         time.Duration
 )
 
