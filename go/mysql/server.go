@@ -211,6 +211,8 @@ type Listener struct {
 	// handled further by the MySQL handler. An non-nil error will stop
 	// processing the connection by the MySQL handler.
 	PreHandleFunc func(context.Context, net.Conn, uint32) (net.Conn, error)
+
+	TcpPropFunc func(*net.TCPConn, time.Duration) error
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -299,6 +301,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadBufferSize:  cfg.ConnReadBufferSize,
 		connBufferPooling:   cfg.ConnBufferPooling,
 		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
+		TcpPropFunc:         setTcpConnProperties,
 	}, nil
 }
 
@@ -347,7 +350,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Enable KeepAlive on TCP connections and change keep-alive period if provided.
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		setTcpConnProperties(tcpConn, l.connKeepAlivePeriod)
+		if err := l.TcpPropFunc(tcpConn, l.connKeepAlivePeriod); err != nil {
+			log.Errorf("error in setting tcp properties: %v", err)
+		}
 	}
 
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
@@ -545,19 +550,20 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 }
 
-func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) {
+func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) error {
 	if err := conn.SetKeepAlive(true); err != nil {
-		log.Errorf("unable to enable keepalive on tcp connection: %v", err)
-		return
+		return vterrors.Wrapf(err, "unable to enable keepalive on tcp connection")
 	}
 
 	if keepAlivePeriod <= 0 {
-		return
+		return nil
 	}
 
 	if err := conn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-		log.Errorf("unable to set keepalive period on tcp connection: %v", err)
+		return vterrors.Wrapf(err, "unable to set keepalive period on tcp connection")
 	}
+
+	return nil
 }
 
 // Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.

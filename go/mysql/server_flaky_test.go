@@ -1503,3 +1503,39 @@ func TestServerFlush(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, row)
 }
+
+func TestTcpKeepAlive(t *testing.T) {
+	th := &testHandler{}
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0)
+	require.NoError(t, err)
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host: host,
+		Port: port,
+	}
+
+	var called bool
+	l.TcpPropFunc = func(conn *net.TCPConn, duration time.Duration) error {
+		called = true
+		return nil
+	}
+
+	// on connect, the tcp method should be called.
+	c, err := Connect(context.Background(), params)
+	require.NoError(t, err)
+	defer c.Close()
+	require.True(t, called, "tcp property method not called")
+
+	// move to original method
+	l.TcpPropFunc = setTcpConnProperties
+
+	// close the connection
+	th.lastConn.Close()
+
+	// now calling this method should fail.
+	err = setTcpConnProperties(th.lastConn.conn.(*net.TCPConn), 0)
+	require.ErrorContains(t, err, "unable to enable keepalive on tcp connection")
+}
