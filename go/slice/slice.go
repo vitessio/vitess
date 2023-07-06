@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package slices2 contains generic Slice helpers;
+// Package slice contains generic Slice helpers;
 // Some of this code is sourced from https://github.com/luraim/fun (Apache v2)
-package slices2
+package slice
 
 // All returns true if all elements return true for given predicate
 func All[T any](s []T, fn func(T) bool) bool {

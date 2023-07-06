@@ -34,7 +34,7 @@ The operators go through a few phases while planning:
 package operators
 
 import (
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -150,7 +150,7 @@ func transformColumnsToSelectExprs(op ops.Operator) (sqlparser.SelectExprs, erro
 	if err != nil {
 		return nil, err
 	}
-	selExprs := slices2.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
+	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from
 	})
 	return selExprs, nil

@@ -19,9 +19,10 @@ package operators
 import (
 	"strings"
 
+	"vitess.io/vitess/go/slice"
+
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -111,7 +112,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 }
 
 func (o *Ordering) ShortDescription() string {
-	ordering := slices2.Map(o.Order, func(o ops.OrderBy) string {
+	ordering := slice.Map(o.Order, func(o ops.OrderBy) string {
 		return sqlparser.String(o.Inner)
 	})
 	return strings.Join(ordering, ", ")

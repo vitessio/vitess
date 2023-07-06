@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -163,12 +163,12 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return useSimpleProjection(op, cols, src)
 	}
 
-	expressions := slices2.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
+	expressions := slice.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
 		return from.GetExpr()
 	})
 
 	failed := false
-	evalengineExprs := slices2.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
+	evalengineExprs := slice.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
 		switch e := from.(type) {
 		case operators.Eval:
 			return e.EExpr
@@ -181,7 +181,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		}
 	})
 	var primitive *engine.Projection
-	columnNames := slices2.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
+	columnNames := slice.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
 		return from.ColumnName()
 	})
 
@@ -637,7 +637,7 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (logicalPlan, error) {
-	sources, err := slices2.MapWithError(op.Sources, func(src ops.Operator) (logicalPlan, error) {
+	sources, err := slice.MapWithError(op.Sources, func(src ops.Operator) (logicalPlan, error) {
 		plan, err := transformToLogicalPlan(ctx, src, false)
 		if err != nil {
 			return nil, err

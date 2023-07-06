@@ -17,7 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -70,7 +70,7 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 		if !requireOrdering {
 			return in, rewrite.SameTree, nil
 		}
-		orderBys := slices2.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
+		orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
 			return from.AsOrderBy()
 		})
 		if aggrOp.DistinctExpr != nil {
@@ -92,7 +92,7 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 }
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
-	requiredOrder := slices2.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
+	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
 		return from.SimplifiedExpr
 	})
 	if in.DistinctExpr != nil {

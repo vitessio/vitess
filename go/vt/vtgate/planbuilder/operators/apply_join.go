@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/slice"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -180,7 +181,7 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 }
 
 func (a *ApplyJoin) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return slices2.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
+	return slice.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
 }
 
 func (a *ApplyJoin) GetSelectExprs() (sqlparser.SelectExprs, error) {
@@ -271,7 +272,7 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			}
 			a.Vars[col.BvNames[i]] = offset
 		}
-		lhsColumns := slices2.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
+		lhsColumns := slice.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
 			col, ok := from.(*sqlparser.ColName)
 			if !ok {
 				// todo: there is no good reason to keep this limitation around
@@ -293,7 +294,7 @@ func (a *ApplyJoin) addOffset(offset int) {
 
 func (a *ApplyJoin) ShortDescription() string {
 	pred := sqlparser.String(a.Predicate)
-	columns := slices2.Map(a.ColumnsAST, func(from JoinColumn) string {
+	columns := slice.Map(a.ColumnsAST, func(from JoinColumn) string {
 		return sqlparser.String(from.Original)
 	})
 	return fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))

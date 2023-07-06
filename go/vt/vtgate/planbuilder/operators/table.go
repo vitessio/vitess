@@ -19,7 +19,7 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -78,7 +78,7 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 }
 
 func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return slices2.Map(to.Columns, colNameToExpr), nil
+	return slice.Map(to.Columns, colNameToExpr), nil
 }
 
 func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {

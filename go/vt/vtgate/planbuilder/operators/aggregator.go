@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/slice"
+
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -230,7 +231,7 @@ func (a *Aggregator) GetSelectExprs() (sqlparser.SelectExprs, error) {
 }
 
 func (a *Aggregator) ShortDescription() string {
-	columns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
+	columns := slice.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
 		return sqlparser.String(from)
 	})
 	if a.Alias != "" {

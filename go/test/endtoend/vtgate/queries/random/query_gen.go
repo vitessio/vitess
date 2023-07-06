@@ -21,9 +21,10 @@ import (
 	"math/rand"
 	"time"
 
+	"vitess.io/vitess/go/slice"
+
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -459,7 +460,7 @@ func createLimit() *sqlparser.Limit {
 // returns a random expression and its type
 func getRandomExpr(tables []tableT) sqlparser.Expr {
 	seed := time.Now().UnixNano()
-	g := sqlparser.NewGenerator(seed, 2, slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+	g := sqlparser.NewGenerator(seed, 2, slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 	return g.Expression()
 }
 

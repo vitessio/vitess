@@ -17,7 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -83,7 +83,7 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 }
 
 func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return slices2.Map(v.Columns, colNameToExpr), nil
+	return slice.Map(v.Columns, colNameToExpr), nil
 }
 
 func (v *Vindex) GetSelectExprs() (sqlparser.SelectExprs, error) {
