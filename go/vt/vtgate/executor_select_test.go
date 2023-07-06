@@ -2029,14 +2029,14 @@ func TestSelectScatterAggregate(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32},
-			{Name: "sum(foo)", Type: sqltypes.Int32},
+			{Name: "sum(foo)", Type: sqltypes.Decimal},
 		},
 		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewInt32(int32(i*2 + 4)),
+			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -2088,13 +2088,13 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32},
-			{Name: "sum(foo)", Type: sqltypes.Int32},
+			{Name: "sum(foo)", Type: sqltypes.Decimal},
 		},
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewInt32(int32(i*2 + 4)),
+			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -3688,15 +3688,15 @@ func TestSelectAggregationNoData(t *testing.T) {
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2", "int64|int64")),
-			expSandboxQ: "select col1, col2 from `user` limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1", "int64")),
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "int64|int64|varbinary")),
-			expSandboxQ: "select col1, col2, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|1|weight_string(col2)", "int64|int64|varbinary")),
+			expSandboxQ: "select col2, 1, weight_string(col2) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[]`,
 		},
@@ -3772,72 +3772,72 @@ func TestSelectAggregationData(t *testing.T) {
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2", "int64|int64"), "1|2", "2|1"),
-			expSandboxQ: "select col1, col2 from `user` limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1"),
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "int64|int64|varbinary"), "3|1|NULL", "2|2|NULL"),
-			expSandboxQ: "select col1, col2, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|1|weight_string(col2)", "int64|int64|varbinary"), "3|1|NULL", "2|1|NULL"),
+			expSandboxQ: "select col2, 1, weight_string(col2) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
-			expRow:      `[[INT64(1) INT64(8)] [INT64(2) INT64(1)]]`,
+			expRow:      `[[INT64(2) INT64(4)] [INT64(3) INT64(5)]]`,
 		},
 		{
 			sql:         `select count(col1) from (select id, col1 from user limit 2) x`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1", "int64|varchar"), "3|a", "2|b"),
-			expSandboxQ: "select id, col1 from `user` limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1", "varchar"), "a", "b"),
+			expSandboxQ: "select col1 from (select id, col1 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(col1)" type:INT64]`,
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select count(col1), col2 from (select col2, col1 from user limit 9) x group by col2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|col1|weight_string(col2)", "int64|varchar|varbinary"), "3|a|NULL", "2|b|NULL"),
-			expSandboxQ: "select col2, col1, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "varchar|int64|varbinary"), "a|3|NULL", "b|2|NULL"),
+			expSandboxQ: "select col1, col2, weight_string(col2) from (select col2, col1 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(col1)" type:INT64 name:"col2" type:INT64]`,
-			expRow:      `[[INT64(8) INT64(2)] [INT64(1) INT64(3)]]`,
+			expRow:      `[[INT64(4) INT64(2)] [INT64(5) INT64(3)]]`,
 		},
 		{
 			sql:         `select col1, count(col2) from (select col1, col2 from user limit 9) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|1|a", "b|null|b"),
-			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expSandboxQ: "select col1, col2, weight_string(col1) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
-			expRow:      `[[VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
+			expRow:      `[[VARCHAR("a") INT64(5)] [VARCHAR("b") INT64(0)]]`,
 		},
 		{
 			sql:         `select col1, count(col2) from (select col1, col2 from user limit 32) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "null|1|null", "null|null|null", "a|1|a", "b|null|b"),
-			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expSandboxQ: "select col1, col2, weight_string(col1) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
 			expRow:      `[[NULL INT64(8)] [VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|3|a"),
-			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expSandboxQ: "select col1, col2, weight_string(col1) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
 			expRow:      `[[VARCHAR("a") DECIMAL(12)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|2|a"),
-			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
-			expRow:      `[[VARCHAR("a") DECIMAL(8)]]`,
+			expSandboxQ: "select col1, col2, weight_string(col1) from (select col1, col2 from `user`) as x limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expRow:      `[[VARCHAR("a") FLOAT64(8)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|x|a"),
-			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
-			expRow:      `[[VARCHAR("a") DECIMAL(0)]]`,
+			expSandboxQ: "select col1, col2, weight_string(col1) from (select col1, col2 from `user`) as x limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expRow:      `[[VARCHAR("a") FLOAT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|null|a"),
-			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expSandboxQ: "select col1, col2, weight_string(col1) from (select col1, col2 from `user`) as x limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
 			expRow:      `[[VARCHAR("a") NULL]]`,
 		},
 	}
@@ -3889,7 +3889,7 @@ func TestSelectAggregationRandom(t *testing.T) {
 	rs, err := executor.Execute(context.Background(), "TestSelectCFC", session,
 		"select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
 	require.NoError(t, err)
-	assert.Equal(t, `[[INT64(10) INT64(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
+	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
 
 func TestSelectHexAndBit(t *testing.T) {

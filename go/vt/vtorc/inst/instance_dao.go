@@ -237,10 +237,10 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SemiSyncPrimaryStatus = fullStatus.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
 
-		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
-			// Stuff only supported on Oracle MySQL >= 5.6
+		if instance.IsOracleMySQL() || instance.IsPercona() {
+			// Stuff only supported on Oracle / Percona MySQL
 			// ...
-			// @@gtid_mode only available in Orcale MySQL >= 5.6
+			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
 			instance.GTIDMode = fullStatus.GtidMode
 			instance.ServerUUID = fullStatus.ServerUuid
 			if fullStatus.PrimaryStatus != nil {
@@ -306,7 +306,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
+			log.Warningf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -964,7 +964,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) error {
 	writeInstances := [](*Instance){}
 	for _, instance := range instances {
-		if InstanceIsForgotten(instance.InstanceAlias) && !instance.IsSeed() {
+		if InstanceIsForgotten(instance.InstanceAlias) {
 			continue
 		}
 		writeInstances = append(writeInstances, instance)
@@ -1089,7 +1089,7 @@ func ForgetInstance(tabletAlias string) error {
 		return err
 	}
 	if rows == 0 {
-		errMsg := fmt.Sprintf("ForgetInstance(): instance %+v not found", tabletAlias)
+		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAlias)
 		log.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}

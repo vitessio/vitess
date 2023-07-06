@@ -66,6 +66,8 @@ service TabletManager {
 
   rpc ApplySchema(tabletmanagerdata.ApplySchemaRequest) returns (tabletmanagerdata.ApplySchemaResponse) {};
 
+  rpc ResetSequences(tabletmanagerdata.ResetSequencesRequest) returns (tabletmanagerdata.ResetSequencesResponse) {};
+
   rpc LockTables(tabletmanagerdata.LockTablesRequest) returns (tabletmanagerdata.LockTablesResponse) {};
 
   rpc UnlockTables(tabletmanagerdata.UnlockTablesRequest) returns (tabletmanagerdata.UnlockTablesResponse) {};

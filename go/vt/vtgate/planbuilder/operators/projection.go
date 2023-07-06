@@ -119,10 +119,29 @@ func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
+func (p *Projection) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	if p.isDerived() {
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*p.TableID)
+		if err != nil {
+			return 0, err
+		}
+		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
+	}
+	if offset, found := canReuseColumn(ctx, p.Columns, expr, extractExpr); found {
+		return offset, nil
+	}
+	return -1, nil
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, extractExpr); found {
+	offset, err := p.findCol(ctx, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset >= 0 {
 		return p, offset, nil
 	}
+
 	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
@@ -171,6 +190,10 @@ func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 		return nil, nil
 	}
 	return p.Columns, nil
+}
+
+func (p *Projection) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(p)
 }
 
 func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
@@ -318,4 +341,11 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	return nil
+}
+
+func (p *Projection) introducesTableID() semantics.TableSet {
+	if p.TableID == nil {
+		return semantics.EmptyTableSet()
+	}
+	return *p.TableID
 }

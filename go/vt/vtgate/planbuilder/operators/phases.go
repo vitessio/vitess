@@ -63,38 +63,53 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 			return in, rewrite.SameTree, nil
 		}
 
-		requireOrdering, err := needsOrdering(aggrOp, ctx)
+		requireOrdering, err := needsOrdering(ctx, aggrOp)
 		if err != nil {
 			return nil, nil, err
 		}
 		if !requireOrdering {
 			return in, rewrite.SameTree, nil
 		}
+		orderBys := slices2.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
+			return from.AsOrderBy()
+		})
+		if aggrOp.DistinctExpr != nil {
+			orderBys = append(orderBys, ops.OrderBy{
+				Inner: &sqlparser.Order{
+					Expr: aggrOp.DistinctExpr,
+				},
+				SimplifiedExpr: aggrOp.DistinctExpr,
+			})
+		}
 		aggrOp.Source = &Ordering{
 			Source: aggrOp.Source,
-			Order: slices2.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
-				return from.AsOrderBy()
-			}),
+			Order:  orderBys,
 		}
 		return in, rewrite.NewTree("added ordering before aggregation", in), nil
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, error) {
-	if len(in.Grouping) == 0 {
+func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
+	requiredOrder := slices2.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
+		return from.SimplifiedExpr
+	})
+	if in.DistinctExpr != nil {
+		requiredOrder = append(requiredOrder, in.DistinctExpr)
+	}
+	if len(requiredOrder) == 0 {
 		return false, nil
 	}
 	srcOrdering, err := in.Source.GetOrdering()
 	if err != nil {
 		return false, err
 	}
-	if len(srcOrdering) < len(in.Grouping) {
+	if len(srcOrdering) < len(requiredOrder) {
 		return true, nil
 	}
-	for idx, gb := range in.Grouping {
-		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb.SimplifiedExpr) {
+	for idx, gb := range requiredOrder {
+		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb) {
 			return true, nil
 		}
 	}

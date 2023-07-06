@@ -1,4 +1,4 @@
-# Release of Vitess v17.0.0-rc2
+# Release of Vitess v17.0.0
 ## Summary
 
 ### Table of Contents
@@ -11,7 +11,7 @@
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
     - [Compression CLI flags removed from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
-    - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
+    - [VtctldClient command RestoreFromBackup will now use the correct context](#vtctldclient-command-restorefrombackup-will-now-use-the-correct-context)
     - [VTTablet Restore Metrics](#vttablet-restore-metrics)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
@@ -61,8 +61,8 @@ func NewTabletPicker(
 Where ctx, localCell, option are all new parameters.
 
 `option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
-CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
-`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
+- `CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+- `TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
 
 See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
@@ -70,9 +70,11 @@ See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for ex
 
 When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used.
 
+`vtgr` is now deprecated as part of `v17.0.0`, please see [the deprecation notice](#deprecated-vtgr).
+
 #### <a id="dedicated-vtgate-prepare-stats">Dedicated stats for VTGate Prepare operations
 
-Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute and Prepare operations generate stats under independent stats keys.
+Prior to v17 Vitess incorrectly combined stats for VTGate `Execute` and `Prepare` operations under a single stats key (`Execute`). In v17 `Execute` and `Prepare` operations generate stats under independent stats keys.
 
 Here is a (condensed) example of stats output:
 
@@ -128,7 +130,7 @@ The CLI flags below were mistakenly added to `vtctld` and `vtctldclient` in v15.
 
 #### <a id="VtctldClient-RestoreFromBackup">VtctldClient command RestoreFromBackup will now use the correct context
 
-The VtctldClient command RestoreFromBackup initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
+The VtctldClient command `RestoreFromBackup` initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
 Prior to v17, this asynchronous process could run indefinitely in the background since it was called using the background context. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
 this behavior was changed to use a context with a timeout of `action_timeout`. If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough
 time for the restore process to complete. Otherwise, the restore will throw an error if the context expires before it completes.
@@ -147,12 +149,12 @@ In v17 [PR#13040](https://github.com/vitessio/vitess/issues/13037), this behavio
 
 #### <a id="builtin-backup-read-buffering-flags"/>Backup --builtinbackup-file-read-buffer-size and --builtinbackup-file-write-buffer-size
 
-Prior to v17 the builtin Backup Engine does not use read buffering for restores, and for backups uses a hardcoded write buffer size of 2097152 bytes.
+Prior to v17 the builtin Backup Engine does not use read buffering for restores, and for backups uses a hardcoded write buffer size of `2097152 bytes`.
 
 In v17 these defaults may be tuned with, respectively `--builtinbackup-file-read-buffer-size` and `--builtinbackup-file-write-buffer-size`.
 
-- `--builtinbackup-file-read-buffer-size`:  read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
-- `--builtinbackup-file-write-buffer-size`: write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
+- `--builtinbackup-file-read-buffer-size`:  read files using an IO buffer of this many bytes. Golang defaults are used when set to `0`.
+- `--builtinbackup-file-write-buffer-size`: write files using an IO buffer of this many bytes. Golang defaults are used when set to `0`. (default `2097152`)
 
 These flags are applicable to the following programs:
 
@@ -189,7 +191,9 @@ Note that this flag overrides `--enable-lag-throttler` and `--throttle-threshold
 
 Metrics related to backup operations are available in both Vtbackup and VTTablet.
 
-**BackupBytes, BackupCount, BackupDurationNanoseconds**
+- `BackupBytes`
+- `BackupCount`
+- `BackupDurationNanosecond`
 
 Depending on the Backup Engine and Backup Storage in-use, a backup may be a complex pipeline of operations, including but not limited to:
 
@@ -201,9 +205,11 @@ These operations are counted and timed, and the number of bytes consumed or prod
 
 ##### Restore metrics
 
-Metrics related to restore operations are available in both Vtbackup and VTTablet.
+Metrics related to restore operations are available in both Vtbackup and VTTablet:
 
-**RestoreBytes, RestoreCount, RestoreDurationNanoseconds**
+- `RestoreBytes`
+- `RestoreCount`
+- `RestoreDurationNanoseconds`
 
 Depending on the Backup Engine and Backup Storage in-use, a restore may be a complex pipeline of operations, including but not limited to:
 
@@ -215,13 +221,13 @@ These operations are counted and timed, and the number of bytes consumed or prod
 
 ##### Vtbackup metrics
 
-Vtbackup exports some metrics which are not available elsewhere.
+Vtbackup exports some metrics which are not available elsewhere:
 
-**DurationByPhaseSeconds**
+- `DurationByPhaseSeconds`
 
 Vtbackup fetches the last backup, restores it to an empty mysql installation, replicates recent changes into that installation, and then takes a backup of that installation.
 
-_DurationByPhaseSeconds_ exports timings for these individual phases.
+`DurationByPhaseSeconds` exports timings for these individual phases.
 
 ##### Example
 
@@ -404,7 +410,7 @@ This could be a breaking change for grpc api users based on how they have implem
 Gen4 planner was made default in v14 for `SELECT` queries. In v15 `UPDATE` and `DELETE` queries were moved to Gen4 framework.
 With this release `INSERT` queries are moved to Gen4.
 
-Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive `/*vt+ planner=<planner_version>` for individual query.
+Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive /*vt+ planner=<planner_version>` for individual query.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
@@ -470,7 +476,7 @@ The `k8stopo` has been deprecated, also see https://github.com/vitessio/vitess/i
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/17.0/17.0.0/changelog.md).
 
-The release includes 442 commits (excluding merges)
+The release includes 457 commits (excluding merges)
 
-Thanks to all our contributors: @Ayman161803, @GuptaManan100, @L3o-pold, @Phanatic, @WilliamLu99, @adsr, @ajm188, @andylim-duo, @arthurschreiber, @austenLacy, @cuishuang, @dasl-, @dbussink, @deepthi, @dependabot[bot], @ejortegau, @fatih, @frouioui, @github-actions[bot], @harshit-gangal, @hkdsun, @jeremycole, @jhump, @johanstenberg92, @jwangace, @kevinpurwito, @kovyrin, @lixin963, @mattlord, @maxbrunet, @maxenglander, @mdlayher, @moberghammer, @notfelineit, @olyazavr, @pbibra, @pnacht, @rohit-nayak-ps, @rsajwani, @shlomi-noach, @systay, @timvaillancourt, @twthorn, @vbalys, @vinimdocarmo, @vitess-bot[bot], @vmg, @yoheimuta
+Thanks to all our contributors: @Ayman161803, @GuptaManan100, @L3o-pold, @Phanatic, @WilliamLu99, @adsr, @ajm188, @andylim-duo, @arthurschreiber, @arvind-murty, @austenLacy, @cuishuang, @dasl-, @dbussink, @deepthi, @dependabot[bot], @ejortegau, @fatih, @frouioui, @github-actions[bot], @harshit-gangal, @hkdsun, @jeremycole, @jhump, @johanstenberg92, @jwangace, @kevinpurwito, @kovyrin, @lixin963, @mattlord, @maxbrunet, @maxenglander, @mdlayher, @moberghammer, @notfelineit, @olyazavr, @pbibra, @pnacht, @rohit-nayak-ps, @rsajwani, @shlomi-noach, @systay, @timvaillancourt, @twthorn, @vbalys, @vinimdocarmo, @vitess-bot[bot], @vmg, @yoheimuta
 

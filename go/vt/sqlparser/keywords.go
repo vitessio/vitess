@@ -126,6 +126,7 @@ var keywords = []keyword{
 	{"always", ALWAYS},
 	{"analyze", ANALYZE},
 	{"and", AND},
+	{"any_value", ANY_VALUE},
 	{"array", ARRAY},
 	{"as", AS},
 	{"asc", ASC},

@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -66,7 +65,7 @@ type Engine struct {
 	isOpen     bool
 	tables     map[string]*Table
 	lastChange int64
-	//the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
+	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos mysql.Position
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
@@ -328,10 +327,7 @@ func (se *Engine) MakeNonPrimary() {
 	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
-			t.SequenceInfo.Lock()
-			t.SequenceInfo.NextVal = 0
-			t.SequenceInfo.LastVal = 0
-			t.SequenceInfo.Unlock()
+			t.SequenceInfo.Reset()
 		}
 	}
 }
@@ -445,7 +441,6 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return err
 	}
 
-	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
 	curTables := map[string]bool{"dual": true}
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
@@ -498,7 +493,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[1].String(), row[3].ToString())
 		if err != nil {
-			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
+			log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
 			continue
 		}
 		if includeStats {
@@ -512,9 +507,6 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		} else {
 			created = append(created, table)
 		}
-	}
-	if rec.HasErrors() {
-		return rec.Error()
 	}
 
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
@@ -846,4 +838,20 @@ func extractNamesFromTablesList(tables []*Table) []string {
 		tableNames = append(tableNames, table.Name.String())
 	}
 	return tableNames
+}
+
+func (se *Engine) ResetSequences(tables []string) error {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	for _, tableName := range tables {
+		if table, ok := se.tables[tableName]; ok {
+			if table.SequenceInfo != nil {
+				log.Infof("Resetting sequence info for table %v: %s", tableName, table.SequenceInfo)
+				table.SequenceInfo.Reset()
+			}
+		} else {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %v not found in schema", tableName)
+		}
+	}
+	return nil
 }

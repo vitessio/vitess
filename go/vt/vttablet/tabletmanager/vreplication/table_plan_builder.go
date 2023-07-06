@@ -448,10 +448,10 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		}
 	}
 	if expr, ok := aliased.Expr.(sqlparser.AggrFunc); ok {
-		if expr.IsDistinct() {
+		if sqlparser.IsDistinct(expr) {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
-		switch fname := strings.ToLower(expr.AggrName()); fname {
+		switch fname := expr.AggrName(); fname {
 		case "count":
 			if _, ok := expr.(*sqlparser.CountStar); !ok {
 				return nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))

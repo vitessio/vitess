@@ -489,6 +489,8 @@ func (throttler *Throttler) Open() error {
 					})
 					return
 				}
+				// It's possible, especially in CI, that this throttler opened before the SrvKeyspace entry is created in topo.
+				// We thus retry until the entry is found.
 				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
 				<-retryTicker.C
 			}
