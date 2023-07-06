@@ -12,18 +12,29 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	statsdAddress    string
-	statsdSampleRate = 1.0
+	statsdAddress = viperutil.Configure("stats.statsd.address", viperutil.Options[string]{
+		FlagName: "statsd_address",
+	})
+	statsdSampleRate = viperutil.Configure("stats.statsd.sample_rate", viperutil.Options[float64]{
+		FlagName: "statsd_sample_rate",
+		Default:  1,
+	})
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&statsdAddress, "statsd_address", statsdAddress, "Address for statsd client")
-	fs.Float64Var(&statsdSampleRate, "statsd_sample_rate", statsdSampleRate, "Sample rate for statsd metrics")
+	fs.String("statsd_address", statsdAddress.Default(), "Address for statsd client")
+	fs.Float64("statsd_sample_rate", statsdSampleRate.Default(), "Sample rate for statsd metrics")
+
+	viperutil.BindFlags(fs,
+		statsdAddress,
+		statsdSampleRate,
+	)
 }
 
 func init() {
@@ -77,11 +88,11 @@ func Init(namespace string) {
 
 // InitWithoutServenv initializes the statsd using the namespace but without servenv
 func InitWithoutServenv(namespace string) {
-	if statsdAddress == "" {
+	if statsdAddress.Get() == "" {
 		log.Info("statsdAddress is empty")
 		return
 	}
-	statsdC, err := statsd.NewBuffered(statsdAddress, 100)
+	statsdC, err := statsd.NewBuffered(statsdAddress.Get(), 100)
 	if err != nil {
 		log.Errorf("Failed to create statsd client %v", err)
 		return
@@ -92,7 +103,7 @@ func InitWithoutServenv(namespace string) {
 	}
 	sb.namespace = namespace
 	sb.statsdClient = statsdC
-	sb.sampleRate = statsdSampleRate
+	sb.sampleRate = statsdSampleRate.Get()
 	stats.RegisterPushBackend("statsd", sb)
 	stats.RegisterTimerHook(func(statsName, name string, value int64, timings *stats.Timings) {
 		tags := makeLabels(strings.Split(timings.Label(), "."), name)

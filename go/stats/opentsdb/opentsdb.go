@@ -30,13 +30,17 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var openTsdbURI string
+var openTsdbURI = viperutil.Configure("stats.opentsdb.uri", viperutil.Options[string]{
+	FlagName: "opentsdb_uri",
+})
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&openTsdbURI, "opentsdb_uri", openTsdbURI, "URI of opentsdb /api/put method")
+	fs.String("opentsdb_uri", openTsdbURI.Default(), "URI of opentsdb /api/put method")
+	viperutil.BindFlags(fs, openTsdbURI)
 }
 
 func init() {
@@ -64,7 +68,7 @@ func sendDataPoints(data []dataPoint) error {
 		return err
 	}
 
-	resp, err := http.Post(openTsdbURI, "application/json", bytes.NewReader(json))
+	resp, err := http.Post(openTsdbURI.Get(), "application/json", bytes.NewReader(json))
 	if err != nil {
 		return err
 	}
@@ -102,7 +106,7 @@ func Init(prefix string) {
 
 // InitWithoutServenv initializes the opentsdb without servenv
 func InitWithoutServenv(prefix string) {
-	if openTsdbURI == "" {
+	if openTsdbURI.Get() == "" {
 		return
 	}
 
