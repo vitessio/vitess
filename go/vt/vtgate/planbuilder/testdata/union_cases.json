@@ -316,53 +316,75 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
       "Instructions": {
-        "OperatorType": "Concatenate",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where id = 1",
-                "Table": "`user`",
-                "Values": [
-                  "INT64(1)"
-                ],
-                "Vindex": "user_index"
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "GroupBy": "(0|1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(0|1) ASC",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Concatenate",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                            "Query": "select id, weight_string(id) from `user` where id = 1",
+                            "Table": "`user`",
+                            "Values": [
+                              "INT64(1)"
+                            ],
+                            "Vindex": "user_index"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                            "Query": "select id, weight_string(id) from `user` where id = 1",
+                            "Table": "`user`",
+                            "Values": [
+                              "INT64(1)"
+                            ],
+                            "Vindex": "user_index"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               },
               {
                 "OperatorType": "Route",
-                "Variant": "EqualUnique",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where id = 1",
-                "Table": "`user`",
-                "Values": [
-                  "INT64(1)"
-                ],
-                "Vindex": "user_index"
+                "Query": "select id from `user`",
+                "Table": "`user`"
               }
             ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`",
-            "Table": "`user`"
           }
         ]
       },
@@ -431,7 +453,87 @@
   {
     "comment": "multi-shard union",
     "query": "(select id from user union select id from music) union select 1 from dual",
-    "plan": "VT13001: [BUG] index mismatch while pushing the column for '1'"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(select id from user union select id from music) union select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "(0|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "(0|1)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(0|1) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Concatenate",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                                "Query": "select id, weight_string(id) from `user`",
+                                "Table": "`user`"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+                                "Query": "select id, weight_string(id) from music",
+                                "Table": "music"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1, weight_string(1) from dual where 1 != 1",
+                    "Query": "select 1, weight_string(1) from dual",
+                    "Table": "dual"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "multi-shard union",
@@ -566,7 +668,175 @@
   {
     "comment": "multiple unions",
     "query": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
-    "plan": "VT13001: [BUG] index mismatch while pushing the column for '2.0'"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "0 ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "0",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "0 ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Concatenate",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Aggregate",
+                                "Variant": "Ordered",
+                                "GroupBy": "0",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Sort",
+                                    "Variant": "Memory",
+                                    "OrderBy": "0 ASC",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Concatenate",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Aggregate",
+                                            "Variant": "Ordered",
+                                            "GroupBy": "0",
+                                            "Inputs": [
+                                              {
+                                                "OperatorType": "Sort",
+                                                "Variant": "Memory",
+                                                "OrderBy": "0 ASC",
+                                                "Inputs": [
+                                                  {
+                                                    "OperatorType": "Concatenate",
+                                                    "Inputs": [
+                                                      {
+                                                        "OperatorType": "Aggregate",
+                                                        "Variant": "Ordered",
+                                                        "GroupBy": "0",
+                                                        "Inputs": [
+                                                          {
+                                                            "OperatorType": "Sort",
+                                                            "Variant": "Memory",
+                                                            "OrderBy": "0 ASC",
+                                                            "Inputs": [
+                                                              {
+                                                                "OperatorType": "Concatenate",
+                                                                "Inputs": [
+                                                                  {
+                                                                    "OperatorType": "Route",
+                                                                    "Variant": "Reference",
+                                                                    "Keyspace": {
+                                                                      "Name": "main",
+                                                                      "Sharded": false
+                                                                    },
+                                                                    "FieldQuery": "select 1 from dual where 1 != 1",
+                                                                    "Query": "select 1 from dual",
+                                                                    "Table": "dual"
+                                                                  },
+                                                                  {
+                                                                    "OperatorType": "Route",
+                                                                    "Variant": "Reference",
+                                                                    "Keyspace": {
+                                                                      "Name": "main",
+                                                                      "Sharded": false
+                                                                    },
+                                                                    "FieldQuery": "select null from dual where 1 != 1",
+                                                                    "Query": "select null from dual",
+                                                                    "Table": "dual"
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "OperatorType": "Route",
+                                                        "Variant": "Reference",
+                                                        "Keyspace": {
+                                                          "Name": "main",
+                                                          "Sharded": false
+                                                        },
+                                                        "FieldQuery": "select 1.0 from dual where 1 != 1",
+                                                        "Query": "select 1.0 from dual",
+                                                        "Table": "dual"
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Reference",
+                                            "Keyspace": {
+                                              "Name": "main",
+                                              "Sharded": false
+                                            },
+                                            "FieldQuery": "select '1' from dual where 1 != 1",
+                                            "Query": "select '1' from dual",
+                                            "Table": "dual"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Reference",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": false
+                                },
+                                "FieldQuery": "select 2 from dual where 1 != 1",
+                                "Query": "select 2 from dual",
+                                "Table": "dual"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 2.0 from `user` where 1 != 1",
+                    "Query": "select 2.0 from `user`",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union distinct between a scatter query and a join (other side)",
@@ -783,12 +1053,92 @@
   {
     "comment": "Union in derived table with first SELECT being an UNION",
     "query": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
-    "plan": "VT13001: [BUG] index mismatch while pushing the column for 'user_id'"
+    "plan": "VT13001: [BUG] did not expect to add group by here"
   },
   {
-    "comment": "optimises away ORDER BY when it's safe to do",
+    "comment": "gen4 optimises away ORDER BY when it's safe to do",
     "query": "(select id from user union select id from music order by id) union select 1 from unsharded",
-    "plan": "VT13001: [BUG] index mismatch while pushing the column for '1'"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(select id from user union select id from music order by id) union select 1 from unsharded",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "(0|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "(0|1)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(0|1) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Concatenate",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                                "Query": "select id, weight_string(id) from `user`",
+                                "Table": "`user`"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+                                "Query": "select id, weight_string(id) from music",
+                                "Table": "music"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1, weight_string(1) from unsharded where 1 != 1",
+                    "Query": "select 1, weight_string(1) from unsharded",
+                    "Table": "unsharded"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "push down the ::upper_limit to the sources, since we are doing DISTINCT on them, it's safe",
@@ -873,9 +1223,119 @@
     }
   },
   {
-    "comment": "UNION that needs to be reordered to be merged more aggressively - able to get it down to 2 routes",
+    "comment": "UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes",
     "query": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
-    "plan": "VT13001: [BUG] index mismatch while pushing the column for 'col'"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "(0|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "(0|1)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(0|1) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Concatenate",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Aggregate",
+                                "Variant": "Ordered",
+                                "GroupBy": "(0|1)",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Sort",
+                                    "Variant": "Memory",
+                                    "OrderBy": "(0|1) ASC",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Concatenate",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Unsharded",
+                                            "Keyspace": {
+                                              "Name": "main",
+                                              "Sharded": false
+                                            },
+                                            "FieldQuery": "select col, weight_string(col) from unsharded where 1 != 1",
+                                            "Query": "select col, weight_string(col) from unsharded",
+                                            "Table": "unsharded"
+                                          },
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Scatter",
+                                            "Keyspace": {
+                                              "Name": "user",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                                            "Query": "select id, weight_string(id) from `user`",
+                                            "Table": "`user`"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Unsharded",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": false
+                                },
+                                "FieldQuery": "select col2, weight_string(col2) from unsharded where 1 != 1",
+                                "Query": "select col2, weight_string(col2) from unsharded",
+                                "Table": "unsharded"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col, weight_string(col) from user_extra where 1 != 1",
+                    "Query": "select col, weight_string(col) from user_extra",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   },
   {
     "comment": "derived table with union",

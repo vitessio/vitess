@@ -161,37 +161,30 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 
 func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	var newSources []ops.Operator
-	var anythingChanged *rewrite.ApplyResult
-	for _, source := range u.Sources {
-		var other *Union
-		horizon, ok := source.(*Horizon)
-		if ok {
-			union, ok := horizon.Source.(*Union)
-			if ok {
-				other = union
-			}
-		}
-		if other == nil {
-			newSources = append(newSources, source)
+	var newSelects []sqlparser.SelectExprs
+	merged := false
+
+	for idx, source := range u.Sources {
+		other, ok := source.(*Union)
+
+		if ok && (u.Distinct || len(other.Ordering) == 0 && !other.Distinct) {
+			newSources = append(newSources, other.Sources...)
+			newSelects = append(newSelects, other.Selects...)
+			merged = true
 			continue
 		}
-		anythingChanged = anythingChanged.Merge(rewrite.NewTree("merged UNIONs", other))
-		switch {
-		case len(other.Ordering) == 0 && !other.Distinct:
-			fallthrough
-		case u.Distinct:
-			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
-			newSources = append(newSources, other.Sources...)
 
-		default:
-			newSources = append(newSources, other)
-		}
-	}
-	if anythingChanged != rewrite.SameTree {
-		u.Sources = newSources
+		newSources = append(newSources, source)
+		newSelects = append(newSelects, u.Selects[idx])
 	}
 
-	return u, anythingChanged, nil
+	if !merged {
+		return u, rewrite.SameTree, nil
+	}
+
+	u.Sources = newSources
+	u.Selects = newSelects
+	return u, rewrite.NewTree("merged UNIONs", u), nil
 }
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {

@@ -75,10 +75,6 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 		return nil, err
 	}
 
-	if op, err = compact(ctx, op); err != nil {
-		return nil, err
-	}
-
 	_, isRoute := op.(*Route)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 		// If we got here, we don't have a single shard plan

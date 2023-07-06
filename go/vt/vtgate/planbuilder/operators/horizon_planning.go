@@ -36,6 +36,9 @@ type (
 )
 
 func errHorizonNotPlanned() error {
+	if rewrite.DebugOperatorTree {
+		fmt.Println("ERROR! Falling back on the old horizon planner")
+	}
 	return _errHorizonNotPlanned
 }
 
@@ -79,6 +82,11 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		return nil, err
 	}
 
+	output, err = compact(ctx, output)
+	if err != nil {
+		return nil, err
+	}
+
 	return
 }
 
@@ -101,6 +109,11 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 			fmt.Printf("PHASE: %s\n", phase.Name)
 		}
 		op, err = optimizeHorizonPlanning(ctx, op)
+		if err != nil {
+			return nil, err
+		}
+
+		op, err = compact(ctx, op)
 		if err != nil {
 			return nil, err
 		}
