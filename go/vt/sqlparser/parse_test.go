@@ -2825,6 +2825,9 @@ var (
 			input:  "create table t (pk int not null, primary key `pk_id` (`pk`))",
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
 		}, {
+			input:  "create table t (password int not null, primary key (password))",
+			output: "create table t (\n\t`password` int not null,\n\tprimary key (`password`)\n)",
+		}, {
 			input:  "create table t (pk int not null, constraint `mykey` primary key `pk_id` (`pk`))",
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
 		}, {
@@ -7143,22 +7146,23 @@ var incorrectlyParse = []string{
 
 // TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
 func TestKeywordsCorrectlyParse(t *testing.T) {
-	aliasTest := "SELECT 1 as %s"
-	iTest1 := "INSERT INTO t_t (%s) VALUES ('one')"
-	iTest2 := "INSERT INTO t_t (pk, %s) VALUES (1, 'one')"
-	iTest3 := "INSERT INTO t_t (pk, %s, c1) VALUES (1, 'one', 1)"
-	dTest := "DELETE FROM t where %s=1"
-	uTest := "UPDATE t SET %s=1"
-	cTest1 := "CREATE TABLE t(%s int)"
-	cTest2 := "CREATE TABLE t(foo int, %s int)"
-	cTest3 := "CREATE TABLE t(foo int, %s int, foo int)"
-	tTest := "CREATE TABLE %s(i int)"
-	tcTest := "SELECT * FROM t ORDER BY t.%s"
-	sTest := "SELECT %s.c FROM t"
-	dropConstraintTest := "ALTER TABLE t DROP CONSTRAINT %s"
-	dropCheckTest := "ALTER TABLE t DROP CHECK %s"
-
-	tests := []string{aliasTest, iTest1, iTest2, iTest3, dTest, uTest, cTest1, cTest2, cTest3, tTest, tcTest, sTest, dropConstraintTest, dropCheckTest}
+	tests := []string{
+		"SELECT 1 as %s",
+		"INSERT INTO t_t (%s) VALUES ('one')",
+		"INSERT INTO t_t (pk, %s) VALUES (1, 'one')",
+		"INSERT INTO t_t (pk, %s, c1) VALUES (1, 'one', 1)",
+		"DELETE FROM t where %s=1",
+		"UPDATE t SET %s=1",
+		"CREATE TABLE t(%s int)",
+		"CREATE TABLE t(foo int, %s int)",
+		"CREATE TABLE t(foo int, %s int, foo int)",
+		"CREATE TABLE foo (i int, primary key (%s))",
+		"CREATE TABLE %s(i int)",
+		"SELECT * FROM t ORDER BY t.%s",
+		"SELECT %s.c FROM t",
+		"ALTER TABLE t DROP CONSTRAINT %s",
+		"ALTER TABLE t DROP CHECK %s",
+	}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {
