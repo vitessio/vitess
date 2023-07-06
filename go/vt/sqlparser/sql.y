@@ -3841,15 +3841,15 @@ index_column_list:
   }
 
 index_column:
-  sql_id length_opt asc_desc_opt
-  {
-      $$ = &IndexColumn{Column: $1, Length: $2, Order: $3}
-  }
-| column_name_safe_keyword length_opt asc_desc_opt
+  ID length_opt asc_desc_opt
   {
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
-
+| all_non_reserved length_opt asc_desc_opt
+  {
+      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
+  }
+  
 foreign_key_definition:
   CONSTRAINT ID foreign_key_details
   {
