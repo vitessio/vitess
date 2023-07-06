@@ -61,7 +61,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-max-result-size", "1000000",
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--queryserver-config-max-result-size", "1000000",
 			"--queryserver-config-query-timeout", "200",
 			"--queryserver-config-query-pool-timeout", "200")
 		// Start Unsharded keyspace
@@ -85,7 +86,10 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true", "--query-timeout=100")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+			"--enable_system_settings",
+			"--query-timeout", "100",
+			"--mysql-server-keepalive-period", "3s")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

@@ -17,17 +17,23 @@ limitations under the License.
 package misc
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -37,7 +43,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1"}
+		tables := []string{"t1", "uks.unsharded"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -126,7 +132,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// unsharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	for i := 0; i < 12; i++ {
-		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
+		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
 	}
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
@@ -304,12 +310,68 @@ func TestPrepareStatements(t *testing.T) {
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }
 
+// TestBuggyOuterJoin validates inconsistencies around outer joins, adding these tests to stop regressions.
 func TestBuggyOuterJoin(t *testing.T) {
-	// We found a couple of inconsistencies around outer joins, adding these tests to stop regressions
 	mcmp, closer := start(t)
 	defer closer()
 
 	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
-
 	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
+}
+
+func TestTCPKeepAlive(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, ok := conn.GetRawConn().(*net.TCPConn)
+	if !ok {
+		t.Fatalf("tcp connection expected, got: %T", conn.GetRawConn())
+	}
+
+	// finding a loopback device.
+	ifs, err := pcap.FindAllDevs()
+	require.NoError(t, err)
+	var localDevice string
+	for _, dev := range ifs {
+		if strings.Contains(dev.Name, "lo") {
+			localDevice = dev.Name
+		}
+	}
+	if localDevice == "" {
+		t.Skip("loopback device not found. Cannot continue with the test.")
+	}
+
+	// Set up packet capture handle
+	handle, err := pcap.OpenLive(localDevice, 65536, true, pcap.BlockForever)
+	require.NoError(t, err)
+	defer handle.Close()
+
+	// Set packet filter for vtgate mysql port.
+	expr := fmt.Sprintf("tcp and port %d", clusterInstance.VtgateMySQLPort)
+	err = handle.SetBPFFilter(expr)
+	require.NoError(t, err)
+
+	// Start capturing packets
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	ch := packetSource.Packets()
+
+	testTimeout := time.After(5 * time.Second)
+	for {
+		select {
+		case packet := <-ch:
+			// Check if packet is TCP
+			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+				tcp, _ := tcpLayer.(*layers.TCP)
+
+				// Check if packet has only the ACK flag set (keep-alive packet)
+				if tcp.ACK && !tcp.SYN && !tcp.FIN && !tcp.RST && !tcp.PSH && !tcp.URG {
+					// received a keep-alive packet.
+					return
+				}
+			}
+		case <-testTimeout:
+			t.Fatal("test timeout out after 5 seconds.")
+		}
+	}
 }

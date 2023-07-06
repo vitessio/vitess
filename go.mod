@@ -97,6 +97,7 @@ require (
 require (
 	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/bndr/gotabulate v1.1.2
+	github.com/google/gopacket v1.1.19
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kr/pretty v0.3.1
