@@ -272,23 +272,18 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		case popcode.AggregateSum:
 			opcode = popcode.AggregateSumDistinct
 		}
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     opcode,
-			Col:        innerCol,
-			Alias:      expr.ColumnName(),
-			OrigOpcode: origOpcode,
-		})
+		aggr := engine.NewAggregateParam(opcode, innerCol, expr.ColumnName())
+		aggr.OrigOpcode = origOpcode
+		oa.aggregates = append(oa.aggregates, aggr)
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
 		pb.plan = newBuilder
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     opcode,
-			Col:        innerCol,
-			OrigOpcode: origOpcode,
-		})
+		aggr := engine.NewAggregateParam(opcode, innerCol, "")
+		aggr.OrigOpcode = origOpcode
+		oa.aggregates = append(oa.aggregates, aggr)
 	}
 
 	// Build a new rc with oa as origin because it's semantically different

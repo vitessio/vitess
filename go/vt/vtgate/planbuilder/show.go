@@ -564,11 +564,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	}
 	return &engine.OrderedAggregate{
 		Aggregates: []*engine.AggregateParams{
-			{
-				Opcode: popcode.AggregateGtid,
-				Col:    1,
-				Alias:  "global vgtid_executed",
-			},
+			engine.NewAggregateParam(popcode.AggregateGtid, 1, "global vgtid_executed"),
 		},
 		TruncateColumnCount: 2,
 		Input:               send,

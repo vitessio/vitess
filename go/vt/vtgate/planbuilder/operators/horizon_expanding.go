@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, nil, errHorizonNotPlanned()
@@ -74,19 +74,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
 }
 
-func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
-	for _, aggregation := range aggregations {
-		if aggregation.Distinct {
-			return errHorizonNotPlanned()
-		}
-	}
-	if _, isDerived := horizon.(*Derived); isDerived {
-		return errHorizonNotPlanned()
-	}
-	return nil
-}
-
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (out ops.Operator, err error) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
@@ -97,27 +85,15 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		if err != nil {
 			return nil, err
 		}
-		if derived, isDerived := horizon.(*Derived); isDerived {
-			id := derived.TableId
-			projX.TableID = &id
-			projX.Alias = derived.Alias
-		}
+		projX.TableID = horizon.TableId
+		projX.Alias = horizon.Alias
 		out = projX
 
 		return out, nil
 	}
 
-	err = checkAggregationSupported(horizon)
-	if err != nil {
-		return nil, err
-	}
-
 	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := checkInvalid(aggregations, horizon); err != nil {
 		return nil, err
 	}
 
@@ -127,12 +103,8 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
 		Aggregations: aggregations,
-	}
-
-	if derived, isDerived := horizon.(*Derived); isDerived {
-		id := derived.TableId
-		a.TableID = &id
-		a.Alias = derived.Alias
+		TableID:      horizon.TableId,
+		Alias:        horizon.Alias,
 	}
 
 	if complexAggr {
