@@ -826,7 +826,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"START SLAVE",
 		// extra SetReplicationSource call due to retry
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
@@ -840,8 +839,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
-		"FAKE SET MASTER",
-		// extra SetReplicationSource call due to retry
 		"FAKE SET MASTER",
 	}
 	goodReplica2.StartActionLoop(t, wr)
@@ -861,22 +858,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
 	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
-	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		// extra commands because of retry
-		"STOP SLAVE",
-		"START SLAVE",
-		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
-	}
-	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"FAKE SET MASTER",
-		"START SLAVE",
-		// extra commands because of retry
-		"FAKE SET MASTER",
-		"START SLAVE",
-	}
 
 	// run PlannedReparentShard
 	err = vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
