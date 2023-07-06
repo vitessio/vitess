@@ -1186,7 +1186,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			}
 
 			buffer.Write(tkn.buf[start:tkn.bufPos])
-			tkn.Position += (tkn.bufPos - start)
+			tkn.Position += tkn.bufPos - start
 
 			if tkn.bufPos >= tkn.bufSize {
 				// Reached the end of the buffer without finding a delim or
@@ -1223,6 +1223,16 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	if tkn.lastChar == '@' {
 		tkn.potentialAccountName = true
 	}
+	
+	// mysql strings get auto concatenated, so see if the next token is a string and scan it if so
+	tkn.skipBlank()
+	if tkn.lastChar == '\'' || tkn.lastChar == '"' {
+		nextTyp, nextStr := tkn.scanString(tkn.lastChar, STRING)
+		if nextTyp == STRING {
+			return nextTyp, append(buffer.Bytes(), nextStr...)
+		}
+	}
+	
 	return typ, buffer.Bytes()
 }
 
