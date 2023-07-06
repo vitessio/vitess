@@ -80,7 +80,8 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--grpc_max_message_size", strconv.FormatInt(maxGrpcSize, 10),
-			"--max_memory_rows", "999999")
+			"--max_memory_rows", "999999",
+			"--allow-kill-statement")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}

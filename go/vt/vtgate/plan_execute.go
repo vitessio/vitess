@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -244,25 +245,37 @@ func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSe
 // If it fails to rollback to the previous savepoint then, the transaction is forced to be rolled back.
 func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) error {
 	var err error
+	var errMsg strings.Builder
+
+	// If the context got cancelled we still have to revert the partial DML execution.
+	// We cannot use the parent context here anymore.
+	if ctx.Err() != nil {
+		errMsg.WriteString("context canceled: ")
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+	}
 
 	// needs to rollback only once.
 	rQuery := safeSession.rollbackOnPartialExec
 	if rQuery != txRollback {
 		safeSession.SavepointRollback()
-		_, _, err := e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
+		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
+		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
-			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
+			errMsg.WriteString("reverted partial DML execution failure")
+			return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 		}
 		// not able to rollback changes of the failed query, so have to abort the complete transaction.
 	}
 
 	// abort the transaction.
 	_ = e.txConn.Rollback(ctx, safeSession)
-	var errMsg = "transaction rolled back to reverse changes of partial DML execution"
+	errMsg.WriteString("transaction rolled back to reverse changes of partial DML execution")
 	if err != nil {
-		return vterrors.Wrap(err, errMsg)
+		return vterrors.Wrap(err, errMsg.String())
 	}
-	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg)
+	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 }
 
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {

@@ -2718,8 +2718,9 @@ func TestExecutorKillStmt(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
 	tcs := []struct {
-		errStr string
-		query  string
+		errStr   string
+		query    string
+		disallow bool
 
 		expectedLog string
 	}{{
@@ -2734,9 +2735,18 @@ func TestExecutorKillStmt(t *testing.T) {
 	}, {
 		query:  "kill query 24",
 		errStr: "connection does not exists: 24",
+	}, {
+		query:    "kill connection 1",
+		disallow: true,
+		errStr:   "VT07001: kill statement execution not permitted.",
+	}, {
+		query:    "kill query 1",
+		disallow: true,
+		errStr:   "VT07001: kill statement execution not permitted.",
 	}}
 
 	for _, tc := range tcs {
+		allowKillStmt = !tc.disallow
 		t.Run("execute:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
 			_, err := executor.Execute(context.Background(), mysqlCtx, "TestExecutorKillStmt", NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil)

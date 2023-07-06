@@ -637,8 +637,12 @@ func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLC
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
+	if !allowKillStmt {
+		return nil, vterrors.VT07001("kill statement execution not permitted.")
+	}
+
 	if mysqlCtx == nil {
-		return nil, vterrors.VT12001(vtrpcpb.Code_UNIMPLEMENTED, "kill statement works with access through mysql protocol")
+		return nil, vterrors.VT12001("kill statement works with access through mysql protocol")
 	}
 
 	killStmt := stmt.(*sqlparser.Kill)
