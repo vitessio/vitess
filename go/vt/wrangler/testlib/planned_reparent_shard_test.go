@@ -97,7 +97,9 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
-		// we end up calling SetReplicationSource twice on the old primary
+		// We might end up calling SetReplicationSource twice on the old primary
+		// one coming from `PlannedReparentShard` and one coming from `endPrimaryTerm`.
+		// This is a race though between SetReplicationSource on this tablet and `PromoteReplica` on the new primary.
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -132,8 +134,9 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
 
-	err = oldPrimary.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
+	// Because of the race we can either end up using all the queries, or 2 might be left.
+	queriesLeft := len(oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList) - oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryCurrent
+	require.True(t, queriesLeft == 0 || queriesLeft == 2)
 
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
@@ -209,7 +212,9 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
-		// we end up calling SetReplicationSource twice on the old primary
+		// We might end up calling SetReplicationSource twice on the old primary
+		// one coming from `PlannedReparentShard` and one coming from `endPrimaryTerm`.
+		// This is a race though between SetReplicationSource on this tablet and `PromoteReplica` on the new primary.
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -258,8 +263,9 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	// check what was run
 	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
-	err = oldPrimary.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
+	// Because of the race we can either end up using all the queries, or 2 might be left.
+	queriesLeft := len(oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList) - oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryCurrent
+	require.True(t, queriesLeft == 0 || queriesLeft == 2)
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
 	err = goodReplica2.FakeMysqlDaemon.CheckSuperQueryList()
@@ -625,9 +631,10 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE",
 		"START SLAVE",
+		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceError = errors.New("Slave failed to initialize relay log info structure from the repository")
+	goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -795,6 +802,9 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
+		// extra SetReplicationSource call due to retry
+		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
@@ -813,6 +823,9 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
+		"START SLAVE",
+		// extra SetReplicationSource call due to retry
+		"STOP SLAVE",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
@@ -844,23 +857,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
-	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		// extra commands because of retry
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
-	}
-	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"FAKE SET MASTER",
-		"START SLAVE",
-		// extra commands because of retry
-		"FAKE SET MASTER",
-		"START SLAVE",
-	}
+	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
 
 	// run PlannedReparentShard
 	err = vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
@@ -921,7 +918,6 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
