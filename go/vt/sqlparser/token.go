@@ -1227,7 +1227,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	// mysql strings get auto concatenated, so see if the next token is a string and scan it if so
 	tkn.skipBlank()
 	if tkn.lastChar == '\'' || tkn.lastChar == '"' {
-		nextTyp, nextStr := tkn.scanString(tkn.lastChar, STRING)
+		delim := tkn.lastChar
+		tkn.next()
+		nextTyp, nextStr := tkn.scanString(delim, STRING)
 		if nextTyp == STRING {
 			return nextTyp, append(buffer.Bytes(), nextStr...)
 		}
