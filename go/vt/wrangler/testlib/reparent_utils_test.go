@@ -167,7 +167,6 @@ func TestReparentTablet(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	replica.StartActionLoop(t, wr)
@@ -226,6 +225,7 @@ func TestSetReplicationSource(t *testing.T) {
 			"START SLAVE",
 			// We stop and reset the replication parameters because of relay log issues.
 			"STOP SLAVE",
+			"STOP SLAVE",
 			"RESET SLAVE",
 			"START SLAVE",
 		}
@@ -233,7 +233,7 @@ func TestSetReplicationSource(t *testing.T) {
 		defer replica.StopActionLoop(t)
 
 		// Set the correct error message that indicates we have received a relay log error.
-		replica.FakeMysqlDaemon.SetReplicationSourceError = errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log")
+		replica.FakeMysqlDaemon.StartReplicationError = errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log")
 		// run ReparentTablet
 		err = wr.SetReplicationSource(ctx, replica.Tablet)
 		require.NoError(t, err, "SetReplicationSource failed")

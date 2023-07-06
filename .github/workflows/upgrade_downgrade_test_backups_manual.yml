@@ -273,14 +273,6 @@ jobs:
         source build.env ; cd examples/backups
         ./take_backups.sh
 
-    # Stopping the tablets so we can perform the upgrade.
-    - name: Stop tablets
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        source build.env ; cd examples/backups
-        ./stop_tablets.sh
-
     # We upgrade: we swap binaries and use the version N of the tablet.
     - name: Upgrade - Swap binaries, use VTTablet N
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -299,9 +291,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env ; cd examples/backups
-        ./restart_tablets.sh
-        # give enough time to the tablets to restore the backup
-        sleep 90
+        ./upgrade_cluster.sh
 
     # We count the number of rows in every table to check that the restore step was successful.
     - name: Assert the number of rows in every table

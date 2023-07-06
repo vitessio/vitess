@@ -58,6 +58,6 @@ for i in 101 201 301; do
   exit 1
 done
 
-vtctldclient InitShardPrimary --force commerce/0 zone1-100
-vtctldclient InitShardPrimary --force customer/-80 zone1-200
-vtctldclient InitShardPrimary --force customer/80- zone1-300
+vtctldclient PlannedReparentShard commerce/0 --new-primary "zone1-100"
+vtctldclient PlannedReparentShard customer/-80 --new-primary "zone1-200"
+vtctldclient PlannedReparentShard customer/80- --new-primary "zone1-300"
