@@ -3849,7 +3849,15 @@ index_column:
   {
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
-
+| non_reserved_keyword2 length_opt asc_desc_opt
+  {
+      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
+  }
+| non_reserved_keyword3 length_opt asc_desc_opt
+  {
+      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
+  }
+  
 foreign_key_definition:
   CONSTRAINT ID foreign_key_details
   {
