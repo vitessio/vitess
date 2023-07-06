@@ -183,7 +183,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger)
+	merged, err := MergeJoin(ctx, outerOp, subq, joinPredicates, merger)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func tryMergeSubqueryWithRoute(
 		if !ok {
 			return nil, nil
 		}
-		merged, err := merger.mergeTables(outerRouting, innerRouting, outerOp, subqueryRoute)
+		merged, err := merger.mergeShardedRouting(outerRouting, innerRouting, outerOp, subqueryRoute)
 		mergedRouting := merged.Routing.(*ShardedRouting)
 		mergedRouting.PickBestAvailableVindex()
 		return merged, err

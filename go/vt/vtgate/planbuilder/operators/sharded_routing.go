@@ -609,7 +609,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB)
+				return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -633,7 +633,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 		if !canMerge {
 			return nil, nil
 		}
-		return m.mergeTables(tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 	}
 	return nil, nil
 }
