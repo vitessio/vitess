@@ -452,7 +452,7 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
-	// failed load should not return any error, instead should be logged.
+	// failed load should return an error because of test_table
 	assert.ErrorContains(t, err, "Row count exceeded")
 
 	logs := tl.GetAllLogs()
