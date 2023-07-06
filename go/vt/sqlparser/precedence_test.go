@@ -216,7 +216,7 @@ func TestRandom(t *testing.T) {
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
 	seed := time.Now().UnixNano()
 	fmt.Println(fmt.Sprintf("seed is %d", seed)) // nolint
-	g := newGenerator(seed, 5)
+	g := NewGenerator(seed, 5)
 	endBy := time.Now().Add(1 * time.Second)
 
 	for {
@@ -224,7 +224,7 @@ func TestRandom(t *testing.T) {
 			break
 		}
 		// Given a random expression
-		randomExpr := g.expression()
+		randomExpr := g.Expression()
 		inputQ := "select " + String(randomExpr) + " from t"
 
 		// When it's parsed and unparsed

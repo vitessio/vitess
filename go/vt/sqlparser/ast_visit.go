@@ -54,6 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -793,6 +795,18 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAnyValue(in *AnyValue, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -4376,6 +4390,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
 	case *BitAnd:
@@ -4474,6 +4490,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4726,6 +4744,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:

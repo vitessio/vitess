@@ -17,12 +17,14 @@ limitations under the License.
 package inst
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -75,7 +77,7 @@ func TestAuditOperation(t *testing.T) {
 	auditType := "test-audit-operation"
 	message := "test-message"
 
-	t.Run("Audit to backend", func(t *testing.T) {
+	t.Run("audit to backend", func(t *testing.T) {
 		config.Config.AuditLogFile = ""
 		config.Config.AuditToSyslog = false
 		config.Config.AuditToBackendDB = true
@@ -85,7 +87,7 @@ func TestAuditOperation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that we can read the recent audits
-		audits, err := ReadRecentAudit(tab100Alias, 0)
+		audits, err := readRecentAudit(tab100Alias, 0)
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
@@ -94,7 +96,7 @@ func TestAuditOperation(t *testing.T) {
 		require.EqualValues(t, tab100Alias, audits[0].AuditTabletAlias)
 
 		// Check the same for no-filtering
-		audits, err = ReadRecentAudit("", 0)
+		audits, err = readRecentAudit("", 0)
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
@@ -103,7 +105,7 @@ func TestAuditOperation(t *testing.T) {
 		require.EqualValues(t, tab100Alias, audits[0].AuditTabletAlias)
 	})
 
-	t.Run("Audit to File", func(t *testing.T) {
+	t.Run("audit to File", func(t *testing.T) {
 		config.Config.AuditToBackendDB = false
 		config.Config.AuditToSyslog = false
 
@@ -123,4 +125,52 @@ func TestAuditOperation(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, string(fileContent), "\ttest-audit-operation\tzone-1-0000000100\t[ks:0]\ttest-message")
 	})
+}
+
+// audit presents a single audit entry (namely in the database)
+type audit struct {
+	AuditID          int64
+	AuditTimestamp   string
+	AuditType        string
+	AuditTabletAlias string
+	Message          string
+}
+
+// readRecentAudit returns a list of audit entries order chronologically descending, using page number.
+func readRecentAudit(tabletAlias string, page int) ([]audit, error) {
+	res := []audit{}
+	var args []any
+	whereCondition := ``
+	if tabletAlias != "" {
+		whereCondition = `where alias=?`
+		args = append(args, tabletAlias)
+	}
+	query := fmt.Sprintf(`
+		select
+			audit_id,
+			audit_timestamp,
+			audit_type,
+			alias,
+			message
+		from
+			audit
+		%s
+		order by
+			audit_timestamp desc
+		limit ?
+		offset ?
+		`, whereCondition)
+	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
+		a := audit{}
+		a.AuditID = m.GetInt64("audit_id")
+		a.AuditTimestamp = m.GetString("audit_timestamp")
+		a.AuditType = m.GetString("audit_type")
+		a.AuditTabletAlias = m.GetString("alias")
+		a.Message = m.GetString("message")
+
+		res = append(res, a)
+		return nil
+	})
+	return res, err
 }

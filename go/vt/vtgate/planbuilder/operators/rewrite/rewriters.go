@@ -113,6 +113,14 @@ func BottomUp(
 
 var DebugOperatorTree = false
 
+func EnableDebugPrinting() (reset func()) {
+	t := DebugOperatorTree
+	DebugOperatorTree = true
+	return func() {
+		DebugOperatorTree = t
+	}
+}
+
 // FixedPointBottomUp rewrites an operator tree much like BottomUp does,
 // but does the rewriting repeatedly, until a tree walk is done with no changes to the tree.
 func FixedPointBottomUp(

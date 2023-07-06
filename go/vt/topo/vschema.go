@@ -33,7 +33,7 @@ import (
 // SaveVSchema first validates the VSchema, then saves it.
 // If the VSchema is empty, just remove it.
 func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
-	err := vindexes.ValidateKeyspace(vschema)
+	_, err := vindexes.BuildKeyspace(vschema)
 	if err != nil {
 		return err
 	}

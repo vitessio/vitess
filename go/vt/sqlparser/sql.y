@@ -349,7 +349,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
-%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE
+%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE ANY_VALUE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
@@ -5983,6 +5983,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
+| ANY_VALUE openb expression closeb
+  {
+    $$ = &AnyValue{Arg:$3}
+  }
 | TIMESTAMPADD openb timestampadd_interval ',' expression ',' expression closeb
   {
     $$ = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: $7, Interval: $5, Unit: $3}
@@ -8045,6 +8049,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
 | ASCII
 | AUTO_INCREMENT

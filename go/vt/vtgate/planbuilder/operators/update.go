@@ -38,7 +38,7 @@ type Update struct {
 }
 
 // Introduces implements the PhysicalOperator interface
-func (u *Update) Introduces() semantics.TableSet {
+func (u *Update) introducesTableID() semantics.TableSet {
 	return u.QTable.ID
 }
 

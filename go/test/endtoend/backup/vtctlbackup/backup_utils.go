@@ -1233,11 +1233,27 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
+
+}
+
+func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
+	backupPosition := vars["RestorePosition"].(string)
+	backupTime := vars["RestoredBackupTime"].(string)
+	require.Contains(t, vars, "RestoredBackupTime")
+	require.Contains(t, vars, "RestorePosition")
+	require.NotEqual(t, "", backupPosition)
+	require.NotEqual(t, "", backupTime)
+	rp, err := mysql.DecodePosition(backupPosition)
+	require.NoError(t, err)
+	require.False(t, rp.IsZero())
 }
 
 func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	// Currently only the builtin backup engine instruments bytes-processed
 	// counts.
+
+	verifyRestorePositionAndTimeStats(t, vars)
+
 	if !useXtrabackup {
 		require.Contains(t, vars, "RestoreBytes")
 		bb := vars["RestoreBytes"].(map[string]any)

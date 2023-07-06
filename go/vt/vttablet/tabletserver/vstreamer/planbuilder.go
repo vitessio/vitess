@@ -613,7 +613,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Field:  plan.Table.Fields[colnum],
 		}, nil
 	case sqlparser.AggrFunc:
-		if strings.ToLower(inner.AggrName()) != "keyspace_id" {
+		if inner.AggrName() != "keyspace_id" {
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
 		}
 		if len(inner.GetArgs()) != 0 {

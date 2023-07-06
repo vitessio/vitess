@@ -582,6 +582,7 @@ type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	isDerived() bool
+	findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 }
 
 func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
@@ -607,6 +608,10 @@ func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToG
 
 func (r *Route) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return r.Source.GetColumns()
+}
+
+func (r *Route) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return r.Source.GetSelectExprs()
 }
 
 func (r *Route) GetOrdering() ([]ops.OrderBy, error) {

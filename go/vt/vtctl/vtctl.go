@@ -123,6 +123,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -3333,6 +3334,27 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		wr.Logger().Errorf2(err, "Failed to marshal VSchema for display")
 	} else {
 		wr.Logger().Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
+	}
+
+	// Validate the VSchema.
+	ksVs, err := vindexes.BuildKeyspace(vs)
+	if err != nil {
+		return err
+	}
+
+	// Log unknown Vindex params as warnings.
+	var vdxNames []string
+	for name := range ksVs.Vindexes {
+		vdxNames = append(vdxNames, name)
+	}
+	sort.Strings(vdxNames)
+	for _, name := range vdxNames {
+		vdx := ksVs.Vindexes[name]
+		if val, ok := vdx.(vindexes.ParamValidating); ok {
+			for _, param := range val.UnknownParams() {
+				wr.Logger().Warningf("Unknown param in vindex %s: %s", name, param)
+			}
+		}
 	}
 
 	if *dryRun {
