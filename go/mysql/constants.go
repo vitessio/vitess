@@ -541,6 +541,7 @@ const (
 	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
 	ErrWrongValueForType           = 1411
+	ERNoSuchUser                   = 1449
 	ERForbidSchemaChange           = 1450
 	ERWrongValue                   = 1525
 	ERDataOutOfRange               = 1690
