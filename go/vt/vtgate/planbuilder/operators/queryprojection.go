@@ -788,6 +788,9 @@ func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningCo
 // We are also free to add more ORDER BY columns than the user asked for which we leverage,
 // so the input is already ordered according to the GROUP BY columns used
 func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) bool {
+	if qp == nil {
+		return false
+	}
 	if qp.hasCheckedAlignment {
 		return false
 	}

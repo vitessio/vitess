@@ -471,45 +471,26 @@
                 "OperatorType": "Concatenate",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Ordered",
-                    "GroupBy": "(0|1)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Sort",
-                        "Variant": "Memory",
-                        "OrderBy": "(0|1) ASC",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Concatenate",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "user",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                                "Query": "select id, weight_string(id) from `user`",
-                                "Table": "`user`"
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "user",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
-                                "Query": "select id, weight_string(id) from music",
-                                "Table": "music"
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "Query": "select id, weight_string(id) from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+                    "Query": "select id, weight_string(id) from music",
+                    "Table": "music"
                   },
                   {
                     "OperatorType": "Route",
@@ -685,135 +666,59 @@
                 "OperatorType": "Concatenate",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Ordered",
-                    "GroupBy": "0",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Sort",
-                        "Variant": "Memory",
-                        "OrderBy": "0 ASC",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Concatenate",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Aggregate",
-                                "Variant": "Ordered",
-                                "GroupBy": "0",
-                                "Inputs": [
-                                  {
-                                    "OperatorType": "Sort",
-                                    "Variant": "Memory",
-                                    "OrderBy": "0 ASC",
-                                    "Inputs": [
-                                      {
-                                        "OperatorType": "Concatenate",
-                                        "Inputs": [
-                                          {
-                                            "OperatorType": "Aggregate",
-                                            "Variant": "Ordered",
-                                            "GroupBy": "0",
-                                            "Inputs": [
-                                              {
-                                                "OperatorType": "Sort",
-                                                "Variant": "Memory",
-                                                "OrderBy": "0 ASC",
-                                                "Inputs": [
-                                                  {
-                                                    "OperatorType": "Concatenate",
-                                                    "Inputs": [
-                                                      {
-                                                        "OperatorType": "Aggregate",
-                                                        "Variant": "Ordered",
-                                                        "GroupBy": "0",
-                                                        "Inputs": [
-                                                          {
-                                                            "OperatorType": "Sort",
-                                                            "Variant": "Memory",
-                                                            "OrderBy": "0 ASC",
-                                                            "Inputs": [
-                                                              {
-                                                                "OperatorType": "Concatenate",
-                                                                "Inputs": [
-                                                                  {
-                                                                    "OperatorType": "Route",
-                                                                    "Variant": "Reference",
-                                                                    "Keyspace": {
-                                                                      "Name": "main",
-                                                                      "Sharded": false
-                                                                    },
-                                                                    "FieldQuery": "select 1 from dual where 1 != 1",
-                                                                    "Query": "select 1 from dual",
-                                                                    "Table": "dual"
-                                                                  },
-                                                                  {
-                                                                    "OperatorType": "Route",
-                                                                    "Variant": "Reference",
-                                                                    "Keyspace": {
-                                                                      "Name": "main",
-                                                                      "Sharded": false
-                                                                    },
-                                                                    "FieldQuery": "select null from dual where 1 != 1",
-                                                                    "Query": "select null from dual",
-                                                                    "Table": "dual"
-                                                                  }
-                                                                ]
-                                                              }
-                                                            ]
-                                                          }
-                                                        ]
-                                                      },
-                                                      {
-                                                        "OperatorType": "Route",
-                                                        "Variant": "Reference",
-                                                        "Keyspace": {
-                                                          "Name": "main",
-                                                          "Sharded": false
-                                                        },
-                                                        "FieldQuery": "select 1.0 from dual where 1 != 1",
-                                                        "Query": "select 1.0 from dual",
-                                                        "Table": "dual"
-                                                      }
-                                                    ]
-                                                  }
-                                                ]
-                                              }
-                                            ]
-                                          },
-                                          {
-                                            "OperatorType": "Route",
-                                            "Variant": "Reference",
-                                            "Keyspace": {
-                                              "Name": "main",
-                                              "Sharded": false
-                                            },
-                                            "FieldQuery": "select '1' from dual where 1 != 1",
-                                            "Query": "select '1' from dual",
-                                            "Table": "dual"
-                                          }
-                                        ]
-                                      }
-                                    ]
-                                  }
-                                ]
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Reference",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": false
-                                },
-                                "FieldQuery": "select 2 from dual where 1 != 1",
-                                "Query": "select 2 from dual",
-                                "Table": "dual"
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 from dual where 1 != 1",
+                    "Query": "select 1 from dual",
+                    "Table": "dual"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select null from dual where 1 != 1",
+                    "Query": "select null from dual",
+                    "Table": "dual"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1.0 from dual where 1 != 1",
+                    "Query": "select 1.0 from dual",
+                    "Table": "dual"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select '1' from dual where 1 != 1",
+                    "Query": "select '1' from dual",
+                    "Table": "dual"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 2 from dual where 1 != 1",
+                    "Query": "select 2 from dual",
+                    "Table": "dual"
                   },
                   {
                     "OperatorType": "Route",
@@ -1172,7 +1077,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                        "Query": "select id, weight_string(id) from `user`",
+                        "Query": "select id, weight_string(id) from `user` limit :__upper_limit",
                         "Table": "`user`"
                       },
                       {
@@ -1183,7 +1088,7 @@
                           "Sharded": false
                         },
                         "FieldQuery": "select 3, weight_string(3) from dual where 1 != 1",
-                        "Query": "select 3, weight_string(3) from dual",
+                        "Query": "select 3, weight_string(3) from dual limit :__upper_limit",
                         "Table": "dual"
                       }
                     ]
@@ -1243,75 +1148,37 @@
                 "OperatorType": "Concatenate",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Ordered",
-                    "GroupBy": "(0|1)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Sort",
-                        "Variant": "Memory",
-                        "OrderBy": "(0|1) ASC",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Concatenate",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Aggregate",
-                                "Variant": "Ordered",
-                                "GroupBy": "(0|1)",
-                                "Inputs": [
-                                  {
-                                    "OperatorType": "Sort",
-                                    "Variant": "Memory",
-                                    "OrderBy": "(0|1) ASC",
-                                    "Inputs": [
-                                      {
-                                        "OperatorType": "Concatenate",
-                                        "Inputs": [
-                                          {
-                                            "OperatorType": "Route",
-                                            "Variant": "Unsharded",
-                                            "Keyspace": {
-                                              "Name": "main",
-                                              "Sharded": false
-                                            },
-                                            "FieldQuery": "select col, weight_string(col) from unsharded where 1 != 1",
-                                            "Query": "select col, weight_string(col) from unsharded",
-                                            "Table": "unsharded"
-                                          },
-                                          {
-                                            "OperatorType": "Route",
-                                            "Variant": "Scatter",
-                                            "Keyspace": {
-                                              "Name": "user",
-                                              "Sharded": true
-                                            },
-                                            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                                            "Query": "select id, weight_string(id) from `user`",
-                                            "Table": "`user`"
-                                          }
-                                        ]
-                                      }
-                                    ]
-                                  }
-                                ]
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Unsharded",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": false
-                                },
-                                "FieldQuery": "select col2, weight_string(col2) from unsharded where 1 != 1",
-                                "Query": "select col2, weight_string(col2) from unsharded",
-                                "Table": "unsharded"
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select col, weight_string(col) from unsharded where 1 != 1",
+                    "Query": "select col, weight_string(col) from unsharded",
+                    "Table": "unsharded"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "Query": "select id, weight_string(id) from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select col2, weight_string(col2) from unsharded where 1 != 1",
+                    "Query": "select col2, weight_string(col2) from unsharded",
+                    "Table": "unsharded"
                   },
                   {
                     "OperatorType": "Route",

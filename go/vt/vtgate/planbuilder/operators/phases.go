@@ -39,6 +39,13 @@ func getPhases() []Phase {
 		// Initial optimization
 		Name: "initial horizon planning optimization phase",
 	}, {
+		Name: "pull distinct from UNION",
+		// to make it easier to compact UNIONs together, we keep the `distinct` flag in the UNION op until this
+		// phase. Here we will place a DISTINCT op on top of the UNION, and turn the UNION into a UNION ALL
+		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			return pullDistinctFromUNION(op)
+		},
+	}, {
 		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
 		// need it their inputs, and then we start splitting the aggregation
 		// so parts run on MySQL and parts run on VTGate

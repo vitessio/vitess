@@ -46,13 +46,6 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 		return nil, nil, err
 	}
 
-	if union.Distinct {
-		op = &Distinct{
-			Source: op,
-			QP:     qp,
-		}
-	}
-
 	if len(qp.OrderExprs) > 0 {
 		op = &Ordering{
 			Source: op,
@@ -67,7 +60,7 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 		}
 	}
 
-	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
+	return op, rewrite.NewTree("expand UNION horizon into smaller components", op), nil
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -110,7 +103,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		}
 	}
 
-	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
+	return op, rewrite.NewTree("expand SELECT horizon into smaller components", op), nil
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {

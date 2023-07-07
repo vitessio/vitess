@@ -161,6 +161,23 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 }
 
+// addColumnsToInput adds columns needed by an operator to its input.
+// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+func pullDistinctFromUNION(root ops.Operator) (ops.Operator, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		union, ok := in.(*Union)
+		if !ok || !union.distinct {
+			return in, rewrite.SameTree, nil
+		}
+
+		union.distinct = false
+
+		return &Distinct{Source: union}, rewrite.NewTree("pulled out DISTINCT from union", union), nil
+	}
+
+	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+}
+
 func getVisitor(
 	ctx *plancontext.PlanningContext,
 	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error),

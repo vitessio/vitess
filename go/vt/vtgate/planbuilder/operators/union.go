@@ -31,10 +31,7 @@ import (
 type Union struct {
 	Sources  []ops.Operator
 	Selects  []sqlparser.SelectExprs
-	Distinct bool
-
-	// TODO this should be removed. For now it's used to fail queries
-	Ordering []ops.OrderBy
+	distinct bool
 
 	offsetPlanned bool
 }
@@ -48,7 +45,7 @@ func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 func (u *Union) GetOrdering() ([]ops.OrderBy, error) {
-	return u.Ordering, nil
+	return nil, nil
 }
 
 // Inputs implements the Operator interface
@@ -167,7 +164,7 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 	for idx, source := range u.Sources {
 		other, ok := source.(*Union)
 
-		if ok && (u.Distinct || len(other.Ordering) == 0 && !other.Distinct) {
+		if ok && (u.distinct || !other.distinct) {
 			newSources = append(newSources, other.Sources...)
 			newSelects = append(newSelects, other.Selects...)
 			merged = true

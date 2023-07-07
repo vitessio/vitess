@@ -34,10 +34,13 @@ The operators go through a few phases while planning:
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -57,6 +60,11 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 	op, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
 		return nil, err
+	}
+
+	if rewrite.DebugOperatorTree {
+		fmt.Println("Initial tree:")
+		fmt.Println(ops.ToTree(op))
 	}
 
 	if op, err = compact(ctx, op); err != nil {

@@ -103,7 +103,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	lexprs := sqlparser.GetFirstSelect(node.Left).SelectExprs
 	rexprs := sqlparser.GetFirstSelect(node.Right).SelectExprs
 	union := &Union{
-		Distinct: node.Distinct,
+		distinct: node.Distinct,
 		Sources:  []ops.Operator{opLHS, opRHS},
 		Selects:  []sqlparser.SelectExprs{lexprs, rexprs},
 	}
