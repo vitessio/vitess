@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"errors"
 	"expvar"
 	"fmt"
 	"net/http"
@@ -27,20 +28,19 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const baseShowTablesPattern = `SELECT t\.table_name.*`
@@ -201,7 +201,7 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
 	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 
-	//ReloadAt tests
+	// ReloadAt tests
 	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
 	require.NoError(t, err)
 	pos2, err := mysql.DecodePosition("MariaDB/0-41983-40")
@@ -423,7 +423,10 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	}
 }
 
-func TestOpenFailedDueToTableErr(t *testing.T) {
+// TestOpenFailedDueToLoadTableErr tests that schema engine load should not fail instead should log the failures.
+func TestOpenFailedDueToLoadTableErr(t *testing.T) {
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
@@ -431,27 +434,30 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("test_view", true, "VIEW"),
 		},
 	})
-	db.MockQueriesForTable("test_table", &sqltypes.Result{
-		// this will cause NewTable error, as it expects zero rows.
-		Fields: []*querypb.Field{
-			{
-				Type: querypb.Type_VARCHAR,
-			},
-		},
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarBinary("")},
-		},
-	})
+	// this will cause NewTable error, as it expects zero rows.
+	db.MockQueriesForTable("test_table", sqltypes.MakeTestResult(sqltypes.MakeTestFields("foo", "varchar"), ""))
+
+	// adding column query for table_view
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), ""))
+	// rejecting the impossible query
+	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", errors.New("The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)"))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
-	want := "Row count exceeded"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
-	}
+	// failed load should not return any error, instead should be logged.
+	require.NoError(t, err)
+
+	logs := tl.GetAllLogs()
+	logOutput := strings.Join(logs, ":::")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_table")
+	assert.Contains(t, logOutput, "Row count exceeded")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_view")
+	assert.Contains(t, logOutput, "The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
 }
 
 func TestExportVars(t *testing.T) {
