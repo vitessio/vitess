@@ -417,12 +417,6 @@ var (
 		}, {
 			input: "select /* table alias with as */ 1 from t as t1",
 		}, {
-			input:  "select /* string table alias */ 1 from t as 't1'",
-			output: "select /* string table alias */ 1 from t as t1",
-		}, {
-			input:  "select /* string table alias without as */ 1 from t 't1'",
-			output: "select /* string table alias without as */ 1 from t as t1",
-		}, {
 			input: "select /* keyword table alias */ 1 from t as `By`",
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
@@ -439,9 +433,6 @@ var (
 			output: "select /* table alias */ 1 from t as of '2019-01-01' as t1",
 		}, {
 			input: "select /* table alias with as */ 1 from t as of '2019-01-01' as t1",
-		}, {
-			input:  "select /* string table alias */ 1 from t as of '2019-01-01' as 't1'",
-			output: "select /* string table alias */ 1 from t as of '2019-01-01' as t1",
 		}, {
 			input: "select /* keyword table alias */ 1 from t as of '2019-01-01' as `By`",
 		}, {

@@ -5776,10 +5776,6 @@ table_alias:
   {
     $$ = NewTableIdent(string($1))
   }
-| STRING
-  {
-    $$ = NewTableIdent(string($1))
-  }
 
 inner_join:
   JOIN
