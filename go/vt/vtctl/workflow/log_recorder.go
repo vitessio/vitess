@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"fmt"
 	"sort"
 )
 
@@ -35,7 +36,11 @@ func NewLogRecorder() *LogRecorder {
 // Log records a new log message
 func (lr *LogRecorder) Log(log string) {
 	lr.logs = append(lr.logs, log)
-	//fmt.Printf("DR: %s\n", log)
+}
+
+// Logf records a new log message with interpolation parameters using fmt.Sprintf.
+func (lr *LogRecorder) Logf(log string, args ...any) {
+	lr.logs = append(lr.logs, fmt.Sprintf(log, args...))
 }
 
 // LogSlice sorts a given slice using natural sort, so that the result is predictable.
