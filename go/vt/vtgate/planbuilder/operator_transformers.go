@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
@@ -77,10 +78,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(plan),
-			weightStrings:     make(map[*resultColumn]int),
-		},
+		resultsBuilder: newResultsBuilder(plan, nil),
 	}
 
 	for _, aggr := range op.Aggregations {
@@ -133,12 +131,8 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 		TruncateColumnCount: ordering.ResultColumns,
 	}
 	ms := &memorySort{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(src),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         primitive,
-		},
-		eMemorySort: primitive,
+		resultsBuilder: newResultsBuilder(src, primitive),
+		eMemorySort:    primitive,
 	}
 
 	for idx, order := range ordering.Order {
@@ -1077,6 +1071,24 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 				return a.Val == b.Val
 			}
 		}
+	}
+	return false
+}
+
+func hexEqual(a, b *sqlparser.Literal) bool {
+	v, err := a.HexDecode()
+	if err != nil {
+		return false
+	}
+	switch b.Type {
+	case sqlparser.StrVal:
+		return bytes.Equal(v, b.Bytes())
+	case sqlparser.HexVal:
+		v2, err := b.HexDecode()
+		if err != nil {
+			return false
+		}
+		return bytes.Equal(v, v2)
 	}
 	return false
 }

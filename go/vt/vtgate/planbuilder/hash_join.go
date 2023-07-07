@@ -32,7 +32,6 @@ var _ logicalPlan = (*hashJoin)(nil)
 
 // hashJoin is used to build a HashJoin primitive.
 type hashJoin struct {
-	gen4Plan
 
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan

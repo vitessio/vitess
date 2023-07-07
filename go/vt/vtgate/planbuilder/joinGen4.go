@@ -48,8 +48,6 @@ type joinGen4 struct {
 	// LHSColumns are the columns from the LHS used for the join.
 	// These are the same columns pushed on the LHS that are now used in the Vars field
 	LHSColumns []*sqlparser.ColName
-
-	gen4Plan
 }
 
 // WireupGen4 implements the logicalPlan interface

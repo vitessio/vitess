@@ -21,41 +21,30 @@ import (
 	"fmt"
 	"sort"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
-	// V3 is also the default planner
-	V3 = querypb.ExecuteOptions_V3
 	// Gen4 uses the default Gen4 planner, which is the greedy planner
 	Gen4 = querypb.ExecuteOptions_Gen4
 	// Gen4GreedyOnly uses only the faster greedy planner
 	Gen4GreedyOnly = querypb.ExecuteOptions_Gen4Greedy
 	// Gen4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
-	// Gen4WithFallback first attempts to use the Gen4 planner, and if that fails, uses the V3 planner instead
-	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
-	// Gen4CompareV3 executes queries on both Gen4 and V3 to compare their results.
-	Gen4CompareV3 = querypb.ExecuteOptions_Gen4CompareV3
-	// V3Insert executes insert query on V3 and others on Gen4.
-	V3Insert = querypb.ExecuteOptions_V3Insert
 )
 
 var (
-	plannerVersions = []plancontext.PlannerVersion{V3, V3Insert, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
+	plannerVersions = []plancontext.PlannerVersion{Gen4, Gen4GreedyOnly, Gen4Left2Right}
 )
 
 type (
@@ -136,31 +125,19 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) stmtPlanner, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
+func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
 	planner, ok := getPlannerFromQuery(stmt)
 	if !ok {
 		// if the query doesn't specify the planner, we check what the configuration is
 		planner = vschema.Planner()
 	}
 	switch planner {
-	case Gen4CompareV3:
-		return gen4CompareV3Planner(query), nil
 	case Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner(query, planner), nil
-	case Gen4WithFallback:
-		fp := &fallbackPlanner{
-			primary:  gen4Planner(query, Gen4),
-			fallback: v3planner(query),
-		}
-		return fp.plan, nil
-	case V3Insert:
-		if _, isInsert := stmt.(*sqlparser.Insert); isInsert {
-			return v3planner(query), nil
-		}
-		return gen4Planner(query, Gen4), nil
-	case V3:
-		return v3planner(query), nil
 	default:
+		if planner != Gen4 {
+			log.Infof("Using Gen4 planner instead of %s", planner.String())
+		}
 		// default is gen4 plan
 		return gen4Planner(query, Gen4), nil
 	}
@@ -215,31 +192,31 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Insert:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildInsertPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Update:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Union:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}

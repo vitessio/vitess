@@ -28,7 +28,6 @@ import (
 )
 
 type projection struct {
-	gen4Plan
 	source      logicalPlan
 	columnNames []string
 	columns     []sqlparser.Expr

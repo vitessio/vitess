@@ -357,10 +357,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		return nil, err
 	}
 
-	oa.resultsBuilder = resultsBuilder{
-		logicalPlanCommon: newBuilderCommon(aggPlan),
-		weightStrings:     make(map[*resultColumn]int),
-	}
+	oa.resultsBuilder = newResultsBuilder(aggPlan, nil)
 
 	return hp.planHaving(ctx, oa)
 }
@@ -809,12 +806,8 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, 
 func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *orderedAggregate, orderExprs []ops.OrderBy) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(plan),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         primitive,
-		},
-		eMemorySort: primitive,
+		resultsBuilder: newResultsBuilder(plan, primitive),
+		eMemorySort:    primitive,
 	}
 
 	for _, order := range orderExprs {
@@ -854,12 +847,8 @@ func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggreg
 func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext, plan logicalPlan, orderExprs []ops.OrderBy, useWeightStr bool) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(plan),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         primitive,
-		},
-		eMemorySort: primitive,
+		resultsBuilder: newResultsBuilder(plan, primitive),
+		eMemorySort:    primitive,
 	}
 
 	for _, order := range orderExprs {
@@ -917,10 +906,7 @@ func (hp *horizonPlanning) planDistinct(ctx *plancontext.PlanningContext, plan l
 
 func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan *orderedAggregate) (logicalPlan, error) {
 	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(currPlan),
-			weightStrings:     make(map[*resultColumn]int),
-		},
+		resultsBuilder: newResultsBuilder(currPlan, nil),
 	}
 	for _, sExpr := range hp.qp.SelectExprs {
 		expr, err := sExpr.GetExpr()
@@ -991,11 +977,8 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 		return nil, err
 	}
 	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(innerPlan),
-			weightStrings:     make(map[*resultColumn]int),
-		},
-		groupByKeys: groupByKeys,
+		resultsBuilder: newResultsBuilder(innerPlan, nil),
+		groupByKeys:    groupByKeys,
 	}
 	return oa, nil
 }

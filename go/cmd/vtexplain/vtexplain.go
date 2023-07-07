@@ -113,8 +113,8 @@ func main() {
 
 func parseAndRun() error {
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerVersionStr)
-	if plannerVersionStr != "" && plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
-		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4 or an empty value to use the default planner", plannerVersionStr)
+	if plannerVersionStr != "" && plannerVersion != querypb.ExecuteOptions_Gen4 {
+		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid value is Gen4 or an empty value to use the default planner", plannerVersionStr)
 	}
 
 	sql, err := getFileParam(sqlFlag, sqlFileFlag, "sql", true)

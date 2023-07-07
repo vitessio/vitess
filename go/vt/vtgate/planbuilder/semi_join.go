@@ -30,7 +30,6 @@ var _ logicalPlan = (*semiJoin)(nil)
 // This gets built if a rhs is correlated and can
 // be pulled out but requires some variables to be supplied from outside.
 type semiJoin struct {
-	gen4Plan
 	rhs  logicalPlan
 	lhs  logicalPlan
 	cols []int

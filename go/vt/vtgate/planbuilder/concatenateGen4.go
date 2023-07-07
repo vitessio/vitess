@@ -34,26 +34,6 @@ type concatenateGen4 struct {
 
 var _ logicalPlan = (*concatenateGen4)(nil)
 
-// Order implements the logicalPlan interface
-func (c *concatenateGen4) Order() int {
-	panic("implement me")
-}
-
-// ResultColumns implements the logicalPlan interface
-func (c *concatenateGen4) ResultColumns() []*resultColumn {
-	panic("implement me")
-}
-
-// Reorder implements the logicalPlan interface
-func (c *concatenateGen4) Reorder(order int) {
-	panic("implement me")
-}
-
-// Wireup implements the logicalPlan interface
-func (c *concatenateGen4) Wireup(plan logicalPlan, jt *jointab) error {
-	panic("implement me")
-}
-
 // WireupGen4 implements the logicalPlan interface
 func (c *concatenateGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	for _, source := range c.sources {
@@ -63,21 +43,6 @@ func (c *concatenateGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 		}
 	}
 	return nil
-}
-
-// SupplyVar implements the logicalPlan interface
-func (c *concatenateGen4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("implement me")
-}
-
-// SupplyCol implements the logicalPlan interface
-func (c *concatenateGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("implement me")
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (c *concatenateGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	panic("implement me")
 }
 
 // Primitive implements the logicalPlan interface
