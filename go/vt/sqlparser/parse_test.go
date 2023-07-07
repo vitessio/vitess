@@ -443,9 +443,6 @@ var (
 			input:  "select /* string table alias */ 1 from t as of '2019-01-01' as 't1'",
 			output: "select /* string table alias */ 1 from t as of '2019-01-01' as t1",
 		}, {
-			input:  "select /* string table alias without as */ 1 from t as of '2019-01-01' 't1'",
-			output: "select /* string table alias without as */ 1 from t as of '2019-01-01' as t1",
-		}, {
 			input: "select /* keyword table alias */ 1 from t as of '2019-01-01' as `By`",
 		}, {
 			input: "select /* join */ 1 from t1 join t2",

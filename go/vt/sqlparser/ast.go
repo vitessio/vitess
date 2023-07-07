@@ -136,7 +136,7 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 					// column names don't need any special handling to capture the input expression
 					return false, nil
 				} else {
-					node.InputExpression = strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t")
+					node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
 				}
 			}
 			return true, nil
@@ -177,20 +177,20 @@ func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
 	}
 }
 
-// func trimQuotes(s string) string {
-// 	firstChar := s[0]
-// 	lastChar := s[len(s)-1]
-// 	if firstChar == lastChar {
-// 		if firstChar == '`' || firstChar == '"' || firstChar == '\'' {
-// 			// Some edge cases here: we have to be careful to not strip expressions like `"1" + "2"`
-// 			if stringIsUnbrokenQuote(s, firstChar) {
-// 				return s[1 : len(s)-1]
-// 			}
-// 		}
-// 	}
-// 
-// 	return s
-// }
+func trimQuotes(s string) string {
+	firstChar := s[0]
+	lastChar := s[len(s)-1]
+	if firstChar == lastChar {
+		if firstChar == '`' || firstChar == '"' || firstChar == '\'' {
+			// Some edge cases here: we have to be careful to not strip expressions like `"1" + "2"`
+			if stringIsUnbrokenQuote(s, firstChar) {
+				return s[1 : len(s)-1]
+			}
+		}
+	}
+
+	return s
+}
 
 func stringIsUnbrokenQuote(s string, quoteChar byte) bool {
 	numConsecutiveQuotes := 0
