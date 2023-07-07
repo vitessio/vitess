@@ -66,6 +66,14 @@ var (
 			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
 		},
 		{
+			input: `Select 'a' "b" 'c'`,
+			output: "select 'abc'",
+		},
+		{
+			input: `Select concat('a' "b" 'c', "de" 'f')`,
+			output: "select concat('abc', 'def')",
+		},
+		{
 			input:  "SET @foo = 'o' 'ne';",
 			output: "set @foo = 'one'",
 		},
@@ -413,12 +421,6 @@ var (
 		}, {
 			input: "select /* table alias with as */ 1 from t as t1",
 		}, {
-			input:  "select /* string table alias */ 1 from t as 't1'",
-			output: "select /* string table alias */ 1 from t as t1",
-		}, {
-			input:  "select /* string table alias without as */ 1 from t 't1'",
-			output: "select /* string table alias without as */ 1 from t as t1",
-		}, {
 			input: "select /* keyword table alias */ 1 from t as `By`",
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
@@ -435,12 +437,6 @@ var (
 			output: "select /* table alias */ 1 from t as of '2019-01-01' as t1",
 		}, {
 			input: "select /* table alias with as */ 1 from t as of '2019-01-01' as t1",
-		}, {
-			input:  "select /* string table alias */ 1 from t as of '2019-01-01' as 't1'",
-			output: "select /* string table alias */ 1 from t as of '2019-01-01' as t1",
-		}, {
-			input:  "select /* string table alias without as */ 1 from t as of '2019-01-01' 't1'",
-			output: "select /* string table alias without as */ 1 from t as of '2019-01-01' as t1",
 		}, {
 			input: "select /* keyword table alias */ 1 from t as of '2019-01-01' as `By`",
 		}, {
@@ -3364,6 +3360,15 @@ func TestValid(t *testing.T) {
 	}
 }
 
+func TestSingle(t *testing.T) {
+	validSQL = append(validSQL, validMultiStatementSql...)
+	for _, tcase := range validSQL {
+		if tcase.input == "select \"'ain't'\", '\"hello\"' from t" {
+			runParseTestCase(t, tcase)
+		}
+	}
+}
+
 func TestGeneratedColumns(t *testing.T) {
 	tests := []parseTest{
 		{
@@ -4001,6 +4006,9 @@ func TestInvalid(t *testing.T) {
 		input: "SET @foo = `o` `ne`;",
 		err:   "syntax error",
 	}, {
+		input: "select '1' '2",
+		err:   "syntax error",
+	}, {
 		input: "CHANGE REPLICATION FILTER",
 		err:   "syntax error",
 	}, {
@@ -4061,13 +4069,15 @@ func TestInvalid(t *testing.T) {
 	}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil {
-			t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
-		}
-		if err != nil && !strings.Contains(err.Error(), tcase.err) {
-			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			if err == nil {
+				t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
+			}
+			if err != nil && !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
+			}
+		})
 	}
 
 	invalidDDL := []struct {
