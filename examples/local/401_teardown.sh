@@ -34,7 +34,7 @@ for tablet in 100 200 300 400; do
 			echo "Shutting down tablet $alias"
 			CELL=zone1 TABLET_UID=$uid ../common/scripts/vttablet-down.sh
    			# because MySQL takes time to stop, we do this in parallel
-			CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh
+			CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh &
 		done
 
   		# without a sleep below, we can have the echo happen before the echo of mysqlctl-down.sh
