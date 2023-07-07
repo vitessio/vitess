@@ -1454,5 +1454,195 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "UNION ALL with repeating column on the LHS",
+    "query": "select foo, foo, foo from user union all select bar, baz, toto from music",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select foo, foo, foo from user union all select bar, baz, toto from music",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select foo, foo, foo from `user` where 1 != 1 union all select bar, baz, toto from music where 1 != 1",
+        "Query": "select foo, foo, foo from `user` union all select bar, baz, toto from music",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select foo, foo, foo from user union all select bar, baz, toto from music",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, foo, foo from `user` where 1 != 1",
+            "Query": "select foo, foo, foo from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select bar, baz, toto from music where 1 != 1",
+            "Query": "select bar, baz, toto from music",
+            "Table": "music"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL with repeating column on the RHS",
+    "query": "select bar, baz, toto from music union all select foo, foo, foo from user",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, baz, toto from music union all select foo, foo, foo from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select bar, baz, toto from music where 1 != 1 union all select foo, foo, foo from `user` where 1 != 1",
+        "Query": "select bar, baz, toto from music union all select foo, foo, foo from `user`",
+        "Table": "music"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, baz, toto from music union all select foo, foo, foo from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select bar, baz, toto from music where 1 != 1",
+            "Query": "select bar, baz, toto from music",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, foo, foo from `user` where 1 != 1",
+            "Query": "select foo, foo, foo from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION with repeating column on the LHS",
+    "query": "select foo, foo, foo from user union select bar, baz, toto from music",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select foo, foo, foo from user union select bar, baz, toto from music",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, foo, foo from `user` where 1 != 1",
+                "Query": "select foo, foo, foo from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select bar, baz, toto from music where 1 != 1",
+                "Query": "select bar, baz, toto from music",
+                "Table": "music"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "gen4-plan": "VT13001: [BUG] grouping column on wrong index: want: 1, got: 0"
+  },
+  {
+    "comment": "UNION with repeating column on the RHS",
+    "query": "select bar, baz, toto from music union select foo, foo, foo from user",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, baz, toto from music union select foo, foo, foo from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select bar, baz, toto from music where 1 != 1",
+                "Query": "select bar, baz, toto from music",
+                "Table": "music"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, foo, foo from `user` where 1 != 1",
+                "Query": "select foo, foo, foo from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "gen4-plan": "VT12001: unsupported: offsets did not line up for UNION"
   }
 ]

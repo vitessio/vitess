@@ -185,10 +185,6 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 }
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	err := u.planOffsets(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
 	cols, err := u.GetColumns()
 	if err != nil {
 		return nil, 0, err
@@ -235,7 +231,7 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.Aliase
 			return nil, 0, err
 		}
 		if this != offset {
-			panic("uh oh")
+			return nil, 0, vterrors.VT12001("offsets did not line up for UNION")
 		}
 		u.Sources[i] = newSrc
 	}
@@ -254,29 +250,4 @@ func (u *Union) NoLHSTableSet() {}
 
 func (u *Union) ShortDescription() string {
 	return ""
-}
-
-func (u *Union) planOffsets(ctx *plancontext.PlanningContext) error {
-	if u.offsetPlanned {
-		return nil
-	}
-	u.offsetPlanned = true
-
-	for idx, source := range u.Sources {
-		for eIdx, expr := range u.Selects[idx] {
-			ae, ok := expr.(*sqlparser.AliasedExpr)
-			if !ok {
-				return vterrors.VT09015()
-			}
-			newOp, offset, err := source.AddColumn(ctx, ae, false, false)
-			if err != nil {
-				return err
-			}
-			if offset != eIdx {
-				return vterrors.VT13001(fmt.Sprintf("index mismatch while pushing the column for '%s'", sqlparser.String(ae)))
-			}
-			u.Sources[idx] = newOp
-		}
-	}
-	return nil
 }
