@@ -1233,6 +1233,8 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 		nextTyp, nextStr := tkn.scanString(delim, STRING)
 		if nextTyp == STRING {
 			return nextTyp, append(buffer.Bytes(), nextStr...)
+		} else {
+			return LEX_ERROR, buffer.Bytes()
 		}
 	}
 	

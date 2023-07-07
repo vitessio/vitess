@@ -4006,6 +4006,9 @@ func TestInvalid(t *testing.T) {
 		input: "SET @foo = `o` `ne`;",
 		err:   "syntax error",
 	}, {
+		input: "select '1' '2",
+		err:   "syntax error",
+	}, {
 		input: "CHANGE REPLICATION FILTER",
 		err:   "syntax error",
 	}, {
@@ -4066,13 +4069,15 @@ func TestInvalid(t *testing.T) {
 	}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil {
-			t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
-		}
-		if err != nil && !strings.Contains(err.Error(), tcase.err) {
-			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			if err == nil {
+				t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
+			}
+			if err != nil && !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
+			}
+		})
 	}
 
 	invalidDDL := []struct {
