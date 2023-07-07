@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -48,7 +49,7 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string,
 			return nil, err
 		}
 		ta.Type = Message
-	case strings.Contains(tableType, "VIEW"):
+	case strings.Contains(tableType, tmutils.TableView):
 		ta.Type = View
 	}
 	return ta, nil
