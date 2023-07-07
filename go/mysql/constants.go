@@ -554,6 +554,7 @@ const (
 	ERIllegalValueForType          = ErrorCode(1367)
 	ERDataTooLong                  = ErrorCode(1406)
 	ErrWrongValueForType           = ErrorCode(1411)
+	ERNoSuchUser                   = ErrorCode(1449)
 	ERForbidSchemaChange           = ErrorCode(1450)
 	ERWrongValue                   = ErrorCode(1525)
 	ERDataOutOfRange               = ErrorCode(1690)
