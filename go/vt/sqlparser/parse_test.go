@@ -70,6 +70,10 @@ var (
 			output: "select 'abc'",
 		},
 		{
+			input: `Select concat('a' "b" 'c', "de" 'f')`,
+			output: "select concat('abc', 'def')",
+		},
+		{
 			input:  "SET @foo = 'o' 'ne';",
 			output: "set @foo = 'one'",
 		},
