@@ -51,9 +51,20 @@ else
 	vtctldclient CreateKeyspace --sidecar-db-name="${SIDECAR_DB_NAME}" --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
 fi
 
+# start mysqlctls for keyspace commerce
+# because MySQL takes time to start, we do this in parallel
+for i in 100 101 102; do
+	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh &
+done
+
+# without a sleep, we can have below echo happen before the echo of mysqlctl-up.sh
+sleep 2
+echo "Waiting for mysqlctls to start..."
+wait
+echo "mysqlctls are running!"
+
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
-	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
