@@ -25,11 +25,13 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 const getWorkflowQuery = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
@@ -3022,6 +3024,7 @@ func TestAddTablesToVSchema(t *testing.T) {
 func TestMigrateVSchema(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
+		Cell:           "cell",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
@@ -3036,7 +3039,6 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzGetWorkflowQuery, getWorkflowRes)
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -3044,6 +3046,8 @@ func TestMigrateVSchema(t *testing.T) {
 	ctx := context.Background()
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,
+		Cells:          []string{ms.Cell},
+		TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 		SourceKeyspace: ms.SourceKeyspace,
 		TargetKeyspace: ms.TargetKeyspace,
 		IncludeTables:  []string{"t1"},
@@ -3069,6 +3073,7 @@ func TestMigrateVSchema(t *testing.T) {
 //   - TestPlayerDDL tests that the vplayer correctly implements the ddl behavior
 //   - We have a manual e2e test for the full behavior: TestVReplicationDDLHandling
 func TestMoveTablesDDLFlag(t *testing.T) {
+	ctx := context.Background()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -3078,7 +3083,6 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	ctx := context.Background()
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
@@ -3088,10 +3092,23 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// for prototext fields so we use the default insert stmt.
 			//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
 			//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
 
-			want := fmt.Sprintf(`summary:"Successfully created the workflow MoveTables workflow on (1) target primary tablets in the %s keyspace" details:{tablet:"%s-200 (%s/0)"}`,
-				ms.TargetKeyspace, env.cell, ms.TargetKeyspace)
+			// TODO: we cannot test the actual query generated w/o having a
+			// TabletManager. Importing the tabletmanager package, however, causes
+			// a circular dependency.
+			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
+			env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
+			env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
+
+			targetShard, err := env.topoServ.GetShardNames(ctx, ms.TargetKeyspace)
+			require.NoError(t, err)
+			sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
+			require.NoError(t, err)
+			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97\" status:\"running\" info:\"VStream Lag: 0s\"}}}",
+				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0])
 
 			res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       ms.Workflow,

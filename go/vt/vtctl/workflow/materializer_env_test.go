@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -51,6 +52,7 @@ type testMaterializerEnv struct {
 	sources []string
 	targets []string
 	tablets map[int]*topodatapb.Tablet
+	// Importing the tabletmanager package causes a circular dependency. :-(
 	//tms      map[int]*tabletmanager.TabletManager
 	topoServ *topo.Server
 	cell     string
@@ -151,7 +153,7 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 	/*
 		env.tms[id] = &tabletmanager.TabletManager{
 			TopoServer: env.topoServ,
-			VREngine:   &vreplication.NewSimpleTestEngine(env.topoServ, env.cell, nil, func() binlogplayer.DBClient, func() binlogplayer.DBClient, dbname, externalConfig),
+			VREngine:   vreplication.NewSimpleTestEngine(env.topoServ, env.cell, nil, binlogplayer.DBClient, binlogplayer.DBClient, dbname, externalConfig),
 		}
 	*/
 	if err := env.ws.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
@@ -217,6 +219,29 @@ func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
 func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields("rowsaffected", "int64"), "1")
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+			Workflow: "workflow",
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+				{
+					Id: 1,
+					Bls: &binlogdatapb.BinlogSource{
+						Keyspace: "sourceks",
+						Shard:    "0",
+						Filter: &binlogdatapb.Filter{
+							Rules: []*binlogdatapb.Rule{
+								{
+									Match: ".*",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		nil
 }
 
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
