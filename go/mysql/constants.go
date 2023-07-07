@@ -536,6 +536,7 @@ const (
 	ERDataTooLong                  = 1406
 	ErrWrongValueForType           = 1411
 	ERWarnDataTruncated            = 1265
+	ERNoSuchUser                   = 1449
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
 	ERInvalidJSONText              = 3140

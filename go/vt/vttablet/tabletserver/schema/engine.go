@@ -18,26 +18,29 @@ package schema
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -341,6 +344,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		return err
 	}
 
+	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
 	curTables := map[string]bool{"dual": true}
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
@@ -376,9 +380,24 @@ func (se *Engine) reload(ctx context.Context) error {
 		}
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
+		tableType := row[1].String()
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
 		if err != nil {
-			log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
+			isView := strings.Contains(tableType, tmutils.TableView)
+			var emptyColumnsError mysqlctl.EmptyColumnsErr
+			if errors.As(err, &emptyColumnsError) && isView {
+				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
+				continue
+			}
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchUser && isView {
+				// A VIEW that has an invalid DEFINER, leading to:
+				// ERROR 1449 (HY000): The user specified as a definer (...) does not exist
+				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
+				continue
+			}
+			// Non recoverable error:
+			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
 		table.FileSize = fileSize
@@ -390,6 +409,9 @@ func (se *Engine) reload(ctx context.Context) error {
 		} else {
 			created = append(created, tableName)
 		}
+	}
+	if rec.HasErrors() {
+		return rec.Error()
 	}
 
 	// Compute and handle dropped tables.
