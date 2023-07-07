@@ -44,6 +44,7 @@ type Tokenizer struct {
 	Position             int
 	OldPosition          int
 	lastToken            []byte
+	lastTyp  int
 	lastNonNilToken      []byte
 	LastError            error
 	posVarIndex          int
@@ -758,6 +759,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	}
 	lval.bytes = val
 	tkn.lastToken = val
+	tkn.lastTyp = typ
 	if val != nil {
 		tkn.lastNonNilToken = val
 	}
@@ -790,17 +792,35 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
-		specialComment := tkn.specialComment
-		tok, val := specialComment.Scan()
-		tkn.Position = specialComment.Position
+		
+		// If this is the last non-comment token, we may have some special string concatenation to do before returning 
+		// control to the outer tokenizer (see scanString for details)
+		specialLastToken := tkn.specialComment.lastToken
+		specialLastTyp := tkn.specialComment.lastTyp
+
+		tok, val := tkn.specialComment.Scan()
+		tkn.Position = tkn.specialComment.Position
 
 		if tok != 0 {
 			// return the specialComment scan result as the result
+			tkn.specialComment.lastToken = val
+			tkn.specialComment.lastTyp = tok
 			return tok, val
 		}
 
 		// reset the position to what it was when we originally finished parsing the special comment
 		tkn.Position = tkn.specialCommentEndPos
+
+		if specialLastToken != nil && specialLastTyp == STRING {
+			tkn.skipBlank()
+			lastChar := tkn.lastChar
+			if lastChar == '\'' || lastChar == '"' {
+				tkn.specialComment = nil
+				tkn.next()
+				typ, token := tkn.scanString(lastChar, STRING)
+				return typ, append(specialLastToken, token...)
+			}
+		}
 
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil

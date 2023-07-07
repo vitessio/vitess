@@ -66,6 +66,10 @@ var (
 			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
 		},
 		{
+			input: `Select 'a' "b" 'c'`,
+			output: "select 'abc'",
+		},
+		{
 			input:  "SET @foo = 'o' 'ne';",
 			output: "set @foo = 'one'",
 		},
@@ -3361,6 +3365,15 @@ func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
+	}
+}
+
+func TestSingle(t *testing.T) {
+	validSQL = append(validSQL, validMultiStatementSql...)
+	for _, tcase := range validSQL {
+		if tcase.input == "select \"'ain't'\", '\"hello\"' from t" {
+			runParseTestCase(t, tcase)
+		}
 	}
 }
 
