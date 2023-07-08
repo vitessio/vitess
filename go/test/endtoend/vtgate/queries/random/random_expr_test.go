@@ -33,19 +33,19 @@ func TestRandomExprWithTables(t *testing.T) {
 		{tableExpr: sqlparser.NewTableName("dept")},
 	}
 	schemaTables[0].addColumns([]column{
-		{name: "empno", typ: "bigint"},
-		{name: "ename", typ: "varchar"},
-		{name: "job", typ: "varchar"},
-		{name: "mgr", typ: "bigint"},
-		{name: "hiredate", typ: "date"},
-		{name: "sal", typ: "bigint"},
-		{name: "comm", typ: "bigint"},
-		{name: "deptno", typ: "bigint"},
+		{name: sqlparser.NewColName("empno"), typ: "bigint"},
+		{name: sqlparser.NewColName("ename"), typ: "varchar"},
+		{name: sqlparser.NewColName("job"), typ: "varchar"},
+		{name: sqlparser.NewColName("mgr"), typ: "bigint"},
+		{name: sqlparser.NewColName("hiredate"), typ: "date"},
+		{name: sqlparser.NewColName("sal"), typ: "bigint"},
+		{name: sqlparser.NewColName("comm"), typ: "bigint"},
+		{name: sqlparser.NewColName("deptno"), typ: "bigint"},
 	}...)
 	schemaTables[1].addColumns([]column{
-		{name: "deptno", typ: "bigint"},
-		{name: "dname", typ: "varchar"},
-		{name: "loc", typ: "varchar"},
+		{name: sqlparser.NewColName("deptno"), typ: "bigint"},
+		{name: sqlparser.NewColName("dname"), typ: "varchar"},
+		{name: sqlparser.NewColName("loc"), typ: "varchar"},
 	}...)
 
 	seed := time.Now().UnixNano()

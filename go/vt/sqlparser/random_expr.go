@@ -29,7 +29,9 @@ type (
 	}
 
 	ExprGeneratorConfig struct {
-		Type string
+		// IsAggregate determines if the random expression is an aggregation expression
+		IsAggregate bool
+		Type        string
 	}
 )
 
@@ -50,6 +52,16 @@ func (genConfig ExprGeneratorConfig) stringTypeConfig() ExprGeneratorConfig {
 
 func (genConfig ExprGeneratorConfig) anyTypeConfig() ExprGeneratorConfig {
 	genConfig.Type = ""
+	return genConfig
+}
+
+func (genConfig ExprGeneratorConfig) aggregateConfig() ExprGeneratorConfig {
+	genConfig.IsAggregate = true
+	return genConfig
+}
+
+func (genConfig ExprGeneratorConfig) notAggregateConfig() ExprGeneratorConfig {
+	genConfig.IsAggregate = false
 	return genConfig
 }
 

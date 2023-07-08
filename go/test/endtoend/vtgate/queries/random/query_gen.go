@@ -36,10 +36,10 @@ const testFailingQueries = false
 
 type (
 	column struct {
-		tableName string
-		name      string
-		typ       string
+		name *sqlparser.ColName
+		typ  string
 	}
+
 	tableT struct {
 		// the tableT struct can be used to represent the schema of a table or a derived table
 		// in the former case tableExpr will be a sqlparser.TableName, in the latter a sqlparser.DerivedTable
@@ -54,7 +54,18 @@ type (
 var _ sqlparser.ExprGenerator = (*tableT)(nil)
 var _ sqlparser.ExprGenerator = (*column)(nil)
 
-// var _ sqlparser.ExprGenerator = column{}
+// getColumnName returns tableName.name
+func (c *column) getColumnName() string {
+	return sqlparser.String(c.name)
+}
+
+func (c *column) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+	if c.typ == genConfig.Type {
+		return c.name
+	}
+
+	return nil
+}
 
 func (t *tableT) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
 	colsCopy := slices.Clone(t.cols)
@@ -63,8 +74,7 @@ func (t *tableT) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Exp
 		idx := rand.Intn(len(colsCopy))
 		randCol := colsCopy[idx]
 		if randCol.typ == genConfig.Type {
-			newTableName := t.getName()
-			return sqlparser.NewColNameWithQualifier(randCol.name, sqlparser.NewTableName(newTableName))
+			return randCol.name
 		}
 
 		// delete randCol from colsCopy
@@ -89,11 +99,11 @@ func (t *tableT) getName() string {
 	return ""
 }
 
-// setName sets the alias for t, as well as setting the tableName for all columns in cols
-func (t *tableT) setName(newName string) {
+// setAlias sets the alias for t, as well as setting the tableName for all columns in cols
+func (t *tableT) setAlias(newName string) {
 	t.alias = newName
 	for i := range t.cols {
-		t.cols[i].tableName = newName
+		t.cols[i].name.Qualifier = sqlparser.NewTableName(newName)
 	}
 }
 
@@ -101,22 +111,9 @@ func (t *tableT) setName(newName string) {
 // this makes it unnatural to modify tableName
 func (t *tableT) addColumns(col ...column) {
 	for i := range col {
-		col[i].tableName = t.getName()
+		col[i].name.Qualifier = sqlparser.NewTableName(t.getName())
 		t.cols = append(t.cols, col[i])
 	}
-}
-
-// getColumnName returns tableName.name
-func (c *column) getColumnName() string {
-	return fmt.Sprintf("%s.%s", c.tableName, c.name)
-}
-
-func (c *column) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
-	if c.typ == genConfig.Type {
-		return sqlparser.NewColNameWithQualifier(c.name, sqlparser.NewTableName(c.tableName))
-	}
-
-	return nil
 }
 
 func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Select {
@@ -231,7 +228,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 
 		sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(randomExpr, "crandom0"))
 		newTable.addColumns(column{
-			name: "crandom0",
+			name: sqlparser.NewColName("crandom0"),
 			typ:  typ,
 		})
 
@@ -267,13 +264,13 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 	tables = append(tables, schemaTables[rand.Intn(2)])
 
 	sel.From = append(sel.From, newAliasedTable(tables[0], "tbl0"))
-	tables[0].setName("tbl0")
+	tables[0].setAlias("tbl0")
 
 	numTables := rand.Intn(len(schemaTables))
 	for i := 0; i < numTables; i++ {
 		tables = append(tables, randomEl(schemaTables))
 		sel.From = append(sel.From, newAliasedTable(tables[i+1], fmt.Sprintf("tbl%d", i+1)))
-		tables[i+1].setName(fmt.Sprintf("tbl%d", i+1))
+		tables[i+1].setAlias(fmt.Sprintf("tbl%d", i+1))
 	}
 
 	// TODO: outer joins produce mismatched results
@@ -281,7 +278,7 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 	if isJoin {
 		// TODO: do nested joins
 		newTable := randomEl(schemaTables)
-		newTable.setName(fmt.Sprintf("tbl%d", numTables))
+		newTable.setAlias(fmt.Sprintf("tbl%d", numTables))
 		tables = append(tables, newTable)
 
 		createJoin(tables, sel)
@@ -324,13 +321,13 @@ func createGroupBy(tables []tableT, maxGB int) (groupBy sqlparser.GroupBy, group
 		if col.typ == "date" && !testFailingQueries {
 			continue
 		}
-		groupBy = append(groupBy, newColumn(col))
+		groupBy = append(groupBy, col.name)
 
 		// add to select
 		if rand.Intn(2) < 1 {
 			groupSelectExprs = append(groupSelectExprs, newAliasedColumn(col, fmt.Sprintf("cgroup%d", i)))
 			// TODO: alias in a separate function to properly generate the having clause
-			col.name = fmt.Sprintf("cgroup%d", i)
+			col.name = sqlparser.NewColName(fmt.Sprintf("cgroup%d", i))
 			grouping = append(grouping, col)
 		}
 	}
@@ -342,11 +339,11 @@ func createGroupBy(tables []tableT, maxGB int) (groupBy sqlparser.GroupBy, group
 func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.SelectExprs, aggregates []column) {
 	aggregations := []func(col column) sqlparser.Expr{
 		func(_ column) sqlparser.Expr { return &sqlparser.CountStar{} },
-		func(col column) sqlparser.Expr { return &sqlparser.Count{Args: sqlparser.Exprs{newColumn(col)}} },
-		func(col column) sqlparser.Expr { return &sqlparser.Sum{Arg: newColumn(col)} },
-		// func(col column) sqlparser.Expr { return &sqlparser.Avg{Arg: newAggregateExpr(col)} },
-		func(col column) sqlparser.Expr { return &sqlparser.Min{Arg: newColumn(col)} },
-		func(col column) sqlparser.Expr { return &sqlparser.Max{Arg: newColumn(col)} },
+		func(col column) sqlparser.Expr { return &sqlparser.Count{Args: sqlparser.Exprs{col.name}} },
+		func(col column) sqlparser.Expr { return &sqlparser.Sum{Arg: col.name} },
+		// func(col column) sqlparser.Expr { return &sqlparser.Avg{Arg: col.name} },
+		func(col column) sqlparser.Expr { return &sqlparser.Min{Arg: col.name} },
+		func(col column) sqlparser.Expr { return &sqlparser.Max{Arg: col.name} },
 	}
 
 	numAggrs := rand.Intn(maxAggrs)
@@ -383,7 +380,7 @@ func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.Sele
 			col.typ = "decimal"
 		}
 
-		col.name = fmt.Sprintf("caggr%d", i)
+		col.name = sqlparser.NewColName(fmt.Sprintf("caggr%d", i))
 		aggregates = append(aggregates, col)
 	}
 	return
@@ -458,11 +455,7 @@ func newAliasedTable(tbl tableT, alias string) *sqlparser.AliasedTableExpr {
 }
 
 func newAliasedColumn(col column, alias string) *sqlparser.AliasedExpr {
-	return sqlparser.NewAliasedExpr(newColumn(col), alias)
-}
-
-func newColumn(col column) *sqlparser.ColName {
-	return sqlparser.NewColNameWithQualifier(col.name, sqlparser.NewTableName(col.tableName))
+	return sqlparser.NewAliasedExpr(col.name, alias)
 }
 
 func getRandomComparisonExprOperator() sqlparser.ComparisonExprOperator {

@@ -127,9 +127,6 @@ func TestMustFix(t *testing.T) {
 
 	// EOF
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl0, (select count(*) from emp as tbl0, emp as tbl1 limit 18) as tbl1")
-
-	// EOF
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
 }
 
 func TestKnownFailures(t *testing.T) {
@@ -215,19 +212,19 @@ func TestRandom(t *testing.T) {
 		{tableExpr: sqlparser.NewTableName("dept")},
 	}
 	schemaTables[0].addColumns([]column{
-		{name: "empno", typ: "bigint"},
-		{name: "ename", typ: "varchar"},
-		{name: "job", typ: "varchar"},
-		{name: "mgr", typ: "bigint"},
-		{name: "hiredate", typ: "date"},
-		{name: "sal", typ: "bigint"},
-		{name: "comm", typ: "bigint"},
-		{name: "deptno", typ: "bigint"},
+		{name: sqlparser.NewColName("empno"), typ: "bigint"},
+		{name: sqlparser.NewColName("ename"), typ: "varchar"},
+		{name: sqlparser.NewColName("job"), typ: "varchar"},
+		{name: sqlparser.NewColName("mgr"), typ: "bigint"},
+		{name: sqlparser.NewColName("hiredate"), typ: "date"},
+		{name: sqlparser.NewColName("sal"), typ: "bigint"},
+		{name: sqlparser.NewColName("comm"), typ: "bigint"},
+		{name: sqlparser.NewColName("deptno"), typ: "bigint"},
 	}...)
 	schemaTables[1].addColumns([]column{
-		{name: "deptno", typ: "bigint"},
-		{name: "dname", typ: "varchar"},
-		{name: "loc", typ: "varchar"},
+		{name: sqlparser.NewColName("deptno"), typ: "bigint"},
+		{name: sqlparser.NewColName("dname"), typ: "varchar"},
+		{name: sqlparser.NewColName("loc"), typ: "varchar"},
 	}...)
 
 	endBy := time.Now().Add(1 * time.Second)
@@ -293,5 +290,6 @@ func TestBuggyQueries(t *testing.T) {
 	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)")
 	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
 	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
 
 }
