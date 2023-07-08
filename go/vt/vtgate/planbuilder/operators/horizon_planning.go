@@ -139,6 +139,8 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownFilter(ctx, in)
 		case *Distinct:
 			return tryPushingDownDistinct(in)
+		case *Union:
+			return tryPushDownUnion(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -616,6 +618,29 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 	}
 
 	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
+}
+
+func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	if op.distinct {
+		sources, selects, err := mergeUnionInputInAnyOrder(ctx, op)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(sources) == 1 {
+			return sources[0], rewrite.NewTree("pushed union under route", op), nil
+		}
+		var result *rewrite.ApplyResult
+		if len(sources) != len(op.Sources) {
+			result = rewrite.NewTree("merged union inputs", op)
+		}
+		return &Union{
+			Sources:  sources,
+			Selects:  selects,
+			distinct: true,
+		}, result, nil
+	}
+
+	return op, rewrite.SameTree, nil
 }
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for

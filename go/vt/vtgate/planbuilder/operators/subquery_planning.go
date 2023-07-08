@@ -183,7 +183,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := MergeJoin(ctx, outerOp, subq, joinPredicates, merger)
+	merged, err := mergeJoinInputs(ctx, outerOp, subq, joinPredicates, merger)
 	if err != nil {
 		return nil, err
 	}

@@ -249,5 +249,8 @@ func (u *Union) GetSelectExprs() (sqlparser.SelectExprs, error) {
 func (u *Union) NoLHSTableSet() {}
 
 func (u *Union) ShortDescription() string {
+	if u.distinct {
+		return "DISTINCT"
+	}
 	return ""
 }

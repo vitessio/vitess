@@ -25,23 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// MergeJoin checks whether two operators can be merged into a single one.
+// mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func MergeJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
-	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
-	if lhsRoute == nil || rhsRoute == nil {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
+	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
+	if lhsRoute == nil {
 		return nil, nil
-	}
-
-	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
-
-	a, b := getRoutingType(routingA), getRoutingType(routingB)
-	if getTypeName(routingA) < getTypeName(routingB) {
-		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
-		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
-		a, b = b, a
-		routingA, routingB = routingB, routingA
 	}
 
 	switch {
@@ -74,6 +64,25 @@ func MergeJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPred
 	default:
 		return nil, nil
 	}
+}
+
+func prepareInputRoutes(lhs ops.Operator, rhs ops.Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
+	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+	if lhsRoute == nil || rhsRoute == nil {
+		return nil, nil, nil, nil, 0, 0, false
+	}
+
+	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
+
+	a, b := getRoutingType(routingA), getRoutingType(routingB)
+	if getTypeName(routingA) < getTypeName(routingB) {
+		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
+		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
+		a, b = b, a
+		routingA, routingB = routingB, routingA
+	}
+
+	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
 }
 
 type (

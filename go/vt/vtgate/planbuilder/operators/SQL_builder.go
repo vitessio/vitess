@@ -114,6 +114,14 @@ func (qb *queryBuilder) clearProjections() {
 	sel.SelectExprs = nil
 }
 
+func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
+	qb.sel = &sqlparser.Union{
+		Left:     qb.sel,
+		Right:    other.sel,
+		Distinct: distinct,
+	}
+}
+
 func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
 	sel := qb.sel.(*sqlparser.Select)
 	otherSel := other.sel.(*sqlparser.Select)
@@ -329,6 +337,8 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildOrdering(op, qb)
 	case *Aggregator:
 		return buildAggregation(op, qb)
+	case *Union:
+		return buildUnion(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
@@ -444,6 +454,30 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
 	} else {
 		qb.joinInnerWith(qbR, op.Predicate)
 	}
+	return nil
+}
+
+func buildUnion(op *Union, qb *queryBuilder) error {
+	// the first input is built first
+	err := buildQuery(op.Sources[0], qb)
+	if err != nil {
+		return err
+	}
+
+	for i, src := range op.Sources {
+		if i == 0 {
+			continue
+		}
+
+		// now we can go over the remaining inputs and UNION them together
+		qbOther := &queryBuilder{ctx: qb.ctx}
+		err = buildQuery(src, qbOther)
+		if err != nil {
+			return err
+		}
+		qb.unionWith(qbOther, op.distinct)
+	}
+
 	return nil
 }
 
