@@ -115,35 +115,68 @@ func pushDownAggregationThroughRoute(
 
 // pushDownAggregations splits aggregations between the original aggregator and the one we are pushing down
 func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) error {
-	for i, aggregation := range aggregator.Aggregations {
-		if !aggregation.Distinct || exprHasUniqueVindex(ctx, aggregation.Func.GetArg()) {
-			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggregation)
-			aggregateTheAggregate(aggregator, i)
+	canPushDownDistinct, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
+	if err != nil {
+		return err
+	}
+
+	if !canPushDownDistinct {
+		aggregator.DistinctExpr = distinctExpr
+	}
+
+	aeDistinctExpr := aeWrap(aggregator.DistinctExpr)
+	offset := -1
+	for i, aggr := range aggregator.Aggregations {
+		if aggr.Distinct && !canPushDownDistinct {
+			offset = aggr.ColOffset
+			aggrBelowRoute.Columns[offset] = aeDistinctExpr
 			continue
 		}
-		innerExpr := aggregation.Func.GetArg()
-
-		if aggregator.DistinctExpr != nil {
-			if ctx.SemTable.EqualsExpr(aggregator.DistinctExpr, innerExpr) {
-				// we can handle multiple distinct aggregations, as long as they are aggregating on the same expression
-				aggrBelowRoute.Columns[aggregation.ColOffset] = aeWrap(innerExpr)
-				continue
-			}
-			return vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(aggregation.Original)))
-		}
-
-		// We handle a distinct aggregation by turning it into a group by and
-		// doing the aggregating on the vtgate level instead
-		aggregator.DistinctExpr = innerExpr
-		aeDistinctExpr := aeWrap(aggregator.DistinctExpr)
-
-		aggrBelowRoute.Columns[aggregation.ColOffset] = aeDistinctExpr
-
-		groupBy := NewGroupBy(aggregator.DistinctExpr, aggregator.DistinctExpr, aeDistinctExpr)
-		groupBy.ColOffset = aggregation.ColOffset
-		aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
+		aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
+		aggregateTheAggregate(aggregator, i)
 	}
+
+	// everything is pushed below the route.
+	if canPushDownDistinct {
+		return nil
+	}
+
+	// We handle a distinct aggregation by turning it into a group by and
+	// doing the aggregating on the vtgate level instead
+	// Adding to group by can be done only once even though there are multiple distinct aggregation with same expression.
+	groupBy := NewGroupBy(aggregator.DistinctExpr, aggregator.DistinctExpr, aeDistinctExpr)
+	groupBy.ColOffset = offset
+	aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
+
 	return nil
+}
+
+func checkIfWeCanPushDown(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, sqlparser.Expr, error) {
+	canPushDown := true
+	var distinctExpr sqlparser.Expr
+	var differentExpr *sqlparser.AliasedExpr
+
+	for _, aggr := range aggregator.Aggregations {
+		if !aggr.Distinct {
+			continue
+		}
+		innerExpr := aggr.Func.GetArg()
+		if !exprHasUniqueVindex(ctx, innerExpr) {
+			canPushDown = false
+		}
+		if distinctExpr == nil {
+			distinctExpr = innerExpr
+		}
+		if !ctx.SemTable.EqualsExpr(distinctExpr, innerExpr) {
+			differentExpr = aggr.Original
+		}
+	}
+
+	if !canPushDown && differentExpr != nil {
+		return false, nil, vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(differentExpr)))
+	}
+
+	return canPushDown, distinctExpr, nil
 }
 
 func pushDownAggregationThroughFilter(
@@ -411,6 +444,15 @@ func splitAggrColumnsToLeftAndRight(
 		outerJoin: join.LeftJoin,
 	}
 
+	canPushDownDistinct, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !canPushDownDistinct {
+		aggregator.DistinctExpr = distinctExpr
+		return nil, nil, errAbortAggrPushing
+	}
+
 outer:
 	// we prefer adding the aggregations in the same order as the columns are declared
 	for colIdx, col := range aggregator.Columns {
@@ -509,9 +551,6 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// this is only used for SHOW GTID queries that will never contain joins
 		return vterrors.VT13001("cannot do join with vgtid")
 	case opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
-		if !exprHasUniqueVindex(ctx, aggr.Func.GetArg()) {
-			return errAbortAggrPushing
-		}
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	default:
 		return errHorizonNotPlanned()

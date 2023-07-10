@@ -3854,8 +3854,8 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select u.textcol1, u.val2, weight_string(u.val2) from `user` as u where 1 != 1",
-                    "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-                    "Query": "select u.textcol1, u.val2, weight_string(u.val2) from `user` as u order by u.textcol1 asc",
+                    "OrderBy": "0 ASC COLLATE latin1_swedish_ci, (1|2) ASC",
+                    "Query": "select u.textcol1, u.val2, weight_string(u.val2) from `user` as u order by u.textcol1 asc, u.val2 asc",
                     "Table": "`user`"
                   },
                   {
