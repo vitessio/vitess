@@ -1128,11 +1128,16 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 		return nil, err
 	}
 
-	summary := fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace", req.Workflow, req.TargetKeyspace)
-	var details *[]string
+	var summary string
+	if req.DryRun {
+		summary = fmt.Sprintf("Complete dry run results for workflow %s.%s at %v", req.TargetKeyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
+	} else {
+		summary = fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace", req.Workflow, req.TargetKeyspace)
+	}
+	var dryRunResults *[]string
 
 	if state.WorkflowType == TypeMigrate {
-		details, err = s.finalizeMigrateWorkflow(ctx, req.TargetKeyspace, req.Workflow, strings.Join(ts.tables, ","),
+		dryRunResults, err = s.finalizeMigrateWorkflow(ctx, req.TargetKeyspace, req.Workflow, strings.Join(ts.tables, ","),
 			false, req.KeepData, req.KeepRoutingRules, req.DryRun)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to finalize the %s workflow in the %s keyspace",
@@ -1141,8 +1146,8 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 		resp := &vtctldatapb.MoveTablesCompleteResponse{
 			Summary: summary,
 		}
-		if details != nil {
-			resp.Details = *details
+		if dryRunResults != nil {
+			resp.DryRunResults = *dryRunResults
 		}
 		return resp, nil
 	}
@@ -1156,15 +1161,15 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	} else {
 		renameTable = DropTable
 	}
-	if details, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
+	if dryRunResults, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
 		return nil, err
 	}
 
 	resp := &vtctldatapb.MoveTablesCompleteResponse{
 		Summary: summary,
 	}
-	if details != nil {
-		resp.Details = *details
+	if dryRunResults != nil {
+		resp.DryRunResults = *dryRunResults
 	}
 
 	return resp, nil
@@ -1212,7 +1217,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
-	response.Summary = fmt.Sprintf("Successfully deleted the %s workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.Keyspace)
+	response.Summary = fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace", req.Workflow, req.Keyspace)
 	details := make([]*vtctldatapb.WorkflowDeleteResponse_TabletInfo, 0, len(res))
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowDeleteResponse_TabletInfo{
@@ -2183,12 +2188,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		timeout = defaultDuration
 	}
 
-	ts, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
 		return nil, err
 	}
 
-	if state.WorkflowType == TypeMigrate {
+	if startState.WorkflowType == TypeMigrate {
 		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
 	}
 
@@ -2203,17 +2208,17 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	direction := TrafficSwitchDirection(req.Direction)
 	if direction == DirectionBackward {
-		ts, state, err = s.getWorkflowState(ctx, state.SourceKeyspace, ts.reverseWorkflow)
+		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
 			return nil, err
 		}
 	}
-	reason, err := s.canSwitch(ctx, ts, state, direction, int64(maxReplicationLagAllowed.Seconds()))
+	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()))
 	if err != nil {
 		return nil, err
 	}
 	if reason != "" {
-		return nil, fmt.Errorf("cannot switch traffic for workflow %s at this time: %s", state.Workflow, reason)
+		return nil, fmt.Errorf("cannot switch traffic for workflow %s at this time: %s", startState.Workflow, reason)
 	}
 
 	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
@@ -2221,7 +2226,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if hasReplica || hasRdonly {
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, state, timeout, false, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, timeout, false, direction); err != nil {
 			return nil, err
 		}
 	}
@@ -2233,32 +2238,40 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, err
 		}
 	}
+
 	if wrDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *wrDryRunResults...)
 	}
 	if req.DryRun && len(dryRunResults) == 0 {
 		dryRunResults = append(dryRunResults, "No changes required")
 	}
-	var results []string
+	cmd := "SwitchTraffic"
+	if direction == DirectionBackward {
+		cmd = "ReverseTraffic"
+	}
+	resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
 	if req.DryRun {
-		results = append(results, dryRunResults...)
+		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v", cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
+		resp.DryRunResults = dryRunResults
 	} else {
+		resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 		// Reload the state after the SwitchTraffic operation
 		// and return that as a string.
 		keyspace := req.Keyspace
 		workflow := req.Workflow
 		if direction == DirectionBackward {
-			keyspace = state.SourceKeyspace
+			keyspace = startState.SourceKeyspace
 			workflow = ts.reverseWorkflow
 		}
-		_, state, err := s.getWorkflowState(ctx, keyspace, workflow)
+		resp.StartState = startState.String()
+		_, currentState, err := s.getWorkflowState(ctx, keyspace, workflow)
 		if err != nil {
-			results = append(results, fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err))
+			resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
 		} else {
-			results = append(results, state.String())
+			resp.CurrentState = currentState.String()
 		}
 	}
-	return &vtctldatapb.WorkflowSwitchTrafficResponse{Results: results}, nil
+	return resp, nil
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.

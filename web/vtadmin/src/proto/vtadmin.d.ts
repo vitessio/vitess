@@ -52484,8 +52484,8 @@ export namespace vtctldata {
         /** MoveTablesCompleteResponse summary */
         summary?: (string|null);
 
-        /** MoveTablesCompleteResponse details */
-        details?: (string[]|null);
+        /** MoveTablesCompleteResponse dry_run_results */
+        dry_run_results?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteResponse. */
@@ -52500,8 +52500,8 @@ export namespace vtctldata {
         /** MoveTablesCompleteResponse summary. */
         public summary: string;
 
-        /** MoveTablesCompleteResponse details. */
-        public details: string[];
+        /** MoveTablesCompleteResponse dry_run_results. */
+        public dry_run_results: string[];
 
         /**
          * Creates a new MoveTablesCompleteResponse instance using the specified properties.
@@ -61829,8 +61829,17 @@ export namespace vtctldata {
     /** Properties of a WorkflowSwitchTrafficResponse. */
     interface IWorkflowSwitchTrafficResponse {
 
-        /** WorkflowSwitchTrafficResponse results */
-        results?: (string[]|null);
+        /** WorkflowSwitchTrafficResponse summary */
+        summary?: (string|null);
+
+        /** WorkflowSwitchTrafficResponse start_state */
+        start_state?: (string|null);
+
+        /** WorkflowSwitchTrafficResponse current_state */
+        current_state?: (string|null);
+
+        /** WorkflowSwitchTrafficResponse dry_run_results */
+        dry_run_results?: (string[]|null);
     }
 
     /** Represents a WorkflowSwitchTrafficResponse. */
@@ -61842,8 +61851,17 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IWorkflowSwitchTrafficResponse);
 
-        /** WorkflowSwitchTrafficResponse results. */
-        public results: string[];
+        /** WorkflowSwitchTrafficResponse summary. */
+        public summary: string;
+
+        /** WorkflowSwitchTrafficResponse start_state. */
+        public start_state: string;
+
+        /** WorkflowSwitchTrafficResponse current_state. */
+        public current_state: string;
+
+        /** WorkflowSwitchTrafficResponse dry_run_results. */
+        public dry_run_results: string[];
 
         /**
          * Creates a new WorkflowSwitchTrafficResponse instance using the specified properties.

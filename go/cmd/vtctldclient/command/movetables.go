@@ -270,15 +270,13 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	format := strings.ToLower(moveTablesOptions.Format)
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
 	switch format {
 	case "text", "json":
 	default:
 		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
 	}
-
 	var output []byte
-
 	if format == "json" {
 		output, err = cli.MarshalJSON(resp)
 		if err != nil {
@@ -296,7 +294,6 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		}
 		output = tout.Bytes()
 	}
-
 	fmt.Printf("%s\n", output)
 
 	return nil
@@ -316,17 +313,26 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Sort the inner TabletInfo slice for deterministic output.
-	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
-	})
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
 	}
-
-	fmt.Printf("%s\n", data)
+	var output []byte
+	if format == "json" {
+		// Sort the inner TabletInfo slice for deterministic output.
+		sort.Slice(resp.Details, func(i, j int) bool {
+			return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
+		})
+		output, err = cli.MarshalJSONCompact(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		output = []byte(resp.Summary + "\n")
+	}
+	fmt.Printf("%s\n", output)
 
 	return nil
 }
@@ -347,12 +353,30 @@ func commandMoveTablesComplete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
 	}
-
-	fmt.Printf("%s\n", data)
+	var output []byte
+	if format == "json" {
+		output, err = cli.MarshalJSONCompact(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		tout := bytes.Buffer{}
+		tout.WriteString(resp.Summary + "\n")
+		if len(resp.DryRunResults) > 0 {
+			tout.WriteString("\n")
+			for _, r := range resp.DryRunResults {
+				tout.WriteString(r + "\n")
+			}
+		}
+		output = tout.Bytes()
+	}
+	fmt.Printf("%s\n", output)
 
 	return nil
 }
@@ -419,12 +443,32 @@ func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
 	}
-
-	fmt.Printf("%s\n", data)
+	var output []byte
+	if format == "json" {
+		output, err = cli.MarshalJSONCompact(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		tout := bytes.Buffer{}
+		tout.WriteString(resp.Summary + "\n\n")
+		if req.DryRun {
+			for _, line := range resp.DryRunResults {
+				tout.WriteString(line + "\n")
+			}
+		} else {
+			tout.WriteString(fmt.Sprintf("Start State: %s\n", resp.StartState))
+			tout.WriteString(fmt.Sprintf("Current State: %s\n", resp.CurrentState))
+		}
+		output = tout.Bytes()
+	}
+	fmt.Printf("%s\n", output)
 
 	return nil
 }
@@ -448,12 +492,32 @@ func commandMoveTablesReverseTraffic(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
 	}
-
-	fmt.Printf("%s\n", data)
+	var output []byte
+	if format == "json" {
+		output, err = cli.MarshalJSONCompact(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		tout := bytes.Buffer{}
+		tout.WriteString(resp.Summary + "\n\n")
+		if req.DryRun {
+			for _, line := range resp.DryRunResults {
+				tout.WriteString(line + "\n")
+			}
+		} else {
+			tout.WriteString(fmt.Sprintf("Start State: %s\n", resp.StartState))
+			tout.WriteString(fmt.Sprintf("Current State: %s\n", resp.CurrentState))
+		}
+		output = tout.Bytes()
+	}
+	fmt.Printf("%s\n", output)
 
 	return nil
 }
@@ -464,7 +528,6 @@ func init() {
 	MoveTables.Flags().StringVarP(&moveTablesOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required)")
 	MoveTables.MarkPersistentFlagRequired("workflow")
 	MoveTables.Flags().StringVar(&moveTablesOptions.Format, "format", "text", "The format of the output; supported formats are: text,json")
-	MoveTables.MarkPersistentFlagRequired("workflow")
 	Root.AddCommand(MoveTables)
 
 	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace")

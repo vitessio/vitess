@@ -865,7 +865,7 @@ message MoveTablesCompleteRequest {
 
 message MoveTablesCompleteResponse {
   string summary = 1;
-  repeated string details = 2;
+  repeated string dry_run_results = 2;
 }
 
 message PingTabletRequest {
@@ -1420,7 +1420,10 @@ message WorkflowSwitchTrafficRequest {
 }
 
 message WorkflowSwitchTrafficResponse {
-  repeated string results = 1;
+  string summary = 1;
+  string start_state = 2;
+  string current_state = 3;
+  repeated string dry_run_results = 4;
 }
 
 message WorkflowUpdateRequest {
