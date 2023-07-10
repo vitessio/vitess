@@ -827,9 +827,8 @@ message MoveTablesCreateRequest {
   bool all_tables = 8;
   repeated string include_tables = 9;
   repeated string exclude_tables = 10;
-  // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
-  // it is of the type <cluster_type.cluster_name>
-  string external_cluster = 11;
+  // The name of the external cluster mounted in topo server.
+  string external_cluster_name = 11;
   // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTables
   string source_time_zone = 12;
   // OnDdl specifies the action to be taken when a DDL is encountered.

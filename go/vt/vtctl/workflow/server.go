@@ -941,8 +941,8 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		err          error
 	)
 
-	if req.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
-		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.ExternalCluster)
+	if req.ExternalClusterName != "" { // When the source is an external cluster mounted using the Mount command
+		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.ExternalClusterName)
 		if err != nil {
 			return nil, err
 		}
@@ -1039,7 +1039,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		TabletTypes:               req.TabletTypes,
 		TabletSelectionPreference: req.TabletSelectionPreference,
 		StopAfterCopy:             req.StopAfterCopy,
-		ExternalCluster:           req.ExternalCluster,
+		ExternalCluster:           req.ExternalClusterName,
 		SourceShards:              req.SourceShards,
 		OnDdl:                     req.OnDdl,
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,

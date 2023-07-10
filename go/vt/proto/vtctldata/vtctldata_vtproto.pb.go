@@ -5766,10 +5766,10 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i--
 		dAtA[i] = 0x62
 	}
-	if len(m.ExternalCluster) > 0 {
-		i -= len(m.ExternalCluster)
-		copy(dAtA[i:], m.ExternalCluster)
-		i = encodeVarint(dAtA, i, uint64(len(m.ExternalCluster)))
+	if len(m.ExternalClusterName) > 0 {
+		i -= len(m.ExternalClusterName)
+		copy(dAtA[i:], m.ExternalClusterName)
+		i = encodeVarint(dAtA, i, uint64(len(m.ExternalClusterName)))
 		i--
 		dAtA[i] = 0x5a
 	}
@@ -13135,7 +13135,7 @@ func (m *MoveTablesCreateRequest) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
-	l = len(m.ExternalCluster)
+	l = len(m.ExternalClusterName)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -28661,7 +28661,7 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 11:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ExternalCluster", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ExternalClusterName", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -28689,7 +28689,7 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.ExternalCluster = string(dAtA[iNdEx:postIndex])
+			m.ExternalClusterName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 12:
 			if wireType != 2 {

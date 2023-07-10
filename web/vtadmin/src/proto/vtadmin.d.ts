@@ -51982,8 +51982,8 @@ export namespace vtctldata {
         /** MoveTablesCreateRequest exclude_tables */
         exclude_tables?: (string[]|null);
 
-        /** MoveTablesCreateRequest external_cluster */
-        external_cluster?: (string|null);
+        /** MoveTablesCreateRequest external_cluster_name */
+        external_cluster_name?: (string|null);
 
         /** MoveTablesCreateRequest source_time_zone */
         source_time_zone?: (string|null);
@@ -52043,8 +52043,8 @@ export namespace vtctldata {
         /** MoveTablesCreateRequest exclude_tables. */
         public exclude_tables: string[];
 
-        /** MoveTablesCreateRequest external_cluster. */
-        public external_cluster: string;
+        /** MoveTablesCreateRequest external_cluster_name. */
+        public external_cluster_name: string;
 
         /** MoveTablesCreateRequest source_time_zone. */
         public source_time_zone: string;
