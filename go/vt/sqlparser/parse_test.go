@@ -40,6 +40,14 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input: "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + VALUES(count)",
+			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
+		},
+		{
+			input: "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE account = account + VALUES(account)",
+			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update account = `account` + values(`account`)",
+		},
+		{
 			// INVISIBLE should parse, but be a no-op (for now)
 			input: "create table t (pk int primary key, c1 int INVISIBLE)",
 			output: "create table t (\n\tpk int primary key,\n\tc1 int\n)",
