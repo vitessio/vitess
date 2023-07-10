@@ -6634,6 +6634,15 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| VALUES openb column_name_safe_keyword closeb
+  {
+    $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
+  }
+// TODO: non_reserved_keyword and non_reserved_keyword2 cause grammar conflicts
+| VALUES openb non_reserved_keyword3 closeb
+  {
+    $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
+  }
 | REPEAT openb argument_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
