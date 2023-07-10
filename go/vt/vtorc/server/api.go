@@ -23,7 +23,6 @@ import (
 	"net/http"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -57,7 +56,6 @@ var (
 // ServeHTTP implements the http.Handler interface. This is the entry point for all the api commands of VTOrc
 func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	apiPath := request.URL.Path
-	log.Infof("HTTP API Request received: %v", apiPath)
 	if err := acl.CheckAccessHTTP(request, getACLPermissionLevelForAPI(apiPath)); err != nil {
 		acl.SendError(response, err)
 		return
