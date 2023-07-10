@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strings"
@@ -196,6 +197,7 @@ var (
 	moveTablesOptions = struct {
 		Workflow       string
 		TargetKeyspace string
+		Format         string
 	}{}
 	moveTablesCancelOptions = struct {
 		KeepData         bool
@@ -268,12 +270,34 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
+	format := strings.ToLower(moveTablesOptions.Format)
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
 	}
 
-	fmt.Printf("%s\n", data)
+	var output []byte
+
+	if format == "json" {
+		output, err = cli.MarshalJSON(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		tout := bytes.Buffer{}
+		tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n", moveTablesOptions.TargetKeyspace, moveTablesOptions.Workflow))
+		for _, shardstreams := range resp.ShardStreams {
+			for _, shardstream := range shardstreams.Streams {
+				tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
+				tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n", shardstream.Id, moveTablesOptions.TargetKeyspace, tablet,
+					shardstream.Status, shardstream.Info))
+			}
+		}
+		output = tout.Bytes()
+	}
+
+	fmt.Printf("%s\n", output)
 
 	return nil
 }
@@ -438,6 +462,8 @@ func init() {
 	MoveTables.PersistentFlags().StringVar(&moveTablesOptions.TargetKeyspace, "target-keyspace", "", "Keyspace where the tables are being moved to and where the workflow exists (required)")
 	MoveTables.MarkPersistentFlagRequired("target-keyspace")
 	MoveTables.Flags().StringVarP(&moveTablesOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required)")
+	MoveTables.MarkPersistentFlagRequired("workflow")
+	MoveTables.Flags().StringVar(&moveTablesOptions.Format, "format", "text", "The format of the output; supported formats are: text,json")
 	MoveTables.MarkPersistentFlagRequired("workflow")
 	Root.AddCommand(MoveTables)
 
