@@ -5806,10 +5806,6 @@ table_alias:
   {
     $$ = NewTableIdent(string($1))
   }
-| STRING
-  {
-    $$ = NewTableIdent(string($1))
-  }
 
 inner_join:
   JOIN
@@ -7587,6 +7583,7 @@ set_expression_assignment:
     //       SET @@GLOBAL.GTID_PURGED= /*!80000 '+'*/ 'beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126';
     //       The full fix is for any adjacent single-quoted or double-quoted strings to be concatenated but
     //       this fixes the most pressing case. For more details, see: https://github.com/dolthub/dolt/issues/5232
+    // In other places we can correctly concatenate adjacent string literals, but the special comments break it
     $$ = &SetVarExpr{Name: $1, Expr: NewStrVal([]byte(string($3)+string($4))), Scope: SetScope_None}
   }
 | column_name '=' expression

@@ -136,7 +136,7 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 					// column names don't need any special handling to capture the input expression
 					return false, nil
 				} else {
-					node.InputExpression = trimQuotes(strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+					node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
 				}
 			}
 			return true, nil

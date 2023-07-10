@@ -44,6 +44,7 @@ type Tokenizer struct {
 	Position             int
 	OldPosition          int
 	lastToken            []byte
+	lastTyp  int
 	lastNonNilToken      []byte
 	LastError            error
 	posVarIndex          int
@@ -758,6 +759,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	}
 	lval.bytes = val
 	tkn.lastToken = val
+	tkn.lastTyp = typ
 	if val != nil {
 		tkn.lastNonNilToken = val
 	}
@@ -790,9 +792,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
-		specialComment := tkn.specialComment
-		tok, val := specialComment.Scan()
-		tkn.Position = specialComment.Position
+		tok, val := tkn.specialComment.Scan()
+		tkn.Position = tkn.specialComment.Position
 
 		if tok != 0 {
 			// return the specialComment scan result as the result
@@ -1186,7 +1187,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			}
 
 			buffer.Write(tkn.buf[start:tkn.bufPos])
-			tkn.Position += (tkn.bufPos - start)
+			tkn.Position += tkn.bufPos - start
 
 			if tkn.bufPos >= tkn.bufSize {
 				// Reached the end of the buffer without finding a delim or
@@ -1223,6 +1224,20 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	if tkn.lastChar == '@' {
 		tkn.potentialAccountName = true
 	}
+	
+	// mysql strings get auto concatenated, so see if the next token is a string and scan it if so
+	tkn.skipBlank()
+	if tkn.lastChar == '\'' || tkn.lastChar == '"' {
+		delim := tkn.lastChar
+		tkn.next()
+		nextTyp, nextStr := tkn.scanString(delim, STRING)
+		if nextTyp == STRING {
+			return nextTyp, append(buffer.Bytes(), nextStr...)
+		} else {
+			return LEX_ERROR, buffer.Bytes()
+		}
+	}
+	
 	return typ, buffer.Bytes()
 }
 
