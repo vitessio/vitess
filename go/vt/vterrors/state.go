@@ -81,6 +81,7 @@ const (
 
 	// permission denied
 	AccessDeniedError
+	KillDeniedError
 
 	// server not available
 	ServerNotAvailable

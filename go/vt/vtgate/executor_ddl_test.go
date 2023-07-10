@@ -59,7 +59,7 @@ func TestDDLFlags(t *testing.T) {
 		t.Run(fmt.Sprintf("%s-%v-%v", testcase.sql, testcase.enableDirectDDL, testcase.enableOnlineDDL), func(t *testing.T) {
 			enableDirectDDL = testcase.enableDirectDDL
 			enableOnlineDDL = testcase.enableOnlineDDL
-			_, err := executor.Execute(ctx, "TestDDLFlags", session, testcase.sql, nil)
+			_, err := executor.Execute(ctx, nil, "TestDDLFlags", session, testcase.sql, nil)
 			if testcase.wantErr {
 				require.EqualError(t, err, testcase.err)
 			} else {
