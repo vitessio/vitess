@@ -579,15 +579,15 @@
     }
   },
   {
-    "comment": "count with distinct unique vindex",
-    "query": "select col, count(distinct id) from user group by col",
+    "comment": "count and sum with distinct unique vindex",
+    "query": "select col, count(distinct id), sum(distinct id) from user group by col",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select col, count(distinct id) from user group by col",
+      "Original": "select col, count(distinct id), sum(distinct id) from user group by col",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count",
+        "Aggregates": "sum_count(1) AS count, sum(2)",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -597,9 +597,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(distinct id) from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(distinct id), sum(distinct id) from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(distinct id) from `user` group by col order by col asc",
+            "Query": "select col, count(distinct id), sum(distinct id) from `user` group by col order by col asc",
             "Table": "`user`"
           }
         ]
@@ -607,11 +607,11 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select col, count(distinct id) from user group by col",
+      "Original": "select col, count(distinct id), sum(distinct id) from user group by col",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_distinct(1) AS count(distinct id)",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct id), sum_sum_distinct(2) AS sum(distinct id)",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -621,9 +621,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(distinct id) from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(distinct id), sum(distinct id) from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(distinct id) from `user` group by col order by col asc",
+            "Query": "select col, count(distinct id), sum(distinct id) from `user` group by col order by col asc",
             "Table": "`user`"
           }
         ]
@@ -7034,6 +7034,59 @@
                     "Table": "music"
                   }
                 ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "count distinct and sum distinct on join query pushed down - unique vindex",
+    "query": "select u.col1, count(distinct m.user_id), sum(distinct m.user_id) from user u join music m group by u.col1",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.col1, count(distinct m.user_id), sum(distinct m.user_id) from user u join music m group by u.col1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct m.user_id), sum_sum_distinct(2) AS sum(distinct m.user_id)",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
+            "TableName": "`user`_music",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.col1, weight_string(u.col1) from `user` as u where 1 != 1 group by u.col1, weight_string(u.col1)",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select u.col1, weight_string(u.col1) from `user` as u group by u.col1, weight_string(u.col1) order by u.col1 asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct m.user_id), sum(distinct m.user_id) from music as m where 1 != 1 group by .0",
+                "Query": "select count(distinct m.user_id), sum(distinct m.user_id) from music as m group by .0",
+                "Table": "music"
               }
             ]
           }

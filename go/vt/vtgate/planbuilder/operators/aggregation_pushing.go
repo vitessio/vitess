@@ -70,8 +70,8 @@ func (a *Aggregator) aggregateTheAggregates() {
 func aggregateTheAggregate(a *Aggregator, i int) {
 	aggr := a.Aggregations[i]
 	switch aggr.OpCode {
-	case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-		// All count variations turn into SUM above the Route.
+	case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
+		// All count variations turn into SUM above the Route. This is also applied for Sum distinct when it is pushed down.
 		// Think of it as we are SUMming together a bunch of distributed COUNTs.
 		aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
 		a.Aggregations[i] = aggr
@@ -509,7 +509,10 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// this is only used for SHOW GTID queries that will never contain joins
 		return vterrors.VT13001("cannot do join with vgtid")
 	case opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
-		return errAbortAggrPushing
+		if !exprHasUniqueVindex(ctx, aggr.Func.GetArg()) {
+			return errAbortAggrPushing
+		}
+		return ab.handlePushThroughAggregation(ctx, aggr)
 	default:
 		return errHorizonNotPlanned()
 	}
