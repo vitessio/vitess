@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -29,11 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/sqlescape"
-
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -203,6 +202,15 @@ type Conn struct {
 	// keepAliveOn marks when keep alive is active on the connection.
 	// This is currently used for testing.
 	keepAliveOn bool
+
+	// mu protects the fields below
+	mu sync.Mutex
+	// cancel keep the cancel function for the current executing query.
+	// this is used by `kill [query|connection] ID` command from other connection.
+	cancel context.CancelFunc
+	// this is used to mark the connection to be closed so that the command phase for the connection can be stopped and
+	// the connection gets closed.
+	closing bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -925,6 +933,10 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		return false
 	}
 	if len(data) == 0 {
+		return false
+	}
+	// before continue to process the packet, check if the connection should be closed or not.
+	if c.IsMarkedForClose() {
 		return false
 	}
 
@@ -1662,4 +1674,39 @@ func (c *Conn) IsUnixSocket() bool {
 // GetRawConn returns the raw net.Conn for nefarious purposes.
 func (c *Conn) GetRawConn() net.Conn {
 	return c.conn
+}
+
+// CancelCtx aborts an existing running query
+func (c *Conn) CancelCtx() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cancel != nil {
+		c.cancel()
+	}
+}
+
+// UpdateCancelCtx updates the cancel function on the connection.
+func (c *Conn) UpdateCancelCtx(cancel context.CancelFunc) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cancel = cancel
+}
+
+// MarkForClose marks the connection for close.
+func (c *Conn) MarkForClose() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closing = true
+}
+
+// IsMarkedForClose return true if the connection should be closed.
+func (c *Conn) IsMarkedForClose() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closing
+}
+
+// GetTestConn returns a conn for testing purpose only.
+func GetTestConn() *Conn {
+	return newConn(testConn{})
 }

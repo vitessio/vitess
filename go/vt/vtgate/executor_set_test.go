@@ -270,7 +270,7 @@ func TestExecutorSet(t *testing.T) {
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			_, err := executorEnv.Execute(context.Background(), nil, "TestExecute", session, tcase.in, nil)
 			if tcase.err == "" {
 				require.NoError(t, err)
 				utils.MustMatch(t, tcase.out, session.Session, "new executor")
@@ -370,12 +370,7 @@ func TestExecutorSetOp(t *testing.T) {
 			session.TargetString = KsTestUnsharded
 			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
-			_, err := executor.Execute(
-				context.Background(),
-				"TestExecute",
-				session,
-				tcase.in,
-				nil)
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", session, tcase.in, nil)
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.warning, session.Warnings, "")
 			utils.MustMatch(t, tcase.sysVars, session.SystemVariables, "")
@@ -388,7 +383,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	_, err := executor.Execute(context.Background(), nil, "TestExecute", session, set, nil)
 	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
 
 	vschemaacl.AuthorizedDDLUsers = "%"
@@ -400,11 +395,11 @@ func TestExecutorSetMetadata(t *testing.T) {
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	_, err = executor.Execute(context.Background(), nil, "TestExecute", session, set, nil)
 	assert.NoError(t, err, "%s error: %v", set, err)
 
 	show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
-	result, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	result, err := executor.Execute(context.Background(), nil, "TestExecute", session, show, nil)
 	assert.NoError(t, err)
 
 	want := "1"
@@ -413,11 +408,11 @@ func TestExecutorSetMetadata(t *testing.T) {
 
 	// Update metadata
 	set = "set @@vitess_metadata.app_keyspace_v2='2'"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	_, err = executor.Execute(context.Background(), nil, "TestExecute", session, set, nil)
 	assert.NoError(t, err, "%s error: %v", set, err)
 
 	show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
-	gotqr, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	gotqr, err := executor.Execute(context.Background(), nil, "TestExecute", session, show, nil)
 	assert.NoError(t, err)
 
 	wantqr := &sqltypes.Result{
@@ -433,7 +428,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
 
 	show = "show vitess_metadata variables"
-	gotqr, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	gotqr, err = executor.Execute(context.Background(), nil, "TestExecute", session, show, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, wantqr.Fields, gotqr.Fields)
@@ -460,7 +455,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", session, tcase.in, nil)
 			if err != nil {
 				require.EqualError(t, err, tcase.err)
 			} else {
@@ -519,7 +514,7 @@ func TestSetVar(t *testing.T) {
 		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 		"|only_full_group_by")})
 
-	_, err := executor.Execute(context.Background(), "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(context.Background(), nil, "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	tcases := []struct {
@@ -541,7 +536,7 @@ func TestSetVar(t *testing.T) {
 			// reset reserved conn need.
 			session.SetReservedConn(false)
 
-			_, err = executor.Execute(context.Background(), "TestSetVar", session, tc.sql, map[string]*querypb.BindVariable{})
+			_, err = executor.Execute(context.Background(), nil, "TestSetVar", session, tc.sql, map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
 			assert.Equal(t, tc.rc, session.InReservedConn())
 		})
@@ -567,11 +562,11 @@ func TestSetVarShowVariables(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE")})
 
-	_, err := executor.Execute(context.Background(), "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(context.Background(), nil, "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	// this should return the updated value of sql_mode.
-	qr, err := executor.Execute(context.Background(), "TestSetVar", session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
+	qr, err := executor.Execute(context.Background(), nil, "TestSetVar", session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
 	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
@@ -614,7 +609,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 					sqltypes.MakeTestResult(nil)}) // third one for new set query
 
 				setQ := fmt.Sprintf("set %s = '%s'", tcase.sysVar, tcase.val)
-				_, err := e.Execute(context.Background(), "TestExecutorSetAndSelect", session, setQ, nil)
+				_, err := e.Execute(context.Background(), nil, "TestExecutorSetAndSelect", session, setQ, nil)
 				require.NoError(t, err)
 			}
 
@@ -622,7 +617,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 			// if the query reaches the shard, it will return REPEATABLE-READ isolation level.
 			sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), "REPEATABLE-READ")})
 
-			qr, err := e.Execute(context.Background(), "TestExecutorSetAndSelect", session, selectQ, nil)
+			qr, err := e.Execute(context.Background(), nil, "TestExecutorSetAndSelect", session, selectQ, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.exp, fmt.Sprintf("%v", qr.Rows))
 		})
