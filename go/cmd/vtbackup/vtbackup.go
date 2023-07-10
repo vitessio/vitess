@@ -480,24 +480,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 	}
 
-	if restartBeforeBackup {
-		restartAt := time.Now()
-		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
-		// Prep for full/clean shutdown (not typically the default)
-		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
-			return fmt.Errorf("Could not prep for full shutdown: %v", err)
-		}
-		// Shutdown, waiting for it to finish
-		if err := mysqld.Shutdown(ctx, mycnf, true); err != nil {
-			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
-		}
-		// Start MySQL, waiting for it to come up
-		if err := mysqld.Start(ctx, mycnf); err != nil {
-			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
-		}
-		durationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
-	}
-
 	// Now we can take a new backup.
 	backupAt := time.Now()
 	if err := mysqlctl.Backup(ctx, backupParams); err != nil {

@@ -217,7 +217,7 @@ func TestExecuteBackup(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestExecuteBackupWIthSafeUpgrade(t *testing.T) {
+func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
