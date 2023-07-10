@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -253,6 +255,48 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 			utils.MustMatch(t, tcase.expResult, results)
 		})
 	}
+}
+
+// TestScalarDistinctAggr tests distinct aggregation on engine.
+func TestScalarDistinctAggr(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"value|sum(distinct shardkey)",
+		"varchar|decimal",
+	)
+
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(
+		fields,
+		"foo|600",
+		"tata|893",
+		"tete|12833",
+		"titi|2380",
+		"toto|200",
+		"yoyo|783493",
+	)}}
+	param := NewAggregateParam(AggregateCountDistinct, 0, "count(distinct value)")
+	param.CollationID = collations.CollationUtf8mb4ID
+
+	param2 := NewAggregateParam(AggregateSum, 1, "sum(distinct sharkey)")
+	param2.OrigOpcode = AggregateSumDistinct
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{param, param2},
+		Input:      fp,
+	}
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	require.Equal(t, `[INT64(6) DECIMAL(800199)]`, fmt.Sprintf("%v", qr.Rows))
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, `[INT64(6) DECIMAL(800199)]`, fmt.Sprintf("%v", results.Rows))
 }
 
 // TestScalarGroupConcat tests group_concat with partial aggregation on engine.
