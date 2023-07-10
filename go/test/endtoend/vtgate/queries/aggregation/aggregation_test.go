@@ -539,7 +539,7 @@ func TestDistinctAggregation(t *testing.T) {
 		`SELECT /*vt+ PLANNER=gen4 */ a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
 		`SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.value`,
 	} {
-		t.Run(query, func(t *testing.T) {
+		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
 			mcmp.Exec(query)
 		})
 	}
