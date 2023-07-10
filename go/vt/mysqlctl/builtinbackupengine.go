@@ -218,6 +218,8 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
+	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+
 	// @@gtid_purged
 	getPurgedGTIDSet := func() (mysql.Position, mysql.Mysql56GTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
@@ -328,7 +330,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
-	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID, mysqlVersion); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -418,6 +420,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 
+	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+
 	// check if we need to set innodb_fast_shutdown=0 for a backup safe for upgrades
 	if params.UpgradeSafe {
 		if _, err := params.Mysqld.FetchSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
@@ -434,7 +438,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID, mysqlVersion)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -519,6 +523,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	fromPosition mysql.Position,
 	binlogFiles []string,
 	serverUUID string,
+	mysqlVersion string,
 ) (finalErr error) {
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
@@ -613,6 +618,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 			Shard:          params.Shard,
 			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
+			MySQLVersion:   mysqlVersion,
+			UpgradeSafe:    params.UpgradeSafe,
 		},
 
 		// Builtin-specific fields

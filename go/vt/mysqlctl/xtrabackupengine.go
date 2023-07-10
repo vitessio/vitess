@@ -211,6 +211,8 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 
+	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+
 	flavor := pos.GTIDSet.Flavor()
 	params.Logger.Infof("Detected MySQL flavor: %v", flavor)
 
@@ -250,6 +252,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			Shard:          params.Shard,
 			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
+			MySQLVersion:   mysqlVersion,
 		},
 
 		// XtraBackup-specific fields

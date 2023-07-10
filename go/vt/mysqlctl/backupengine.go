@@ -23,6 +23,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -276,6 +278,12 @@ type BackupManifest struct {
 	Keyspace string
 
 	Shard string
+
+	// MySQLversion is the version of MySQL when the backup was taken.
+	MySQLVersion string
+
+	// UpgradeSafe indicates whether the backup is safe to use for an upgrade to a newer MySQL version
+	UpgradeSafe bool
 }
 
 func (m *BackupManifest) HashKey() string {
@@ -395,6 +403,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	manifests := make([]*BackupManifest, len(bhs))
 	manifestHandleMap := NewManifestHandleMap()
 
+	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+
 	fullBackupIndex := func() int {
 		for index := len(bhs) - 1; index >= 0; index-- {
 			bh := bhs[index]
@@ -410,6 +420,14 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			if bm.Incremental {
 				// We're looking for a full backup
 				continue
+			}
+
+			// check if the backup can be used with this MySQL version.
+			if bm.MySQLVersion != "" {
+				if err := isMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
+					params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
+					continue
+				}
 			}
 
 			var backupTime time.Time
@@ -470,6 +488,86 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	}
 	restorePath.manifests = manifests
 	return restorePath, nil
+}
+
+var simpleVersionRegex = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
+func isMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe bool) error {
+	// It's always safe to use the same version.
+	if to == from {
+		return nil
+	}
+
+	toParts := simpleVersionRegex.FindStringSubmatch(to)
+	if len(toParts) != 4 {
+		return fmt.Errorf("could not parse running MySQL version from '%s'", to)
+	}
+
+	fromParts := simpleVersionRegex.FindStringSubmatch(from)
+	if len(fromParts) != 4 {
+		return fmt.Errorf("could not parse backup MySQL version from '%s'", to)
+	}
+
+	toMajor, err := strconv.Atoi(toParts[1])
+	if err != nil {
+		return fmt.Errorf("could not parse running MySQL major version from '%s': %v", to, err)
+	}
+
+	fromMajor, err := strconv.Atoi(fromParts[1])
+	if err != nil {
+		return fmt.Errorf("could not parse backup MySQL major version from '%s': %v", to, err)
+	}
+
+	if toMajor < fromMajor {
+		return fmt.Errorf("running MySQL version '%s' is older than backup MySQL version '%s'", to, from)
+	}
+
+	if toMajor > fromMajor {
+		if !upgradeSafe {
+			return fmt.Errorf("running MySQL version '%s' is newer than backup MySQL version '%s' which is not safe to upgrade", to, from)
+		}
+		return nil
+	}
+
+	toMinor, err := strconv.Atoi(toParts[2])
+	if err != nil {
+		return fmt.Errorf("could not parse running MySQL minor version from '%s': %v", to, err)
+	}
+
+	fromMinor, err := strconv.Atoi(fromParts[2])
+	if err != nil {
+		return fmt.Errorf("could not parse backup MySQL minor version from '%s': %v", to, err)
+	}
+
+	if toMinor < fromMinor {
+		return fmt.Errorf("running MySQL version '%s' is older than backup MySQL version '%s'", to, from)
+	}
+
+	if toMinor > fromMinor {
+		if !upgradeSafe {
+			return fmt.Errorf("running MySQL version '%s' is newer than backup MySQL version '%s' which is not safe to upgrade", to, from)
+		}
+		return nil
+	}
+
+	toPatch, err := strconv.Atoi(toParts[3])
+	if err != nil {
+		return fmt.Errorf("could not parse running MySQL patch version from '%s': %v", to, err)
+	}
+
+	fromPatch, err := strconv.Atoi(fromParts[3])
+	if err != nil {
+		return fmt.Errorf("could not parse backup MySQL patch version from '%s': %v", to, err)
+	}
+
+	if toPatch < fromPatch {
+		return fmt.Errorf("running MySQL version '%s' is older than backup MySQL version '%s'", to, from)
+	}
+
+	if toPatch > fromPatch && !upgradeSafe {
+		return fmt.Errorf("running MySQL version '%s' is newer than backup MySQL version '%s' which is not safe to upgrade", to, from)
+	}
+	return nil
 }
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
