@@ -25,50 +25,49 @@ import (
 
 type (
 	ExprGenerator interface {
-		Generate(config ExprGeneratorConfig) Expr
+		Generate(r *rand.Rand, config ExprGeneratorConfig) Expr
 	}
 
 	ExprGeneratorConfig struct {
 		// IsAggregate determines if the random expression is an aggregation expression
-		IsAggregate bool
-		Type        string
+		CanAggregate bool
+		Type         string
 	}
 )
 
-func (genConfig ExprGeneratorConfig) boolTypeConfig() ExprGeneratorConfig {
-	genConfig.Type = "tinyint"
-	return genConfig
+func (egc ExprGeneratorConfig) boolTypeConfig() ExprGeneratorConfig {
+	egc.Type = "tinyint"
+	return egc
 }
 
-func (genConfig ExprGeneratorConfig) intTypeConfig() ExprGeneratorConfig {
-	genConfig.Type = "bigint"
-	return genConfig
+func (egc ExprGeneratorConfig) intTypeConfig() ExprGeneratorConfig {
+	egc.Type = "bigint"
+	return egc
 }
 
-func (genConfig ExprGeneratorConfig) stringTypeConfig() ExprGeneratorConfig {
-	genConfig.Type = "varchar"
-	return genConfig
+func (egc ExprGeneratorConfig) stringTypeConfig() ExprGeneratorConfig {
+	egc.Type = "varchar"
+	return egc
 }
 
-func (genConfig ExprGeneratorConfig) anyTypeConfig() ExprGeneratorConfig {
-	genConfig.Type = ""
-	return genConfig
+func (egc ExprGeneratorConfig) anyTypeConfig() ExprGeneratorConfig {
+	egc.Type = ""
+	return egc
 }
 
-func (genConfig ExprGeneratorConfig) aggregateConfig() ExprGeneratorConfig {
-	genConfig.IsAggregate = true
-	return genConfig
+func (egc ExprGeneratorConfig) CanAggregateConfig() ExprGeneratorConfig {
+	egc.CanAggregate = true
+	return egc
 }
 
-func (genConfig ExprGeneratorConfig) notAggregateConfig() ExprGeneratorConfig {
-	genConfig.IsAggregate = false
-	return genConfig
+func (egc ExprGeneratorConfig) cannotAggregateConfig() ExprGeneratorConfig {
+	egc.CanAggregate = false
+	return egc
 }
 
-func NewGenerator(seed int64, maxDepth int, exprGenerators ...ExprGenerator) *Generator {
+func NewGenerator(r *rand.Rand, maxDepth int, exprGenerators ...ExprGenerator) *Generator {
 	g := Generator{
-		seed:           seed,
-		r:              rand.New(rand.NewSource(seed)),
+		r:              r,
 		maxDepth:       maxDepth,
 		exprGenerators: exprGenerators,
 	}
@@ -76,7 +75,6 @@ func NewGenerator(seed int64, maxDepth int, exprGenerators ...ExprGenerator) *Ge
 }
 
 type Generator struct {
-	seed           int64
 	r              *rand.Rand
 	depth          int
 	maxDepth       int
@@ -129,7 +127,32 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.booleanExpr(genConfig) },
 	}
 
+	if genConfig.CanAggregate {
+		genConfig = genConfig.cannotAggregateConfig()
+		options = append(options, func() Expr { return RandomAggregate(g.r, g.Expression(genConfig)) })
+	}
+
 	return g.randomOf(options)
+}
+
+var aggregates = []string{"count(*)", "count", "sum" /*, "min", "max" */}
+
+func RandomAggregate(r *rand.Rand, expr Expr) Expr {
+	aggr := aggregates[r.Intn(len(aggregates))]
+	switch aggr {
+	case "count(*)":
+		return &CountStar{}
+	case "count":
+		return &Count{Args: Exprs{expr}}
+	case "sum":
+		return &Sum{Arg: expr}
+	case "min":
+		return &Min{Arg: expr}
+	case "max":
+		return &Max{Arg: expr}
+	}
+
+	return expr
 }
 
 func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
@@ -137,7 +160,7 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		return g.booleanLiteral()
 	}
 
-	genConfig.Type = "tinyint"
+	genConfig = genConfig.boolTypeConfig()
 
 	options := []exprF{
 		func() Expr { return g.andExpr(genConfig) },
@@ -161,7 +184,7 @@ func (g *Generator) intExpr(genConfig ExprGeneratorConfig) Expr {
 		return g.intLiteral()
 	}
 
-	genConfig.Type = "bigint"
+	genConfig = genConfig.intTypeConfig()
 
 	options := []exprF{
 		func() Expr { return g.arithmetic(genConfig) },
@@ -176,7 +199,7 @@ func (g *Generator) intExpr(genConfig ExprGeneratorConfig) Expr {
 		}
 
 		options = append(options, func() Expr {
-			expr := generator.Generate(genConfig)
+			expr := generator.Generate(g.r, genConfig)
 			if expr == nil {
 				return g.intLiteral()
 			}
@@ -192,7 +215,7 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 		return g.stringLiteral()
 	}
 
-	genConfig.Type = "varchar"
+	genConfig = genConfig.stringTypeConfig()
 
 	options := []exprF{
 		func() Expr { return g.stringLiteral() },
@@ -206,7 +229,7 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 		}
 
 		options = append(options, func() Expr {
-			expr := generator.Generate(genConfig)
+			expr := generator.Generate(g.r, genConfig)
 			if expr == nil {
 				return g.stringLiteral()
 			}
@@ -226,7 +249,7 @@ func (g *Generator) randomBool() bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := fmt.Sprintf("%d", g.r.Intn(1000)-g.r.Intn(1000))
+	t := fmt.Sprintf("%d", g.r.Intn(100)-g.r.Intn(100))
 
 	return NewIntLiteral(t)
 }
@@ -274,7 +297,7 @@ func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 		elseExpr = g.Expression(genConfig)
 	}
 
-	size := g.r.Intn(2) + 2
+	size := g.r.Intn(2) + 1
 	var whens []*When
 	for i := 0; i < size; i++ {
 		var cond Expr

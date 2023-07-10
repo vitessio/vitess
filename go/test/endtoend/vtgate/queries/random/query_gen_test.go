@@ -20,15 +20,15 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
-	"vitess.io/vitess/go/slices2"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// This test tests that generating a random expression with a schema does not panic
-func TestRandomExprWithTables(t *testing.T) {
-
+// TestSeed makes sure that the seed is deterministic
+func TestSeed(t *testing.T) {
+	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
 		{tableExpr: sqlparser.NewTableName("emp")},
 		{tableExpr: sqlparser.NewTableName("dept")},
@@ -49,11 +49,9 @@ func TestRandomExprWithTables(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	seed := time.Now().UnixNano()
-	r := rand.New(rand.NewSource(seed))
-	g := sqlparser.NewGenerator(r, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
-	for i := 0; i < 100; i++ {
-		expr := g.Expression(sqlparser.ExprGeneratorConfig{CanAggregate: true})
-		fmt.Println(sqlparser.String(expr))
-	}
+	seed := int64(1688972682389909000)
+	query1 := sqlparser.String(randomQuery(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, schemaTables))
+	query2 := sqlparser.String(randomQuery(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, schemaTables))
+	fmt.Println(query1)
+	require.Equal(t, query1, query2)
 }

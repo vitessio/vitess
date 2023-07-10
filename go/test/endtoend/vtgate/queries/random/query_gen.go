@@ -19,7 +19,6 @@ package random
 import (
 	"fmt"
 	"math/rand"
-	"time"
 
 	"golang.org/x/exp/slices"
 
@@ -36,10 +35,11 @@ const testFailingQueries = false
 
 type (
 	column struct {
-		name *sqlparser.ColName
-		typ  string
+		name string
+		// TODO: perhaps remove tableName and always pass columns through a tableT
+		tableName string
+		typ       string
 	}
-
 	tableT struct {
 		// the tableT struct can be used to represent the schema of a table or a derived table
 		// in the former case tableExpr will be a sqlparser.TableName, in the latter a sqlparser.DerivedTable
@@ -54,35 +54,19 @@ type (
 var _ sqlparser.ExprGenerator = (*tableT)(nil)
 var _ sqlparser.ExprGenerator = (*column)(nil)
 
-// getColumnName returns tableName.name
+// getColumnName returns tableName.name (if tableName is nonempty), otherwise name
 func (c *column) getColumnName() string {
-	return sqlparser.String(c.name)
-}
-
-func (c *column) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
-	if c.typ == genConfig.Type {
-		return c.name
+	var columnName string
+	if c.tableName != "" {
+		columnName += c.tableName + "."
 	}
 
-	return nil
+	return columnName + c.name
 }
 
-func (t *tableT) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
-	colsCopy := slices.Clone(t.cols)
-
-	for len(colsCopy) > 0 {
-		idx := rand.Intn(len(colsCopy))
-		randCol := colsCopy[idx]
-		if randCol.typ == genConfig.Type {
-			return randCol.name
-		}
-
-		// delete randCol from colsCopy
-		colsCopy[idx] = colsCopy[len(colsCopy)-1]
-		colsCopy = colsCopy[:len(colsCopy)-1]
-	}
-
-	return nil
+// getASTExpr returns the AST representation of a column
+func (c *column) getASTExpr() sqlparser.Expr {
+	return sqlparser.NewColNameWithQualifier(c.name, sqlparser.NewTableName(c.tableName))
 }
 
 // getName returns the alias if it is nonempty
@@ -103,7 +87,7 @@ func (t *tableT) getName() string {
 func (t *tableT) setAlias(newName string) {
 	t.alias = newName
 	for i := range t.cols {
-		t.cols[i].name.Qualifier = sqlparser.NewTableName(newName)
+		t.cols[i].tableName = newName
 	}
 }
 
@@ -111,56 +95,83 @@ func (t *tableT) setAlias(newName string) {
 // this makes it unnatural to modify tableName
 func (t *tableT) addColumns(col ...column) {
 	for i := range col {
-		col[i].name.Qualifier = sqlparser.NewTableName(t.getName())
+		col[i].tableName = t.getName()
 		t.cols = append(t.cols, col[i])
 	}
 }
 
-func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Select {
+func (c *column) Generate(_ *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+	if c.typ == genConfig.Type {
+		return c.getASTExpr()
+	}
+
+	return nil
+}
+
+func (t *tableT) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+	colsCopy := slices.Clone(t.cols)
+
+	for len(colsCopy) > 0 {
+		idx := r.Intn(len(colsCopy))
+		randCol := colsCopy[idx]
+		if randCol.typ == genConfig.Type {
+			return randCol.getASTExpr()
+		}
+
+		// delete randCol from colsCopy
+		colsCopy[idx] = colsCopy[len(colsCopy)-1]
+		colsCopy = colsCopy[:len(colsCopy)-1]
+	}
+
+	return nil
+}
+
+func randomQuery(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, schemaTables []tableT) *sqlparser.Select {
 	sel := &sqlparser.Select{}
 	sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
 
 	// select distinct (fails with group by bigint)
-	isDistinct := rand.Intn(2) < 1
+	isDistinct := r.Intn(2) < 1
 	if isDistinct {
 		sel.MakeDistinct()
 	}
 
 	// create both tables and join at the same time since both occupy the from clause
-	tables, isJoin := createTablesAndJoin(schemaTables, sel)
+	tables, isJoin := createTablesAndJoin(r, genConfig, schemaTables, sel)
 
 	// canAggregate determines if the query will have
 	// aggregate columns, group by, and having
-	canAggregate := rand.Intn(4) > 0
+	canAggregate := r.Intn(4) > 0
 
 	var (
 		groupBy          sqlparser.GroupBy
 		groupSelectExprs sqlparser.SelectExprs
 		grouping         []column
-		aggrExprs        sqlparser.SelectExprs
+		aggrSelectExprs  sqlparser.SelectExprs
 		aggregates       []column
 	)
 	// TODO: distinct makes vitess think there is grouping on aggregation columns
 	if canAggregate {
 		if testFailingQueries || !isDistinct {
 			// group by
-			groupBy, groupSelectExprs, grouping = createGroupBy(tables, maxGroupBy)
+			groupBy, groupSelectExprs, grouping = createGroupBy(r, tables)
 			sel.AddSelectExprs(groupSelectExprs)
 			sel.GroupBy = groupBy
 		}
 
 		// aggregate columns
-		aggrExprs, aggregates = createAggregations(tables, maxAggrs)
-		sel.AddSelectExprs(aggrExprs)
+		aggrSelectExprs, aggregates = createAggregations(r, genConfig, tables)
+		sel.AddSelectExprs(aggrSelectExprs)
+		// sel.GroupBy = append(sel.GroupBy, aggrExprs...)
 
 		// having
-		isHaving := rand.Intn(2) < 1
+		isHaving := r.Intn(2) < 1
 		if isHaving {
-			sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(tables)...))
-			if rand.Intn(2) < 1 && testFailingQueries {
+			sel.AddHaving(sqlparser.AndExpressions(createHavingPredicates(r, genConfig, grouping)...))
+			if r.Intn(2) < 1 && testFailingQueries {
 				// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
 				// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
-				sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(tables)...))
+				sel.AddHaving(sqlparser.AndExpressions(createWherePredicates(r, genConfig, tables)...))
 			}
 		}
 		// TODO: use sqlparser.ExprGenerator to generate a random expression with aggregation functions
@@ -169,21 +180,21 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 
 	// can add both aggregate and grouping columns to order by
 	// TODO: order fails with distinct and outer joins
-	isOrdered := rand.Intn(2) < 1 && (!isDistinct || testFailingQueries) && (!isJoin || testFailingQueries) && testFailingQueries
+	isOrdered := r.Intn(2) < 1 && (!isDistinct || testFailingQueries) && (!isJoin || testFailingQueries) && testFailingQueries
 	// TODO: order by fails a lot; probably related to the previously passing query
 	// TODO: should be fixed soon
 	if isOrdered {
-		sel.OrderBy = createOrderBy(groupBy, aggrExprs)
+		sel.OrderBy = createOrderBy(r, groupBy, aggrSelectExprs)
 	}
 
 	// TODO: random expressions cause a lot of failures
 	// where
-	sel.AddWhere(sqlparser.AndExpressions(createWherePredicates(tables)...))
+	sel.AddWhere(sqlparser.AndExpressions(createWherePredicates(r, genConfig, tables)...))
 
 	// only add a limit if the grouping columns are ordered
 	// TODO: limit fails a lot
-	if rand.Intn(2) < 1 && (isOrdered || len(groupBy) == 0) && testFailingQueries {
-		sel.Limit = createLimit()
+	if r.Intn(2) < 1 && (isOrdered || len(groupBy) == 0) && testFailingQueries {
+		sel.Limit = createLimit(r)
 	}
 
 	var (
@@ -193,19 +204,20 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 	)
 	// add random expression to select
 	// TODO: random expressions cause a lot of failures
-	isRandomExpr := rand.Intn(2) < 1 && testFailingQueries
+	isRandomExpr := r.Intn(2) < 1 && testFailingQueries
 
 	// TODO: selecting a random expression potentially with columns creates
 	// TODO: only_full_group_by related errors in Vitess
 	if testFailingQueries {
 		// TODO: ugly
 		f = func() sqlparser.Expr {
-			return getRandomExpr(sqlparser.ExprGeneratorConfig{}, slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
-				return &t
-			})...)
+			return getRandomExpr(r, sqlparser.ExprGeneratorConfig{},
+				slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
+					return &t
+				})...)
 		}
 	} else {
-		f = func() sqlparser.Expr { return getRandomExpr(sqlparser.ExprGeneratorConfig{}) }
+		f = func() sqlparser.Expr { return getRandomExpr(r, sqlparser.ExprGeneratorConfig{}) }
 	}
 
 	// make sure we have at least one select expression
@@ -228,17 +240,23 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 
 		sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(randomExpr, "crandom0"))
 		newTable.addColumns(column{
-			name: sqlparser.NewColName("crandom0"),
+			name: "crandom0",
 			typ:  typ,
 		})
 
 		// make sure to add the random expression to group by and order by for only_full_group_by
 		if canAggregate {
 			sel.AddGroupBy(randomExpr)
-			sel.AddOrder(sqlparser.NewOrder(randomExpr, getRandomOrderDirection()))
+			sel.AddOrder(sqlparser.NewOrder(randomExpr, getRandomOrderDirection(r)))
 		}
 
 		break
+	}
+
+	// alias the grouping columns
+	for i, col := range grouping {
+		alias := fmt.Sprintf("cgroup%d", i)
+		col.name = alias
 	}
 
 	// add them to newTable
@@ -251,37 +269,39 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Sel
 
 	// derived tables (partially unsupported)
 	// TODO: derived tables fails a lot
-	if rand.Intn(10) < 1 && testFailingQueries {
-		sel = randomQuery(schemaTables, 3, 3)
+	if r.Intn(10) < 1 && testFailingQueries {
+		sel = randomQuery(r, genConfig, schemaTables)
 	}
 
 	return sel
 }
 
-func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT, bool) {
+func createTablesAndJoin(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, schemaTables []tableT, sel *sqlparser.Select) ([]tableT, bool) {
 	var tables []tableT
 	// add at least one of original emp/dept tables for now because derived tables have nil columns
-	tables = append(tables, schemaTables[rand.Intn(2)])
+	tables = append(tables, schemaTables[r.Intn(2)])
 
-	sel.From = append(sel.From, newAliasedTable(tables[0], "tbl0"))
 	tables[0].setAlias("tbl0")
+	sel.From = append(sel.From, newAliasedTable(tables[0], "tbl0"))
 
-	numTables := rand.Intn(len(schemaTables))
+	numTables := r.Intn(len(schemaTables))
 	for i := 0; i < numTables; i++ {
-		tables = append(tables, randomEl(schemaTables))
-		sel.From = append(sel.From, newAliasedTable(tables[i+1], fmt.Sprintf("tbl%d", i+1)))
-		tables[i+1].setAlias(fmt.Sprintf("tbl%d", i+1))
+		tables = append(tables, randomEl(r, schemaTables))
+		alias := fmt.Sprintf("tbl%d", i+1)
+		sel.From = append(sel.From, newAliasedTable(tables[i+1], alias))
+		tables[i+1].setAlias(alias)
 	}
 
 	// TODO: outer joins produce mismatched results
-	isJoin := rand.Intn(2) < 1 && testFailingQueries
+	isJoin := r.Intn(2) < 1 && testFailingQueries
 	if isJoin {
 		// TODO: do nested joins
-		newTable := randomEl(schemaTables)
-		newTable.setAlias(fmt.Sprintf("tbl%d", numTables))
+		newTable := randomEl(r, schemaTables)
+		alias := fmt.Sprintf("tbl%d", numTables)
+		newTable.setAlias(alias)
 		tables = append(tables, newTable)
 
-		createJoin(tables, sel)
+		createJoin(r, genConfig, tables, sel)
 	}
 
 	return tables, isJoin
@@ -289,13 +309,13 @@ func createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT
 
 // creates a left join (without the condition) between the last table in sel and newTable
 // tables should have one more table than sel
-func createJoin(tables []tableT, sel *sqlparser.Select) {
+func createJoin(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, tables []tableT, sel *sqlparser.Select) {
 	n := len(sel.From)
 	if len(tables) != n+1 {
 		log.Fatalf("sel has %d tables and tables has %d tables", len(sel.From), n)
 	}
 
-	joinPredicate := sqlparser.AndExpressions(createJoinPredicates(tables)...)
+	joinPredicate := sqlparser.AndExpressions(createJoinPredicates(r, genConfig, tables)...)
 	joinCondition := sqlparser.NewJoinCondition(joinPredicate, nil)
 	newTable := newAliasedTable(tables[n], fmt.Sprintf("tbl%d", n))
 	sel.From[n-1] = sqlparser.NewJoinTableExpr(sel.From[n-1], sqlparser.LeftJoinType, newTable, joinCondition)
@@ -303,31 +323,32 @@ func createJoin(tables []tableT, sel *sqlparser.Select) {
 
 // returns 1-3 random expressions based on the last two elements of tables
 // tables should have at least two elements
-func createJoinPredicates(tables []tableT) sqlparser.Exprs {
+func createJoinPredicates(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, tables []tableT) sqlparser.Exprs {
 	if len(tables) < 2 {
 		log.Fatalf("tables has %d elements, needs at least 2", len(tables))
 	}
 
-	return createPredicates(1, &tables[len(tables)-2], &tables[len(tables)-1])
+	return createRandomExprs(r, genConfig, 1, &tables[len(tables)-2], &tables[len(tables)-1])
 }
 
 // returns the grouping columns as three types: sqlparser.GroupBy, sqlparser.SelectExprs, []column
-func createGroupBy(tables []tableT, maxGB int) (groupBy sqlparser.GroupBy, groupSelectExprs sqlparser.SelectExprs, grouping []column) {
-	numGBs := rand.Intn(maxGB)
+func createGroupBy(r *rand.Rand, tables []tableT) (groupBy sqlparser.GroupBy, groupSelectExprs sqlparser.SelectExprs, grouping []column) {
+	numGBs := r.Intn(3)
 	for i := 0; i < numGBs; i++ {
-		tblIdx := rand.Intn(len(tables))
-		col := randomEl(tables[tblIdx].cols)
+		tblIdx := r.Intn(len(tables))
+		col := randomEl(r, tables[tblIdx].cols)
 		// TODO: grouping by a date column sometimes errors
 		if col.typ == "date" && !testFailingQueries {
 			continue
 		}
-		groupBy = append(groupBy, col.name)
+		groupBy = append(groupBy, col.getASTExpr())
 
 		// add to select
-		if rand.Intn(2) < 1 {
-			groupSelectExprs = append(groupSelectExprs, newAliasedColumn(col, fmt.Sprintf("cgroup%d", i)))
+		if r.Intn(2) < 1 {
+			alias := fmt.Sprintf("cgroup%d", len(grouping))
+			groupSelectExprs = append(groupSelectExprs, newAliasedColumn(col, alias))
 			// TODO: alias in a separate function to properly generate the having clause
-			col.name = sqlparser.NewColName(fmt.Sprintf("cgroup%d", i))
+			//col.name = sqlparser.NewColName(alias)
 			grouping = append(grouping, col)
 		}
 	}
@@ -336,67 +357,32 @@ func createGroupBy(tables []tableT, maxGB int) (groupBy sqlparser.GroupBy, group
 }
 
 // returns the aggregation columns as three types: sqlparser.SelectExprs, []column
-func createAggregations(tables []tableT, maxAggrs int) (aggrExprs sqlparser.SelectExprs, aggregates []column) {
-	aggregations := []func(col column) sqlparser.Expr{
-		func(_ column) sqlparser.Expr { return &sqlparser.CountStar{} },
-		func(col column) sqlparser.Expr { return &sqlparser.Count{Args: sqlparser.Exprs{col.name}} },
-		func(col column) sqlparser.Expr { return &sqlparser.Sum{Arg: col.name} },
-		// func(col column) sqlparser.Expr { return &sqlparser.Avg{Arg: col.name} },
-		func(col column) sqlparser.Expr { return &sqlparser.Min{Arg: col.name} },
-		func(col column) sqlparser.Expr { return &sqlparser.Max{Arg: col.name} },
+func createAggregations(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, tables []tableT) (aggrSelectExprs sqlparser.SelectExprs, aggregates []column) {
+	aggrExprs := createRandomExprs(r, genConfig, 0,
+		slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
+			return &t
+		})...)
+	for i := range aggrExprs {
+		expr := sqlparser.RandomAggregate(r, aggrExprs[i])
+		alias := fmt.Sprintf("caggr%d", i)
+		aggrSelectExprs = append(aggrSelectExprs, sqlparser.NewAliasedExpr(expr, alias))
+		aggregates = append(aggregates, column{name: alias})
 	}
 
-	numAggrs := rand.Intn(maxAggrs)
-	for i := 0; i < numAggrs; i++ {
-		tblIdx, aggrIdx := rand.Intn(len(tables)), rand.Intn(len(aggregations))
-		col := randomEl(tables[tblIdx].cols)
-		// TODO: aggregating on a date column sometimes errors
-		if col.typ == "date" && !testFailingQueries {
-			i--
-			continue
-		}
-
-		newAggregate := aggregations[aggrIdx](col)
-		// TODO: collating on strings sometimes errors
-		if col.typ == "varchar" && !testFailingQueries {
-			switch newAggregate.(type) {
-			case *sqlparser.Min, *sqlparser.Max:
-				i--
-				continue
-			}
-		}
-
-		// TODO: type of sum() is incorrect (int64 vs decimal) in certain queries
-		if _, ok := newAggregate.(*sqlparser.Sum); ok && !testFailingQueries {
-			i--
-			continue
-		}
-
-		aggrExprs = append(aggrExprs, sqlparser.NewAliasedExpr(newAggregate, fmt.Sprintf("caggr%d", i)))
-
-		if aggrIdx <= 1 /* CountStar and Count */ {
-			col.typ = "bigint"
-		} else if _, ok := newAggregate.(*sqlparser.Avg); ok && col.getColumnName() == "bigint" {
-			col.typ = "decimal"
-		}
-
-		col.name = sqlparser.NewColName(fmt.Sprintf("caggr%d", i))
-		aggregates = append(aggregates, col)
-	}
 	return
 }
 
 // orders on all non-aggregate SelectExprs and independently at random on all aggregate SelectExprs of sel
-func createOrderBy(groupBy sqlparser.GroupBy, aggrExprs sqlparser.SelectExprs) (orderBy sqlparser.OrderBy) {
+func createOrderBy(r *rand.Rand, groupBy sqlparser.GroupBy, aggrExprs sqlparser.SelectExprs) (orderBy sqlparser.OrderBy) {
 	// always order on grouping columns
 	for i := range groupBy {
-		orderBy = append(orderBy, sqlparser.NewOrder(groupBy[i], getRandomOrderDirection()))
+		orderBy = append(orderBy, sqlparser.NewOrder(groupBy[i], getRandomOrderDirection(r)))
 	}
 
 	// randomly order on aggregation columns
 	for i := range aggrExprs {
-		if aliasedExpr, ok := aggrExprs[i].(*sqlparser.AliasedExpr); ok && rand.Intn(2) < 1 {
-			orderBy = append(orderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection()))
+		if aliasedExpr, ok := aggrExprs[i].(*sqlparser.AliasedExpr); ok && r.Intn(2) < 1 {
+			orderBy = append(orderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection(r)))
 		}
 	}
 
@@ -404,46 +390,39 @@ func createOrderBy(groupBy sqlparser.GroupBy, aggrExprs sqlparser.SelectExprs) (
 }
 
 // returns 0-2 random expressions based on tables
-func createWherePredicates(tables []tableT) sqlparser.Exprs {
-	return createPredicates(0, slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
-}
-
-// returns between minPredicates and minPredicates + 2 random expressions using generators
-func createPredicates(minPredicates int, generators ...sqlparser.ExprGenerator) (predicates sqlparser.Exprs) {
-	numPredicates := rand.Intn(3) + minPredicates
-	for i := 0; i < numPredicates; i++ {
-		predicates = append(predicates, getRandomExpr(sqlparser.ExprGeneratorConfig{}, generators...))
-	}
-
-	return
+func createWherePredicates(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, tables []tableT) sqlparser.Exprs {
+	// TODO: create gen config outside
+	return createRandomExprs(r, sqlparser.ExprGeneratorConfig{}, 0,
+		slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 }
 
 // creates predicates for the having clause comparing a column to a random expression
-func createHavingPredicates(tables []tableT) (havingPredicates sqlparser.Exprs) {
-	aggrSelectExprs, _ := createAggregations(tables, 2) // createAggregations(generators)
-	for i := range aggrSelectExprs {
-		if lhs, ok := aggrSelectExprs[i].(*sqlparser.AliasedExpr); ok {
-			// TODO: HAVING can only contain aggregate or grouping columns in mysql, works fine in vitess
-			// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
-			// TODO: but random expressions without the columns also fails
-			if testFailingQueries {
-				predRandomExpr := getRandomExpr(sqlparser.ExprGeneratorConfig{}, slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
-					return &t
-				})...)
-				havingPredicates = append(havingPredicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), lhs.Expr, predRandomExpr, nil))
-			} else if rhs, ok1 := randomEl(aggrSelectExprs).(*sqlparser.AliasedExpr); ok1 {
-				havingPredicates = append(havingPredicates, sqlparser.NewComparisonExpr(getRandomComparisonExprOperator(), lhs.Expr, rhs.Expr, nil))
-			}
-		}
+func createHavingPredicates(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, grouping []column) sqlparser.Exprs {
+	return createRandomExprs(r, sqlparser.ExprGeneratorConfig{CanAggregate: true}, 0,
+		slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })...)
+}
+
+// returns between minExprs and minExprs + 2 random expressions using generators
+func createRandomExprs(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, minExprs int, generators ...sqlparser.ExprGenerator) (predicates sqlparser.Exprs) {
+	numPredicates := r.Intn(3) + minExprs
+	for i := 0; i < numPredicates; i++ {
+		predicates = append(predicates, getRandomExpr(r, genConfig, generators...))
 	}
+
 	return
 }
 
+// getRandomExpr returns a random expression
+func getRandomExpr(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, generators ...sqlparser.ExprGenerator) sqlparser.Expr {
+	g := sqlparser.NewGenerator(r, 2, generators...)
+	return g.Expression(genConfig)
+}
+
 // creates sel.Limit
-func createLimit() *sqlparser.Limit {
-	limitNum := rand.Intn(10)
-	if rand.Intn(2) < 1 {
-		offset := rand.Intn(10)
+func createLimit(r *rand.Rand) *sqlparser.Limit {
+	limitNum := r.Intn(10)
+	if r.Intn(2) < 1 {
+		offset := r.Intn(10)
 		return sqlparser.NewLimit(offset, limitNum)
 	}
 
@@ -455,26 +434,14 @@ func newAliasedTable(tbl tableT, alias string) *sqlparser.AliasedTableExpr {
 }
 
 func newAliasedColumn(col column, alias string) *sqlparser.AliasedExpr {
-	return sqlparser.NewAliasedExpr(col.name, alias)
+	return sqlparser.NewAliasedExpr(col.getASTExpr(), alias)
 }
 
-func getRandomComparisonExprOperator() sqlparser.ComparisonExprOperator {
-	// =, <, >, <=, >=, !=, <=>
-	return randomEl([]sqlparser.ComparisonExprOperator{0, 1, 2, 3, 4, 5, 6})
-}
-
-func getRandomOrderDirection() sqlparser.OrderDirection {
+func getRandomOrderDirection(r *rand.Rand) sqlparser.OrderDirection {
 	// asc, desc
-	return randomEl([]sqlparser.OrderDirection{0, 1})
+	return randomEl(r, []sqlparser.OrderDirection{0, 1})
 }
 
-// getRandomExpr returns a random expression
-func getRandomExpr(genConfig sqlparser.ExprGeneratorConfig, generators ...sqlparser.ExprGenerator) sqlparser.Expr {
-	seed := time.Now().UnixNano()
-	g := sqlparser.NewGenerator(seed, 2, generators...)
-	return g.Expression(genConfig)
-}
-
-func randomEl[K any](in []K) K {
-	return in[rand.Intn(len(in))]
+func randomEl[K any](r *rand.Rand, in []K) K {
+	return in[r.Intn(len(in))]
 }

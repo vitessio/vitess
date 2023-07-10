@@ -18,6 +18,7 @@ package random
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ import (
 // this test uses the AST defined in the sqlparser package to randomly generate queries
 
 // if true then execution will always stop on a "must fix" error: a mismatched results or EOF
-const stopOnMustFixError = true
+const stopOnMustFixError = false
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
@@ -82,6 +83,9 @@ func TestMustFix(t *testing.T) {
 
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(case false when true then tbl1.deptno else -154 / 132 end) as caggr1 from emp as tbl0, dept as tbl1")
 
 	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
@@ -137,6 +141,10 @@ func TestKnownFailures(t *testing.T) {
 
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
+
+	// vitess error: unsupported: min/max on types that are not comparable is not supported
+	// mysql error: <nil>
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(case true when false then 'gnu' when true then 'meerkat' end) as caggr0 from dept as tbl0")
 
 	// vitess error: vttablet: rpc error: code = InvalidArgument desc = BIGINT UNSIGNED value is out of range in '(-(273) + (-(15) & 124))'
 	// mysql error: <nil>
@@ -212,32 +220,35 @@ func TestRandom(t *testing.T) {
 		{tableExpr: sqlparser.NewTableName("dept")},
 	}
 	schemaTables[0].addColumns([]column{
-		{name: sqlparser.NewColName("empno"), typ: "bigint"},
-		{name: sqlparser.NewColName("ename"), typ: "varchar"},
-		{name: sqlparser.NewColName("job"), typ: "varchar"},
-		{name: sqlparser.NewColName("mgr"), typ: "bigint"},
-		{name: sqlparser.NewColName("hiredate"), typ: "date"},
-		{name: sqlparser.NewColName("sal"), typ: "bigint"},
-		{name: sqlparser.NewColName("comm"), typ: "bigint"},
-		{name: sqlparser.NewColName("deptno"), typ: "bigint"},
+		{name: "empno", typ: "bigint"},
+		{name: "ename", typ: "varchar"},
+		{name: "job", typ: "varchar"},
+		{name: "mgr", typ: "bigint"},
+		{name: "hiredate", typ: "date"},
+		{name: "sal", typ: "bigint"},
+		{name: "comm", typ: "bigint"},
+		{name: "deptno", typ: "bigint"},
 	}...)
 	schemaTables[1].addColumns([]column{
-		{name: sqlparser.NewColName("deptno"), typ: "bigint"},
-		{name: sqlparser.NewColName("dname"), typ: "varchar"},
-		{name: sqlparser.NewColName("loc"), typ: "varchar"},
+		{name: "deptno", typ: "bigint"},
+		{name: "dname", typ: "varchar"},
+		{name: "loc", typ: "varchar"},
 	}...)
 
 	endBy := time.Now().Add(1 * time.Second)
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true
-	for time.Now().Before(endBy) && (!t.Failed() || testFailingQueries) {
-		query := sqlparser.String(randomQuery(schemaTables, 3, 3))
+	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
+		seed := time.Now().UnixNano()
+		fmt.Printf("seed: %d\n", seed)
+		r := rand.New(rand.NewSource(seed))
+		query := sqlparser.String(randomQuery(r, sqlparser.ExprGeneratorConfig{}, schemaTables))
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
-
+		fmt.Println(query)
 		// this assumes all queries are valid mysql queries
 		if vtErr != nil {
-			fmt.Println(query)
+
 			fmt.Println(vtErr)
 
 			if stopOnMustFixError {
