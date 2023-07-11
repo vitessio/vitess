@@ -36,14 +36,14 @@ const (
 	GhostName     Name = "gh-ost"
 	PTOSCName     Name = "pt-osc"
 
-	VStreamerName         Name = "vstreamer"
 	VReplicationName      Name = "vreplication"
-	VPlayerName           Name = "vplayer"
-	VCopierName           Name = "vcopier"
-	ResultStreamerName    Name = "resultstreamer"
-	RowStreamerName       Name = "rowstreamer"
-	ExternalConnectorName Name = "external-connector"
-	ReplicaConnectorName  Name = "replica-connector"
+	VStreamerName         Name = VReplicationName + ":" + "vstreamer" // means this will throttle when either "vstreamer" or "vreplication", or both, are throttled
+	VPlayerName           Name = VReplicationName + ":" + "vplayer"
+	VCopierName           Name = VReplicationName + ":" + "vcopier"
+	ResultStreamerName    Name = VReplicationName + ":" + "resultstreamer"
+	RowStreamerName       Name = VReplicationName + ":" + "rowstreamer"
+	ExternalConnectorName Name = VReplicationName + ":" + "external-connector"
+	ReplicaConnectorName  Name = VReplicationName + ":" + "replica-connector"
 
 	BinlogWatcherName Name = "binlog-watcher"
 	MessagerName      Name = "messager"
