@@ -342,10 +342,24 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	var keyspaces = make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
-	for _, ks := range vc.vschema.Keyspaces {
-		keyspaces = append(keyspaces, ks.Keyspace)
+	keyspaceNames := vc.resolver.GetGateway().GetServingKeyspaces()
+
+	var keyspaces []*vindexes.Keyspace
+	for _, ksName := range keyspaceNames {
+		ks, exists := vc.vschema.Keyspaces[ksName]
+		if exists {
+			keyspaces = append(keyspaces, ks.Keyspace)
+		}
 	}
+	if len(keyspaces) == 0 {
+		for _, ks := range vc.vschema.Keyspaces {
+			keyspaces = append(keyspaces, ks.Keyspace)
+		}
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+
 	sort.Slice(keyspaces, func(i, j int) bool {
 		return keyspaces[i].Name < keyspaces[j].Name
 	})

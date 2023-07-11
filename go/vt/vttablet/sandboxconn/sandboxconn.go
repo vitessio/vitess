@@ -509,6 +509,11 @@ func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *queryp
 	return sbc, nil
 }
 
+// GetServingKeyspaces returns list of serving keyspaces.
+func (sbc *SandboxConn) GetServingKeyspaces() []string {
+	return nil
+}
+
 // HandlePanic is part of the QueryService interface.
 func (sbc *SandboxConn) HandlePanic(err *error) {
 }
