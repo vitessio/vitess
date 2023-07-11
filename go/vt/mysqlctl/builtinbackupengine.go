@@ -218,7 +218,10 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
-	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
+	}
 
 	// @@gtid_purged
 	getPurgedGTIDSet := func() (mysql.Position, mysql.Mysql56GTIDSet, error) {
@@ -420,7 +423,10 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 
-	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
+	}
 
 	// check if we need to set innodb_fast_shutdown=0 for a backup safe for upgrades
 	if params.UpgradeSafe {

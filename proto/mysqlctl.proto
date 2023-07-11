@@ -56,6 +56,12 @@ message RefreshConfigRequest{}
 
 message RefreshConfigResponse{}
 
+message VersionStringRequest{}
+
+message VersionStringResponse{
+  string version = 1;
+}
+
 // MysqlCtl is the service definition
 service MysqlCtl {
   rpc Start(StartRequest) returns (StartResponse) {};
@@ -64,6 +70,7 @@ service MysqlCtl {
   rpc ApplyBinlogFile(ApplyBinlogFileRequest) returns (ApplyBinlogFileResponse) {};
   rpc ReinitConfig(ReinitConfigRequest) returns (ReinitConfigResponse) {};
   rpc RefreshConfig(RefreshConfigRequest) returns (RefreshConfigResponse) {};
+  rpc VersionString(VersionStringRequest) returns (VersionStringResponse) {};
 }
 
 // BackupInfo is the read-only attributes of a mysqlctl/backupstorage.BackupHandle.

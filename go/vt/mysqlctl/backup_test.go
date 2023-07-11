@@ -429,80 +429,80 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 		wantErr                bool
 	}{
 		{
-			fromVersion: "5.6.42",
-			toVersion:   "5.7.40",
+			fromVersion: "mysqld  Ver 5.6.42",
+			toVersion:   "mysqld  Ver 5.7.40",
 			upgradeSafe: false,
 			wantErr:     true,
 		},
 		{
-			fromVersion: "5.6.42",
-			toVersion:   "5.7.40",
+			fromVersion: "mysqld  Ver 5.6.42",
+			toVersion:   "mysqld  Ver 5.7.40",
 			upgradeSafe: true,
 			wantErr:     false,
 		},
 		{
-			fromVersion: "5.7.42",
-			toVersion:   "8.0.32",
+			fromVersion: "mysqld  Ver 5.7.42",
+			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: true,
 			wantErr:     false,
 		},
 		{
-			fromVersion: "5.7.42",
-			toVersion:   "8.0.32",
+			fromVersion: "mysqld  Ver 5.7.42",
+			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: false,
 			wantErr:     true,
 		},
 		{
-			fromVersion: "5.7.42",
-			toVersion:   "8.0.32",
+			fromVersion: "mysqld  Ver 5.7.42",
+			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: true,
 			wantErr:     false,
 		},
 		{
-			fromVersion: "8.0.32",
-			toVersion:   "8.0.32",
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: false,
 			wantErr:     false,
 		},
 		{
-			fromVersion: "8.0.32",
-			toVersion:   "8.0.32",
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: true,
 			wantErr:     false,
 		},
 		{
-			fromVersion: "8.0.32",
-			toVersion:   "8.0.31",
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.31",
 			upgradeSafe: false,
 			wantErr:     true,
 		},
 		{
-			fromVersion: "8.0.32",
-			toVersion:   "8.0.31",
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.31",
 			upgradeSafe: true,
 			wantErr:     true,
 		},
 		{
-			fromVersion: "8.0.32",
-			toVersion:   "8.0.33",
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.33",
 			upgradeSafe: false,
 			wantErr:     true,
 		},
 		{
-			fromVersion: "8.0.32",
-			toVersion:   "8.0.33",
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.33",
 			upgradeSafe: true,
 			wantErr:     false,
 		},
 		{
 			fromVersion: "",
-			toVersion:   "8.0.33",
+			toVersion:   "mysqld  Ver 8.0.33",
 			upgradeSafe: false,
 			wantErr:     false,
 		},
 		{
 			fromVersion: "",
-			toVersion:   "8.0.33",
+			toVersion:   "mysqld  Ver 8.0.33",
 			upgradeSafe: true,
 			wantErr:     false,
 		},
@@ -512,7 +512,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 		t.Run(fmt.Sprintf("%s->%s upgradeSafe=%t", tc.fromVersion, tc.toVersion, tc.upgradeSafe), func(t *testing.T) {
 			env, closer := createFakeBackupRestoreEnv(t)
 			defer closer()
-			env.mysqld.VersionString = tc.toVersion
+			env.mysqld.Version = tc.toVersion
 
 			manifest := BackupManifest{
 				BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),

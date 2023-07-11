@@ -179,22 +179,6 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 // executeFullBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
-	if params.UpgradeSafe {
-		params.Logger.Infof("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
-		// Prep for full/clean shutdown (not typically the default)
-		if _, err := params.Mysqld.FetchSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
-			return false, vterrors.Wrapf(err, "failed to disable fast shutdown")
-		}
-		// Shutdown, waiting for it to finish
-		if err := params.Mysqld.Shutdown(ctx, params.Cnf, true); err != nil {
-			return false, vterrors.Wrapf(err, "failed to shut down mysqld")
-		}
-		// Start MySQL, waiting for it to come up
-		if err := params.Mysqld.Start(ctx, params.Cnf); err != nil {
-			return false, vterrors.Wrapf(err, "failed to start mysqld")
-		}
-	}
-
 	if params.IncrementalFromPos != "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
 	}
@@ -226,7 +210,10 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 
-	mysqlVersion := params.Mysqld.GetVersionString(ctx)
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
+	}
 
 	flavor := pos.GTIDSet.Flavor()
 	params.Logger.Infof("Detected MySQL flavor: %v", flavor)
@@ -268,7 +255,9 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
 			MySQLVersion:   mysqlVersion,
-			UpgradeSafe:    params.UpgradeSafe,
+			// xtrabackup backups are always created such that they
+			// are safe to use for upgrades later on.
+			UpgradeSafe: true,
 		},
 
 		// XtraBackup-specific fields

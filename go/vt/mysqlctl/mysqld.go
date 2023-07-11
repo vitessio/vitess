@@ -1128,33 +1128,31 @@ func buildLdPaths() ([]string, error) {
 }
 
 // GetVersionString is part of the MysqlExecutor interface.
-func (mysqld *Mysqld) GetVersionString(ctx context.Context) string {
-	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.version")
-	if err != nil {
-		log.Errorf("Error fetching MySQL version: %v", err)
-		return ""
+func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
+	// Execute as remote action on mysqlctld to ensure we get the actual running MySQL version.
+	if socketFile != "" {
+		log.Infof("executing Mysqld.VersionString() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
+		if err != nil {
+			return "", fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.VersionString(ctx)
 	}
-	if len(qr.Rows) != 1 {
-		log.Errorf("Unexpected number of rows: %v", qr.Rows)
-		return ""
-	}
-	res := qr.Named().Row()
-	version, _ := res.ToString("@@global.version")
-	return version
+	return GetVersionString()
 }
 
 // GetVersionComment gets the version comment.
-func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
+func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.version_comment")
 	if err != nil {
-		return ""
+		return "", err
 	}
 	if len(qr.Rows) != 1 {
-		return ""
+		return "", fmt.Errorf("unexpected result length: %v", len(qr.Rows))
 	}
 	res := qr.Named().Row()
-	versionComment, _ := res.ToString("@@global.version_comment")
-	return versionComment
+	return res.ToString("@@global.version_comment")
 }
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:

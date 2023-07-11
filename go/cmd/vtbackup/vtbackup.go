@@ -107,6 +107,7 @@ var (
 	initialBackup       bool
 	allowFirstBackup    bool
 	restartBeforeBackup bool
+	upgradeSafe         bool
 	// vttablet-like flags
 	initDbNameOverride string
 	initKeyspace       string
@@ -134,7 +135,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&minRetentionCount, "min_retention_count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
 	fs.BoolVar(&initialBackup, "initial_backup", initialBackup, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	fs.BoolVar(&allowFirstBackup, "allow_first_backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
-	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. This is useful when you want to use this backup for a MySQL upgrade or to work around certain xtrabackup bugs.")
+	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
+	fs.BoolVar(&upgradeSafe, "upgrade_safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	// vttablet-like flags
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
@@ -301,7 +303,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Shard:              initShard,
 		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
 		Stats:              backupstats.BackupStats(),
-		UpgradeSafe:        restartBeforeBackup,
+		UpgradeSafe:        upgradeSafe,
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -478,6 +480,24 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.EnableRedoLog(ctx); err != nil {
 			return fmt.Errorf("failed to re-enable redo log: %v", err)
 		}
+	}
+
+	if restartBeforeBackup {
+		restartAt := time.Now()
+		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
+		// Prep for full/clean shutdown (not typically the default)
+		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
+			return fmt.Errorf("Could not prep for full shutdown: %v", err)
+		}
+		// Shutdown, waiting for it to finish
+		if err := mysqld.Shutdown(ctx, mycnf, true); err != nil {
+			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
+		}
+		// Start MySQL, waiting for it to come up
+		if err := mysqld.Start(ctx, mycnf); err != nil {
+			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
+		}
+		durationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
 	}
 
 	// Now we can take a new backup.
