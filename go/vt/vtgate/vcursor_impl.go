@@ -356,15 +356,18 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 
 // getSortedServingKeyspaces gets the sorted serving keyspaces
 func (vc *vcursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
-	keyspaceNames := vc.resolver.GetGateway().GetServingKeyspaces()
-
 	var keyspaces []*vindexes.Keyspace
-	for _, ksName := range keyspaceNames {
-		ks, exists := vc.vschema.Keyspaces[ksName]
-		if exists {
-			keyspaces = append(keyspaces, ks.Keyspace)
+
+	if vc.resolver != nil && vc.resolver.GetGateway() != nil {
+		keyspaceNames := vc.resolver.GetGateway().GetServingKeyspaces()
+		for _, ksName := range keyspaceNames {
+			ks, exists := vc.vschema.Keyspaces[ksName]
+			if exists {
+				keyspaces = append(keyspaces, ks.Keyspace)
+			}
 		}
 	}
+
 	if len(keyspaces) == 0 {
 		for _, ks := range vc.vschema.Keyspaces {
 			keyspaces = append(keyspaces, ks.Keyspace)
