@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -37,7 +36,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1"}
+		tables := []string{"t1", "uks.unsharded"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -126,7 +125,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// unsharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	for i := 0; i < 12; i++ {
-		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
+		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
 	}
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
@@ -304,12 +303,11 @@ func TestPrepareStatements(t *testing.T) {
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }
 
+// TestBuggyOuterJoin validates inconsistencies around outer joins, adding these tests to stop regressions.
 func TestBuggyOuterJoin(t *testing.T) {
-	// We found a couple of inconsistencies around outer joins, adding these tests to stop regressions
 	mcmp, closer := start(t)
 	defer closer()
 
 	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
-
 	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
 }
