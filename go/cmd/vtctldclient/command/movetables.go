@@ -164,13 +164,18 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"ReverseTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			moveTablesSwitchTrafficOptions.Direction = workflow.DirectionBackward
 			if !cmd.Flags().Lookup("tablet-types").Changed {
 				// We switch traffic for all tablet types if none are provided.
-				moveTablesSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+				moveTablesSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{
+					topodatapb.TabletType_PRIMARY,
+					topodatapb.TabletType_REPLICA,
+					topodatapb.TabletType_RDONLY,
+				}
 			}
 			return nil
 		},
-		RunE: commandMoveTablesReverseTraffic,
+		RunE: commandMoveTablesSwitchTraffic,
 	}
 
 	// MoveTablesSwitchTraffic makes a MoveTablesSwitchTraffic gRPC call to a vtctld.
@@ -182,9 +187,14 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"SwitchTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			moveTablesSwitchTrafficOptions.Direction = workflow.DirectionForward
 			if !cmd.Flags().Lookup("tablet-types").Changed {
 				// We switch traffic for all tablet types if none are provided.
-				moveTablesSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+				moveTablesSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{
+					topodatapb.TabletType_PRIMARY,
+					topodatapb.TabletType_REPLICA,
+					topodatapb.TabletType_RDONLY,
+				}
 			}
 			return nil
 		},
@@ -284,12 +294,13 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		tout := bytes.Buffer{}
-		tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n", moveTablesOptions.TargetKeyspace, moveTablesOptions.Workflow))
+		tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n",
+			moveTablesOptions.TargetKeyspace, moveTablesOptions.Workflow))
 		for _, shardstreams := range resp.ShardStreams {
 			for _, shardstream := range shardstreams.Streams {
 				tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
-				tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n", shardstream.Id, moveTablesOptions.TargetKeyspace, tablet,
-					shardstream.Status, shardstream.Info))
+				tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
+					shardstream.Id, moveTablesOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
 			}
 		}
 		output = tout.Bytes()
@@ -436,56 +447,7 @@ func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
 		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
 		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
 		EnableReverseReplication: moveTablesSwitchTrafficOptions.EnableReverseReplication,
-		Direction:                int32(workflow.DirectionForward),
-	}
-	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
-	if err != nil {
-		return err
-	}
-
-	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
-	switch format {
-	case "text", "json":
-	default:
-		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
-	}
-	var output []byte
-	if format == "json" {
-		output, err = cli.MarshalJSONCompact(resp)
-		if err != nil {
-			return err
-		}
-	} else {
-		tout := bytes.Buffer{}
-		tout.WriteString(resp.Summary + "\n\n")
-		if req.DryRun {
-			for _, line := range resp.DryRunResults {
-				tout.WriteString(line + "\n")
-			}
-		} else {
-			tout.WriteString(fmt.Sprintf("Start State: %s\n", resp.StartState))
-			tout.WriteString(fmt.Sprintf("Current State: %s\n", resp.CurrentState))
-		}
-		output = tout.Bytes()
-	}
-	fmt.Printf("%s\n", output)
-
-	return nil
-}
-
-func commandMoveTablesReverseTraffic(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
-		Keyspace:                 moveTablesOptions.TargetKeyspace,
-		Workflow:                 moveTablesOptions.Workflow,
-		Cells:                    moveTablesSwitchTrafficOptions.Cells,
-		TabletTypes:              moveTablesSwitchTrafficOptions.TabletTypes,
-		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
-		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
-		EnableReverseReplication: true, // The original workflow should always be enabled
-		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
-		Direction:                int32(workflow.DirectionBackward),
+		Direction:                int32(moveTablesSwitchTrafficOptions.Direction),
 	}
 	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
 	if err != nil {

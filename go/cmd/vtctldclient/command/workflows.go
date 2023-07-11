@@ -234,7 +234,7 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 	}
 
 	var data []byte
-	if strings.ToUpper(cmd.Name()) == "LIST" {
+	if strings.ToLower(cmd.Name()) == "list" {
 		// We only want the names
 		Names := make([]string, len(resp.Workflows))
 		for i, wf := range resp.Workflows {
@@ -307,10 +307,10 @@ func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	var state binlogdatapb.VReplicationWorkflowState
-	switch strings.ToUpper(cmd.Name()) {
-	case "START":
+	switch strings.ToLower(cmd.Name()) {
+	case "start":
 		state = binlogdatapb.VReplicationWorkflowState_Running
-	case "STOP":
+	case "stop":
 		state = binlogdatapb.VReplicationWorkflowState_Stopped
 	default:
 		return fmt.Errorf("invalid workstate: %s", args[0])
