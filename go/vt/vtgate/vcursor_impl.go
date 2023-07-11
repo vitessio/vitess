@@ -360,10 +360,6 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return keyspaces[i].Name < keyspaces[j].Name
 	})
 
-	sort.Slice(keyspaces, func(i, j int) bool {
-		return keyspaces[i].Name < keyspaces[j].Name
-	})
-
 	// Look for any sharded keyspace if present, otherwise take the first keyspace,
 	// sorted alphabetically
 	for _, ks := range keyspaces {

@@ -45,6 +45,9 @@ type SandboxConn struct {
 	// These errors work for all functions.
 	MustFailCodes map[vtrpcpb.Code]int
 
+	// ServingKeyspaces is a list of serving keyspaces
+	ServingKeyspaces []string
+
 	// These errors are triggered only for specific functions.
 	// For now these are just for the 2PC functions.
 	MustFailPrepare             int
@@ -511,7 +514,7 @@ func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *queryp
 
 // GetServingKeyspaces returns list of serving keyspaces.
 func (sbc *SandboxConn) GetServingKeyspaces() []string {
-	return nil
+	return sbc.ServingKeyspaces
 }
 
 // HandlePanic is part of the QueryService interface.
