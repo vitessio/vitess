@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
@@ -40,7 +42,118 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+var errShortCircuit = fmt.Errorf("short circuiting test")
+
+// TestCreateVReplicationWorkflow tests the query generated
+// from a VtctldServer MoveTablesCreate request to ensure
+// that the VReplication stream(s) are created correctly.
+func TestCreateVReplicationWorkflow(t *testing.T) {
+	ctx := context.Background()
+	sourceKs := "sourceks"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetTabletUID := 300
+	shard := "0"
+	wf := "testwf"
+	defaultSchema := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			},
+		},
+	}
+	tenv := newTestEnv(t)
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	insertPrefix := "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
+
+	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	tests := []struct {
+		name   string
+		req    *vtctldatapb.MoveTablesCreateRequest
+		schema *tabletmanagerdatapb.SchemaDefinition
+		query  string
+	}{
+		{
+			name: "defaults",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace: sourceKs,
+				TargetKeyspace: targetKs,
+				Workflow:       wf,
+				Cells:          tenv.cells,
+				AllTables:      true,
+			},
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+				insertPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+		},
+		{
+			name: "all values",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace: sourceKs,
+				TargetKeyspace: targetKs,
+				Workflow:       wf,
+				Cells:          tenv.cells,
+				IncludeTables:  []string{defaultSchema.TableDefinitions[0].Name},
+				// TODO: see why setting these causes the test to fail
+				//ExcludeTables:  []string{"wut"},
+				//SourceTimeZone:     "EDT",
+				OnDdl:              binlogdatapb.OnDDLAction_EXEC.String(),
+				StopAfterCopy:      true,
+				DropForeignKeys:    true,
+				DeferSecondaryKeys: true,
+				AutoStart:          true,
+			},
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+				insertPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+		},
+	}
+
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'",
+		targetKs, wf), &sqltypes.Result{})
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1",
+		targetKs), &sqltypes.Result{})
+	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, "select val from _vt.resharding_journal where id=7224776740563431192", &sqltypes.Result{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+				}
+			}()
+
+			require.NotNil(t, tt.req, "No MoveTablesCreate request provided")
+			require.NotEmpty(t, tt.query, "No expected query provided")
+
+			if tt.schema == nil {
+				tt.schema = defaultSchema
+			}
+			tenv.tmc.SetSchema(tt.schema)
+
+			tenv.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+			// This is our expected query, which will also short circuit
+			// the test with an error as at this point we've tested what
+			// we wanted to test.
+			tenv.vrdbClient.ExpectRequest(tt.query, nil, errShortCircuit)
+			_, err := ws.MoveTablesCreate(ctx, tt.req)
+			tenv.vrdbClient.Wait()
+			require.ErrorIs(t, err, errShortCircuit)
+		})
+	}
+}
 
 func TestUpdateVReplicationWorkflow(t *testing.T) {
 	ctx := context.Background()
@@ -49,7 +162,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	workflow := "testwf"
 	dbName := "test"
 	vreplID := 1
-	shortCircuitErr := fmt.Errorf("short circuiting test")
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	ts := memorytopo.NewServer(cells[0])
@@ -181,6 +293,8 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			require.NotNil(t, tt.request, "No request provided")
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
+			tt.request.State = binlogdatapb.VReplicationWorkflowState_Stopped
+
 			// These are the same for each RPC call.
 			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
 			dbClient.ExpectRequest(selectQuery, selectRes, nil)
@@ -190,10 +304,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
-			dbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, shortCircuitErr)
+			dbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			_, err = tm.UpdateVReplicationWorkflow(ctx, tt.request)
 			dbClient.Wait()
-			require.ErrorIs(t, err, shortCircuitErr)
+			require.ErrorIs(t, err, errShortCircuit)
 		})
 	}
 }
