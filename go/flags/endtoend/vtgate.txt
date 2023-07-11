@@ -79,13 +79,11 @@ Usage of vtgate:
       --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
       --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
-      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
+      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
-      --log_link string                                                  If non-empty, add symbolic links in this directory to the log files
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logbuflevel int                                                  Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                      log to standard error instead of files
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
@@ -164,7 +162,7 @@ Usage of vtgate:
       --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
-      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
@@ -204,7 +202,7 @@ Usage of vtgate:
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)

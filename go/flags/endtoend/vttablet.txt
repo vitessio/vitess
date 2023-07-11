@@ -169,14 +169,12 @@ Usage of vttablet:
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
-      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
+      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
-      --log_link string                                                  If non-empty, add symbolic links in this directory to the log files
       --log_queries                                                      Enable query logging to syslog.
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logbuflevel int                                                  Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -291,7 +289,7 @@ Usage of vttablet:
       --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
-      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
       --stream_health_buffer_size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-acl-config string                                          path to table access checker config file; send SIGHUP to reload this file
       --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
@@ -363,7 +361,7 @@ Usage of vttablet:
       --unhealthy_threshold duration                                     replication lag after which a replica is considered unhealthy (default 2h0m0s)
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vreplication-parallel-insert-workers int                         Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase. (default 1)
       --vreplication_copy_phase_duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
