@@ -26,9 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// This test tests that generating a random expression with a schema does not panic
+// This test tests that generating random expressions with a schema does not panic
 func TestRandomExprWithTables(t *testing.T) {
-
+	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
 		{tableExpr: sqlparser.NewTableName("emp")},
 		{tableExpr: sqlparser.NewTableName("dept")},

@@ -60,7 +60,7 @@ func (egc ExprGeneratorConfig) CanAggregateConfig() ExprGeneratorConfig {
 	return egc
 }
 
-func (egc ExprGeneratorConfig) cannotAggregateConfig() ExprGeneratorConfig {
+func (egc ExprGeneratorConfig) CannotAggregateConfig() ExprGeneratorConfig {
 	egc.CanAggregate = false
 	return egc
 }
@@ -128,7 +128,7 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 	}
 
 	if genConfig.CanAggregate {
-		genConfig = genConfig.cannotAggregateConfig()
+		genConfig = genConfig.CannotAggregateConfig()
 		options = append(options, func() Expr { return RandomAggregate(g.r, g.Expression(genConfig)) })
 	}
 
@@ -138,18 +138,20 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 var aggregates = []string{"count(*)", "count", "sum" /*, "min", "max" */}
 
 func RandomAggregate(r *rand.Rand, expr Expr) Expr {
+	isDisinct := r.Intn(2) < 1
+
 	aggr := aggregates[r.Intn(len(aggregates))]
 	switch aggr {
 	case "count(*)":
 		return &CountStar{}
 	case "count":
-		return &Count{Args: Exprs{expr}}
+		return &Count{Args: Exprs{expr}, Distinct: isDisinct}
 	case "sum":
-		return &Sum{Arg: expr}
+		return &Sum{Arg: expr, Distinct: isDisinct}
 	case "min":
-		return &Min{Arg: expr}
+		return &Min{Arg: expr, Distinct: isDisinct}
 	case "max":
-		return &Max{Arg: expr}
+		return &Max{Arg: expr, Distinct: isDisinct}
 	}
 
 	return expr

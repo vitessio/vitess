@@ -49,9 +49,11 @@ func TestSeed(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	seed := int64(1688972682389909000)
-	query1 := sqlparser.String(randomQuery(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, schemaTables))
-	query2 := sqlparser.String(randomQuery(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, schemaTables))
+	seed := int64(1)
+	qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})
+	query1 := sqlparser.String(qg.randomQuery(schemaTables))
+	qg = newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})
+	query2 := sqlparser.String(qg.randomQuery(schemaTables))
 	fmt.Println(query1)
 	require.Equal(t, query1, query2)
 }

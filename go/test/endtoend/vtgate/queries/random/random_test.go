@@ -84,6 +84,11 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
+	// panics instead of normally logging the error
+	// Received unexpected error:
+	// VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct 1) as caggr1
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(distinct tbl0.comm) as caggr0, sum(distinct 1) as caggr1 from emp as tbl0, emp as tbl1 having 'redfish' < 'blowfish'")
+
 	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(case false when true then tbl1.deptno else -154 / 132 end) as caggr1 from emp as tbl0, dept as tbl1")
 
@@ -242,8 +247,8 @@ func TestRandom(t *testing.T) {
 	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
 		seed := time.Now().UnixNano()
 		fmt.Printf("seed: %d\n", seed)
-		r := rand.New(rand.NewSource(seed))
-		query := sqlparser.String(randomQuery(r, sqlparser.ExprGeneratorConfig{}, schemaTables))
+		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})
+		query := sqlparser.String(qg.randomQuery(schemaTables))
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
 		fmt.Println(query)
 		// this assumes all queries are valid mysql queries
