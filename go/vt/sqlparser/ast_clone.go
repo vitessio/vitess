@@ -287,6 +287,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJtOnResponse(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
+	case *Kill:
+		return CloneRefOfKill(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
@@ -1980,6 +1982,15 @@ func CloneRefOfJtOnResponse(n *JtOnResponse) *JtOnResponse {
 
 // CloneRefOfKeyState creates a deep clone of the input.
 func CloneRefOfKeyState(n *KeyState) *KeyState {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfKill creates a deep clone of the input.
+func CloneRefOfKill(n *Kill) *Kill {
 	if n == nil {
 		return nil
 	}
@@ -4161,6 +4172,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfFlush(in)
 	case *Insert:
 		return CloneRefOfInsert(in)
+	case *Kill:
+		return CloneRefOfKill(in)
 	case *Load:
 		return CloneRefOfLoad(in)
 	case *LockTables:

@@ -238,6 +238,7 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 func executorExecSession(executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	return executor.Execute(
 		context.Background(),
+		nil,
 		"TestExecute",
 		NewSafeSession(session),
 		sql,
@@ -261,6 +262,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	results := make(chan *sqltypes.Result, 100)
 	err = executor.StreamExecute(
 		context.Background(),
+		nil,
 		"TestExecuteStream",
 		NewSafeSession(nil),
 		sql,

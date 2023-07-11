@@ -52,7 +52,7 @@ type (
 const VindexUnsupported = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
-func (v *Vindex) Introduces() semantics.TableSet {
+func (v *Vindex) introducesTableID() semantics.TableSet {
 	return v.Solved
 }
 
@@ -84,6 +84,10 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 
 func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(v.Columns, colNameToExpr), nil
+}
+
+func (v *Vindex) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(v)
 }
 
 func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {

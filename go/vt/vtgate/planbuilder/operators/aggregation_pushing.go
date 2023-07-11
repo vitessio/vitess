@@ -57,23 +57,24 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	}
 
 	aggregator.Pushed = true
-	if applyResult != rewrite.SameTree && aggregator.Original {
-		aggregator.aggregateTheAggregates()
-	}
 
 	return
 }
 
 func (a *Aggregator) aggregateTheAggregates() {
-	for i, aggr := range a.Aggregations {
-		// Handle different aggregation operations when pushing down through a sharded route.
-		switch aggr.OpCode {
-		case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-			// All count variations turn into SUM above the Route.
-			// Think of it as we are SUMming together a bunch of distributed COUNTs.
-			aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
-			a.Aggregations[i] = aggr
-		}
+	for i := range a.Aggregations {
+		aggregateTheAggregate(a, i)
+	}
+}
+
+func aggregateTheAggregate(a *Aggregator, i int) {
+	aggr := a.Aggregations[i]
+	switch aggr.OpCode {
+	case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
+		// All count variations turn into SUM above the Route.
+		// Think of it as we are SUMming together a bunch of distributed COUNTs.
+		aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
+		a.Aggregations[i] = aggr
 	}
 }
 
@@ -92,9 +93,13 @@ func pushDownAggregationThroughRoute(
 	}
 
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := aggregator.Clone([]ops.Operator{route.Source}).(*Aggregator)
-	aggrBelowRoute.Pushed = false
-	aggrBelowRoute.Original = false
+	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
+	aggrBelowRoute.Aggregations = nil
+
+	err := pushDownAggregations(ctx, aggregator, aggrBelowRoute)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Set the source of the route to the new aggregator placed below the route.
 	route.Source = aggrBelowRoute
@@ -108,17 +113,44 @@ func pushDownAggregationThroughRoute(
 	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
 }
 
+// pushDownAggregations splits aggregations between the original aggregator and the one we are pushing down
+func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) error {
+	for i, aggregation := range aggregator.Aggregations {
+		if !aggregation.Distinct || exprHasUniqueVindex(ctx, aggregation.Func.GetArg()) {
+			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggregation)
+			aggregateTheAggregate(aggregator, i)
+			continue
+		}
+		innerExpr := aggregation.Func.GetArg()
+
+		if aggregator.DistinctExpr != nil {
+			if ctx.SemTable.EqualsExpr(aggregator.DistinctExpr, innerExpr) {
+				// we can handle multiple distinct aggregations, as long as they are aggregating on the same expression
+				aggrBelowRoute.Columns[aggregation.ColOffset] = aeWrap(innerExpr)
+				continue
+			}
+			return vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(aggregation.Original)))
+		}
+
+		// We handle a distinct aggregation by turning it into a group by and
+		// doing the aggregating on the vtgate level instead
+		aggregator.DistinctExpr = innerExpr
+		aeDistinctExpr := aeWrap(aggregator.DistinctExpr)
+
+		aggrBelowRoute.Columns[aggregation.ColOffset] = aeDistinctExpr
+
+		groupBy := NewGroupBy(aggregator.DistinctExpr, aggregator.DistinctExpr, aeDistinctExpr)
+		groupBy.ColOffset = aggregation.ColOffset
+		aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
+	}
+	return nil
+}
+
 func pushDownAggregationThroughFilter(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
 	filter *Filter,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
-
-	for _, predicate := range filter.Predicates {
-		if sqlparser.ContainsAggregation(predicate) {
-			return nil, nil, errHorizonNotPlanned()
-		}
-	}
 
 	columnsNeeded := collectColNamesNeeded(ctx, filter)
 
@@ -145,7 +177,7 @@ withNextColumn:
 		// by splitting one and pushing under a join, we can get rid of this one
 		return aggregator.Source, rewrite.NewTree("push aggregation under filter - remove original", aggregator), nil
 	}
-
+	aggregator.aggregateTheAggregates()
 	return aggregator, rewrite.NewTree("push aggregation under filter - keep original", aggregator), nil
 }
 
@@ -293,6 +325,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		return output, rewrite.NewTree("push Aggregation under join - keep original", rootAggr), nil
 	}
 
+	rootAggr.aggregateTheAggregates()
 	rootAggr.Source = output
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
@@ -472,6 +505,11 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
 		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+	case opcode.AggregateGtid:
+		// this is only used for SHOW GTID queries that will never contain joins
+		return vterrors.VT13001("cannot do join with vgtid")
+	case opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+		return errAbortAggrPushing
 	default:
 		return errHorizonNotPlanned()
 	}

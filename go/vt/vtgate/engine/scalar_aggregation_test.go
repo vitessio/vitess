@@ -69,7 +69,6 @@ func TestEmptyRows(outer *testing.T) {
 
 	for _, test := range testCases {
 		outer.Run(test.opcode.String(), func(t *testing.T) {
-			assert := assert.New(t)
 			fp := &fakePrimitive{
 				results: []*sqltypes.Result{sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -91,7 +90,7 @@ func TestEmptyRows(outer *testing.T) {
 			}
 
 			result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-			assert.NoError(err)
+			assert.NoError(t, err)
 
 			wantResult := sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -106,7 +105,6 @@ func TestEmptyRows(outer *testing.T) {
 }
 
 func TestScalarAggregateStreamExecute(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|weight_string(col)",
 		"uint64|varbinary",
@@ -135,17 +133,16 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(err)
+	assert.NoError(t, err)
 	// one for the fields, and one for the actual aggregation result
 	require.EqualValues(t, 2, len(results), "number of results")
 
 	got := fmt.Sprintf("%v", results[1].Rows)
-	assert.Equal("[[DECIMAL(4)]]", got)
+	assert.Equal(t, "[[DECIMAL(4)]]", got)
 }
 
 // TestScalarAggregateExecuteTruncate checks if truncate works
 func TestScalarAggregateExecuteTruncate(t *testing.T) {
-	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|weight_string(col)",
 		"uint64|varbinary",
@@ -169,8 +166,8 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 	}
 
 	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
-	assert.NoError(err)
-	assert.Equal("[[DECIMAL(4)]]", fmt.Sprintf("%v", qr.Rows))
+	assert.NoError(t, err)
+	assert.Equal(t, "[[DECIMAL(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestScalarGroupConcatWithAggrOnEngine tests group_concat with full aggregation on engine.

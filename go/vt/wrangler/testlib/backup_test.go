@@ -185,9 +185,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -422,9 +422,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -639,9 +639,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)

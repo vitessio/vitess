@@ -459,5 +459,11 @@
     "comment": "extremum on input from both sides",
     "query": "insert into music(user_id, id) select foo, bar from music on duplicate key update id = id+1",
     "plan": "VT12001: unsupported: DML cannot update vindex column"
+  },
+  {
+    "comment": "aggregation on top of aggregation not supported",
+    "query": "select distinct count(*) from user, (select distinct count(*) from user) X",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: aggregation on top of aggregation not supported"
   }
 ]

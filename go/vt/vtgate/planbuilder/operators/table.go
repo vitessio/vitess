@@ -54,7 +54,7 @@ func (to *Table) Clone([]ops.Operator) ops.Operator {
 }
 
 // Introduces implements the PhysicalOperator interface
-func (to *Table) Introduces() semantics.TableSet {
+func (to *Table) introducesTableID() semantics.TableSet {
 	return to.QTable.ID
 }
 
@@ -77,6 +77,10 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 
 func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(to)
 }
 
 func (to *Table) GetOrdering() ([]ops.OrderBy, error) {

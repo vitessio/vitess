@@ -25,20 +25,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/sqlescape"
-
 	proxyproto "github.com/pires/go-proxyproto"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -525,7 +523,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	for {
 		kontinue := c.handleNextCommand(l.handler)
-		if !kontinue {
+		// before going for next command check if the connection should be closed or not.
+		if !kontinue || c.IsMarkedForClose() {
 			return
 		}
 	}

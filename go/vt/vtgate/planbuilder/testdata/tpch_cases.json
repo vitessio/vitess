@@ -553,131 +553,172 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(3) AS revenue",
-        "GroupBy": "(0|6), (1|5), (2|4)",
+        "GroupBy": "(0|4), (1|5), (2|6)",
         "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 4] as supp_nation",
-              "[COLUMN 5] as cust_nation",
-              "[COLUMN 6] as l_year",
-              "(((([COLUMN 10] * COALESCE([COLUMN 11], INT64(1))) * COALESCE([COLUMN 12], INT64(1))) * COALESCE([COLUMN 13], INT64(1))) * COALESCE([COLUMN 14], INT64(1))) * COALESCE([COLUMN 15], INT64(1)) as revenue",
-              "[COLUMN 9]",
-              "[COLUMN 8]",
-              "[COLUMN 7]"
+              "[COLUMN 2] as supp_nation",
+              "[COLUMN 3] as cust_nation",
+              "[COLUMN 4] as l_year",
+              "[COLUMN 0] * [COLUMN 1] as revenue",
+              "[COLUMN 5] as weight_string(supp_nation)",
+              "[COLUMN 6] as weight_string(cust_nation)",
+              "[COLUMN 7] as weight_string(l_year)"
             ],
             "Inputs": [
               {
-                "OperatorType": "Sort",
-                "Variant": "Memory",
-                "OrderBy": "(0|16) ASC, (1|17) ASC, (2|18) ASC",
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,L:5,R:2,L:6",
+                "JoinVars": {
+                  "n1_n_name": 4,
+                  "o_custkey": 3
+                },
+                "TableName": "lineitem_orders_supplier_nation_customer_nation",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "L:2,R:0,L:3,L:4,L:8,R:1,L:9,L:13,R:2,L:14,L:15,L:16,L:17,L:18,R:3,R:4,L:19,R:5,L:20",
-                    "JoinVars": {
-                      "n1_n_name": 1,
-                      "o_custkey": 0
-                    },
-                    "TableName": "lineitem_orders_supplier_nation_customer_nation",
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] * [COLUMN 1] as revenue",
+                      "[COLUMN 2] as supp_nation",
+                      "[COLUMN 3] as l_year",
+                      "[COLUMN 4] as orders.o_custkey",
+                      "[COLUMN 5] as n1.n_name",
+                      "[COLUMN 6] as weight_string(supp_nation)",
+                      "[COLUMN 7] as weight_string(l_year)"
+                    ],
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,R:0,R:1,L:2,L:3,L:5,R:2,R:3,R:4,L:6,L:8,R:5,R:6,R:7,L:9,L:10,L:11,R:8,R:9,R:10,L:12",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,L:1,L:2,L:3,R:2,L:5",
                         "JoinVars": {
-                          "l_suppkey": 1
+                          "l_suppkey": 4
                         },
                         "TableName": "lineitem_orders_supplier_nation",
                         "Inputs": [
                           {
-                            "OperatorType": "Join",
-                            "Variant": "Join",
-                            "JoinColumnIndexes": "R:0,L:0,L:2,L:3,L:0,R:0,L:2,L:6,R:2,L:7,L:4,R:1,L:8",
-                            "JoinVars": {
-                              "l_orderkey": 1
-                            },
-                            "TableName": "lineitem_orders",
+                            "OperatorType": "Projection",
+                            "Expressions": [
+                              "[COLUMN 0] * [COLUMN 1] as revenue",
+                              "[COLUMN 2] as l_year",
+                              "[COLUMN 3] as orders.o_custkey",
+                              "[COLUMN 4] as n1.n_name",
+                              "[COLUMN 5] as lineitem.l_suppkey",
+                              "[COLUMN 6] as weight_string(l_year)"
+                            ],
                             "Inputs": [
                               {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:0,R:0,L:1,L:2,L:3,L:4,L:6",
+                                "JoinVars": {
+                                  "l_orderkey": 5
                                 },
-                                "FieldQuery": "select l_suppkey, l_orderkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
-                                "Query": "select l_suppkey, l_orderkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31') group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
-                                "Table": "lineitem"
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select o_custkey, count(*), weight_string(o_custkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey)",
-                                "Query": "select o_custkey, count(*), weight_string(o_custkey) from orders where o_orderkey = :l_orderkey group by o_custkey, weight_string(o_custkey)",
-                                "Table": "orders",
-                                "Values": [
-                                  ":l_orderkey"
-                                ],
-                                "Vindex": "hash"
+                                "TableName": "lineitem_orders",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select sum(volume) as revenue, l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, orders.o_custkey as `orders.o_custkey`, lineitem.l_suppkey as `lineitem.l_suppkey`, lineitem.l_orderkey as `lineitem.l_orderkey` from lineitem where 1 != 1) as shipping where 1 != 1 group by l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year)",
+                                    "OrderBy": "(7|8) ASC, (9|10) ASC, (1|6) ASC",
+                                    "Query": "select sum(volume) as revenue, l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, orders.o_custkey as `orders.o_custkey`, lineitem.l_suppkey as `lineitem.l_suppkey`, lineitem.l_orderkey as `lineitem.l_orderkey` from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year) order by supp_nation asc, cust_nation asc, l_year asc",
+                                    "Table": "lineitem"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*) from orders where 1 != 1 group by .0",
+                                    "Query": "select count(*) from orders where o_orderkey = :l_orderkey group by .0",
+                                    "Table": "orders",
+                                    "Values": [
+                                      ":l_orderkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
                               }
                             ]
                           },
                           {
-                            "OperatorType": "Join",
-                            "Variant": "Join",
-                            "JoinColumnIndexes": "R:0,R:1,R:0,R:0,R:1,R:3,R:3,R:4,L:1,R:2,R:5",
-                            "JoinVars": {
-                              "s_nationkey": 0
-                            },
-                            "TableName": "supplier_nation",
+                            "OperatorType": "Projection",
+                            "Expressions": [
+                              "[COLUMN 0] * [COLUMN 1] as count(*)",
+                              "[COLUMN 2] as supp_nation",
+                              "[COLUMN 3] as weight_string(supp_nation)"
+                            ],
                             "Inputs": [
                               {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
+                                "JoinVars": {
+                                  "s_nationkey": 1
                                 },
-                                "FieldQuery": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey)",
-                                "Query": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where s_suppkey = :l_suppkey group by s_nationkey, weight_string(s_nationkey)",
-                                "Table": "supplier",
-                                "Values": [
-                                  ":l_suppkey"
-                                ],
-                                "Vindex": "hash"
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select n1.n_name, n1.n_name as supp_nation, count(*), weight_string(n1.n_name), weight_string(n1.n_name), weight_string(n1.n_name) from nation as n1 where 1 != 1 group by n1.n_name, weight_string(n1.n_name), supp_nation, weight_string(supp_nation)",
-                                "Query": "select n1.n_name, n1.n_name as supp_nation, count(*), weight_string(n1.n_name), weight_string(n1.n_name), weight_string(n1.n_name) from nation as n1 where n1.n_nationkey = :s_nationkey group by n1.n_name, weight_string(n1.n_name), supp_nation, weight_string(supp_nation)",
-                                "Table": "nation",
-                                "Values": [
-                                  ":s_nationkey"
-                                ],
-                                "Vindex": "hash"
+                                "TableName": "supplier_nation",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), shipping.`supplier.s_nationkey` from (select supplier.s_nationkey as `supplier.s_nationkey` from supplier where 1 != 1) as shipping where 1 != 1 group by shipping.`supplier.s_nationkey`",
+                                    "Query": "select count(*), shipping.`supplier.s_nationkey` from (select supplier.s_nationkey as `supplier.s_nationkey` from supplier where s_suppkey = :l_suppkey) as shipping group by shipping.`supplier.s_nationkey`",
+                                    "Table": "supplier",
+                                    "Values": [
+                                      ":l_suppkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation from nation as n1 where 1 != 1) as shipping where 1 != 1 group by supp_nation, weight_string(supp_nation)",
+                                    "Query": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping group by supp_nation, weight_string(supp_nation)",
+                                    "Table": "nation",
+                                    "Values": [
+                                      ":s_nationkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
                               }
                             ]
                           }
                         ]
-                      },
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] * [COLUMN 1] as count(*)",
+                      "[COLUMN 2] as cust_nation",
+                      "[COLUMN 3] as weight_string(cust_nation)"
+                    ],
+                    "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,R:0,R:2,L:1,R:1,R:3",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
                         "JoinVars": {
-                          "c_nationkey": 0
+                          "c_nationkey": 1
                         },
                         "TableName": "customer_nation",
                         "Inputs": [
@@ -688,8 +729,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where 1 != 1 group by c_nationkey, weight_string(c_nationkey)",
-                            "Query": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where c_custkey = :o_custkey group by c_nationkey, weight_string(c_nationkey)",
+                            "FieldQuery": "select count(*), shipping.`customer.c_nationkey` from (select customer.c_nationkey as `customer.c_nationkey` from customer where 1 != 1) as shipping where 1 != 1 group by shipping.`customer.c_nationkey`",
+                            "Query": "select count(*), shipping.`customer.c_nationkey` from (select customer.c_nationkey as `customer.c_nationkey` from customer where c_custkey = :o_custkey) as shipping group by shipping.`customer.c_nationkey`",
                             "Table": "customer",
                             "Values": [
                               ":o_custkey"
@@ -703,8 +744,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where 1 != 1 group by cust_nation, weight_string(cust_nation)",
-                            "Query": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey group by cust_nation, weight_string(cust_nation)",
+                            "FieldQuery": "select count(*), cust_nation, weight_string(cust_nation) from (select n2.n_name as cust_nation from nation as n2 where 1 != 1) as shipping where 1 != 1 group by cust_nation, weight_string(cust_nation)",
+                            "Query": "select count(*), cust_nation, weight_string(cust_nation) from (select n2.n_name as cust_nation from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey) as shipping group by cust_nation, weight_string(cust_nation)",
                             "Table": "nation",
                             "Values": [
                               ":c_nationkey"

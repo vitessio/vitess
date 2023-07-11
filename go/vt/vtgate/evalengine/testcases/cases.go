@@ -151,6 +151,10 @@ var Cases = []TestCase{
 	{Run: FnUUID},
 	{Run: FnUUIDToBin},
 	{Run: DateMath},
+	{Run: RegexpLike},
+	{Run: RegexpInstr},
+	{Run: RegexpSubstr},
+	{Run: RegexpReplace},
 }
 
 func JSONPathOperations(yield Query) {
@@ -1896,5 +1900,289 @@ func DateMath(yield Query) {
 				yield(fmt.Sprintf("TIMESTAMPADD(%v, %s, %s)", i, v, d), nil)
 			}
 		}
+	}
+}
+
+func RegexpLike(yield Query) {
+	mysqlDocSamples := []string{
+		`'Michael!' REGEXP '.*'`,
+		`'Michael!' RLIKE '.*'`,
+		`'Michael!' NOT REGEXP '.*'`,
+		`'Michael!' NOT RLIKE '.*'`,
+		`'new*\n*line' REGEXP 'new\\*.\\*line'`,
+		`'a' REGEXP '^[a-d]'`,
+		`REGEXP_LIKE('CamelCase', 'CAMELCASE')`,
+		`REGEXP_LIKE('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_LIKE('abc', 'ABC'`,
+		`REGEXP_LIKE('abc', 'ABC', 'c')`,
+		`REGEXP_LIKE(1234, 12)`,
+		`REGEXP_LIKE(1234, 12, 'c')`,
+		`' '  REGEXP '[[:blank:]]'`,
+		`'\t' REGEXP '[[:blank:]]'`,
+		`' '  REGEXP '[[:space:]]'`,
+		`'\t' REGEXP '[[:space:]]'`,
+		`_latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`,
+		`_koi8r  0xFF regexp _koi8r  '[[:lower:]]' COLLATE koi8r_bin`,
+		`_latin1 0xFF regexp _latin1 '[[:upper:]]' COLLATE latin1_bin`,
+		`_koi8r  0xFF regexp _koi8r  '[[:upper:]]' COLLATE koi8r_bin`,
+		`_latin1 0xF7 regexp _latin1 '[[:alpha:]]'`,
+		`_koi8r  0xF7 regexp _koi8r  '[[:alpha:]]'`,
+		`_latin1'a' regexp _latin1'A' collate latin1_general_ci`,
+		`_latin1'a' regexp _latin1'A' collate latin1_bin`,
+
+		`_latin1 'ÿ' regexp _utf8mb4 'ÿ'`,
+		`_utf8mb4 'ÿ' regexp _latin1 'ÿ'`,
+		`convert('ÿ' as char character set latin1) regexp _utf8mb4 'ÿ'`,
+		`_utf8mb4 'ÿ' regexp convert('ÿ' as char character set latin1)`,
+
+		`'a' regexp '\\p{alphabetic}'`,
+		`'a' regexp '\\P{alphabetic}'`,
+		`'👌🏾regexp '\\p{Emoji}\\p{Emoji_modifier}'`,
+		`'a' regexp '\\p{Lowercase_letter}'`,
+		`'a' regexp '\\p{Uppercase_letter}'`,
+		`'A' regexp '\\p{Lowercase_letter}'`,
+		`'A' regexp '\\p{Uppercase_letter}'`,
+		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
+		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
+		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+		`0xff REGEXP 0xff`,
+		`0xff REGEXP 0xfe`,
+		`cast(time '12:34:58' as json) REGEXP 0xff`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, i := range regexInputs {
+		for _, p := range regexInputs {
+			yield(fmt.Sprintf("%s REGEXP %s", i, p), nil)
+			yield(fmt.Sprintf("%s NOT REGEXP %s", i, p), nil)
+			for _, m := range regexMatchStrings {
+				yield(fmt.Sprintf("REGEXP_LIKE(%s, %s, %s)", i, p, m), nil)
+			}
+		}
+	}
+}
+
+func RegexpInstr(yield Query) {
+	mysqlDocSamples := []string{
+		`REGEXP_INSTR('Michael!', '.*')`,
+		`REGEXP_INSTR('new*\n*line', 'new\\*.\\*line')`,
+		`REGEXP_INSTR('a', '^[a-d]')`,
+		`REGEXP_INSTR('CamelCase', 'CAMELCASE')`,
+		`REGEXP_INSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_INSTR('abc', 'ABC'`,
+		`REGEXP_INSTR('abc', 'ABC', 'c')`,
+		`REGEXP_INSTR('0', '0', 1, 0)`,
+		`REGEXP_INSTR(' ', '[[:blank:]]')`,
+		`REGEXP_INSTR('\t', '[[:blank:]]')`,
+		`REGEXP_INSTR(' ', '[[:space:]]')`,
+		`REGEXP_INSTR('\t', '[[:space:]]')`,
+		`REGEXP_INSTR(_latin1 0xFF, _latin1 '[[:lower:]]' COLLATE latin1_bin)`,
+		`REGEXP_INSTR(_koi8r  0xFF, _koi8r  '[[:lower:]]' COLLATE koi8r_bin)`,
+		`REGEXP_INSTR(_latin1 0xFF, _latin1 '[[:upper:]]' COLLATE latin1_bin)`,
+		`REGEXP_INSTR(_koi8r  0xFF, _koi8r  '[[:upper:]]' COLLATE koi8r_bin)`,
+		`REGEXP_INSTR(_latin1 0xF7, _latin1 '[[:alpha:]]')`,
+		`REGEXP_INSTR(_koi8r  0xF7, _koi8r  '[[:alpha:]]')`,
+		`REGEXP_INSTR(_latin1'a', _latin1'A' collate latin1_general_ci)`,
+		`REGEXP_INSTR(_latin1'a', _latin1'A' collate latin1_bin)`,
+		`REGEXP_INSTR('a', '\\p{alphabetic}')`,
+		`REGEXP_INSTR('a', '\\P{alphabetic}')`,
+		`REGEXP_INSTR('👌🏾, '\\p{Emoji}\\p{Emoji_modifier}')`,
+		`REGEXP_INSTR('a', '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('a', '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('A', '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('A', '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('dog cat dog', 'dog')`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 2)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 1)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 0)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 1)`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 1, 1, 'i')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 1, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 2)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 0)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 1)`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'i')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('aa aaa aaaa', 'a{2}')`,
+		`REGEXP_INSTR('aa aaa aaaa', 'a{4}')`,
+		`REGEXP_INSTR(1234, 12)`,
+		`REGEXP_INSTR(1234, 12, 1)`,
+		`REGEXP_INSTR(1234, 12, 100)`,
+		`REGEXP_INSTR(1234, 12, 1, 1)`,
+		`REGEXP_INSTR(1234, 12, 1, 1, 1)`,
+		`REGEXP_INSTR(1234, 12, 1, 1, 1, 'c')`,
+		`REGEXP_INSTR('', ' ', 1000)`,
+		`REGEXP_INSTR(' ', ' ', 1000)`,
+		`REGEXP_INSTR(NULL, 'DOG', 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', NULL, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, NULL, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, NULL, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, NULL)`,
+
+		`REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', NULL, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, NULL, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, NULL, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, 1, NULL)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
+func RegexpSubstr(yield Query) {
+	mysqlDocSamples := []string{
+		`REGEXP_SUBSTR('Michael!', '.*')`,
+		`REGEXP_SUBSTR('new*\n*line', 'new\\*.\\*line')`,
+		`REGEXP_SUBSTR('a', '^[a-d]')`,
+		`REGEXP_SUBSTR('CamelCase', 'CAMELCASE')`,
+		`REGEXP_SUBSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_SUBSTR('abc', 'ABC'`,
+		`REGEXP_SUBSTR(' ', '[[:blank:]]')`,
+		`REGEXP_SUBSTR('\t', '[[:blank:]]')`,
+		`REGEXP_SUBSTR(' ', '[[:space:]]')`,
+		`REGEXP_SUBSTR('\t', '[[:space:]]')`,
+		`REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_general_ci)`,
+		`REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_bin)`,
+		`REGEXP_SUBSTR('a', '\\p{alphabetic}')`,
+		`REGEXP_SUBSTR('a', '\\P{alphabetic}')`,
+		`REGEXP_SUBSTR('👌🏾, '\\p{Emoji}\\p{Emoji_modifier}')`,
+		`REGEXP_SUBSTR('a', '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('a', '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('A', '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('A', '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog')`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog', 2)`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog', 1, 1)`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'c')`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog', 1, 2)`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'c')`,
+		`REGEXP_SUBSTR('aa aaa aaaa', 'a{2}')`,
+		`REGEXP_SUBSTR('aa aaa aaaa', 'a{4}')`,
+		`REGEXP_SUBSTR(1234, 12)`,
+		`REGEXP_SUBSTR(1234, 12, 1)`,
+		`REGEXP_SUBSTR(1234, 12, 100)`,
+		`REGEXP_SUBSTR(1234, 12, 1, 1)`,
+		`REGEXP_SUBSTR(1234, 12, 1, 1, 'c')`,
+
+		`REGEXP_SUBSTR(NULL, 'DOG', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', NULL, 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', NULL, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, NULL, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, NULL)`,
+
+		`REGEXP_SUBSTR(NULL, '[', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', NULL, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', 1, NULL, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', 1, 1, NULL)`,
+
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 0, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', -1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 100, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 0)`,
+
+		`REGEXP_SUBSTR(' ', ' ', 1)`,
+		`REGEXP_SUBSTR(' ', ' ', 2)`,
+		`REGEXP_SUBSTR(' ', ' ', 3)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
+func RegexpReplace(yield Query) {
+	mysqlDocSamples := []string{
+		`REGEXP_REPLACE('a b c', 'b', 'X')`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 3)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 3)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 3)`,
+		`REGEXP_REPLACE('a', '\\p{Lowercase_letter}', 'X')`,
+		`REGEXP_REPLACE('a', '\\p{Uppercase_letter}', 'X')`,
+		`REGEXP_REPLACE('A', '\\p{Lowercase_letter}', 'X')`,
+		`REGEXP_REPLACE('A', '\\p{Uppercase_letter}', 'X')`,
+		`REGEXP_REPLACE(1234, 12, 6)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1)`,
+		`REGEXP_REPLACE(1234, 12, 6, 100)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1, 1)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1, 1, 'c')`,
+
+		`REGEXP_REPLACE(NULL, 'DOG', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', NULL, 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, 1, NULL)`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', '1', '1', 0)`,
+
+		`REGEXP_REPLACE(NULL, _latin1'DOG', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, 1, NULL)`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', '1', '1', 0)`,
+
+		`REGEXP_REPLACE(NULL, '[', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, 1, NULL)`,
+
+		`REGEXP_REPLACE(NULL, _latin1'[', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', 'bar', 1, 1, NULL)`,
+
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 0, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('', 'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('', 'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, 1, 0)`,
+
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 0, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('', _latin1'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('', _latin1'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, 1, 0)`,
+
+		`REGEXP_REPLACE(' ', ' ', 'x', 1)`,
+		`REGEXP_REPLACE(' ', ' ', 'x', 2)`,
+		`REGEXP_REPLACE(' ', ' ', 'x', 3)`,
+
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 1)`,
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 2)`,
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 3)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }

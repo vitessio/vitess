@@ -694,6 +694,15 @@ type (
 	CommentOnly struct {
 		Comments []string
 	}
+
+	// KillType is an enum for Kill.Type
+	KillType int8
+
+	// Kill represents a kill statement
+	Kill struct {
+		Type          KillType
+		ProcesslistID uint64
+	}
 )
 
 func (*Union) iStatement()               {}
@@ -746,6 +755,7 @@ func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
 func (*PurgeBinaryLogs) iStatement()     {}
+func (*Kill) iStatement()                {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}

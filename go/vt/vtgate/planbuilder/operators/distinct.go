@@ -112,6 +112,10 @@ func (d *Distinct) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return d.Source.GetColumns()
 }
 
+func (d *Distinct) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return d.Source.GetSelectExprs()
+}
+
 func (d *Distinct) ShortDescription() string {
 	return ""
 }
