@@ -425,7 +425,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 
 			// check if the backup can be used with this MySQL version.
 			if bm.MySQLVersion != "" {
-				if err := isMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
+				if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
 					params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
 					continue
 				}
@@ -490,7 +490,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	return restorePath, nil
 }
 
-func isMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe bool) error {
+func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe bool) error {
 	// It's always safe to use the same version.
 	if to == from {
 		return nil
