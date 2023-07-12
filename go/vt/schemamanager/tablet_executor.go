@@ -36,6 +36,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TabletExecutor applies schema changes to all tablets.
@@ -144,7 +145,7 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) error {
 	for _, sql := range sqls {
 		stmt, err := sqlparser.Parse(sql)
 		if err != nil {
-			return fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to parse sql: %s, got error: %v", sql, err)
 		}
 		switch stmt.(type) {
 		case sqlparser.DDLStatement:
@@ -153,7 +154,7 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) error {
 		case *sqlparser.AlterMigration:
 		default:
 			if len(exec.tablets) != 1 {
-				return fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "non-ddl statements can only be executed for single shard keyspaces: %s", sql)
 			}
 		}
 	}

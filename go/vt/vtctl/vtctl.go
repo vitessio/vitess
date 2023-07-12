@@ -2851,7 +2851,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Deprecated. We recommend using Online DDL for schema changes, big or small.")
+	subFlags.MarkDeprecated("allow_long_unavailability", "")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
@@ -2867,9 +2867,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <keyspace> argument is required for the commandApplySchema command")
-	}
-	if *allowLongUnavailability {
-		log.Warningf("--allow_long_unavailability flag is deprecated. We recommend using Online DDL for schema changes, big or small.")
 	}
 	if *skipPreflight {
 		log.Warningf("--skip_preflight flag is deprecated. Always assumed to be 'true'")
