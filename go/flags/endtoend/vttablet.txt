@@ -37,7 +37,7 @@ Usage of vttablet:
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-path strings                                              Paths to search for config files in. (default [/home/runner/work/vitess/vitess/go/flags/endtoend])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
@@ -256,6 +256,8 @@ Usage of vttablet:
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there
       --restore_from_backup_ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
+      --s2a_enable_appengine_dialer                                      If true, opportunistically use AppEngine-specific dialer to call S2A.
+      --s2a_timeout duration                                             Timeout enforced on the connection to the S2A service for handshake. (default 3s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)

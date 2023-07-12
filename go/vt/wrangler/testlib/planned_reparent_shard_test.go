@@ -631,9 +631,10 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE",
 		"START SLAVE",
+		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceError = errors.New("Slave failed to initialize relay log info structure from the repository")
+	goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -825,7 +826,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"START SLAVE",
 		// extra SetReplicationSource call due to retry
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
@@ -839,8 +839,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
-		"FAKE SET MASTER",
-		// extra SetReplicationSource call due to retry
 		"FAKE SET MASTER",
 	}
 	goodReplica2.StartActionLoop(t, wr)
@@ -920,7 +918,6 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)

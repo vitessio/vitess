@@ -59,6 +59,8 @@ var (
 
 	VT06001 = errorWithState("VT06001", vtrpcpb.Code_ALREADY_EXISTS, DbCreateExists, "cannot create database '%s'; database exists", "The given database name already exists.")
 
+	VT07001 = errorWithState("VT07001", vtrpcpb.Code_PERMISSION_DENIED, KillDeniedError, "%s", "Kill statement is not allowed. More in docs about how to enable it and its limitations.")
+
 	VT09001 = errorWithState("VT09001", vtrpcpb.Code_FAILED_PRECONDITION, RequiresPrimaryKey, PrimaryVindexNotSet, "the table does not have a primary vindex, the operation is impossible.")
 	VT09002 = errorWithState("VT09002", vtrpcpb.Code_FAILED_PRECONDITION, InnodbReadOnly, "%s statement with a replica target", "This type of DML statement is not allowed on a replica target.")
 	VT09003 = errorWithoutState("VT09003", vtrpcpb.Code_FAILED_PRECONDITION, "INSERT query does not have primary vindex column '%v' in the column list", "A vindex column is mandatory for the insert, please provide one.")
@@ -123,6 +125,7 @@ var (
 		VT05006,
 		VT05007,
 		VT06001,
+		VT07001,
 		VT09001,
 		VT09002,
 		VT09003,

@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -25,8 +26,6 @@ import (
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/discovery"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 
@@ -90,6 +89,7 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 	defer cancel()
 	err = executor.StreamExecute(
 		ctx,
+		nil,
 		"TestExecuteStream",
 		NewSafeSession(primarySession),
 		sql,

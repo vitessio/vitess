@@ -75,6 +75,14 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 		return &LikeExpr{BinaryExpr: binaryExpr}, nil
 	case sqlparser.NotLikeOp:
 		return &LikeExpr{BinaryExpr: binaryExpr, Negate: true}, nil
+	case sqlparser.RegexpOp, sqlparser.NotRegexpOp:
+		return &builtinRegexpLike{
+			CallExpr: CallExpr{
+				Arguments: []Expr{left, right},
+				Method:    "REGEXP_LIKE",
+			},
+			Negate: op == sqlparser.NotRegexpOp,
+		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
 	}
