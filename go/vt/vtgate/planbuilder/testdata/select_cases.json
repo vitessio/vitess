@@ -2473,7 +2473,41 @@
   {
     "comment": "union as a derived table",
     "query": "select found from (select id as found from user union all (select id from unsharded)) as t",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got found"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id as found from `user` where 1 != 1",
+            "Query": "select id as found from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from unsharded where 1 != 1",
+            "Query": "select id from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "use output column containing data from both sides of the join",

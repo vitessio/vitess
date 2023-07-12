@@ -119,7 +119,63 @@
   {
     "comment": "almost dereks query - two queries with order by and limit being scattered to two different sets of tablets",
     "query": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got id"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) DESC",
+                    "Query": "select id, weight_string(id) from `user`",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+                    "OrderBy": "(0|1) DESC",
+                    "Query": "select id, weight_string(id) from music",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "Union all",
@@ -168,12 +224,102 @@
   {
     "comment": "union operations in derived table, without star expression (FROM)¡",
     "query": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got col1"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+            "Query": "select col1, col2 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2 from user_extra where 1 != 1",
+            "Query": "select col1, col2 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   },
   {
     "comment": "union all between two scatter selects, with order by",
     "query": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got id"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(5)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) ASC",
+                    "Query": "select id, weight_string(id) from `user`",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(5)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+                    "OrderBy": "(0|1) DESC",
+                    "Query": "select id, weight_string(id) from music",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union all on scatter and single route",
@@ -668,7 +814,54 @@
   {
     "comment": "Union in derived table with first SELECT being an UNION",
     "query": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got t.id"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1) as dt where 1 != 1",
+                    "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user`) as dt",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id, weight_string(user_id) from user_extra where 1 != 1",
+                "Query": "select distinct user_id, weight_string(user_id) from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   },
   {
     "comment": "gen4 optimises away ORDER BY when it's safe to do",
@@ -874,7 +1067,80 @@
   {
     "comment": "derived table with union",
     "query": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got tbl1.id"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "tbl1_id": 0
+        },
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(5)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) ASC",
+                    "Query": "select id, weight_string(id) from `user`",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(5)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) DESC",
+                    "Query": "select id, weight_string(id) from `user`",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select tbl2.id from `user` as tbl2 where 1 != 1",
+            "Query": "select tbl2.id from `user` as tbl2 where tbl2.id = :tbl1_id",
+            "Table": "`user`",
+            "Values": [
+              ":tbl1_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "ambiguous LIMIT",
@@ -990,7 +1256,49 @@
   {
     "comment": "systable union query in derived table with constraint on outside (without star projection)",
     "query": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got kcu.COLUMN_NAME"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select kcu.COLUMN_NAME, weight_string(kcu.COLUMN_NAME) from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select distinct kcu.COLUMN_NAME, weight_string(kcu.COLUMN_NAME) from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */ and COLUMN_NAME = 'primary'",
+                "SysTableTableName": "[kcu_table_name:VARCHAR(\"user_extra\")]",
+                "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                "Table": "information_schema.key_column_usage"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select kcu.COLUMN_NAME, weight_string(kcu.COLUMN_NAME) from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select distinct kcu.COLUMN_NAME, weight_string(kcu.COLUMN_NAME) from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */ and COLUMN_NAME = 'primary'",
+                "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\")]",
+                "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                "Table": "information_schema.key_column_usage"
+              }
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "pushes predicate on both sides of UNION",
@@ -1022,7 +1330,60 @@
   {
     "comment": "systable union query in derived table with constraint on outside (star projection)",
     "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got kcu.CONSTRAINT_CATALOG"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:12)",
+          "(1:13)",
+          "(2:14)",
+          "(3:15)",
+          "(4:16)",
+          "(5:17)",
+          "(6:18)",
+          "(7:19)",
+          "(8:20)",
+          "(9:21)",
+          "(10:22)",
+          "(11:23)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, weight_string(kcu.CONSTRAINT_CATALOG), weight_string(kcu.CONSTRAINT_SCHEMA), weight_string(kcu.CONSTRAINT_NAME), weight_string(kcu.TABLE_CATALOG), weight_string(kcu.TABLE_SCHEMA), weight_string(kcu.TABLE_NAME), weight_string(kcu.COLUMN_NAME), weight_string(kcu.ORDINAL_POSITION), weight_string(kcu.POSITION_IN_UNIQUE_CONSTRAINT), weight_string(kcu.REFERENCED_TABLE_SCHEMA), weight_string(kcu.REFERENCED_TABLE_NAME), weight_string(kcu.REFERENCED_COLUMN_NAME) from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select distinct kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, weight_string(kcu.CONSTRAINT_CATALOG), weight_string(kcu.CONSTRAINT_SCHEMA), weight_string(kcu.CONSTRAINT_NAME), weight_string(kcu.TABLE_CATALOG), weight_string(kcu.TABLE_SCHEMA), weight_string(kcu.TABLE_NAME), weight_string(kcu.COLUMN_NAME), weight_string(kcu.ORDINAL_POSITION), weight_string(kcu.POSITION_IN_UNIQUE_CONSTRAINT), weight_string(kcu.REFERENCED_TABLE_SCHEMA), weight_string(kcu.REFERENCED_TABLE_NAME), weight_string(kcu.REFERENCED_COLUMN_NAME) from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */ and CONSTRAINT_NAME = 'primary'",
+                "SysTableTableName": "[kcu_table_name:VARCHAR(\"user_extra\")]",
+                "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                "Table": "information_schema.key_column_usage"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, weight_string(kcu.CONSTRAINT_CATALOG), weight_string(kcu.CONSTRAINT_SCHEMA), weight_string(kcu.CONSTRAINT_NAME), weight_string(kcu.TABLE_CATALOG), weight_string(kcu.TABLE_SCHEMA), weight_string(kcu.TABLE_NAME), weight_string(kcu.COLUMN_NAME), weight_string(kcu.ORDINAL_POSITION), weight_string(kcu.POSITION_IN_UNIQUE_CONSTRAINT), weight_string(kcu.REFERENCED_TABLE_SCHEMA), weight_string(kcu.REFERENCED_TABLE_NAME), weight_string(kcu.REFERENCED_COLUMN_NAME) from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select distinct kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, weight_string(kcu.CONSTRAINT_CATALOG), weight_string(kcu.CONSTRAINT_SCHEMA), weight_string(kcu.CONSTRAINT_NAME), weight_string(kcu.TABLE_CATALOG), weight_string(kcu.TABLE_SCHEMA), weight_string(kcu.TABLE_NAME), weight_string(kcu.COLUMN_NAME), weight_string(kcu.ORDINAL_POSITION), weight_string(kcu.POSITION_IN_UNIQUE_CONSTRAINT), weight_string(kcu.REFERENCED_TABLE_SCHEMA), weight_string(kcu.REFERENCED_TABLE_NAME), weight_string(kcu.REFERENCED_COLUMN_NAME) from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */ and CONSTRAINT_NAME = 'primary'",
+                "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\")]",
+                "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                "Table": "information_schema.key_column_usage"
+              }
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "unknown columns are OK as long as the whole query is unsharded",

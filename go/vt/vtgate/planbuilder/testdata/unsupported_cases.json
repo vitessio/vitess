@@ -377,7 +377,48 @@
   {
     "comment": "aggregation on union",
     "query": "select sum(col) from (select col from user union all select col from unsharded) t",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got col"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(col) from (select col from user union all select col from unsharded) t",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(col)",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col from unsharded where 1 != 1",
+                "Query": "select col from unsharded",
+                "Table": "unsharded"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "insert having subquery in row values",

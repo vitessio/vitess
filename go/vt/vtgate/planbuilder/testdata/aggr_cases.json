@@ -5838,6 +5838,52 @@
     }
   },
   {
+    "comment": "aggregation on union",
+    "query": "select sum(col) from (select col from user union all select col from unsharded) t",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(col) from (select col from user union all select col from unsharded) t",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(col)",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col from unsharded where 1 != 1",
+                "Query": "select col from unsharded",
+                "Table": "unsharded"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "aggregation on top of derived table with limit",
     "query": "select count(val2), sum(val2) from (select id, val2 from user where val2 is null limit 2) as x",
     "plan": {

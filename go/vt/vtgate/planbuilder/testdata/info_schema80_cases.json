@@ -1059,7 +1059,46 @@
   {
     "comment": "merge even one side have schema name in derived table",
     "query": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got dt.TABLE_NAME"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select TABLE_NAME, weight_string(TABLE_NAME) from information_schema.`tables` as t where 1 != 1",
+                "Query": "select distinct TABLE_NAME, weight_string(TABLE_NAME) from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "[VARCHAR(\"a\")]",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select TABLE_NAME, weight_string(TABLE_NAME) from information_schema.`columns` where 1 != 1",
+                "Query": "select distinct TABLE_NAME, weight_string(TABLE_NAME) from information_schema.`columns`",
+                "Table": "information_schema.`columns`"
+              }
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "merge even one side have schema name in subquery",
