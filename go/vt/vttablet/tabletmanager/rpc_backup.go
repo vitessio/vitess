@@ -161,6 +161,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		TabletAlias:        topoproto.TabletAliasString(tablet.Alias),
 		BackupTime:         time.Now(),
 		Stats:              backupstats.BackupStats(),
+		UpgradeSafe:        req.UpgradeSafe,
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)

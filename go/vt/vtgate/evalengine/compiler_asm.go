@@ -35,6 +35,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/mysql/icuregex"
+
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -3942,10 +3944,6 @@ func (asm *assembler) Fn_YEARWEEK() {
 	}, "FN YEARWEEK DATE(SP-1)")
 }
 
-func intervalStackOffset(l, i int) int {
-	return l - i + 1
-}
-
 func (asm *assembler) Interval_i(l int) {
 	asm.adjustStack(-l)
 	asm.emit(func(env *ExpressionEnv) int {
@@ -4284,4 +4282,443 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 		return 1
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
 
+}
+
+func (asm *assembler) Fn_REGEXP_LIKE(m *icuregex.Matcher, negate bool, c charset.Charset, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		m.Reset(charset.Expand(nil, input.bytes, c))
+
+		ok, err := m.Find()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+		if negate {
+			ok = !ok
+		}
+		env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalBool(ok)
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_LIKE VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_LIKE_slow(negate bool, c collations.Charset, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		var err error
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+
+		if offset > 1 {
+			fe := env.vm.stack[env.vm.sp-offset+1]
+			flags, err = regexpFlags(fe, flags, "regexp_like")
+			if err != nil {
+				env.vm.err = err
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(charset.Expand(nil, input.bytes, c))
+
+		ok, err := m.Find()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp--
+			return 1
+		}
+		if negate {
+			ok = !ok
+		}
+		env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalBool(ok)
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_LIKE_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_INSTR(m *icuregex.Matcher, c charset.Charset, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		runes := charset.Expand(nil, input.bytes, c)
+
+		if len(runes) == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= offset
+			return 1
+		}
+
+		pos := int64(1)
+		if offset > 1 {
+			pos, env.vm.err = positionInstr(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), int64(len(runes)))
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		returnOpt := int64(0)
+		if offset > 3 {
+			returnOpt, env.vm.err = returnOption(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), "regexp_instr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+		} else if returnOpt == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.Start()) + pos)
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.End()) + pos)
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_INSTR VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_INSTR_slow(c collations.Charset, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+
+		if offset > 4 {
+			fe := env.vm.stack[env.vm.sp-offset+4]
+			flags, env.vm.err = regexpFlags(fe, flags, "regexp_instr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		runes := charset.Expand(nil, input.bytes, c)
+		if len(runes) == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= offset
+			return 1
+		}
+
+		pos := int64(1)
+		if offset > 1 {
+			pos, env.vm.err = positionInstr(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), int64(len(runes)))
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		returnOpt := int64(0)
+		if offset > 3 {
+			returnOpt, env.vm.err = returnOption(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), "regexp_instr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+		} else if returnOpt == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.Start()) + pos)
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.End()) + pos)
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_INSTR_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_SUBSTR(m *icuregex.Matcher, merged collations.TypedCollation, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		c := merged.Collation.Get().Charset()
+		runes := charset.Expand(nil, input.bytes, c)
+
+		pos := int64(1)
+		if offset > 1 {
+			limit := int64(len(runes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), limit, "regexp_substr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = nil
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = nil
+		} else {
+			out := runes[int64(m.Start())+pos-1 : int64(m.End())+pos-1]
+			b := charset.Collapse(nil, out, c)
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalText(b, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_SUBSTR VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_SUBSTR_slow(merged collations.TypedCollation, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		c := merged.Collation.Get().Charset()
+		runes := charset.Expand(nil, input.bytes, c)
+
+		pos := int64(1)
+		if offset > 1 {
+			limit := int64(len(runes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), limit, "regexp_substr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = nil
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		if offset > 3 {
+			fe := env.vm.stack[env.vm.sp-offset+3]
+			flags, env.vm.err = regexpFlags(fe, flags, "regexp_substr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = nil
+		} else {
+			out := runes[int64(m.Start())+pos-1 : int64(m.End())+pos-1]
+			b := charset.Collapse(nil, out, c)
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalText(b, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_SUBSTR_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_REPLACE(m *icuregex.Matcher, merged collations.TypedCollation, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		repl := env.vm.stack[env.vm.sp-offset+1].(*evalBytes)
+
+		c := merged.Collation.Get().Charset()
+		inputRunes := charset.Expand(nil, input.bytes, c)
+		replRunes := charset.Expand(nil, repl.bytes, c)
+
+		pos := int64(1)
+		if offset > 2 {
+			limit := int64(len(inputRunes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), limit, "regexp_replace")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(0)
+		if offset > 3 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), occ)
+		}
+
+		m.Reset(inputRunes[pos-1:])
+
+		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, merged.Collation.Get().Charset())
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+		if !replaced {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(b, sqltypes.Text, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_REPLACE VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_REPLACE_slow(merged collations.TypedCollation, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		repl := env.vm.stack[env.vm.sp-offset+1].(*evalBytes)
+
+		c := merged.Collation.Get().Charset()
+		inputRunes := charset.Expand(nil, input.bytes, c)
+		replRunes := charset.Expand(nil, repl.bytes, c)
+
+		pos := int64(1)
+		if offset > 2 {
+			limit := int64(len(inputRunes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), limit, "regexp_replace")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(0)
+		if offset > 3 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), 0)
+		}
+
+		if offset > 4 {
+			fe := env.vm.stack[env.vm.sp-offset+4]
+			flags, env.vm.err = regexpFlags(fe, flags, "regexp_replace")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(inputRunes[pos-1:])
+
+		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, merged.Collation.Get().Charset())
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+		if !replaced {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(b, sqltypes.Text, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_REPLACE_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
 }

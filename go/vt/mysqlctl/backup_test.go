@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -419,6 +420,134 @@ func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
 	require.NotNil(t, scopedStats)
 }
 
+// TestRestoreManifestMySQLVersionValidation tests that Restore tries to validate
+// the MySQL version and safe upgrade attribute.
+func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
+	testCases := []struct {
+		fromVersion, toVersion string
+		upgradeSafe            bool
+		wantErr                bool
+	}{
+		{
+			fromVersion: "mysqld  Ver 5.6.42",
+			toVersion:   "mysqld  Ver 5.7.40",
+			upgradeSafe: false,
+			wantErr:     true,
+		},
+		{
+			fromVersion: "mysqld  Ver 5.6.42",
+			toVersion:   "mysqld  Ver 5.7.40",
+			upgradeSafe: true,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "mysqld  Ver 5.7.42",
+			toVersion:   "mysqld  Ver 8.0.32",
+			upgradeSafe: true,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "mysqld  Ver 5.7.42",
+			toVersion:   "mysqld  Ver 8.0.32",
+			upgradeSafe: false,
+			wantErr:     true,
+		},
+		{
+			fromVersion: "mysqld  Ver 5.7.42",
+			toVersion:   "mysqld  Ver 8.0.32",
+			upgradeSafe: true,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.32",
+			upgradeSafe: false,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.32",
+			upgradeSafe: true,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.31",
+			upgradeSafe: false,
+			wantErr:     true,
+		},
+		{
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.31",
+			upgradeSafe: true,
+			wantErr:     true,
+		},
+		{
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.33",
+			upgradeSafe: false,
+			wantErr:     true,
+		},
+		{
+			fromVersion: "mysqld  Ver 8.0.32",
+			toVersion:   "mysqld  Ver 8.0.33",
+			upgradeSafe: true,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "",
+			toVersion:   "mysqld  Ver 8.0.33",
+			upgradeSafe: false,
+			wantErr:     false,
+		},
+		{
+			fromVersion: "",
+			toVersion:   "mysqld  Ver 8.0.33",
+			upgradeSafe: true,
+			wantErr:     false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s->%s upgradeSafe=%t", tc.fromVersion, tc.toVersion, tc.upgradeSafe), func(t *testing.T) {
+			env, closer := createFakeBackupRestoreEnv(t)
+			defer closer()
+			env.mysqld.Version = tc.toVersion
+
+			manifest := BackupManifest{
+				BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+				BackupMethod: "fake",
+				Keyspace:     "test",
+				Shard:        "-",
+				MySQLVersion: tc.fromVersion,
+				UpgradeSafe:  tc.upgradeSafe,
+			}
+
+			manifestBytes, err := json.Marshal(manifest)
+			require.Nil(t, err)
+
+			env.backupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
+			env.backupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
+				BackupHandles: []backupstorage.BackupHandle{
+					&FakeBackupHandle{
+						ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+							return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+						},
+					},
+				},
+			}
+
+			_, err = Restore(env.ctx, env.restoreParams)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+
+}
+
 type forTest []FileEntry
 
 func (f forTest) Len() int           { return len(f) }
@@ -490,6 +619,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 		BackupMethod: "fake",
 		Keyspace:     "test",
 		Shard:        "-",
+		MySQLVersion: "8.0.32",
 	}
 
 	manifestBytes, err := json.Marshal(manifest)

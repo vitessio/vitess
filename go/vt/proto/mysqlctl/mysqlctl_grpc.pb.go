@@ -28,6 +28,7 @@ type MysqlCtlClient interface {
 	ApplyBinlogFile(ctx context.Context, in *ApplyBinlogFileRequest, opts ...grpc.CallOption) (*ApplyBinlogFileResponse, error)
 	ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error)
 	RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error)
+	VersionString(ctx context.Context, in *VersionStringRequest, opts ...grpc.CallOption) (*VersionStringResponse, error)
 }
 
 type mysqlCtlClient struct {
@@ -92,6 +93,15 @@ func (c *mysqlCtlClient) RefreshConfig(ctx context.Context, in *RefreshConfigReq
 	return out, nil
 }
 
+func (c *mysqlCtlClient) VersionString(ctx context.Context, in *VersionStringRequest, opts ...grpc.CallOption) (*VersionStringResponse, error) {
+	out := new(VersionStringResponse)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/VersionString", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MysqlCtlServer is the server API for MysqlCtl service.
 // All implementations must embed UnimplementedMysqlCtlServer
 // for forward compatibility
@@ -102,6 +112,7 @@ type MysqlCtlServer interface {
 	ApplyBinlogFile(context.Context, *ApplyBinlogFileRequest) (*ApplyBinlogFileResponse, error)
 	ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error)
 	RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error)
+	VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error)
 	mustEmbedUnimplementedMysqlCtlServer()
 }
 
@@ -126,6 +137,9 @@ func (UnimplementedMysqlCtlServer) ReinitConfig(context.Context, *ReinitConfigRe
 }
 func (UnimplementedMysqlCtlServer) RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshConfig not implemented")
+}
+func (UnimplementedMysqlCtlServer) VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VersionString not implemented")
 }
 func (UnimplementedMysqlCtlServer) mustEmbedUnimplementedMysqlCtlServer() {}
 
@@ -248,6 +262,24 @@ func _MysqlCtl_RefreshConfig_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MysqlCtl_VersionString_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VersionStringRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).VersionString(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/VersionString",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).VersionString(ctx, req.(*VersionStringRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MysqlCtl_ServiceDesc is the grpc.ServiceDesc for MysqlCtl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -278,6 +310,10 @@ var MysqlCtl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshConfig",
 			Handler:    _MysqlCtl_RefreshConfig_Handler,
+		},
+		{
+			MethodName: "VersionString",
+			Handler:    _MysqlCtl_VersionString_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
