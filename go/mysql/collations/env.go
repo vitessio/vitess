@@ -194,10 +194,11 @@ func makeEnv(version collver) *Environment {
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	CollationUtf8ID       = 33
-	CollationUtf8mb4ID    = 255
-	CollationBinaryID     = 63
-	CollationUtf8mb4BinID = 46
+	CollationUtf8ID        = 33
+	CollationUtf8mb4ID     = 255
+	CollationBinaryID      = 63
+	CollationUtf8mb4BinID  = 46
+	CollationLatin1Swedish = 8
 )
 
 // Binary is the default Binary collation

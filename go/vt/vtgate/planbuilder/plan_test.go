@@ -321,7 +321,9 @@ func TestViews(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	oprewriters.DebugOperatorTree = true
+	reset := oprewriters.EnableDebugPrinting()
+	defer reset()
+
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "vschemas/schema.json", true),
 	}

@@ -463,6 +463,10 @@ const (
 	LatitudeFromHashStr  = "st_latfromgeohash"
 	LongitudeFromHashStr = "st_longfromgeohash"
 	PointFromHashStr     = "st_pointfromgeohash"
+
+	// KillType strings
+	ConnectionStr = "connection"
+	QueryStr      = "query"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -1014,4 +1018,11 @@ const (
 	IntervalDateExprBinaryAdd
 	IntervalDateExprBinaryAddLeft
 	IntervalDateExprBinarySub
+	IntervalDateExprTimestampadd
+)
+
+// Constant for Enum Type - KillType
+const (
+	ConnectionType KillType = iota
+	QueryType
 )

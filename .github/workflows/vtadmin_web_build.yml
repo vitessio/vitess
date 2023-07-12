@@ -42,7 +42,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
-          node-version: '16.19.0'
+          node-version: '18.16.0'
 
       - name: Install dependencies
         if: steps.skip-workflow.outputs.skip-workflow == 'false'

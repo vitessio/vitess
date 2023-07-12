@@ -122,6 +122,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Argument:
 		b, ok := inB.(*Argument)
 		if !ok {
@@ -812,6 +818,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfKeyState(a, b)
+	case *Kill:
+		b, ok := inB.(*Kill)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfKill(a, b)
 	case *LagLeadExpr:
 		b, ok := inB.(*LagLeadExpr)
 		if !ok {
@@ -1430,12 +1442,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfTablespaceOperation(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -1822,6 +1834,17 @@ func (cmp *Comparator) RefOfAndExpr(a, b *AndExpr) bool {
 	}
 	return cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right)
+}
+
+// RefOfAnyValue does deep equals between the two objects.
+func (cmp *Comparator) RefOfAnyValue(a, b *AnyValue) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Arg, b.Arg)
 }
 
 // RefOfArgument does deep equals between the two objects.
@@ -3276,6 +3299,18 @@ func (cmp *Comparator) RefOfKeyState(a, b *KeyState) bool {
 	return a.Enable == b.Enable
 }
 
+// RefOfKill does deep equals between the two objects.
+func (cmp *Comparator) RefOfKill(a, b *Kill) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ProcesslistID == b.ProcesslistID &&
+		a.Type == b.Type
+}
+
 // RefOfLagLeadExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfLagLeadExpr(a, b *LagLeadExpr) bool {
 	if a == b {
@@ -4522,18 +4557,17 @@ func (cmp *Comparator) RefOfTablespaceOperation(a, b *TablespaceOperation) bool 
 	return a.Import == b.Import
 }
 
-// RefOfTimestampFuncExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfTimestampFuncExpr(a, b *TimestampFuncExpr) bool {
+// RefOfTimestampDiffExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfTimestampDiffExpr(a, b *TimestampDiffExpr) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr1, b.Expr1) &&
-		cmp.Expr(a.Expr2, b.Expr2)
+	return cmp.Expr(a.Expr1, b.Expr1) &&
+		cmp.Expr(a.Expr2, b.Expr2) &&
+		a.Unit == b.Unit
 }
 
 // RefOfTrimFuncExpr does deep equals between the two objects.
@@ -4917,6 +4951,12 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Avg:
 		b, ok := inB.(*Avg)
 		if !ok {
@@ -5181,6 +5221,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -5613,12 +5659,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfSum(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -5847,6 +5893,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
+	case *AnyValue:
+		b, ok := inB.(*AnyValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnyValue(a, b)
 	case *Argument:
 		b, ok := inB.(*Argument)
 		if !ok {
@@ -6459,12 +6511,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfSum(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -6831,6 +6883,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfInsert(a, b)
+	case *Kill:
+		b, ok := inB.(*Kill)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfKill(a, b)
 	case *Load:
 		b, ok := inB.(*Load)
 		if !ok {

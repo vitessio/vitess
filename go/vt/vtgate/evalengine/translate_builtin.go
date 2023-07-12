@@ -765,6 +765,167 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			collate:  ast.cfg.Collation,
 		}, nil
 
+	case *sqlparser.RegexpLikeExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpLike{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_LIKE"},
+			Negate:   false,
+		}, nil
+
+	case *sqlparser.RegexpInstrExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.Position != nil {
+			position, err := ast.translateExpr(call.Position)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, position)
+		}
+
+		if call.Occurrence != nil {
+			occurrence, err := ast.translateExpr(call.Occurrence)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, occurrence)
+		}
+
+		if call.ReturnOption != nil {
+			returnOption, err := ast.translateExpr(call.ReturnOption)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, returnOption)
+		}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpInstr{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_INSTR"},
+		}, nil
+
+	case *sqlparser.RegexpSubstrExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.Position != nil {
+			position, err := ast.translateExpr(call.Position)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, position)
+		}
+
+		if call.Occurrence != nil {
+			occurrence, err := ast.translateExpr(call.Occurrence)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, occurrence)
+		}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpSubstr{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_SUBSTR"},
+		}, nil
+
+	case *sqlparser.RegexpReplaceExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		repl, err := ast.translateExpr(call.Repl)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern, repl}
+
+		if call.Position != nil {
+			position, err := ast.translateExpr(call.Position)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, position)
+		}
+
+		if call.Occurrence != nil {
+			occurrence, err := ast.translateExpr(call.Occurrence)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, occurrence)
+		}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpReplace{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_REPLACE"},
+		}, nil
 	default:
 		return nil, translateExprNotSupported(call)
 	}

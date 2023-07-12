@@ -685,6 +685,106 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 	}
 }
 
+// NewTableName makes a new TableName
+func NewTableName(name string) TableName {
+	return TableName{
+		Name: NewIdentifierCS(name),
+	}
+}
+
+// NewTableNameWithQualifier makes a new TableName with a qualifier
+func NewTableNameWithQualifier(name, qualifier string) TableName {
+	return TableName{
+		Name:      NewIdentifierCS(name),
+		Qualifier: NewIdentifierCS(qualifier),
+	}
+}
+
+// NewAliasedTableExpr makes a new AliasedTableExpr with an alias
+func NewAliasedTableExpr(simpleTableExpr SimpleTableExpr, alias string) *AliasedTableExpr {
+	return &AliasedTableExpr{
+		Expr: simpleTableExpr,
+		As:   NewIdentifierCS(alias),
+	}
+}
+
+// NewJoinTableExpr makes a new JoinTableExpr
+func NewJoinTableExpr(leftExpr TableExpr, join JoinType, rightExpr TableExpr, condition *JoinCondition) *JoinTableExpr {
+	return &JoinTableExpr{
+		LeftExpr:  leftExpr,
+		Join:      join,
+		RightExpr: rightExpr,
+		Condition: condition,
+	}
+}
+
+// NewJoinCondition makes a new JoinCondition
+func NewJoinCondition(on Expr, using Columns) *JoinCondition {
+	return &JoinCondition{
+		On:    on,
+		Using: using,
+	}
+}
+
+// NewAliasedExpr makes a new AliasedExpr
+func NewAliasedExpr(expr Expr, alias string) *AliasedExpr {
+	return &AliasedExpr{
+		Expr: expr,
+		As:   NewIdentifierCI(alias),
+	}
+}
+
+// NewOrder makes a new Order
+func NewOrder(expr Expr, direction OrderDirection) *Order {
+	return &Order{
+		Expr:      expr,
+		Direction: direction,
+	}
+}
+
+// NewComparisonExpr makes a new ComparisonExpr
+func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr) *ComparisonExpr {
+	return &ComparisonExpr{
+		Operator: operator,
+		Left:     left,
+		Right:    right,
+		Escape:   escape,
+	}
+}
+
+// NewLimit makes a new Limit
+func NewLimit(offset, rowCount int) *Limit {
+	return &Limit{
+		Offset: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(offset),
+		},
+		Rowcount: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(rowCount),
+		},
+	}
+}
+
+// NewLimitWithoutOffset makes a new Limit without an offset
+func NewLimitWithoutOffset(rowCount int) *Limit {
+	return &Limit{
+		Offset: nil,
+		Rowcount: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(rowCount),
+		},
+	}
+}
+
+// NewDerivedTable makes a new DerivedTable
+func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+	return &DerivedTable{
+		Lateral: lateral,
+		Select:  selectStatement,
+	}
+}
+
 // NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where, windows NamedWindows) *Select {
 	var cache *bool
@@ -950,6 +1050,10 @@ func compliantName(in string) string {
 		buf.WriteRune(c)
 	}
 	return buf.String()
+}
+
+func (node *Select) AddSelectExprs(selectExprs SelectExprs) {
+	node.SelectExprs = append(node.SelectExprs, selectExprs...)
 }
 
 // AddOrder adds an order by element
@@ -2147,6 +2251,11 @@ func convertStringToInt(integer string) int {
 	return val
 }
 
+func convertStringToUInt64(integer string) uint64 {
+	val, _ := strconv.ParseUint(integer, 10, 64)
+	return val
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -2362,7 +2471,7 @@ func getAliasedTableExprFromTableName(tblName TableName) *AliasedTableExpr {
 
 func (node *IntervalDateExpr) IsSubtraction() bool {
 	switch node.Syntax {
-	case IntervalDateExprDateAdd, IntervalDateExprAdddate, IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft:
+	case IntervalDateExprDateAdd, IntervalDateExprAdddate, IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft, IntervalDateExprTimestampadd:
 		return false
 	case IntervalDateExprDateSub, IntervalDateExprSubdate, IntervalDateExprBinarySub:
 		return true
@@ -2391,11 +2500,31 @@ func (node *IntervalDateExpr) FnName() string {
 		return "adddate"
 	case IntervalDateExprSubdate:
 		return "subdate"
+	case IntervalDateExprTimestampadd:
+		return "timestampadd"
 	case IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft:
 		return "<arithmetic interval addition>"
 	case IntervalDateExprBinarySub:
 		return "<arithmetic interval subtraction>"
 	default:
 		return "<unknown>"
+	}
+}
+
+func IsDistinct(f AggrFunc) bool {
+	da, ok := f.(DistinctableAggr)
+	if !ok {
+		return false
+	}
+	return da.IsDistinct()
+}
+
+// ToString returns the type as a string
+func (ty KillType) ToString() string {
+	switch ty {
+	case QueryType:
+		return QueryStr
+	default:
+		return ConnectionStr
 	}
 }

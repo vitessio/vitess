@@ -17,9 +17,8 @@ limitations under the License.
 package services
 
 import (
-	"strings"
-
 	"context"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -111,14 +110,14 @@ func trimmedRequestToError(received string) error {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *errorClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if err := requestToPartialError(sql, session); err != nil {
 		return session, nil, err
 	}
 	if err := requestToError(sql); err != nil {
 		return session, nil, err
 	}
-	return c.fallbackClient.Execute(ctx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
 }
 
 func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
@@ -133,11 +132,11 @@ func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Sessio
 	return c.fallbackClient.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c *errorClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *errorClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if err := requestToError(sql); err != nil {
 		return session, err
 	}
-	return c.fallbackClient.StreamExecute(ctx, session, sql, bindVariables, callback)
+	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
 }
 
 func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {

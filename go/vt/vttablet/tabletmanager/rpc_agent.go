@@ -63,6 +63,8 @@ type RPCTM interface {
 
 	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
+	ResetSequences(ctx context.Context, tables []string) error
+
 	LockTables(ctx context.Context) error
 
 	UnlockTables(ctx context.Context) error

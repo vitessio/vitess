@@ -319,6 +319,20 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *AnyValue) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Argument) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2532,6 +2546,16 @@ func (cached *KeyState) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Kill) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	return size
+}
 func (cached *LagLeadExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4115,16 +4139,14 @@ func (cached *TablespaceOperation) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *TimestampFuncExpr) CachedSize(alloc bool) int64 {
+func (cached *TimestampDiffExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
-	// field Name string
-	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field Expr1 vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr1.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -4133,8 +4155,6 @@ func (cached *TimestampFuncExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr2.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Unit string
-	size += hack.RuntimeAllocSize(int64(len(cached.Unit)))
 	return size
 }
 func (cached *TrimFuncExpr) CachedSize(alloc bool) int64 {

@@ -62,11 +62,6 @@ type orderedAggregate struct {
 	resultsBuilder
 	extraDistinct *sqlparser.ColName
 
-	// preProcess is true if one of the aggregates needs preprocessing.
-	preProcess bool
-
-	aggrOnEngine bool
-
 	// aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	aggregates []*engine.AggregateParams
@@ -182,7 +177,7 @@ func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *ro
 			if node.Type != sqlparser.IntVal {
 				continue
 			}
-			num, err := strconv.ParseInt(string(node.Val), 0, 64)
+			num, err := strconv.ParseInt(node.Val, 0, 64)
 			if err != nil {
 				continue
 			}
@@ -228,8 +223,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	input := oa.input.Primitive()
 	if len(oa.groupByKeys) == 0 {
 		return &engine.ScalarAggregate{
-			PreProcess:          oa.preProcess,
-			AggrOnEngine:        oa.aggrOnEngine,
 			Aggregates:          oa.aggregates,
 			TruncateColumnCount: oa.truncateColumnCount,
 			Input:               input,
@@ -237,8 +230,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	}
 
 	return &engine.OrderedAggregate{
-		PreProcess:          oa.preProcess,
-		AggrOnEngine:        oa.aggrOnEngine,
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
@@ -275,30 +266,24 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.preProcess = true
 		switch opcode {
 		case popcode.AggregateCount:
 			opcode = popcode.AggregateCountDistinct
 		case popcode.AggregateSum:
 			opcode = popcode.AggregateSumDistinct
 		}
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     opcode,
-			Col:        innerCol,
-			Alias:      expr.ColumnName(),
-			OrigOpcode: origOpcode,
-		})
+		aggr := engine.NewAggregateParam(opcode, innerCol, expr.ColumnName())
+		aggr.OrigOpcode = origOpcode
+		oa.aggregates = append(oa.aggregates, aggr)
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
 		pb.plan = newBuilder
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     opcode,
-			Col:        innerCol,
-			OrigOpcode: origOpcode,
-		})
+		aggr := engine.NewAggregateParam(opcode, innerCol, "")
+		aggr.OrigOpcode = origOpcode
+		oa.aggregates = append(oa.aggregates, aggr)
 	}
 
 	// Build a new rc with oa as origin because it's semantically different
@@ -319,7 +304,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 		return false, nil, vterrors.VT03012(sqlparser.String(expr))
 	}
 
-	if !aggr.IsDistinct() {
+	if !sqlparser.IsDistinct(aggr) {
 		return false, nil, nil
 	}
 	if opcode != popcode.AggregateCount && opcode != popcode.AggregateSum && opcode != popcode.AggregateCountStar {

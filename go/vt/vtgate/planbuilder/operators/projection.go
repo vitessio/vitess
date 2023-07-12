@@ -119,10 +119,29 @@ func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
+func (p *Projection) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	if p.isDerived() {
+		derivedTBL, err := ctx.SemTable.TableInfoFor(*p.TableID)
+		if err != nil {
+			return 0, err
+		}
+		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
+	}
+	if offset, found := canReuseColumn(ctx, p.Columns, expr, extractExpr); found {
+		return offset, nil
+	}
+	return -1, nil
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, extractExpr); found {
+	offset, err := p.findCol(ctx, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset >= 0 {
 		return p, offset, nil
 	}
+
 	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
@@ -171,6 +190,10 @@ func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 		return nil, nil
 	}
 	return p.Columns, nil
+}
+
+func (p *Projection) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(p)
 }
 
 func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
@@ -268,12 +291,6 @@ func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, *rewrite.ApplyRe
 	return rb, rewrite.SameTree, nil
 }
 
-func stopAtAggregations(node, _ sqlparser.SQLNode) bool {
-	_, aggr := node.(sqlparser.AggrFunc)
-	b := !aggr
-	return b
-}
-
 func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
 	offset := slices.IndexFunc(p.Columns, func(expr *sqlparser.AliasedExpr) bool {
 		return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
@@ -326,62 +343,9 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
-	in := op.Inputs()[0]
-	columns, err := in.GetColumns()
-	if err != nil {
-		return nil, err
+func (p *Projection) introducesTableID() semantics.TableSet {
+	if p.TableID == nil {
+		return semantics.EmptyTableSet()
 	}
-
-	var exprOffset *sqlparser.Offset
-	down := func(node, parent sqlparser.SQLNode) bool {
-		if err != nil {
-			return false
-		}
-		e, ok := node.(sqlparser.Expr)
-		if !ok {
-			return true
-		}
-		offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
-			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
-		})
-		if offset >= 0 {
-			// this expression can be fetched from the input - we can stop here
-			exprOffset = sqlparser.NewOffset(offset, e)
-			return false
-		}
-
-		if fetchByOffset(e) {
-			// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
-			_, addToGroupBy := e.(*sqlparser.ColName)
-			in, offset, err = in.AddColumn(ctx, aeWrap(e), true, addToGroupBy)
-			if err != nil {
-				return false
-			}
-			op.SetInputs([]ops.Operator{in})
-			columns, err = in.GetColumns()
-			if err != nil {
-				return false
-			}
-			exprOffset = sqlparser.NewOffset(offset, e)
-			return false
-		}
-
-		return true
-	}
-
-	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
-	up := func(cursor *sqlparser.CopyOnWriteCursor) {
-		if exprOffset != nil {
-			cursor.Replace(exprOffset)
-			exprOffset = nil
-		}
-	}
-
-	rewritten := sqlparser.CopyOnRewrite(expr, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
-	if err != nil {
-		return nil, err
-	}
-
-	return rewritten.(sqlparser.Expr), nil
+	return *p.TableID
 }

@@ -221,6 +221,13 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 }
 
+// TestVreplicationCopyThrottling tests the logic that is used
+// by vstreamer when starting a copy phase cycle.
+// This logic today supports waiting for MySQL replication lag
+// and/or InnoDB MVCC history to be below a certain threshold
+// before starting the next copy phase. This test focuses on
+// the innodb history list length check.
+// NOTE: this is a manual test. It is not executed in the CI.
 func TestVreplicationCopyThrottling(t *testing.T) {
 	workflow := "copy-throttling"
 	cell := "zone1"

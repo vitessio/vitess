@@ -62,6 +62,10 @@ type FakeTabletManagerClient struct {
 	tmc tmclient.TabletManagerClient
 }
 
+func (client *FakeTabletManagerClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	return nil
+}
+
 func (client *FakeTabletManagerClient) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	return nil, nil
 }

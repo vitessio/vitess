@@ -72,9 +72,8 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyDb, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

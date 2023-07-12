@@ -118,6 +118,9 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
+	// StopReplicationError error is used by StopReplication
+	StopReplicationError error
+
 	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
 	// in it, then the function returns nil, else the function returns an error
 	WaitPrimaryPositions []mysql.Position
@@ -417,6 +420,9 @@ func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos 
 
 // StopReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
+	if fmd.StopReplicationError != nil {
+		return fmd.StopReplicationError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 	})
@@ -458,11 +464,12 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if stopReplicationBefore {
 		cmds = append(cmds, "STOP SLAVE")
 	}
-	cmds = append(cmds, "RESET SLAVE ALL")
 	cmds = append(cmds, "FAKE SET MASTER")
 	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")
 	}
+	fmd.CurrentSourceHost = host
+	fmd.CurrentSourcePort = port
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
 

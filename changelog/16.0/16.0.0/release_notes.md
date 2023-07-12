@@ -5,6 +5,7 @@
 
 - **[Known Issues](#known-issues)**
   - [MySQL & Xtrabackup known issue](#mysql-xtrabackup-ddl)
+  - [VTTablet Restore Metrics](#vttablet-restore-metrics)
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
@@ -99,6 +100,11 @@ or
 > SET @@ddl_strategy='vitess';
 > ALTER TABLE your_table ENGINE=InnoDB;
 ```
+
+#### <a id="vttablet-restore-metrics">VTTablet Restore Metrics
+
+As part of the VTTablet Sidecar Schema Maintenance Refactor in v16.0.0, we dropped the `local_metadata` table from the sidecar database schema. This table was storing a couple of metrics related to restores from backup, which have now been lost.
+They have been re-introduced in v17.0.0 as metrics that can be accessed from `/debug/vars`.
 
 ## <a id="major-changes"/>Major Changes
 
