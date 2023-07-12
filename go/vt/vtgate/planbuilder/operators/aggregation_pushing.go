@@ -115,42 +115,15 @@ func pushDownAggregationThroughRoute(
 
 // pushDownAggregations splits aggregations between the original aggregator and the one we are pushing down
 func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) error {
-	var distinctExpr sqlparser.Expr
-	var differentExpr *sqlparser.AliasedExpr
+	canPushDownDistinctAggr, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
+	if err != nil {
+		return err
+	}
 
-	distinctAggrPushedDown := true
 	distinctAggrGroupByAdded := false
 
-outer:
 	for i, aggr := range aggregator.Aggregations {
-		if !aggr.Distinct {
-			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
-			aggregateTheAggregate(aggregator, i)
-			continue
-		}
-		funcExpr := aggr.Func.GetArg()
-		switch aggr.OpCode {
-		case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
-			if !exprHasUniqueVindex(ctx, funcExpr) {
-				distinctAggrPushedDown = false
-			}
-			if distinctExpr == nil {
-				distinctExpr = funcExpr
-				break
-			}
-			if !ctx.SemTable.EqualsExpr(distinctExpr, funcExpr) {
-				differentExpr = aggr.Original
-			}
-			if differentExpr != nil && !distinctAggrPushedDown {
-				return vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(differentExpr)))
-			}
-		default:
-			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
-			aggregateTheAggregate(aggregator, i)
-			continue outer
-		}
-
-		if distinctAggrPushedDown {
+		if !aggr.Distinct || canPushDownDistinctAggr {
 			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
 			aggregateTheAggregate(aggregator, i)
 			continue
@@ -158,21 +131,21 @@ outer:
 
 		// We handle a distinct aggregation by turning it into a group by and
 		// doing the aggregating on the vtgate level instead
-		aeDistinctExpr := aeWrap(funcExpr)
+		aeDistinctExpr := aeWrap(distinctExpr)
 		aggrBelowRoute.Columns[aggr.ColOffset] = aeDistinctExpr
 
 		// We handle a distinct aggregation by turning it into a group by and
 		// doing the aggregating on the vtgate level instead
 		// Adding to group by can be done only once even though there are multiple distinct aggregation with same expression.
 		if !distinctAggrGroupByAdded {
-			groupBy := NewGroupBy(funcExpr, funcExpr, aeDistinctExpr)
+			groupBy := NewGroupBy(distinctExpr, distinctExpr, aeDistinctExpr)
 			groupBy.ColOffset = aggr.ColOffset
 			aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
 			distinctAggrGroupByAdded = true
 		}
 	}
 
-	if !distinctAggrPushedDown {
+	if !canPushDownDistinctAggr {
 		aggregator.DistinctExpr = distinctExpr
 	}
 
@@ -186,12 +159,6 @@ func checkIfWeCanPushDown(ctx *plancontext.PlanningContext, aggregator *Aggregat
 
 	for _, aggr := range aggregator.Aggregations {
 		if !aggr.Distinct {
-			continue
-		}
-
-		// MIN and MAX function can also have distinct expression in the function argument.
-		// So, they need to be skipped.
-		if aggr.OpCode != opcode.AggregateCountDistinct && aggr.OpCode != opcode.AggregateSumDistinct {
 			continue
 		}
 
@@ -479,13 +446,14 @@ func splitAggrColumnsToLeftAndRight(
 		outerJoin: join.LeftJoin,
 	}
 
-	canPushDown, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
+	canPushDownDistinctAggr, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	//
-	if !canPushDown {
+	// Distinct aggregation cannot be pushed down in the join.
+	// We keep node of the distinct aggregation expression to be used later for ordering.
+	if !canPushDownDistinctAggr {
 		aggregator.DistinctExpr = distinctExpr
 		return nil, nil, errAbortAggrPushing
 	}
@@ -588,6 +556,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// this is only used for SHOW GTID queries that will never contain joins
 		return vterrors.VT13001("cannot do join with vgtid")
 	case opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+		// we are not going to see values multiple times, so we don't need to multiply with the count(*) from the other side
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	default:
 		return errHorizonNotPlanned()

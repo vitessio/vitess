@@ -878,9 +878,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, min(distinct col2), weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
+            "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col1, min(distinct col2), weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
+            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
             "ResultColumns": 2,
             "Table": "`user`"
           }
@@ -904,9 +904,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, min(distinct col2), weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), weight_string(col2)",
+            "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col1, min(distinct col2), weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), weight_string(col2) order by col1 asc",
+            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), weight_string(col2) order by col1 asc",
             "Table": "`user`"
           }
         ]
@@ -3537,9 +3537,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, min(distinct id), col3, weight_string(col1), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(col3)",
+            "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(col3)",
             "OrderBy": "(0|3) ASC, (2|4) ASC",
-            "Query": "select col1, min(distinct id), col3, weight_string(col1), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(col3) order by col1 asc, col3 asc",
+            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(col3) order by col1 asc, col3 asc",
             "ResultColumns": 3,
             "Table": "`user`"
           }
@@ -3563,9 +3563,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, min(distinct id), col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3)",
+            "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3)",
             "OrderBy": "(0|3) ASC, (2|5) ASC",
-            "Query": "select col1, min(distinct id), col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3) order by col1 asc, col3 asc",
+            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3) order by col1 asc, col3 asc",
             "Table": "`user`"
           }
         ]
@@ -7094,6 +7094,39 @@
       },
       "TablesUsed": [
         "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "count and sum distinct with min distinct on different expressions",
+    "query": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz) from user group by foo",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct baz)",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz) from user group by foo",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "min(1|5) AS min(distinct bar), count_distinct(2|6) AS count(distinct baz), sum_distinct(3|6) AS sum(distinct baz)",
+        "GroupBy": "(0|4)",
+        "ResultColumns": 4,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, weight_string(foo), weight_string(bar), weight_string(baz) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz)",
+            "OrderBy": "(0|4) ASC, (2|6) ASC",
+            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, weight_string(foo), weight_string(bar), weight_string(baz) from `user` group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz) order by foo asc, baz asc",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
         "user.user"
       ]
     }
