@@ -24,16 +24,46 @@ import (
 )
 
 func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
-	{
-		incrementalFromPos := "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
-		gtidSet, err := getIncrementalFromPosGTIDSet(incrementalFromPos)
-		assert.NoError(t, err)
-		assert.Equal(t, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", gtidSet.String())
+	tcases := []struct {
+		incrementalFromPos string
+		gtidSet            string
+		expctError         bool
+	}{
+		{
+			"MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
+			"16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
+			false,
+		},
+		{
+			"16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
+			"16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
+			false,
+		},
+		{
+			"MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3",
+			"",
+			true,
+		},
+		{
+			"MySQL56/invalid",
+			"",
+			true,
+		},
+		{
+			"16b1039f-22b6-11ed-b765-0a43f95f28a3",
+			"",
+			true,
+		},
 	}
-	{
-		incrementalFromPos := "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
-		gtidSet, err := getIncrementalFromPosGTIDSet(incrementalFromPos)
-		assert.NoError(t, err)
-		assert.Equal(t, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", gtidSet.String())
+	for _, tcase := range tcases {
+		t.Run(tcase.incrementalFromPos, func(t *testing.T) {
+			gtidSet, err := getIncrementalFromPosGTIDSet(tcase.incrementalFromPos)
+			if tcase.expctError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tcase.gtidSet, gtidSet.String())
+			}
+		})
 	}
 }
