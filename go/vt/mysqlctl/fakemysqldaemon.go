@@ -170,6 +170,9 @@ type FakeMysqlDaemon struct {
 	// TimeoutHook is a func that can be called at the beginning of any method to fake a timeout.
 	// all a test needs to do is make it { return context.DeadlineExceeded }
 	TimeoutHook func() error
+
+	// Version is the version that will be returned by GetVersionString.
+	Version string
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -180,6 +183,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		db:              db,
 		Running:         true,
 		IOThreadRunning: true,
+		Version:         "8.0.32",
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0, 0)
@@ -686,11 +690,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 }
 
 // GetVersionString is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
+	return fmd.Version, nil
 }
 
 // GetVersionComment is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
+	return "", nil
 }
