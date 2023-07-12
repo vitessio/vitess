@@ -39,7 +39,7 @@ type (
 )
 
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
-	columns, err := d.GetColumns()
+	columns, err := d.GetColumns(ctx)
 	if err != nil {
 		return err
 	}
@@ -110,12 +110,12 @@ func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.A
 	return d, offset, nil
 }
 
-func (d *Distinct) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return d.Source.GetColumns()
+func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return d.Source.GetColumns(ctx)
 }
 
-func (d *Distinct) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return d.Source.GetSelectExprs()
+func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return d.Source.GetSelectExprs(ctx)
 }
 
 func (d *Distinct) ShortDescription() string {

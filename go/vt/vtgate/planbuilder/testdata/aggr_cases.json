@@ -370,9 +370,10 @@
       "QueryType": "SELECT",
       "Original": "select distinct col from user",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -381,9 +382,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col from `user` where 1 != 1 group by col",
-            "OrderBy": "0 ASC",
-            "Query": "select col from `user` group by col order by col asc",
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
             "Table": "`user`"
           }
         ]
@@ -497,8 +497,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2)",
             "Table": "`user`"
           }
         ]
@@ -528,8 +527,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
+            "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2)",
             "Table": "`user`"
           }
         ]
@@ -560,8 +558,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2)",
             "Table": "`user`"
           }
         ]
@@ -592,8 +589,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2)",
             "Table": "`user`"
           }
         ]
@@ -624,8 +620,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), weight_string(col2) order by col1 asc",
+            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), weight_string(col2)",
             "Table": "`user`"
           }
         ]
@@ -661,8 +656,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-                "OrderBy": "(0|2) ASC, (1|3) ASC",
-                "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
+                "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2)",
                 "Table": "`user`"
               }
             ]
@@ -700,8 +694,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b, weight_string(a), weight_string(b)",
-            "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b) order by a asc, b asc",
+            "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b)",
             "Table": "`user`"
           }
         ]
@@ -732,8 +725,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
-            "OrderBy": "(1|3) ASC, (0|4) ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
+            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a)",
             "Table": "`user`"
           }
         ]
@@ -764,8 +756,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
-            "OrderBy": "(1|3) ASC, (0|4) ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
+            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a)",
             "Table": "`user`"
           }
         ]
@@ -1161,8 +1152,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a)",
             "Table": "`user`"
           }
         ]
@@ -1193,8 +1183,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id, 1.1 from `user` where 1 != 1 group by 1.1",
-            "OrderBy": "1 ASC",
-            "Query": "select id, 1.1 from `user` group by 1.1 order by 1.1 asc",
+            "Query": "select id, 1.1 from `user` group by 1.1",
             "Table": "`user`"
           }
         ]
@@ -1301,9 +1290,11 @@
       "QueryType": "SELECT",
       "Original": "select distinct col1, col2 from user group by col1, col2",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), (1|3)",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "(1:3)"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -1313,9 +1304,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
+            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user`",
             "Table": "`user`"
           }
         ]
@@ -1380,8 +1370,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
+                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a)",
                 "Table": "`user`"
               },
               {
@@ -1431,8 +1420,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
+            "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2)",
             "Table": "`user`"
           }
         ]
@@ -1607,8 +1595,7 @@
               "Sharded": true
             },
             "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by v, weight_string(lower(textcol1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by v, weight_string(lower(textcol1)) order by v asc",
+            "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by v, weight_string(lower(textcol1))",
             "Table": "`user`"
           }
         ]
@@ -1669,7 +1656,7 @@
             },
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "Query": "select id, weight_string(id) from `user`",
             "ResultColumns": 1,
             "Table": "`user`"
           }
@@ -2077,8 +2064,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) as a, val1, weight_string(val1) from `user` where 1 != 1 group by val1, weight_string(val1)",
-                    "OrderBy": "(1|2) ASC",
-                    "Query": "select count(*) as a, val1, weight_string(val1) from `user` group by val1, weight_string(val1) order by val1 asc",
+                    "Query": "select count(*) as a, val1, weight_string(val1) from `user` group by val1, weight_string(val1)",
                     "Table": "`user`"
                   }
                 ]
@@ -2330,8 +2316,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
-                    "OrderBy": "(1|2) ASC",
-                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a)",
                     "Table": "`user`"
                   },
                   {
@@ -2392,8 +2377,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
-                    "OrderBy": "(1|2) ASC",
-                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a)",
                     "Table": "`user`"
                   },
                   {
@@ -2546,8 +2530,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3)",
-            "OrderBy": "(0|3) ASC, (2|5) ASC",
-            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3) order by col1 asc, col3 asc",
+            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3)",
             "Table": "`user`"
           }
         ]
@@ -2636,8 +2619,7 @@
               "Sharded": true
             },
             "FieldQuery": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` where 1 != 1 group by val2, val1, weight_string(val2), weight_string(val1)",
-            "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, val1, weight_string(val2), weight_string(val1) order by val2 asc, val1 asc",
+            "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, val1, weight_string(val2), weight_string(val1)",
             "Table": "`user`"
           }
         ]
@@ -2668,8 +2650,7 @@
               "Sharded": true
             },
             "FieldQuery": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` where 1 != 1 group by a, weight_string(ascii(val1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by a, weight_string(ascii(val1)) order by a asc",
+            "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by a, weight_string(ascii(val1))",
             "Table": "`user`"
           }
         ]
@@ -2700,8 +2681,7 @@
               "Sharded": true
             },
             "FieldQuery": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2)",
-            "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) order by tcol1 asc, tcol2 asc",
+            "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2)",
             "Table": "`user`"
           }
         ]
@@ -2732,8 +2712,7 @@
               "Sharded": true
             },
             "FieldQuery": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2)",
-            "OrderBy": "(1|4) ASC, (0|5) ASC",
-            "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) order by tcol1 asc, tcol2 asc",
+            "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2)",
             "Table": "`user`"
           }
         ]
@@ -2965,8 +2944,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select foo, count(*), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|2) ASC",
-                    "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                    "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo)",
                     "Table": "`user`"
                   }
                 ]
@@ -3012,8 +2990,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|3) ASC",
-                    "Query": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                    "Query": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` group by foo, weight_string(foo)",
                     "Table": "`user`"
                   }
                 ]
@@ -3059,8 +3036,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|3) ASC",
-                    "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                    "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` group by foo, weight_string(foo)",
                     "Table": "`user`"
                   }
                 ]
@@ -3104,8 +3080,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select foo, count(*), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|2) ASC",
-                    "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                    "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo)",
                     "Table": "`user`"
                   }
                 ]
@@ -3412,8 +3387,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, `user`.col, weight_string(`user`.id)",
-                "OrderBy": "(1|2) ASC",
-                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.id, `user`.col, weight_string(`user`.id) order by `user`.id asc",
+                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.id, `user`.col, weight_string(`user`.id)",
                 "Table": "`user`"
               },
               {
@@ -3529,8 +3503,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id)",
                 "Table": "`user`"
               },
               {
@@ -4096,8 +4069,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo), weight_string(baz)",
-                    "OrderBy": "(0|2) ASC",
-                    "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo, weight_string(foo), weight_string(baz) order by foo asc",
+                    "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo, weight_string(foo), weight_string(baz)",
                     "Table": "`user`"
                   }
                 ]
@@ -4141,8 +4113,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|2) ASC",
-                    "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
+                    "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo)",
                     "Table": "`user`"
                   }
                 ]
@@ -4182,8 +4153,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col, count(*), col + 1, weight_string(col + 1) from `user` where 1 != 1 group by col",
-                "OrderBy": "0 ASC",
-                "Query": "select col, count(*), col + 1, weight_string(col + 1) from `user` group by col order by col asc",
+                "Query": "select col, count(*), col + 1, weight_string(col + 1) from `user` group by col",
                 "Table": "`user`"
               }
             ]
@@ -4210,7 +4180,7 @@
         },
         "FieldQuery": "select id, id + 1, weight_string(id + 1) from `user` where 1 != 1 group by id",
         "OrderBy": "(1|2) ASC",
-        "Query": "select id, id + 1, weight_string(id + 1) from `user` group by id order by id + 1 asc",
+        "Query": "select id, id + 1, weight_string(id + 1) from `user` group by id",
         "ResultColumns": 1,
         "Table": "`user`"
       },
@@ -4240,8 +4210,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, a + 1, weight_string(a + 1) from `user` where 1 != 1 group by a + 1, weight_string(a + 1)",
-            "OrderBy": "(1|2) ASC",
-            "Query": "select a, a + 1, weight_string(a + 1) from `user` group by a + 1, weight_string(a + 1) order by a + 1 asc",
+            "Query": "select a, a + 1, weight_string(a + 1) from `user` group by a + 1, weight_string(a + 1)",
             "Table": "`user`"
           }
         ]
@@ -4914,9 +4883,11 @@
       "QueryType": "SELECT",
       "Original": "select distinct a, b as a from user",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), (1|3)",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "(1:2)"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -4926,9 +4897,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b as a, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b, weight_string(a), weight_string(b)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select a, b as a, weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b) order by a asc, b asc",
+            "FieldQuery": "select a, b as a, weight_string(b) from `user` where 1 != 1",
+            "Query": "select a, b as a, weight_string(b) from `user`",
             "Table": "`user`"
           }
         ]
@@ -4945,9 +4915,10 @@
       "QueryType": "SELECT",
       "Original": "select distinct a+1 from user",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|1)",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -4957,9 +4928,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a + 1, weight_string(a + 1) from `user` where 1 != 1 group by a + 1, weight_string(a + 1)",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select a + 1, weight_string(a + 1) from `user` group by a + 1, weight_string(a + 1) order by a + 1 asc",
+            "FieldQuery": "select a + 1, weight_string(a + 1) from `user` where 1 != 1",
+            "Query": "select a + 1, weight_string(a + 1) from `user`",
             "Table": "`user`"
           }
         ]
@@ -4996,8 +4966,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*), col from `user` where 1 != 1 group by col",
-                "OrderBy": "1 ASC",
-                "Query": "select count(*), col from `user` group by col order by col asc",
+                "Query": "select count(*), col from `user` group by col",
                 "Table": "`user`"
               }
             ]
@@ -5218,8 +5187,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` where 1 != 1 group by `user`.col, `user`.bar, weight_string(`user`.bar)",
-                "OrderBy": "0 ASC, (1|2) ASC",
-                "Query": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` group by `user`.col, `user`.bar, weight_string(`user`.bar) order by `user`.col asc, `user`.bar asc",
+                "Query": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` group by `user`.col, `user`.bar, weight_string(`user`.bar)",
                 "Table": "`user`"
               },
               {
@@ -5821,8 +5789,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.col1, weight_string(u.col1) from `user` as u where 1 != 1 group by u.col1, weight_string(u.col1)",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select u.col1, weight_string(u.col1) from `user` as u group by u.col1, weight_string(u.col1) order by u.col1 asc",
+                "Query": "select u.col1, weight_string(u.col1) from `user` as u group by u.col1, weight_string(u.col1)",
                 "Table": "`user`"
               },
               {
@@ -5867,8 +5834,7 @@
               "Sharded": true
             },
             "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto)",
-            "OrderBy": "(0|5) ASC, (2|7) ASC",
-            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) order by foo asc, baz asc",
+            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto)",
             "Table": "`user`"
           }
         ]

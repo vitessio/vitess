@@ -96,12 +96,12 @@ func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return f, offset, nil
 }
 
-func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return f.Source.GetColumns()
+func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return f.Source.GetColumns(ctx)
 }
 
-func (f *Filter) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return f.Source.GetSelectExprs()
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return f.Source.GetSelectExprs(ctx)
 }
 
 func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {

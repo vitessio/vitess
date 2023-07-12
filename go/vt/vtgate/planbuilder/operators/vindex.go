@@ -82,12 +82,12 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 	}
 }
 
-func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (v *Vindex) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return slice.Map(v.Columns, colNameToExpr), nil
 }
 
-func (v *Vindex) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(v)
+func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, v)
 }
 
 func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {

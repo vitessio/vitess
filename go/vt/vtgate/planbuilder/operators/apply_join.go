@@ -180,12 +180,12 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 	return offset, nil
 }
 
-func (a *ApplyJoin) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (a *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return slice.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
 }
 
-func (a *ApplyJoin) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(a)
+func (a *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, a)
 }
 
 func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {

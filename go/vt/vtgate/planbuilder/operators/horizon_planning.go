@@ -138,7 +138,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *Filter:
 			return tryPushingDownFilter(ctx, in)
 		case *Distinct:
-			return tryPushingDownDistinct(in)
+			return tryPushingDownDistinct(ctx, in)
 		case *Union:
 			return tryPushDownUnion(ctx, in)
 		default:
@@ -255,12 +255,12 @@ func pushDownProjectionInApplyJoin(
 	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhs, p.TableID, p.Alias)
+	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhs, p.TableID, p.Alias)
+	src.RHS, err = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -369,6 +369,7 @@ func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) (out sqlparse
 }
 
 func createProjectionWithTheseColumns(
+	ctx *plancontext.PlanningContext,
 	src ops.Operator,
 	p *projector,
 	tableID *semantics.TableSet,
@@ -377,7 +378,7 @@ func createProjectionWithTheseColumns(
 	if len(p.cols) == 0 {
 		return src, nil
 	}
-	proj, err := createProjection(src)
+	proj, err := createProjection(ctx, src)
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +588,7 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 
 }
 
-func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushingDownDistinct(ctx *plancontext.PlanningContext, in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 	if in.Pushed {
 		return in, rewrite.SameTree, nil
 	}
@@ -602,22 +603,27 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 		return in, rewrite.SameTree, nil
 	}
 
-	cols, err := in.Source.GetColumns()
-	if err != nil {
-		return nil, nil, err
-	}
+	// TODO: tell the inputs from here we only need distinct inputs
+	in.Pushed = true
 
-	aggr := &Aggregator{
-		Source:   in.Source,
-		QP:       in.QP,
-		Original: true,
-	}
+	return in, rewrite.SameTree, nil
 
-	for _, col := range cols {
-		aggr.addColumnWithoutPushing(col, true)
-	}
-
-	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
+	//cols, err := in.Source.GetColumns(ctx)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//aggr := &Aggregator{
+	//	Source:   in.Source,
+	//	QP:       in.QP,
+	//	Original: true,
+	//}
+	//
+	//for _, col := range cols {
+	//	aggr.addColumnWithoutPushing(col, true)
+	//}
+	//
+	//return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
 }
 
 func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -627,7 +633,12 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 			return nil, nil, err
 		}
 		if len(sources) == 1 {
-			return sources[0], rewrite.NewTree("pushed union under route", op), nil
+			result := sources[0]
+			if op.distinct {
+				result = &Distinct{Source: result}
+			}
+
+			return result, rewrite.NewTree("pushed union under route", op), nil
 		}
 		var result *rewrite.ApplyResult
 		if len(sources) != len(op.Sources) {
@@ -645,7 +656,7 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
 func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
-	cols, err := output.GetSelectExprs()
+	cols, err := output.GetSelectExprs(ctx)
 	if err != nil {
 		return nil, err
 	}

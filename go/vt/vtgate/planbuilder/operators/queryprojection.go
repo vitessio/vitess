@@ -453,6 +453,9 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
 func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) sqlparser.Expr {
+	if qp == nil {
+		return e
+	}
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar

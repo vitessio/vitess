@@ -101,41 +101,36 @@
       "QueryType": "SELECT",
       "Original": "select TABLE_NAME from information_schema.columns union select table_schema from information_schema.tables",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0 COLLATE utf8mb4_0900_ai_ci",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci",
+            "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select TABLE_NAME from information_schema.`columns` where 1 != 1",
-                    "Query": "select TABLE_NAME from information_schema.`columns`",
-                    "Table": "information_schema.`columns`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                    "Query": "select table_schema from information_schema.`tables`",
-                    "Table": "information_schema.`tables`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select TABLE_NAME, weight_string(TABLE_NAME) from information_schema.`columns` where 1 != 1",
+                "Query": "select TABLE_NAME, weight_string(TABLE_NAME) from information_schema.`columns`",
+                "Table": "information_schema.`columns`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select table_schema, weight_string(table_schema) from information_schema.`tables` where 1 != 1",
+                "Query": "select table_schema, weight_string(table_schema) from information_schema.`tables`",
+                "Table": "information_schema.`tables`"
               }
             ]
           }
@@ -150,43 +145,58 @@
       "QueryType": "SELECT",
       "Original": "select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0 COLLATE utf8mb4_0900_ai_ci, 1 COLLATE utf8mb4_0900_ai_ci, 2 COLLATE utf8mb4_0900_ai_ci, 3 COLLATE utf8mb4_0900_ai_ci, 4 COLLATE utf8mb4_0900_ai_ci, 5, 6 COLLATE utf8mb4_0900_ai_ci, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 COLLATE utf8mb4_0900_ai_ci, 18, 19 COLLATE utf8mb4_0900_ai_ci, 20 COLLATE utf8mb4_0900_ai_ci",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:21)",
+          "(1:22)",
+          "(2:23)",
+          "(3:24)",
+          "(4:25)",
+          "(5:26)",
+          "(6:27)",
+          "(7:28)",
+          "(8:29)",
+          "(9:30)",
+          "(10:31)",
+          "(11:32)",
+          "(12:33)",
+          "(13:34)",
+          "(14:35)",
+          "(15:36)",
+          "(16:37)",
+          "(17:38)",
+          "(18:39)",
+          "(19:40)",
+          "(20:41)"
+        ],
+        "ResultColumns": 21,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci, 1 ASC COLLATE utf8mb4_0900_ai_ci, 2 ASC COLLATE utf8mb4_0900_ai_ci, 3 ASC COLLATE utf8mb4_0900_ai_ci, 4 ASC COLLATE utf8mb4_0900_ai_ci, 5 ASC, 6 ASC COLLATE utf8mb4_0900_ai_ci, 7 ASC, 8 ASC, 9 ASC, 10 ASC, 11 ASC, 12 ASC, 13 ASC, 14 ASC, 15 ASC, 16 ASC, 17 ASC COLLATE utf8mb4_0900_ai_ci, 18 ASC, 19 ASC COLLATE utf8mb4_0900_ai_ci, 20 ASC COLLATE utf8mb4_0900_ai_ci",
+            "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
-                    "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
-                    "SysTableTableSchema": "[VARCHAR(\"user\")]",
-                    "Table": "information_schema.`tables`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
-                    "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
-                    "SysTableTableSchema": "[VARCHAR(\"main\")]",
-                    "Table": "information_schema.`tables`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(VERSION), weight_string(`ROW_FORMAT`), weight_string(TABLE_ROWS), weight_string(`AVG_ROW_LENGTH`), weight_string(DATA_LENGTH), weight_string(MAX_DATA_LENGTH), weight_string(INDEX_LENGTH), weight_string(DATA_FREE), weight_string(`AUTO_INCREMENT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(`CHECKSUM`), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
+                "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(VERSION), weight_string(`ROW_FORMAT`), weight_string(TABLE_ROWS), weight_string(`AVG_ROW_LENGTH`), weight_string(DATA_LENGTH), weight_string(MAX_DATA_LENGTH), weight_string(INDEX_LENGTH), weight_string(DATA_FREE), weight_string(`AUTO_INCREMENT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(`CHECKSUM`), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(VERSION), weight_string(`ROW_FORMAT`), weight_string(TABLE_ROWS), weight_string(`AVG_ROW_LENGTH`), weight_string(DATA_LENGTH), weight_string(MAX_DATA_LENGTH), weight_string(INDEX_LENGTH), weight_string(DATA_FREE), weight_string(`AUTO_INCREMENT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(`CHECKSUM`), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
+                "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(VERSION), weight_string(`ROW_FORMAT`), weight_string(TABLE_ROWS), weight_string(`AVG_ROW_LENGTH`), weight_string(DATA_LENGTH), weight_string(MAX_DATA_LENGTH), weight_string(INDEX_LENGTH), weight_string(DATA_FREE), weight_string(`AUTO_INCREMENT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(`CHECKSUM`), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "[VARCHAR(\"main\")]",
+                "Table": "information_schema.`tables`"
               }
             ]
           }
@@ -771,12 +781,83 @@
   {
     "comment": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got found"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(found)",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+                "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "[VARCHAR(\"music\")]",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+                "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+                "SysTableTableSchema": "[VARCHAR(\"music\")]",
+                "Table": "information_schema.views"
+              }
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "union as a derived table",
     "query": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
-    "plan": "VT13001: [BUG] only weight_string function is expected - got found"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+            "SysTableTableSchema": "[VARCHAR(\"music\")]",
+            "Table": "information_schema.`tables`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+            "SysTableTableSchema": "[VARCHAR(\"music\")]",
+            "Table": "information_schema.views"
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "merge system schema queries as long as they have any same table_schema",
@@ -913,7 +994,7 @@
   {
     "comment": "merge even one side have schema name in derived table",
     "query": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
-    "plan": "VT13001: [BUG] did not expect to add group by here"
+    "plan": "VT13001: [BUG] only weight_string function is expected - got dt.TABLE_NAME"
   },
   {
     "comment": "merge even one side have schema name in subquery",

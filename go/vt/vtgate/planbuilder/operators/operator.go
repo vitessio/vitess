@@ -109,11 +109,11 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr,
 	return nil, 0, vterrors.VT13001("noColumns operators have no column")
 }
 
-func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }
 
-func (noColumns) GetSelectExprs() (sqlparser.SelectExprs, error) {
+func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }
 
@@ -149,8 +149,8 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	return tryTruncateColumnsAt(inputs[0], truncateAt)
 }
 
-func transformColumnsToSelectExprs(op ops.Operator) (sqlparser.SelectExprs, error) {
-	columns, err := op.GetColumns()
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {
+	columns, err := op.GetColumns(ctx)
 	if err != nil {
 		return nil, err
 	}

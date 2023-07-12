@@ -10,6 +10,7 @@ import (
 // can be used for UNION DISTINCT
 func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops.Operator, []sqlparser.SelectExprs, error) {
 	sources := op.Sources
+	selects := op.Selects
 
 	// next we'll go over all the plans from and check if any two can be merged. if they can, they are merged,
 	// and we continue checking for pairs of plans that can be merged into a single route
@@ -35,20 +36,23 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 			}
 		}
 		if !merged {
-			return sources, nil, nil
+			return sources, selects, nil
 		}
 
-		var phase []ops.Operator
+		var newSources []ops.Operator
+		var newSelects []sqlparser.SelectExprs
 		for i, source := range sources {
 			if keep[i] || i <= idx {
-				phase = append(phase, source)
+				newSources = append(newSources, source)
+				newSelects = append(newSelects, selects[i])
 			}
 		}
 		idx++
-		sources = phase
+		sources = newSources
+		selects = newSelects
 	}
 
-	return sources, nil, nil
+	return sources, selects, nil
 }
 
 // mergeUnionInputs checks whether two operators can be merged into a single one.
@@ -56,7 +60,7 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 // If they cannot be merged, nil is returned.
 // this function is very similar to mergeJoinInputs
 func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, lhsExprs, rhsExprs sqlparser.SelectExprs, distinct bool) (ops.Operator, error) {
-	lhsRoute, rhsRoute, routingA, _, _, b, _ := prepareInputRoutes(lhs, rhs)
+	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil
 	}
@@ -64,23 +68,28 @@ func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, l
 	switch {
 	// if either side is a dual query, we can always merge them together
 	case b == dual:
-		//rhsRoute.Source = &Union{
-		//	Sources:  []ops.Operator{lhsRoute.Source, rhsRoute.Source},
-		//	Selects:  []sqlparser.SelectExprs{lhsExprs, rhsExprs},
-		//	distinct: false,
-		//}
-		//rhsRoute.MergedWith = append(rhsRoute.MergedWith, lhsRoute)
-		//return rhsRoute, nil
-		return &Route{
-			Source: &Union{
-				Sources:  []ops.Operator{lhsRoute.Source, rhsRoute.Source},
-				Selects:  []sqlparser.SelectExprs{lhsExprs, rhsExprs},
-				distinct: distinct,
-			},
-			MergedWith: []*Route{rhsRoute},
-			Routing:    routingA,
-		}, nil
+		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA), nil
+	case a == dual:
+		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB), nil
+	case a == sharded && b == sharded && sameKeyspace:
+		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB), nil
 	default:
 		return nil, nil
+	}
+}
+
+func createMergedUnion(
+	lhsRoute, rhsRoute *Route,
+	lhsExprs, rhsExprs sqlparser.SelectExprs,
+	distinct bool,
+	routing Routing) *Route {
+	return &Route{
+		Source: &Union{
+			Sources:  []ops.Operator{lhsRoute.Source, rhsRoute.Source},
+			Selects:  []sqlparser.SelectExprs{lhsExprs, rhsExprs},
+			distinct: distinct,
+		},
+		MergedWith: []*Route{rhsRoute},
+		Routing:    routing,
 	}
 }

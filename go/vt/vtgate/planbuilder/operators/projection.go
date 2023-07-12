@@ -182,15 +182,15 @@ func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return p, nil
 }
 
-func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (p *Projection) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	if p.TableID != nil {
 		return nil, nil
 	}
 	return p.Columns, nil
 }
 
-func (p *Projection) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(p)
+func (p *Projection) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, p)
 }
 
 func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
@@ -230,7 +230,7 @@ func (p *Projection) ShortDescription() string {
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		return p.compactWithRoute(src)
+		return p.compactWithRoute(ctx, src)
 	case *ApplyJoin:
 		return p.compactWithJoin(ctx, src)
 	}
@@ -269,14 +269,14 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *Appl
 	return src, rewrite.NewTree("remove projection from before join", src), nil
 }
 
-func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Route) (ops.Operator, *rewrite.ApplyResult, error) {
 	for i, col := range p.Projections {
 		offset, ok := col.(Offset)
 		if !ok || offset.Offset != i {
 			return p, rewrite.SameTree, nil
 		}
 	}
-	columns, err := rb.GetColumns()
+	columns, err := rb.GetColumns(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

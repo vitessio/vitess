@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Union struct {
@@ -33,6 +34,7 @@ type Union struct {
 	Selects  []sqlparser.SelectExprs
 	distinct bool
 
+	columns       []*sqlparser.AliasedExpr
 	offsetPlanned bool
 }
 
@@ -184,8 +186,8 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 	return u, rewrite.NewTree("merged UNIONs", u), nil
 }
 
-func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	cols, err := u.GetColumns()
+func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	cols, err := u.GetColumns(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -200,50 +202,79 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.Aliase
 		return nil, 0, vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(ae)))
 	}
 
-	newSrc, offset, err := u.Sources[0].AddColumn(ctx, ae, true, false)
-	if err != nil {
-		return nil, 0, err
-	}
-	u.Sources[0] = newSrc
-
-	// we are adding a weight_string function. let's find the offset of the argument to it
-	argIdx := slices.IndexFunc(u.Selects[0], func(se sqlparser.SelectExpr) bool {
-		ae, ok := se.(*sqlparser.AliasedExpr)
-		if !ok {
-			err = vterrors.VT12001("can't handle star expressions inside UNION")
-			return false
-		}
-		return ctx.SemTable.EqualsExprWithDeps(ae.Expr, ws.Expr)
+	wsArg := ws.Expr
+	argIdx := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
+		return ctx.SemTable.EqualsExprWithDeps(wsArg, expr.Expr)
 	})
+
 	if argIdx == -1 {
-		return nil, 0, vterrors.VT13001(fmt.Sprintf("could not find the actual expression to add weight_string function: %s", sqlparser.String(ws.Expr)))
+		return nil, 0, vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg)))
 	}
 
-	for i := 1; i < len(u.Sources); i++ {
+	var outputOffset int
+
+	for i, src := range u.Sources {
 		exprs := u.Selects[i]
 		selectExpr := exprs[argIdx]
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, 0, vterrors.VT09015()
 		}
-		newSrc, this, err := u.Sources[i].AddColumn(ctx, aeWrap(weightStringFor(ae.Expr)), true, false)
+		newSrc, thisOffset, err := src.AddColumn(ctx, aeWrap(weightStringFor(ae.Expr)), false, addToGroupBy)
 		if err != nil {
 			return nil, 0, err
 		}
-		if this != offset {
-			return nil, 0, vterrors.VT12001("offsets did not line up for UNION")
+
+		// all offsets for the newly added ws need to line up
+		if i == 0 {
+			outputOffset = thisOffset
+		} else {
+			if thisOffset != outputOffset {
+				return nil, 0, vterrors.VT12001("weight_string offsets did not line up for UNION")
+			}
 		}
+
 		u.Sources[i] = newSrc
 	}
-	return u, offset, nil
+
+	return u, outputOffset, nil
 }
 
-func (u *Union) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return u.Sources[0].GetColumns()
+func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr, err error) {
+	if u.columns != nil {
+		return u.columns, nil
+	}
+
+	var columns [][]*sqlparser.AliasedExpr
+	for _, source := range u.Sources {
+		getColumns, err := source.GetColumns(ctx)
+		if err != nil {
+			return nil, err
+		}
+		columns = append(columns, getColumns)
+	}
+
+	for idx, column := range columns[0] {
+		col := sqlparser.NewColName(column.ColumnName())
+		result = append(result, aeWrap(col))
+
+		dd := semantics.EmptyTableSet()
+		rd := semantics.EmptyTableSet()
+		for _, cols := range columns {
+			e := cols[idx].Expr
+			dd = dd.Merge(ctx.SemTable.DirectDeps(e))
+			rd = rd.Merge(ctx.SemTable.RecursiveDeps(e))
+		}
+
+		ctx.SemTable.Direct[col] = dd
+		ctx.SemTable.Recursive[col] = rd
+	}
+	u.columns = result
+	return
 }
 
-func (u *Union) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return u.Sources[0].GetSelectExprs()
+func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return u.Sources[0].GetSelectExprs(ctx)
 }
 
 func (u *Union) NoLHSTableSet() {}

@@ -75,7 +75,7 @@ func planOffsetsOnJoins(ctx *plancontext.PlanningContext, op ops.Operator) error
 // useOffsets rewrites an expression to use values from the input
 func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
 	in := op.Inputs()[0]
-	columns, err := in.GetColumns()
+	columns, err := in.GetColumns(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 			return err
 		}
 		op.SetInputs([]ops.Operator{in})
-		columns, err = in.GetColumns()
+		columns, err = in.GetColumns(ctx)
 		if err != nil {
 			return err
 		}

@@ -65,12 +65,12 @@ func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	return l, offset, nil
 }
 
-func (l *Limit) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return l.Source.GetColumns()
+func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return l.Source.GetColumns(ctx)
 }
 
-func (l *Limit) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return l.Source.GetSelectExprs()
+func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return l.Source.GetSelectExprs(ctx)
 }
 
 func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {

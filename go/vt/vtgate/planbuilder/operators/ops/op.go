@@ -47,9 +47,8 @@ type (
 		// The offset to the column is returned.
 		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (Operator, int, error)
 
-		GetColumns() ([]*sqlparser.AliasedExpr, error)
-
-		GetSelectExprs() (sqlparser.SelectExprs, error)
+		GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error)
+		GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error)
 
 		ShortDescription() string
 

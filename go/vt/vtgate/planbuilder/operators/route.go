@@ -531,9 +531,9 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r, err
 }
 
-func createProjection(src ops.Operator) (*Projection, error) {
+func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Projection, error) {
 	proj := &Projection{Source: src}
-	cols, err := src.GetColumns()
+	cols, err := src.GetColumns(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +548,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 
 	if reuseExisting {
 		// check if columns is already added.
-		cols, err := r.GetColumns()
+		cols, err := r.GetColumns(ctx)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -561,12 +561,13 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	}
 	// if column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	if ok, offset := addColumnToInput(r.Source, expr, addToGroupBy); ok {
+	if op, ok, offset := addColumnToInput(ctx, r.Source, expr, addToGroupBy); ok {
+		r.Source = op
 		return r, offset, nil
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
-	src, err := createProjection(r.Source)
+	src, err := createProjection(ctx, r.Source)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -587,33 +588,87 @@ type selectExpressions interface {
 	findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 }
 
-func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
+// addColumnToInput adds a column to an operator without pushing it down.
+// It will return a bool indicating whether the addition was succesful or not, and an offset to where the column can be found
+func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (ops.Operator, bool, int) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
-		return addColumnToInput(op.Outer, expr, addToGroupBy)
+		return addColumnToInput(ctx, op.Outer, expr, addToGroupBy)
 	case *Limit:
-		return addColumnToInput(op.Source, expr, addToGroupBy)
+		return addColumnToInput(ctx, op.Source, expr, addToGroupBy)
 	case *Ordering:
-		return addColumnToInput(op.Source, expr, addToGroupBy)
+		return addColumnToInput(ctx, op.Source, expr, addToGroupBy)
 	case selectExpressions:
 		if op.isDerived() {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return false, 0
+			return op, false, 0
 		}
 		offset := op.addColumnWithoutPushing(expr, addToGroupBy)
-		return true, offset
+		return op, true, offset
+	case *Union:
+		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
+		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
+		return &Projection{
+			Source:      op,
+			Columns:     append(op.columns, expr),
+			Projections: nil,
+			TableID:     &tableID,
+			Alias:       "dt",
+		}, true, len(op.columns)
+		//wsExpr, isWeightString := expr.Expr.(*sqlparser.WeightStringFuncExpr)
+		//if !isWeightString {
+		//	return false, 0, vterrors.VT12001("Pushing columns in union that isn't a weight string")
+		//}
+		//columnOffset := -1
+		//for idx, column := range op.columns {
+		//	if ctx.SemTable.EqualsExpr(column.Expr, wsExpr.Expr) {
+		//		columnOffset = idx
+		//		break
+		//	}
+		//}
+		//if columnOffset == -1 {
+		//	return false, 0, vterrors.VT13001("Couldn't find the offset of the weight string argument in Union")
+		//}
+		//
+		//idx := -1
+		//for i, source := range op.Sources {
+		//	cols, err := source.GetColumns(ctx)
+		//	if err != nil {
+		//		return false, 0, err
+		//	}
+		//	ok, offset, err := addColumnToInput(ctx, source, aeWrap(weightStringFor(cols[columnOffset].Expr)), false)
+		//	if err != nil {
+		//		return ok, offset, err
+		//	}
+		//	if !ok {
+		//		if i == 0 {
+		//			return false, 0, nil
+		//		}
+		//		// if we succeeded on one input, and failed later, we are kind of screwed
+		//		return false, 0, vterrors.VT12001("could not push down to all inputs")
+		//	}
+		//	if idx == -1 {
+		//		idx = offset
+		//		continue
+		//	}
+		//	if idx != offset {
+		//		return false, 0, vterrors.VT12001("union columns did not line up")
+		//	}
+		//}
+		//return true, idx, nil
+
 	default:
-		return false, 0
+		return op, false, 0
 	}
 }
 
-func (r *Route) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return r.Source.GetColumns()
+func (r *Route) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return r.Source.GetColumns(ctx)
 }
 
-func (r *Route) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return r.Source.GetSelectExprs()
+func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return r.Source.GetSelectExprs(ctx)
 }
 
 func (r *Route) GetOrdering() ([]ops.OrderBy, error) {
@@ -652,7 +707,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		return err
 	}
 
-	columns, err := r.Source.GetColumns()
+	columns, err := r.Source.GetColumns(ctx)
 	if err != nil {
 		return err
 	}

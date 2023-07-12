@@ -110,7 +110,10 @@ func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
 }
 
 func (qb *queryBuilder) clearProjections() {
-	sel := qb.sel.(*sqlparser.Select)
+	sel, isSel := qb.sel.(*sqlparser.Select)
+	if !isSel {
+		return
+	}
 	sel.SelectExprs = nil
 }
 
@@ -353,7 +356,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 
 	qb.clearProjections()
 
-	cols, err := op.GetColumns()
+	cols, err := op.GetColumns(qb.ctx)
 	if err != nil {
 		return err
 	}
@@ -414,20 +417,29 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 		return err
 	}
 
-	qb.clearProjections()
+	_, isSel := qb.sel.(*sqlparser.Select)
+	if isSel {
+		qb.clearProjections()
 
-	for _, column := range op.Columns {
-		qb.addProjection(column)
+		for _, column := range op.Columns {
+			qb.addProjection(column)
+		}
 	}
 
 	// if the projection is on derived table, we use the select we have
 	// created above and transform it into a derived table
 	if op.TableID != nil {
-		sel := qb.sel.(*sqlparser.Select)
+		sel := qb.sel
 		qb.sel = nil
 		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil, nil)
+	}
+
+	if !isSel {
+		for _, column := range op.Columns {
+			qb.addProjection(column)
+		}
 	}
 
 	return nil

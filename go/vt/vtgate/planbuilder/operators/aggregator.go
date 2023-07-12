@@ -205,7 +205,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	return a, offset, nil
 }
 
-func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
 		return a.Columns, nil
 	}
@@ -213,7 +213,7 @@ func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	// we update the incoming columns, so we know about any new columns that have been added
 	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
 	// Aggregator should be made aware of these to truncate them in final result.
-	columns, err := a.Source.GetColumns()
+	columns, err := a.Source.GetColumns(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +226,8 @@ func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return a.Columns, nil
 }
 
-func (a *Aggregator) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(a)
+func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, a)
 }
 
 func (a *Aggregator) ShortDescription() string {

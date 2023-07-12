@@ -77,12 +77,12 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return to, offset, nil
 }
 
-func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (to *Table) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return slice.Map(to.Columns, colNameToExpr), nil
 }
 
-func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(to)
+func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, to)
 }
 
 func (to *Table) GetOrdering() ([]ops.OrderBy, error) {

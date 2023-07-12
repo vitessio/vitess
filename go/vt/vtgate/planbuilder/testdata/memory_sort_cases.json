@@ -25,8 +25,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, weight_string(a)",
                 "Table": "`user`"
               }
             ]
@@ -64,8 +63,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a)",
                 "Table": "`user`"
               }
             ]
@@ -103,8 +101,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select a, b, count(*) as k, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*) as k, weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select a, b, count(*) as k, weight_string(a), weight_string(b) from `user` group by a, weight_string(a)",
                 "Table": "`user`"
               }
             ]
@@ -146,8 +143,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                    "OrderBy": "(0|3) ASC",
-                    "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc limit :__upper_limit",
+                    "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -187,8 +183,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a)",
                 "Table": "`user`"
               }
             ]
@@ -259,7 +254,7 @@
             },
             "FieldQuery": "select id, weight_string(id) from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select id, weight_string(id) from (select `user`.id, `user`.col from `user`) as t order by id asc",
+            "Query": "select id, weight_string(id) from (select `user`.id, `user`.col from `user`) as t",
             "Table": "`user`"
           },
           {
@@ -554,7 +549,7 @@
         },
         "FieldQuery": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` where 1 != 1",
         "OrderBy": "(1|2) DESC",
-        "Query": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` order by convert(a, binary) desc",
+        "Query": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user`",
         "ResultColumns": 1,
         "Table": "`user`"
       },
@@ -587,7 +582,7 @@
             },
             "FieldQuery": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u where 1 != 1",
             "OrderBy": "(1|2) DESC",
-            "Query": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u order by convert(a, binary) desc",
+            "Query": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u",
             "Table": "`user`"
           },
           {
@@ -647,7 +642,7 @@
         },
         "FieldQuery": "select col, id, weight_string(id) from `user` where 1 != 1",
         "OrderBy": "(1|2) ASC",
-        "Query": "select col, id, weight_string(id) from `user` order by id asc",
+        "Query": "select col, id, weight_string(id) from `user`",
         "ResultColumns": 1,
         "Table": "`user`"
       },

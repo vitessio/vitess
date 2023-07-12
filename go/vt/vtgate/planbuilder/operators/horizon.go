@@ -196,7 +196,7 @@ func canReuseColumn[T any](
 	return
 }
 
-func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
+func (h *Horizon) GetColumns(*plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -207,7 +207,7 @@ func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 	return
 }
 
-func (h *Horizon) GetSelectExprs() (sqlparser.SelectExprs, error) {
+func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return sqlparser.GetFirstSelect(h.Query).SelectExprs, nil
 }
 

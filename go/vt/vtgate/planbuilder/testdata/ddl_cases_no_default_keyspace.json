@@ -501,7 +501,7 @@
   {
     "comment": "create view with union with the same target shard",
     "query": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
-    "plan": "VT09015: schema tracking required"
+    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
   },
   {
     "comment": "create view with testing SingleRow Projection",

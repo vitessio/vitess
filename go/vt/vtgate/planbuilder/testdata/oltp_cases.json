@@ -106,21 +106,28 @@
       "QueryType": "SELECT",
       "Original": "SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0 COLLATE latin1_swedish_ci",
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
-            },
-            "FieldQuery": "select c from sbtest30 where 1 != 1 group by c",
-            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by c asc",
-            "Table": "sbtest30"
+            "OperatorType": "Distinct",
+            "Collations": [
+              "0: latin1_swedish_ci"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select c from sbtest30 where 1 != 1",
+                "Query": "select c from sbtest30 where id between 1 and 10",
+                "Table": "sbtest30"
+              }
+            ]
           }
         ]
       },
