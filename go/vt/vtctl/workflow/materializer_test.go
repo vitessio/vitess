@@ -45,7 +45,7 @@ const mzGetCopyState = "select distinct table_name from _vt.copy_state cs, _vt.v
 const mzGetLatestCopyState = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
 const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
 
-var defaultOnDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 var binlogSource = &binlogdatapb.BinlogSource{
 	Keyspace: "sourceks",
 	Shard:    "0",

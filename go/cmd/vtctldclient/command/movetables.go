@@ -42,7 +42,7 @@ var (
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_PRIMARY,
 	}
-	onDDLDefault             = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+	onDDLDefault             = binlogdatapb.OnDDLAction_IGNORE.String()
 	maxReplicationLagDefault = 30 * time.Second
 	timeoutDefault           = 30 * time.Second
 
