@@ -7100,17 +7100,17 @@
   },
   {
     "comment": "count and sum distinct with min distinct on different expressions",
-    "query": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz) from user group by foo",
+    "query": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz), max(distinct toto) from user group by foo",
     "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct baz)",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz) from user group by foo",
+      "Original": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz), max(distinct toto) from user group by foo",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1|5) AS min(distinct bar), count_distinct(2|6) AS count(distinct baz), sum_distinct(3|6) AS sum(distinct baz)",
-        "GroupBy": "(0|4)",
-        "ResultColumns": 4,
+        "Aggregates": "min(1|6) AS min(distinct bar), count_distinct(2|7) AS count(distinct baz), sum_distinct(3|7) AS sum(distinct baz), max(4|8) AS max(distinct toto)",
+        "GroupBy": "(0|5)",
+        "ResultColumns": 5,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7119,9 +7119,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, weight_string(foo), weight_string(bar), weight_string(baz) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz)",
-            "OrderBy": "(0|4) ASC, (2|6) ASC",
-            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, weight_string(foo), weight_string(bar), weight_string(baz) from `user` group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz) order by foo asc, baz asc",
+            "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto)",
+            "OrderBy": "(0|5) ASC, (2|7) ASC",
+            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) order by foo asc, baz asc",
             "Table": "`user`"
           }
         ]
