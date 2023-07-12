@@ -241,7 +241,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS where 1 != 1",
-                "Query": "select CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS",
+                "Query": "select distinct CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS",
                 "Table": "information_schema.CHARACTER_SETS"
               },
               {
@@ -252,7 +252,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select user_name, weight_string(user_name) from unsharded where 1 != 1",
-                "Query": "select user_name, weight_string(user_name) from unsharded",
+                "Query": "select distinct user_name, weight_string(user_name) from unsharded",
                 "Table": "unsharded"
               }
             ]
@@ -309,7 +309,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1, weight_string(1) from dual where 1 != 1",
-                "Query": "select 1, weight_string(1) from dual",
+                "Query": "select distinct 1, weight_string(1) from dual",
                 "Table": "dual"
               }
             ]
@@ -480,7 +480,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
+                    "Query": "select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -491,7 +491,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
+                    "Query": "select distinct 1 from user_extra where user_extra.extra = 'asdf'",
                     "Table": "user_extra"
                   }
                 ]
@@ -504,7 +504,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 'b', 'c', weight_string('b'), weight_string('c') from `user` where 1 != 1",
-                "Query": "select 'b', 'c', weight_string('b'), weight_string('c') from `user`",
+                "Query": "select distinct 'b', 'c', weight_string('b'), weight_string('c') from `user`",
                 "Table": "`user`"
               }
             ]
@@ -542,7 +542,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 'b', 'c', weight_string('b'), weight_string('c') from `user` where 1 != 1",
-                "Query": "select 'b', 'c', weight_string('b'), weight_string('c') from `user`",
+                "Query": "select distinct 'b', 'c', weight_string('b'), weight_string('c') from `user`",
                 "Table": "`user`"
               },
               {
@@ -559,7 +559,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
+                    "Query": "select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -570,7 +570,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
+                    "Query": "select distinct 1 from user_extra where user_extra.extra = 'asdf'",
                     "Table": "user_extra"
                   }
                 ]
@@ -602,38 +602,56 @@
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS s, any_value(1)",
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0",
+                  "(1:2)"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select count(*) as s, weight_string(count(*)) from `user` where 1 != 1",
-                    "Query": "select count(*) as s, weight_string(count(*)) from `user`",
-                    "Table": "`user`"
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count_star(0) AS s, any_value(1), any_value(2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) as s, weight_string(count(*)), weight_string(weight_string(count(*))) from `user` where 1 != 1",
+                        "Query": "select count(*) as s, weight_string(count(*)), weight_string(weight_string(count(*))) from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
                   }
                 ]
               },
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS s, any_value(1)",
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0",
+                  "(1:2)"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select count(*) as s, weight_string(count(*)) from music where 1 != 1",
-                    "Query": "select count(*) as s, weight_string(count(*)) from music",
-                    "Table": "music"
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count_star(0) AS s, any_value(1), any_value(2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) as s, weight_string(count(*)), weight_string(weight_string(count(*))) from music where 1 != 1",
+                        "Query": "select count(*) as s, weight_string(count(*)), weight_string(weight_string(count(*))) from music",
+                        "Table": "music"
+                      }
+                    ]
                   }
                 ]
               }
@@ -669,27 +687,32 @@
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Sort",
-                "Variant": "Memory",
-                "OrderBy": "(0|1) ASC",
+                "OperatorType": "Distinct",
                 "Inputs": [
                   {
-                    "OperatorType": "Distinct",
-                    "Collations": [
-                      "(0:1)",
-                      "(1:2)"
-                    ],
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(0|1) ASC",
                     "Inputs": [
                       {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select id, weight_string(id), weight_string(weight_string(id)) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt where 1 != 1",
-                        "Query": "select id, weight_string(id), weight_string(weight_string(id)) from (select id from `user` union select id from music) as dt",
-                        "Table": "`user`, music"
+                        "OperatorType": "Distinct",
+                        "Collations": [
+                          "(0:1)",
+                          "(1:2)"
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select id, weight_string(id), weight_string(weight_string(id)) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt where 1 != 1",
+                            "Query": "select id, weight_string(id), weight_string(weight_string(id)) from (select id from `user` union select id from music) as dt",
+                            "Table": "`user`, music"
+                          }
+                        ]
                       }
                     ]
                   }
@@ -703,7 +726,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1, weight_string(1) from unsharded where 1 != 1",
-                "Query": "select 1, weight_string(1) from unsharded",
+                "Query": "select distinct 1, weight_string(1) from unsharded",
                 "Table": "unsharded"
               }
             ]
@@ -801,7 +824,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col, weight_string(col) from unsharded where 1 != 1",
-                "Query": "select col, weight_string(col) from unsharded",
+                "Query": "select distinct col, weight_string(col) from unsharded",
                 "Table": "unsharded"
               },
               {
@@ -812,7 +835,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                "Query": "select id, weight_string(id) from `user`",
+                "Query": "select distinct id, weight_string(id) from `user`",
                 "Table": "`user`"
               },
               {
@@ -823,7 +846,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2, weight_string(col2) from unsharded where 1 != 1",
-                "Query": "select col2, weight_string(col2) from unsharded",
+                "Query": "select distinct col2, weight_string(col2) from unsharded",
                 "Table": "unsharded"
               },
               {
@@ -834,7 +857,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col, weight_string(col) from user_extra where 1 != 1",
-                "Query": "select col, weight_string(col) from user_extra",
+                "Query": "select distinct col, weight_string(col) from user_extra",
                 "Table": "user_extra"
               }
             ]
@@ -938,7 +961,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select id + 42 as foo, weight_string(id + 42) from `user` where 1 != 1",
-                    "Query": "select id + 42 as foo, weight_string(id + 42) from `user`",
+                    "Query": "select distinct id + 42 as foo, weight_string(id + 42) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -949,7 +972,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 + id as foo, weight_string(1 + id) from unsharded where 1 != 1",
-                    "Query": "select 1 + id as foo, weight_string(1 + id) from unsharded",
+                    "Query": "select distinct 1 + id as foo, weight_string(1 + id) from unsharded",
                     "Table": "unsharded"
                   }
                 ]
@@ -1049,7 +1072,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded where 1 != 1",
-                "Query": "select id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded",
+                "Query": "select distinct id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded",
                 "Table": "unsharded"
               },
               {
@@ -1066,7 +1089,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user` where 1 != 1",
-                    "Query": "select `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user`",
+                    "Query": "select distinct `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -1077,7 +1100,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select authoritative.col2, weight_string(authoritative.col2) from authoritative where 1 != 1",
-                    "Query": "select authoritative.col2, weight_string(authoritative.col2) from authoritative",
+                    "Query": "select distinct authoritative.col2, weight_string(authoritative.col2) from authoritative",
                     "Table": "authoritative"
                   }
                 ]

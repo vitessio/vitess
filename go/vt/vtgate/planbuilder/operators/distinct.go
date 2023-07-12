@@ -22,14 +22,18 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
 	Distinct struct {
-		Source ops.Operator
-		QP     *QueryProjection
-		Pushed bool
+		// When splitting a distinct up, we only need one total DISTINCT at the route, any other
+		// intermediate DISTINCTs while we are pushing down can simply be removed
+		Original bool
+		Source   ops.Operator
+		QP       *QueryProjection
+		Pushed   bool
 
 		// When offset planning, we'll fill in this field
 		Columns []engine.CheckCol
@@ -76,6 +80,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
 	return &Distinct{
+		Original: d.Original,
 		Source:   inputs[0],
 		Columns:  slices.Clone(d.Columns),
 		QP:       d.QP,
@@ -119,6 +124,9 @@ func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.S
 }
 
 func (d *Distinct) ShortDescription() string {
+	if d.Original {
+		return "ORG"
+	}
 	return ""
 }
 
@@ -128,4 +136,13 @@ func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
 
 func (d *Distinct) setTruncateColumnCount(offset int) {
 	d.Truncate = offset
+}
+
+func (d *Distinct) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+	other, ok := d.Source.(*Distinct)
+	if !ok {
+		return d, rewrite.SameTree, nil
+	}
+	d.Source = other.Source
+	return d, rewrite.NewTree("removed double distinct", other), nil
 }

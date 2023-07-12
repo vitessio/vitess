@@ -172,7 +172,11 @@ func pullDistinctFromUNION(root ops.Operator) (ops.Operator, error) {
 
 		union.distinct = false
 
-		return &Distinct{Source: union}, rewrite.NewTree("pulled out DISTINCT from union", union), nil
+		distinct := &Distinct{
+			Original: true,
+			Source:   union,
+		}
+		return distinct, rewrite.NewTree("pulled out DISTINCT from union", union), nil
 	}
 
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)

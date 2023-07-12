@@ -383,7 +383,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
+            "Query": "select distinct col from `user`",
             "Table": "`user`"
           }
         ]
@@ -1305,7 +1305,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user`",
+            "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`",
             "Table": "`user`"
           }
         ]
@@ -4891,7 +4891,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b as a, weight_string(b) from `user` where 1 != 1",
-            "Query": "select a, b as a, weight_string(b) from `user`",
+            "Query": "select distinct a, b as a, weight_string(b) from `user`",
             "Table": "`user`"
           }
         ]
@@ -4922,7 +4922,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a + 1, weight_string(a + 1) from `user` where 1 != 1",
-            "Query": "select a + 1, weight_string(a + 1) from `user`",
+            "Query": "select distinct a + 1, weight_string(a + 1) from `user`",
             "Table": "`user`"
           }
         ]

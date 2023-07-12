@@ -616,48 +616,6 @@ func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, e
 			TableID:     &tableID,
 			Alias:       "dt",
 		}, true, len(op.columns)
-		//wsExpr, isWeightString := expr.Expr.(*sqlparser.WeightStringFuncExpr)
-		//if !isWeightString {
-		//	return false, 0, vterrors.VT12001("Pushing columns in union that isn't a weight string")
-		//}
-		//columnOffset := -1
-		//for idx, column := range op.columns {
-		//	if ctx.SemTable.EqualsExpr(column.Expr, wsExpr.Expr) {
-		//		columnOffset = idx
-		//		break
-		//	}
-		//}
-		//if columnOffset == -1 {
-		//	return false, 0, vterrors.VT13001("Couldn't find the offset of the weight string argument in Union")
-		//}
-		//
-		//idx := -1
-		//for i, source := range op.Sources {
-		//	cols, err := source.GetColumns(ctx)
-		//	if err != nil {
-		//		return false, 0, err
-		//	}
-		//	ok, offset, err := addColumnToInput(ctx, source, aeWrap(weightStringFor(cols[columnOffset].Expr)), false)
-		//	if err != nil {
-		//		return ok, offset, err
-		//	}
-		//	if !ok {
-		//		if i == 0 {
-		//			return false, 0, nil
-		//		}
-		//		// if we succeeded on one input, and failed later, we are kind of screwed
-		//		return false, 0, vterrors.VT12001("could not push down to all inputs")
-		//	}
-		//	if idx == -1 {
-		//		idx = offset
-		//		continue
-		//	}
-		//	if idx != offset {
-		//		return false, 0, vterrors.VT12001("union columns did not line up")
-		//	}
-		//}
-		//return true, idx, nil
-
 	default:
 		return op, false, 0
 	}

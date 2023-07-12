@@ -104,6 +104,9 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 			if err != nil {
 				return nil, err
 			}
+			if op == nil {
+				panic("got nil op back")
+			}
 		}
 		if rewrite.DebugOperatorTree {
 			fmt.Printf("PHASE: %s\n", phase.Name)
@@ -112,10 +115,16 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 		if err != nil {
 			return nil, err
 		}
+		if op == nil {
+			panic("got nil op back")
+		}
 
 		op, err = compact(ctx, op)
 		if err != nil {
 			return nil, err
+		}
+		if op == nil {
+			panic("got nil op back")
 		}
 	}
 
@@ -592,38 +601,50 @@ func tryPushingDownDistinct(ctx *plancontext.PlanningContext, in *Distinct) (ops
 	if in.Pushed {
 		return in, rewrite.SameTree, nil
 	}
+	in.Pushed = true
 	switch src := in.Source.(type) {
 	case *Route:
-		if src.IsSingleShard() {
+		if src.IsSingleShard() || !in.Original {
 			return rewrite.Swap(in, src, "push distinct under route")
 		}
+		if isDistinct(src.Source) {
+			return in, rewrite.SameTree, nil
+		}
+		src.Source = &Distinct{Source: src.Source}
+
+		return in, rewrite.NewTree("added distinct under route - kept original", src), nil
 	case *Distinct:
 		return src, rewrite.NewTree("removed double distinct", src), nil
 	case *Aggregator:
 		return in, rewrite.SameTree, nil
+	case *Union:
+		for i := range src.Sources {
+			src.Sources[i] = &Distinct{Source: src.Sources[i]}
+		}
+		return in, rewrite.NewTree("pushed down DISTINCT under UNION", src), nil
+	case *ApplyJoin:
+		src.LHS = &Distinct{Source: src.LHS}
+		src.RHS = &Distinct{Source: src.RHS}
+
+		if in.Original {
+			return in, rewrite.NewTree("pushed distinct under join - kept original", in.Source), nil
+		}
+
+		return in.Source, rewrite.NewTree("pushed distinct under join", in.Source), nil
 	}
 
-	// TODO: tell the inputs from here we only need distinct inputs
-	in.Pushed = true
-
 	return in, rewrite.SameTree, nil
+}
 
-	//cols, err := in.Source.GetColumns(ctx)
-	//if err != nil {
-	//	return nil, nil, err
-	//}
-	//
-	//aggr := &Aggregator{
-	//	Source:   in.Source,
-	//	QP:       in.QP,
-	//	Original: true,
-	//}
-	//
-	//for _, col := range cols {
-	//	aggr.addColumnWithoutPushing(col, true)
-	//}
-	//
-	//return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
+func isDistinct(op ops.Operator) bool {
+	switch op := op.(type) {
+	case *Distinct:
+		return true
+	case *Union:
+		return op.distinct
+	default:
+		return false
+	}
 }
 
 func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -635,7 +656,10 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 		if len(sources) == 1 {
 			result := sources[0]
 			if op.distinct {
-				result = &Distinct{Source: result}
+				result = &Distinct{
+					Source:   result,
+					Original: true,
+				}
 			}
 
 			return result, rewrite.NewTree("pushed union under route", op), nil

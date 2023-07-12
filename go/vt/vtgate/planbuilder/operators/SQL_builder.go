@@ -112,29 +112,51 @@ func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) error {
 		stmt.SelectExprs = append(stmt.SelectExprs, projection)
 		return nil
 	case *sqlparser.Union:
-		// for UNION we can only check if it's valid, and only if we are dealing with a ColName
-		column, ok := projection.Expr.(*sqlparser.ColName)
-		if !ok {
-			return vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(projection)))
+		switch expr := projection.Expr.(type) {
+		case *sqlparser.ColName:
+			return checkUnionColumnByName(expr, qb.sel)
+		default:
+			// if there is more than just column names, we'll just push the UNION
+			// inside a derived table and then recurse into this method again
+			qb.pushUnionInsideDerived()
+			return qb.addProjection(projection)
 		}
-		colName := column.Name.String()
-		exprs := sqlparser.GetFirstSelect(qb.sel).SelectExprs
-		offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
-			switch ae := expr.(type) {
-			case *sqlparser.StarExpr:
-				return true
-			case *sqlparser.AliasedExpr:
-				// When accessing columns on top of a UNION, we fall back to this simple strategy of string comparisons
-				return ae.ColumnName() == colName
-			}
-			return false
-		})
-		if offset == -1 {
-			return vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(projection)))
-		}
-		return nil
+
 	}
 	return vterrors.VT13001("switch should be exhaustive")
+}
+
+func (qb *queryBuilder) pushUnionInsideDerived() {
+	dt := &sqlparser.DerivedTable{
+		Lateral: false,
+		Select:  qb.sel,
+	}
+	qb.sel = &sqlparser.Select{
+		From: []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{
+			Expr: dt,
+			As:   sqlparser.NewIdentifierCS("dt"),
+		}},
+		SelectExprs: sqlparser.CloneSelectExprs(sqlparser.GetFirstSelect(qb.sel).SelectExprs),
+	}
+}
+
+func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.SelectStatement) error {
+	colName := column.Name.String()
+	exprs := sqlparser.GetFirstSelect(sel).SelectExprs
+	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
+		switch ae := expr.(type) {
+		case *sqlparser.StarExpr:
+			return true
+		case *sqlparser.AliasedExpr:
+			// When accessing columns on top of a UNION, we fall back to this simple strategy of string comparisons
+			return ae.ColumnName() == colName
+		}
+		return false
+	})
+	if offset == -1 {
+		return vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(column)))
+	}
+	return nil
 }
 
 func (qb *queryBuilder) clearProjections() {
