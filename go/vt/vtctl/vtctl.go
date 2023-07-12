@@ -2930,6 +2930,34 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	return nil
 }
 
+func generateOnlineDDLQuery(command string, arg string, allSupported bool) (string, error) {
+	// Accept inputs like so:
+	//  "launch", "all"
+	//  "launch", <uuid>
+	//  "launch-all", <empty>
+	if tokens := strings.Split(command, "-"); len(tokens) == 2 && tokens[1] == "all" {
+		// command is e.g. "launch-all"
+		if arg != "" {
+			return "", fmt.Errorf("UUID not allowed in %s", command)
+		}
+		// transform "launch-all" into "launch", "all"
+		command = tokens[0]
+		arg = "all"
+	}
+	switch arg {
+	case "":
+		return "", fmt.Errorf("UUID|all required")
+	case "all":
+		if !allSupported {
+			return "", fmt.Errorf("'all' not supported for %s", command)
+		}
+		return fmt.Sprintf(`alter vitess_migration %s all`, command), nil
+	default:
+		query := `alter vitess_migration %a ` + command
+		return sqlparser.ParseAndBind(query, sqltypes.StringBindVariable(arg))
+	}
+}
+
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 	orderBy := subFlags.String("order", "ascending", "Sort the results by `id` property of the Schema migration (default is ascending. Allowed values are `ascending` or `descending`.")
@@ -2953,7 +2981,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 
 	applySchemaQuery := ""
 	executeFetchQuery := ""
-	var bindErr error
+	var err error
 	switch command {
 	case "show":
 		condition := ""
@@ -2969,12 +2997,12 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			string(schema.OnlineDDLStatusRunning),
 			string(schema.OnlineDDLStatusComplete),
 			string(schema.OnlineDDLStatusFailed):
-			condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
+			condition, err = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
 		default:
 			if schema.IsOnlineDDLUUID(arg) {
-				condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
+				condition, err = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
 			} else {
-				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
+				condition, err = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
 		}
 		order := " order by `id` "
@@ -2993,71 +3021,29 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 		executeFetchQuery = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
-	case "retry":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a retry`, sqltypes.StringBindVariable(arg))
-	case "cleanup":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a cleanup`, sqltypes.StringBindVariable(arg))
-	case "launch":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a launch`, sqltypes.StringBindVariable(arg))
-	case "launch-all":
-		if arg != "" {
-			return fmt.Errorf("UUID not allowed in %s", command)
-		}
-		applySchemaQuery = `alter vitess_migration launch all`
-	case "complete":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a complete`, sqltypes.StringBindVariable(arg))
-	case "complete-all":
-		if arg != "" {
-			return fmt.Errorf("UUID not allowed in %s", command)
-		}
-		applySchemaQuery = `alter vitess_migration complete all`
-	case "cancel":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a cancel`, sqltypes.StringBindVariable(arg))
-	case "cancel-all":
-		if arg != "" {
-			return fmt.Errorf("UUID not allowed in %s", command)
-		}
-		applySchemaQuery = `alter vitess_migration cancel all`
-	case "throttle":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a throttle`, sqltypes.StringBindVariable(arg))
-	case "unthrottle":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a unthrottle`, sqltypes.StringBindVariable(arg))
-	case "throttle-all":
-		if arg != "" {
-			return fmt.Errorf("UUID not allowed in %s", command)
-		}
-		applySchemaQuery = `alter vitess_migration throttle all`
-	case "unthrottle-all":
-		if arg != "" {
-			return fmt.Errorf("UUID not allowed in %s", command)
-		}
-		applySchemaQuery = `alter vitess_migration unthrottle all`
+	case
+		"retry",
+		"cleanup":
+		// Do not support 'ALL' argument
+		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, false)
+	case
+		"launch",
+		"launch-all",
+		"complete",
+		"complete-all",
+		"cancel",
+		"cancel-all",
+		"throttle",
+		"throttle-all",
+		"unthrottle",
+		"unthrottle-all":
+		// Support 'ALL' argument
+		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, true)
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
-	if bindErr != nil {
-		return fmt.Errorf("Error generating OnlineDDL query: %+v", bindErr)
+	if err != nil {
+		return fmt.Errorf("Error generating OnlineDDL query: %+v", err)
 	}
 
 	if applySchemaQuery != "" {
