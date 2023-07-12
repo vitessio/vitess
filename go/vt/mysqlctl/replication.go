@@ -258,9 +258,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	case true:
 		newState = "ReadOnly"
 	}
-	params, _ := mysqld.dbcfgs.DbaWithDB().MysqlParams()
-	log.Infof("SetReadOnly setting connection setting of %s:%d, socket:%s to : %s",
-		params.Host, params.Port, params.UnixSocket, newState)
+	log.Infof("SetReadOnly setting to : %s", newState)
 
 	query := "SET GLOBAL read_only = "
 	if on {
