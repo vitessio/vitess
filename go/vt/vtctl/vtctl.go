@@ -2940,7 +2940,7 @@ func generateOnlineDDLQuery(command string, arg string, allSupported bool) (stri
 	if tokens := strings.Split(command, "-"); len(tokens) == 2 && tokens[1] == "all" {
 		// command is e.g. "launch-all"
 		if arg != "" {
-			return "", fmt.Errorf("UUID not allowed in %s", command)
+			return "", fmt.Errorf("UUID not allowed in '%s' command", command)
 		}
 		// transform "launch-all" into "launch", "all"
 		command = tokens[0]
@@ -2951,7 +2951,7 @@ func generateOnlineDDLQuery(command string, arg string, allSupported bool) (stri
 		return "", fmt.Errorf("UUID|all required")
 	case "all":
 		if !allSupported {
-			return "", fmt.Errorf("'all' not supported for %s", command)
+			return "", fmt.Errorf("'all' not supported for '%s' command", command)
 		}
 		return fmt.Sprintf(`alter vitess_migration %s all`, command), nil
 	default:
