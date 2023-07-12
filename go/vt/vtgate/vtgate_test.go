@@ -88,6 +88,7 @@ func TestVTGateExecute(t *testing.T) {
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_, qr, err := rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			Autocommit:   true,
 			TargetString: "@primary",
@@ -128,6 +129,7 @@ func TestVTGateExecuteError(t *testing.T) {
 	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_, qr, err := rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			Autocommit:   true,
 			TargetString: "@primary",
@@ -227,6 +229,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	// Valid keyspace.
 	_, qr, err := rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			TargetString: KsTestUnsharded,
 		},
@@ -243,6 +246,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	// Invalid keyspace.
 	_, _, err = rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			TargetString: "invalid_keyspace",
 		},
@@ -255,6 +259,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	// Valid keyspace/shard.
 	_, qr, err = rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			TargetString: KsTestUnsharded + ":0@primary",
 		},
@@ -269,6 +274,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	// Invalid keyspace/shard.
 	_, _, err = rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			TargetString: KsTestUnsharded + ":noshard@primary",
 		},
@@ -288,6 +294,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	var qrs []*sqltypes.Result
 	_, err := rpcVTGate.StreamExecute(
 		context.Background(),
+		nil,
 		&vtgatepb.Session{
 			TargetString: "@primary",
 			Options:      executeOptions,
@@ -331,7 +338,7 @@ func TestVTGateBindVarError(t *testing.T) {
 	}{{
 		name: "Execute",
 		f: func() error {
-			_, _, err := rpcVTGate.Execute(ctx, session, "", bindVars)
+			_, _, err := rpcVTGate.Execute(ctx, nil, session, "", bindVars)
 			return err
 		},
 	}, {
@@ -343,7 +350,7 @@ func TestVTGateBindVarError(t *testing.T) {
 	}, {
 		name: "StreamExecute",
 		f: func() error {
-			_, err := rpcVTGate.StreamExecute(ctx, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+			_, err := rpcVTGate.StreamExecute(ctx, nil, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
 			return err
 		},
 	}}
@@ -362,6 +369,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 	_, _, err := rpcVTGate.Execute(
 		context.Background(),
+		nil,
 		primarySession,
 		"select id from t1",
 		nil,
@@ -384,6 +392,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 	_, err = rpcVTGate.StreamExecute(
 		context.Background(),
+		nil,
 		primarySession,
 		"select id from t1",
 		nil,
@@ -506,21 +515,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.Code_ABORTED case.
-	session, _, err := rpcVTGate.Execute(
-		context.Background(),
-		&vtgatepb.Session{},
-		"begin",
-		nil,
-	)
+	session, _, err := rpcVTGate.Execute(context.Background(), nil, &vtgatepb.Session{}, "begin", nil)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = rpcVTGate.Execute(
-		context.Background(),
-		session,
-		"select id from t1",
-		nil,
-	)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -528,12 +527,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
-	_, _, err = rpcVTGate.Execute(
-		context.Background(),
-		session,
-		"select id from t1",
-		nil,
-	)
+	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -546,21 +540,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
-	session, _, err = rpcVTGate.Execute(
-		context.Background(),
-		&vtgatepb.Session{},
-		"begin",
-		nil,
-	)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, &vtgatepb.Session{}, "begin", nil)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = rpcVTGate.Execute(
-		context.Background(),
-		session,
-		"select id from t1",
-		nil,
-	)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -568,12 +552,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
-	_, _, err = rpcVTGate.Execute(
-		context.Background(),
-		session,
-		"select id from t1",
-		nil,
-	)
+	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -586,21 +565,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
 	// vtrpcpb.Code_ALREADY_EXISTS case.
-	session, _, err = rpcVTGate.Execute(
-		context.Background(),
-		&vtgatepb.Session{},
-		"begin",
-		nil,
-	)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, &vtgatepb.Session{}, "begin", nil)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = rpcVTGate.Execute(
-		context.Background(),
-		session,
-		"select id from t1",
-		nil,
-	)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -608,12 +577,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
-	_, _, err = rpcVTGate.Execute(
-		context.Background(),
-		session,
-		"select id from t1",
-		nil,
-	)
+	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -695,13 +659,13 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	require.False(t, session.InTransaction)
 
 	var err error
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "begin", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "begin", nil)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
 
 	// this query goes to multiple shards so internal savepoint will be created.
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (1), (3)", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "insert into sp_tbl(user_id) values (1), (3)", nil)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
@@ -728,7 +692,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc2.Queries = nil
 
 	// multi shard so new savepoint will be created.
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (2), (4)", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "insert into sp_tbl(user_id) values (2), (4)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql:           "savepoint x",
@@ -749,7 +713,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	_, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
+	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "insert into sp_tbl(user_id) values (5)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",

@@ -178,6 +178,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   referenceDefinition *ReferenceDefinition
   txAccessModes []TxAccessMode
   txAccessMode TxAccessMode
+  killType KillType
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -247,6 +248,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
+%token <str> KILL
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -398,14 +400,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %type <partitionByType> range_or_list
 %type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
-%type <statement> command
-%type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
-%type <statement> explain_statement explainable_statement
-%type <statement> prepare_statement
-%type <statement> vexplain_statement
-%type <statement> execute_statement deallocate_statement
+%type <statement> command kill_statement
+%type <statement> explain_statement explainable_statement vexplain_statement
+%type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
+%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list
@@ -589,6 +589,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <literal> ratio_opt
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
+%type <killType> kill_type_opt
 %start any_command
 
 %%
@@ -650,6 +651,7 @@ command:
 | prepare_statement
 | execute_statement
 | deallocate_statement
+| kill_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -7873,6 +7875,28 @@ reserved_table_id:
   {
     $$ = NewIdentifierCS(string($1))
   }
+
+kill_statement:
+  KILL kill_type_opt INTEGRAL
+  {
+    $$ = &Kill{Type: $2, ProcesslistID: convertStringToUInt64($3)}
+  }
+
+kill_type_opt:
+  /* empty */
+  {
+    $$ = ConnectionType
+  }
+| CONNECTION
+  {
+    $$ = ConnectionType
+  }
+| QUERY
+  {
+    $$ = QueryType
+  }
+
+
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -7951,6 +7975,7 @@ reserved_keyword:
 | JOIN
 | JSON_TABLE
 | KEY
+| KILL
 | LAG
 | LAST_VALUE
 | LATERAL

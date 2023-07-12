@@ -111,6 +111,17 @@ func (c *client) RefreshConfig(ctx context.Context) error {
 	})
 }
 
+// VersionString is part of the MysqlctlClient interface.
+func (c *client) VersionString(ctx context.Context) (string, error) {
+	var version string
+	err := c.withRetry(ctx, func() error {
+		r, err := c.c.VersionString(ctx, &mysqlctlpb.VersionStringRequest{})
+		version = r.Version
+		return err
+	})
+	return version, err
+}
+
 // Close is part of the MysqlctlClient interface.
 func (c *client) Close() {
 	c.cc.Close()

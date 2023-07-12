@@ -3649,6 +3649,13 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input: `kill connection 18446744073709551615`,
+	}, {
+		input: `kill query 18446744073709551615`,
+	}, {
+		input:  `kill 18446744073709551615`,
+		output: `kill connection 18446744073709551615`,
 	}}
 )
 

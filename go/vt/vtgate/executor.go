@@ -42,6 +42,11 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -55,12 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 var (
@@ -191,14 +191,14 @@ func NewExecutor(
 }
 
 // Execute executes a non-streaming query.
-func (e *Executor) Execute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
+func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
-	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
+	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
 		saveSessionStats(safeSession, stmtType, 0, 0, 0, err)
@@ -244,6 +244,7 @@ func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, q
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(
 	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
 	method string,
 	safeSession *SafeSession,
 	sql string,
@@ -334,7 +335,7 @@ func (e *Executor) StreamExecute(
 		return err
 	}
 
-	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
@@ -381,11 +382,11 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
-func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
-	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
 		stmtType = plan.Type
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
 		return err
@@ -625,6 +626,36 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *Safe
 		}
 	}
 	return qr, nil
+}
+
+// handleKill executed the kill statement.
+func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, stmt sqlparser.Statement, logStats *logstats.LogStats) (result *sqltypes.Result, err error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	e.updateQueryCounts("Kill", "", "", 0)
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
+	if !allowKillStmt {
+		return nil, vterrors.VT07001("kill statement execution not permitted.")
+	}
+
+	if mysqlCtx == nil {
+		return nil, vterrors.VT12001("kill statement works with access through mysql protocol")
+	}
+
+	killStmt := stmt.(*sqlparser.Kill)
+	switch killStmt.Type {
+	case sqlparser.QueryType:
+		err = mysqlCtx.KillQuery(uint32(killStmt.ProcesslistID))
+	default:
+		err = mysqlCtx.KillConnection(ctx, uint32(killStmt.ProcesslistID))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sqltypes.Result{}, nil
 }
 
 // CloseSession releases the current connection, which rollbacks open transactions and closes reserved connections.
@@ -1269,7 +1300,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	case sqlparser.StmtSelect, sqlparser.StmtShow:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush:
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
