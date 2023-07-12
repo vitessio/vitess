@@ -3669,27 +3669,20 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "(0|2) ASC",
+            "OperatorType": "Limit",
+            "Count": "INT64(2)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(2)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select val1, 1, weight_string(val1), weight_string(val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
-                    "OrderBy": "(0|3) ASC",
-                    "Query": "select val1, 1, weight_string(val1), weight_string(val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select val1, 1, weight_string(val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select val1, 1, weight_string(val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
+                "Table": "`user`"
               }
             ]
           }

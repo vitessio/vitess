@@ -41,6 +41,7 @@ type (
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		// TODO: we should remove this and replace it with rewriters
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 
 		// AddColumn tells an operator to also output an additional column specified.

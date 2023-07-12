@@ -447,8 +447,8 @@ func (st *SemTable) EqualsExprWithDeps(a, b sqlparser.Expr) bool {
 	if !eq {
 		return false
 	}
-	adeps := st.DirectDeps(a)
-	bdeps := st.DirectDeps(b)
+	adeps := st.RecursiveDeps(a)
+	bdeps := st.RecursiveDeps(b)
 	if adeps.IsEmpty() || bdeps.IsEmpty() || adeps == bdeps {
 		return true
 	}

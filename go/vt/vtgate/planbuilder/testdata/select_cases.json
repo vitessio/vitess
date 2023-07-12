@@ -1360,12 +1360,56 @@
   {
     "comment": "union with the same target shard",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from music where user_id = 1 union select * from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
+        "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
+        "Table": "`user`, music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union with the same target shard last_insert_id",
     "query": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
+        "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
+        "Table": "`user`, music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "unsharded union in derived table",

@@ -178,7 +178,44 @@
   {
     "comment": "union all on scatter and single route",
     "query": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union of information_schema with normal table",
@@ -299,12 +336,55 @@
   {
     "comment": "union with the same target shard because of vindex",
     "query": "select * from music where id = 1 union select * from user where id = 1",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from music where id = 1 union select * from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
+        "Query": "select * from music where id = 1 union select * from `user` where id = 1",
+        "Table": "`user`, music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union with different target shards",
     "query": "select 1 from music where id = 1 union select 1 from music where id = 2",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from music where id = 1 union select 1 from music where id = 2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music where 1 != 1 union select 1 from music where 1 != 1",
+        "Query": "select 1 from music where id = 1 union select 1 from music where id = 2",
+        "Table": "music",
+        "Values": [
+          "INT64(2)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   },
   {
     "comment": "multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT",
@@ -340,7 +420,34 @@
   {
     "comment": "multiple unions",
     "query": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `1`, weight_string(`1`) from (select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select `1`, weight_string(`1`) from (select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`) as dt",
+            "Table": "`user`, dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union distinct between a scatter query and a join (other side)",
@@ -865,7 +972,29 @@
   {
     "comment": "pushes predicate on both sides of UNION",
     "query": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, id as foo from `user` where 1 != 1 union select 'extra', user_id from user_extra where 1 != 1",
+        "Query": "select `name`, id as foo from `user` where id = 3 union select 'extra', user_id from user_extra where user_id = 3",
+        "Table": "`user`, user_extra",
+        "Values": [
+          "INT64(3)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   },
   {
     "comment": "systable union query in derived table with constraint on outside (star projection)",

@@ -501,7 +501,21 @@
   {
     "comment": "create view with union with the same target shard",
     "query": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
-    "plan": "VT13001: [BUG] do not know how to turn *operators.Distinct into SQL"
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
+      },
+      "TablesUsed": [
+        "user.view_a"
+      ]
+    }
   },
   {
     "comment": "create view with testing SingleRow Projection",

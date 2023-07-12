@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -104,9 +106,35 @@ func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel.GroupBy = append(sel.GroupBy, original)
 }
 
-func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
-	sel := qb.sel.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, projection)
+func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) error {
+	switch stmt := qb.sel.(type) {
+	case *sqlparser.Select:
+		stmt.SelectExprs = append(stmt.SelectExprs, projection)
+		return nil
+	case *sqlparser.Union:
+		// for UNION we can only check if it's valid, and only if we are dealing with a ColName
+		column, ok := projection.Expr.(*sqlparser.ColName)
+		if !ok {
+			return vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(projection)))
+		}
+		colName := column.Name.String()
+		exprs := sqlparser.GetFirstSelect(qb.sel).SelectExprs
+		offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
+			switch ae := expr.(type) {
+			case *sqlparser.StarExpr:
+				return true
+			case *sqlparser.AliasedExpr:
+				// When accessing columns on top of a UNION, we fall back to this simple strategy of string comparisons
+				return ae.ColumnName() == colName
+			}
+			return false
+		})
+		if offset == -1 {
+			return vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(projection)))
+		}
+		return nil
+	}
+	return vterrors.VT13001("switch should be exhaustive")
 }
 
 func (qb *queryBuilder) clearProjections() {
@@ -342,6 +370,13 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildAggregation(op, qb)
 	case *Union:
 		return buildUnion(op, qb)
+	case *Distinct:
+		err := buildQuery(op.Source, qb)
+		if err != nil {
+			return err
+		}
+		qb.sel.MakeDistinct()
+		return nil
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
@@ -361,7 +396,10 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 		return err
 	}
 	for _, column := range cols {
-		qb.addProjection(column)
+		err := qb.addProjection(column)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, by := range op.Grouping {
@@ -407,7 +445,10 @@ func buildTable(op *Table, qb *queryBuilder) {
 		qb.addPredicate(pred)
 	}
 	for _, name := range op.Columns {
-		qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
+		err := qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -422,7 +463,10 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 		qb.clearProjections()
 
 		for _, column := range op.Columns {
-			qb.addProjection(column)
+			err := qb.addProjection(column)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -438,7 +482,10 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 
 	if !isSel {
 		for _, column := range op.Columns {
-			qb.addProjection(column)
+			err := qb.addProjection(column)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -522,7 +569,10 @@ func buildDerived(op *Horizon, qb *queryBuilder) error {
 		Select: sel,
 	}, nil, op.ColumnAliases)
 	for _, col := range op.Columns {
-		qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+		err := qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
