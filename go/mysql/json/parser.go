@@ -28,12 +28,12 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/mysql/datetime"
-	"vitess.io/vitess/go/mysql/format"
-	"vitess.io/vitess/go/mysql/json/fastparse"
+	"vitess.io/vitess/go/mysql/fastparse"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/format"
 )
 
 // Parser parses JSON.
@@ -1003,10 +1003,7 @@ func (v *Value) Uint64() (uint64, bool) {
 }
 
 func (v *Value) Float64() (float64, bool) {
-	// We only care to parse as many of the initial float characters of the
-	// string as possible. This functionality is implemented in the `strconv` package
-	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(v.s, 64)
+	val, err := fastparse.ParseFloat64(v.s)
 	if err != nil {
 		return val, false
 	}

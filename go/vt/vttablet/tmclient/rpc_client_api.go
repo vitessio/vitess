@@ -51,7 +51,6 @@ func init() {
 		"vtctl",
 		"vtctld",
 		"vtctldclient",
-		"vtgr",
 		"vtorc",
 		"vttablet",
 		"vttestserver",
@@ -78,6 +77,9 @@ type TabletManagerClient interface {
 	//
 	// Various read-write methods
 	//
+
+	// ResetSequences asks the remote tablet to reset the sequences for the specified tables
+	ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error
 
 	// SetReadOnly makes the mysql instance read-only
 	SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error

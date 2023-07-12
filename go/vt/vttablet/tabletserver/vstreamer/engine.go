@@ -43,14 +43,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-const (
-	throttlerAppName = "vstreamer"
 )
 
 // Engine is the engine for handling vreplication streaming requests.
@@ -87,20 +84,21 @@ type Engine struct {
 	vschemaUpdates *stats.Counter
 
 	// vstreamer metrics
-	vstreamerPhaseTimings     *servenv.TimingsWrapper
-	vstreamerCount            *stats.Gauge
-	vstreamerEventsStreamed   *stats.Counter
-	vstreamerPacketSize       *stats.GaugeFunc
-	vstreamerNumPackets       *stats.Counter
-	resultStreamerNumRows     *stats.Counter
-	resultStreamerNumPackets  *stats.Counter
-	rowStreamerNumRows        *stats.Counter
-	rowStreamerNumPackets     *stats.Counter
-	rowStreamerWaits          *servenv.TimingsWrapper
-	errorCounts               *stats.CountersWithSingleLabel
-	vstreamersCreated         *stats.Counter
-	vstreamersEndedWithErrors *stats.Counter
-	vstreamerFlushedBinlogs   *stats.Counter
+	vstreamerPhaseTimings                  *servenv.TimingsWrapper
+	vstreamerCount                         *stats.Gauge
+	vstreamerEventsStreamed                *stats.Counter
+	vstreamerCompressedTransactionsDecoded *stats.Counter
+	vstreamerPacketSize                    *stats.GaugeFunc
+	vstreamerNumPackets                    *stats.Counter
+	resultStreamerNumRows                  *stats.Counter
+	resultStreamerNumPackets               *stats.Counter
+	rowStreamerNumRows                     *stats.Counter
+	rowStreamerNumPackets                  *stats.Counter
+	rowStreamerWaits                       *servenv.TimingsWrapper
+	errorCounts                            *stats.CountersWithSingleLabel
+	vstreamersCreated                      *stats.Counter
+	vstreamersEndedWithErrors              *stats.Counter
+	vstreamerFlushedBinlogs                *stats.Counter
 
 	throttlerClient *throttle.Client
 }
@@ -114,7 +112,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		ts:              ts,
 		se:              se,
 		cell:            cell,
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VStreamerName, throttle.ThrottleCheckSelf),
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
@@ -125,20 +123,21 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vschemaErrors:  env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
 		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 
-		vstreamerPhaseTimings:     env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
-		vstreamerCount:            env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
-		vstreamerEventsStreamed:   env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
-		vstreamerPacketSize:       env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
-		vstreamerNumPackets:       env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
-		resultStreamerNumPackets:  env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
-		resultStreamerNumRows:     env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
-		rowStreamerNumPackets:     env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
-		rowStreamerNumRows:        env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
-		rowStreamerWaits:          env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
-		vstreamersCreated:         env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
-		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
-		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
-		vstreamerFlushedBinlogs:   env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
+		vstreamerPhaseTimings:                  env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
+		vstreamerCount:                         env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
+		vstreamerEventsStreamed:                env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
+		vstreamerCompressedTransactionsDecoded: env.Exporter().NewCounter("VStreamerCompressedTransactionsDecoded", "Count of compressed transactions (MySQL's binlog_transaction_compression=ON) decoded in the VStream API"),
+		vstreamerPacketSize:                    env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
+		vstreamerNumPackets:                    env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
+		resultStreamerNumPackets:               env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
+		resultStreamerNumRows:                  env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
+		rowStreamerNumPackets:                  env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
+		rowStreamerNumRows:                     env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
+		rowStreamerWaits:                       env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
+		vstreamersCreated:                      env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
+		vstreamersEndedWithErrors:              env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
+		errorCounts:                            env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
+		vstreamerFlushedBinlogs:                env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
 	}
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
@@ -197,9 +196,39 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 	return vse.lvschema.vschema
 }
 
+// Only support full and noblob binlog_row_image modes.
+func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Connector) error {
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	rs, err := conn.ExecuteFetch("select @@binlog_row_image", 1, false)
+	if err != nil {
+		return err
+	}
+	if len(rs.Rows) != 1 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("'select @@binlog_row_image' returns an invalid result: %+v", rs.Rows))
+	}
+
+	binlogRowImage := strings.ToLower(rs.Rows[0][0].ToString())
+	switch binlogRowImage {
+	case "minimal":
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "minimal binlog_row_image is not supported by Vitess VReplication")
+	default:
+	}
+	return nil
+}
+
 // Stream starts a new stream.
 // This streams events from the binary logs
-func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
+
+	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
+		return err
+	}
+
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
@@ -212,7 +241,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		}
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
-		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, throttlerApp, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++

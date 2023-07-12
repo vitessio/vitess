@@ -21,10 +21,9 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -98,6 +97,11 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
 		addPred(exp)
 	}
+}
+
+func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
+	sel := qb.sel.(*sqlparser.Select)
+	sel.GroupBy = append(sel.GroupBy, original)
 }
 
 func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
@@ -242,7 +246,7 @@ func (ts *tableSorter) Swap(i, j int) {
 }
 
 func (h *Horizon) toSQL(qb *queryBuilder) error {
-	err := stripDownQuery(h.Select, qb.sel)
+	err := stripDownQuery(h.Query, qb.sel)
 	if err != nil {
 		return err
 	}
@@ -314,14 +318,58 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildApplyJoin(op, qb)
 	case *Filter:
 		return buildFilter(op, qb)
-	case *Derived:
-		return buildDerived(op, qb)
 	case *Horizon:
+		if op.TableId != nil {
+			return buildDerived(op, qb)
+		}
 		return buildHorizon(op, qb)
 	case *Limit:
 		return buildLimit(op, qb)
+	case *Ordering:
+		return buildOrdering(op, qb)
+	case *Aggregator:
+		return buildAggregation(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
+	}
+	return nil
+}
+
+func buildAggregation(op *Aggregator, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	qb.clearProjections()
+
+	cols, err := op.GetColumns()
+	if err != nil {
+		return err
+	}
+	for _, column := range cols {
+		qb.addProjection(column)
+	}
+
+	for _, by := range op.Grouping {
+		qb.addGroupBy(by.Inner)
+		simplified := by.SimplifiedExpr
+		if by.WSOffset != -1 {
+			qb.addGroupBy(weightStringFor(simplified))
+		}
+	}
+
+	return nil
+}
+
+func buildOrdering(op *Ordering, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	for _, order := range op.Order {
+		qb.sel.AddOrder(order.Inner)
 	}
 	return nil
 }
@@ -357,13 +405,21 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	}
 
 	qb.clearProjections()
-	for i, column := range op.Columns {
-		ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
-		if op.ColumnNames[i] != "" {
-			ae.As = sqlparser.NewIdentifierCI(op.ColumnNames[i])
-		}
-		qb.addProjection(ae)
+
+	for _, column := range op.Columns {
+		qb.addProjection(column)
 	}
+
+	// if the projection is on derived table, we use the select we have
+	// created above and transform it into a derived table
+	if op.TableID != nil {
+		sel := qb.sel.(*sqlparser.Select)
+		qb.sel = nil
+		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, nil)
+	}
+
 	return nil
 }
 
@@ -402,7 +458,7 @@ func buildFilter(op *Filter, qb *queryBuilder) error {
 	return nil
 }
 
-func buildDerived(op *Derived, qb *queryBuilder) error {
+func buildDerived(op *Horizon, qb *queryBuilder) error {
 	err := buildQuery(op.Source, qb)
 	if err != nil {
 		return err
@@ -431,7 +487,7 @@ func buildHorizon(op *Horizon, qb *queryBuilder) error {
 		return err
 	}
 
-	err = stripDownQuery(op.Select, qb.sel)
+	err = stripDownQuery(op.Query, qb.sel)
 	if err != nil {
 		return err
 	}

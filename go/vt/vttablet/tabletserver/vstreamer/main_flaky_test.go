@@ -31,8 +31,9 @@ import (
 )
 
 var (
-	engine *Engine
-	env    *testenv.Env
+	engine    *Engine
+	env       *testenv.Env
+	schemaDir string
 
 	ignoreKeyspaceShardInFieldAndRowEvents bool
 )
@@ -62,6 +63,26 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func newEngine(t *testing.T, binlogRowImage string) {
+	if engine != nil {
+		engine.Close()
+	}
+	if env != nil {
+		env.Close()
+	}
+	var err error
+	env, err = testenv.Init()
+	require.NoError(t, err)
+
+	setBinlogRowImage(t, binlogRowImage)
+
+	// engine cannot be initialized in testenv because it introduces
+	// circular dependencies
+	engine = NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
+	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
+	engine.Open()
+}
+
 func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams) *Engine {
 	original, err := env.Dbcfgs.AppWithDB().MysqlParams()
 	require.NoError(t, err)
@@ -73,4 +94,13 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	engine.Open()
 	return engine
+}
+
+func setBinlogRowImage(t *testing.T, mode string) {
+	execStatements(t, []string{
+		fmt.Sprintf("set @@binlog_row_image='%s'", mode),
+		fmt.Sprintf("set @@session.binlog_row_image='%s'", mode),
+		fmt.Sprintf("set @@global.binlog_row_image='%s'", mode),
+	})
+
 }

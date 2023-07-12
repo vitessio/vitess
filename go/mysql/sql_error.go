@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -146,7 +147,11 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 		ss = SSAccessDeniedError
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		num = demuxResourceExhaustedErrors(err.Error())
-		ss = SSClientError
+		// 1041 ER_OUT_OF_RESOURCES has SQLSTATE HYOOO as per https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_out_of_resources,
+		// so don't override it here in that case.
+		if num != EROutOfResources {
+			ss = SSClientError
+		}
 	case vtrpcpb.Code_UNIMPLEMENTED:
 		num = ERNotSupportedYet
 		ss = SSClientError
@@ -213,6 +218,29 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.WrongArguments:               {num: ERWrongArguments, state: SSUnknownSQLState},
 	vterrors.UnknownStmtHandler:           {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
 	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
+	vterrors.RegexpStringNotTerminated:    {num: ERRegexpStringNotTerminated, state: SSUnknownSQLState},
+	vterrors.RegexpBufferOverflow:         {num: ERRegexpBufferOverflow, state: SSUnknownSQLState},
+	vterrors.RegexpIllegalArgument:        {num: ERRegexpIllegalArgument, state: SSUnknownSQLState},
+	vterrors.RegexpIndexOutOfBounds:       {num: ERRegexpIndexOutOfBounds, state: SSUnknownSQLState},
+	vterrors.RegexpInternal:               {num: ERRegexpInternal, state: SSUnknownSQLState},
+	vterrors.RegexpRuleSyntax:             {num: ERRegexpRuleSyntax, state: SSUnknownSQLState},
+	vterrors.RegexpBadEscapeSequence:      {num: ERRegexpBadEscapeSequence, state: SSUnknownSQLState},
+	vterrors.RegexpUnimplemented:          {num: ERRegexpUnimplemented, state: SSUnknownSQLState},
+	vterrors.RegexpMismatchParen:          {num: ERRegexpMismatchParen, state: SSUnknownSQLState},
+	vterrors.RegexpBadInterval:            {num: ERRegexpBadInterval, state: SSUnknownSQLState},
+	vterrors.RegexpMaxLtMin:               {num: ERRRegexpMaxLtMin, state: SSUnknownSQLState},
+	vterrors.RegexpInvalidBackRef:         {num: ERRegexpInvalidBackRef, state: SSUnknownSQLState},
+	vterrors.RegexpLookBehindLimit:        {num: ERRegexpLookBehindLimit, state: SSUnknownSQLState},
+	vterrors.RegexpMissingCloseBracket:    {num: ERRegexpMissingCloseBracket, state: SSUnknownSQLState},
+	vterrors.RegexpInvalidRange:           {num: ERRegexpInvalidRange, state: SSUnknownSQLState},
+	vterrors.RegexpStackOverflow:          {num: ERRegexpStackOverflow, state: SSUnknownSQLState},
+	vterrors.RegexpTimeOut:                {num: ERRegexpTimeOut, state: SSUnknownSQLState},
+	vterrors.RegexpPatternTooBig:          {num: ERRegexpPatternTooBig, state: SSUnknownSQLState},
+	vterrors.RegexpInvalidFlag:            {num: ERRegexpInvalidFlag, state: SSUnknownSQLState},
+	vterrors.RegexpInvalidCaptureGroup:    {num: ERRegexpInvalidCaptureGroup, state: SSUnknownSQLState},
+	vterrors.CharacterSetMismatch:         {num: ERCharacterSetMismatch, state: SSUnknownSQLState},
+	vterrors.WrongParametersToNativeFct:   {num: ERWrongParametersToNativeFct, state: SSUnknownSQLState},
+	vterrors.KillDeniedError:              {num: ERKillDenied, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
@@ -261,6 +289,8 @@ func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
 	case isGRPCOverflowRE.Match([]byte(msg)):
 		return ERNetPacketTooLarge
+	case strings.Contains(msg, "Transaction throttled"):
+		return EROutOfResources
 	default:
 		return ERTooManyUserConnections
 	}

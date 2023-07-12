@@ -37,14 +37,15 @@ import (
 // vtorc as a separate process for testing
 type VTOrcProcess struct {
 	VtctlProcess
-	Port       int
-	LogDir     string
-	ExtraArgs  []string
-	ConfigPath string
-	Config     VTOrcConfiguration
-	WebPort    int
-	proc       *exec.Cmd
-	exit       chan error
+	Port        int
+	LogDir      string
+	LogFileName string
+	ExtraArgs   []string
+	ConfigPath  string
+	Config      VTOrcConfiguration
+	WebPort     int
+	proc        *exec.Cmd
+	exit        chan error
 }
 
 type VTOrcConfiguration struct {
@@ -55,6 +56,7 @@ type VTOrcConfiguration struct {
 	MySQLReplicaUser                      string
 	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
+	TopologyRefreshSeconds                int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`
@@ -124,7 +126,10 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
 	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
-	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", timeNow)))
+	if orc.LogFileName == "" {
+		orc.LogFileName = fmt.Sprintf("orc-stderr-%d.txt", timeNow)
+	}
+	errFile, _ := os.Create(path.Join(orc.LogDir, orc.LogFileName))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)

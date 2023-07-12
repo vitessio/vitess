@@ -30,18 +30,27 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+const (
+	lookupUnicodeLooseMD5HashParamWriteOnly = "write_only"
+)
+
 var (
-	_ SingleColumn   = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup         = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ LookupPlanable = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ SingleColumn   = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup         = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ LookupPlanable = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn    = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup          = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ ParamValidating = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn    = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup          = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ ParamValidating = (*LookupUnicodeLooseMD5HashUnique)(nil)
+
+	lookupUnicodeLooseMD5HashParams = append(
+		append(make([]string, 0), lookupCommonParams...),
+		lookupUnicodeLooseMD5HashParamWriteOnly,
+	)
 )
 
 func init() {
-	Register("lookup_unicodeloosemd5_hash", NewLookupUnicodeLooseMD5Hash)
-	Register("lookup_unicodeloosemd5_hash_unique", NewLookupUnicodeLooseMD5HashUnique)
+	Register("lookup_unicodeloosemd5_hash", newLookupUnicodeLooseMD5Hash)
+	Register("lookup_unicodeloosemd5_hash_unique", newLookupUnicodeLooseMD5HashUnique)
 }
 
 //====================================================================
@@ -51,12 +60,13 @@ func init() {
 // NonUnique and a Lookup and stores the from value in a hashed form.
 // Warning: This Vindex is being depcreated in favor of Lookup
 type LookupUnicodeLooseMD5Hash struct {
-	name      string
-	writeOnly bool
-	lkp       lookupInternal
+	name          string
+	writeOnly     bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
-// NewLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
+// newLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -67,14 +77,17 @@ type LookupUnicodeLooseMD5Hash struct {
 //
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
-	lh := &LookupUnicodeLooseMD5Hash{name: name}
+func newLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
+	lh := &LookupUnicodeLooseMD5Hash{
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupUnicodeLooseMD5HashParams),
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	lh.writeOnly, err = boolFromMap(m, "write_only")
+	lh.writeOnly, err = boolFromMap(m, lookupUnicodeLooseMD5HashParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -152,53 +165,8 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, i
 	return out, nil
 }
 
-// MapResult implements the LookupPlanable interface
-func (lh *LookupUnicodeLooseMD5Hash) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
-	if lh.writeOnly {
-		for range ids {
-			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-
-	for _, result := range results {
-		if len(result.Rows) == 0 {
-			out = append(out, key.DestinationNone{})
-			continue
-		}
-		ksids := make([][]byte, 0, len(result.Rows))
-		for _, row := range result.Rows {
-			num, err := evalengine.ToUint64(row[0])
-			if err != nil {
-				// A failure to convert is equivalent to not being
-				// able to map.
-				continue
-			}
-			ksids = append(ksids, vhash(num))
-		}
-		out = append(out, key.DestinationKeyspaceIDs(ksids))
-	}
-	return out, nil
-}
-
-// Query implements the LookupPlanable interface
-func (lh *LookupUnicodeLooseMD5Hash) Query() (selQuery string, arguments []string) {
-	return lh.lkp.query()
-}
-
-// AllowBatch implements the LookupPlanable interface
-func (lh *LookupUnicodeLooseMD5Hash) AllowBatch() bool {
-	return lh.lkp.BatchLookup
-}
-
 func (lh *LookupUnicodeLooseMD5Hash) AutoCommitEnabled() bool {
 	return lh.lkp.Autocommit
-}
-
-// GetCommitOrder implements the LookupPlanable interface
-func (lh *LookupUnicodeLooseMD5Hash) GetCommitOrder() vtgatepb.CommitOrder {
-	return vtgatepb.CommitOrder_NORMAL
 }
 
 // Verify returns true if ids maps to ksids.
@@ -270,6 +238,11 @@ func (lh *LookupUnicodeLooseMD5Hash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
 }
 
+// UnknownParams implements the ParamValidating interface.
+func (lh *LookupUnicodeLooseMD5Hash) UnknownParams() []string {
+	return lh.unknownParams
+}
+
 //====================================================================
 
 // LookupUnicodeLooseMD5HashUnique defines a vindex that uses a lookup table.
@@ -277,12 +250,13 @@ func (lh *LookupUnicodeLooseMD5Hash) MarshalJSON() ([]byte, error) {
 // Unique and a Lookup and will store the from value in a hashed format.
 // Warning: This Vindex is being depcreated in favor of LookupUnique
 type LookupUnicodeLooseMD5HashUnique struct {
-	name      string
-	writeOnly bool
-	lkp       lookupInternal
+	name          string
+	writeOnly     bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
-// NewLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
+// newLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -293,20 +267,23 @@ type LookupUnicodeLooseMD5HashUnique struct {
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
-	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
+func newLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
+	lhu := &LookupUnicodeLooseMD5HashUnique{
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupUnicodeLooseMD5HashParams),
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	lhu.writeOnly, err = boolFromMap(m, "write_only")
+	lhu.writeOnly, err = boolFromMap(m, lookupUnicodeLooseMD5HashParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
 
 	// Don't allow upserts for unique vindexes.
-	if err := lhu.lkp.Init(m, cc.autocommit, false, cc.multiShardAutocommit); err != nil {
+	if err := lhu.lkp.Init(m, cc.autocommit, false /* upsert */, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lhu, nil
@@ -368,51 +345,8 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCu
 	return out, nil
 }
 
-// MapResult implements the LookupPlanable interface
-func (lhu *LookupUnicodeLooseMD5HashUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
-	if lhu.writeOnly {
-		for range ids {
-			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, key.DestinationNone{})
-		case 1:
-			num, err := evalengine.ToUint64(result.Rows[0][0])
-			if err != nil {
-				out = append(out, key.DestinationNone{})
-				continue
-			}
-			out = append(out, key.DestinationKeyspaceID(vhash(num)))
-		default:
-			return nil, fmt.Errorf("LookupUnicodeLooseMD5HashUnique.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
-}
-
-// Query implements the LookupPlanable interface
-func (lhu *LookupUnicodeLooseMD5HashUnique) Query() (selQuery string, arguments []string) {
-	return lhu.lkp.query()
-}
-
-// AllowBatch implements the LookupPlanable interface
-func (lhu *LookupUnicodeLooseMD5HashUnique) AllowBatch() bool {
-	return lhu.lkp.BatchLookup
-}
-
 func (lhu *LookupUnicodeLooseMD5HashUnique) AutoCommitEnabled() bool {
 	return lhu.lkp.Autocommit
-}
-
-// GetCommitOrder implements the LookupPlanable interface
-func (lhu *LookupUnicodeLooseMD5HashUnique) GetCommitOrder() vtgatepb.CommitOrder {
-	return vtgatepb.CommitOrder_NORMAL
 }
 
 // Verify returns true if ids maps to ksids.
@@ -487,6 +421,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) MarshalJSON() ([]byte, error) {
 // IsBackfilling implements the LookupBackfill interface
 func (lhu *LookupUnicodeLooseMD5HashUnique) IsBackfilling() bool {
 	return lhu.writeOnly
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (lhu *LookupUnicodeLooseMD5HashUnique) UnknownParams() []string {
+	return lhu.unknownParams
 }
 
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {

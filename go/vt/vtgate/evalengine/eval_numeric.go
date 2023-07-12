@@ -21,11 +21,10 @@ import (
 	"math"
 	"strconv"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -111,7 +110,8 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 			}
 			return hex
 		}
-		return &evalFloat{f: parseStringToFloat(e.string())}
+		f, _ := fastparse.ParseFloat64(e.string())
+		return &evalFloat{f: f}
 	case *evalJSON:
 		switch e.Type() {
 		case json.TypeBoolean:
@@ -123,7 +123,8 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 			f, _ := e.Float64()
 			return &evalFloat{f: f}
 		case json.TypeString:
-			return &evalFloat{f: parseStringToFloat(e.Raw())}
+			f, _ := fastparse.ParseFloat64(e.Raw())
+			return &evalFloat{f: f}
 		default:
 			return &evalFloat{f: 0}
 		}
@@ -159,7 +160,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 			}
 			return f, true
 		}
-		val, _, err := hack.ParseFloatPrefix(e.string(), 64)
+		val, err := fastparse.ParseFloat64(e.string())
 		return &evalFloat{f: val}, err == nil
 	case *evalJSON:
 		switch e.Type() {
@@ -172,7 +173,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 			f, ok := e.Float64()
 			return &evalFloat{f: f}, ok
 		case json.TypeString:
-			val, _, err := hack.ParseFloatPrefix(e.Raw(), 64)
+			val, err := fastparse.ParseFloat64(e.Raw())
 			return &evalFloat{f: val}, err == nil
 		default:
 			return &evalFloat{f: 0}, true

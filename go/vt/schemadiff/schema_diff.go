@@ -22,34 +22,50 @@ import (
 	"vitess.io/vitess/go/mathutil"
 )
 
-type DiffDepType int
+type DiffDependencyType int
 
 // diff dependencies in increasing restriction severity
 const (
-	DiffDepNone DiffDepType = iota // not a dependency
-	DiffDepOrderUnknown
-	DiffDepInOrderCompletion
-	DiffDepSequentialExecution
+	DiffDependencyNone DiffDependencyType = iota // not a dependency
+	DiffDependencyOrderUnknown
+	DiffDependencyInOrderCompletion
+	DiffDependencySequentialExecution
 )
 
-// DiffDep indicates a dependency between two diffs, and the type of that dependency
-type DiffDep struct {
-	diff    EntityDiff
-	depDiff EntityDiff // depends on the above diff
-	depType DiffDepType
+// DiffDependency indicates a dependency between two diffs, and the type of that dependency
+type DiffDependency struct {
+	diff          EntityDiff
+	dependentDiff EntityDiff // depends on the above diff
+	typ           DiffDependencyType
 }
 
-// NewDiffDep returns a new diff dependency pairing.
-func NewDiffDep(diff EntityDiff, depDiff EntityDiff, depType DiffDepType) *DiffDep {
-	return &DiffDep{
-		diff:    diff,
-		depDiff: depDiff,
-		depType: depType,
+// NewDiffDependency returns a new diff dependency pairing.
+func NewDiffDependency(diff EntityDiff, dependentDiff EntityDiff, typ DiffDependencyType) *DiffDependency {
+	return &DiffDependency{
+		diff:          diff,
+		dependentDiff: dependentDiff,
+		typ:           typ,
 	}
 }
 
-func (d *DiffDep) hashKey() string {
-	return d.diff.CanonicalStatementString() + "/" + d.depDiff.CanonicalStatementString()
+func (d *DiffDependency) hashKey() string {
+	return d.diff.CanonicalStatementString() + "/" + d.dependentDiff.CanonicalStatementString()
+}
+
+// Diff returns the "benefactor" diff, on which DependentDiff() depends on, ie, should run 1st.
+func (d *DiffDependency) Diff() EntityDiff {
+	return d.diff
+}
+
+// DependentDiff returns the diff that depends on the "benefactor" diff, ie must run 2nd
+func (d *DiffDependency) DependentDiff() EntityDiff {
+	return d.dependentDiff
+}
+
+// Type returns the dependency type. Types are numeric and comparable: the higher the value, the
+// stricter, or more constrained, the dependency is.
+func (d *DiffDependency) Type() DiffDependencyType {
+	return d.typ
 }
 
 /*
@@ -96,18 +112,18 @@ type SchemaDiff struct {
 	schema *Schema
 	diffs  []EntityDiff
 
-	diffMap map[string]EntityDiff // key is diff's CanonicalStatementString()
-	deps    map[string]*DiffDep
+	diffMap      map[string]EntityDiff // key is diff's CanonicalStatementString()
+	dependencies map[string]*DiffDependency
 
 	r *mathutil.EquivalenceRelation // internal structure to help determine diffs
 }
 
 func NewSchemaDiff(schema *Schema) *SchemaDiff {
 	return &SchemaDiff{
-		schema:  schema,
-		deps:    make(map[string]*DiffDep),
-		diffMap: make(map[string]EntityDiff),
-		r:       mathutil.NewEquivalenceRelation(),
+		schema:       schema,
+		dependencies: make(map[string]*DiffDependency),
+		diffMap:      make(map[string]EntityDiff),
+		r:            mathutil.NewEquivalenceRelation(),
 	}
 }
 
@@ -123,7 +139,7 @@ func (d *SchemaDiff) loadDiffs(diffs []EntityDiff) {
 			if i > 0 {
 				// So this is a 2nd, 3rd etc. diff operating on same table
 				// Two migrations on same entity (table in our case) must run sequentially.
-				d.addDep(sdiff, allSubsequent[0], DiffDepSequentialExecution)
+				d.addDep(sdiff, allSubsequent[0], DiffDependencySequentialExecution)
 			}
 			d.r.Add(sdiff.CanonicalStatementString())
 			// since we've exploded the subsequent diffs, we now clear any subsequent diffs
@@ -133,20 +149,20 @@ func (d *SchemaDiff) loadDiffs(diffs []EntityDiff) {
 	}
 }
 
-// addDep adds a dependency: `depDiff` depends on `diff`, with given `depType`. If there's an
+// addDep adds a dependency: `dependentDiff` depends on `diff`, with given `depType`. If there's an
 // already existing dependency between the two diffs, then we compare the dependency type; if the new
 // type has a higher order (ie stricter) then we replace the existing dependency with the new one.
-func (d *SchemaDiff) addDep(diff EntityDiff, depDiff EntityDiff, depType DiffDepType) *DiffDep {
-	_, _ = d.r.Relate(diff.CanonicalStatementString(), depDiff.CanonicalStatementString())
-	diffDep := NewDiffDep(diff, depDiff, depType)
-	if existingDep, ok := d.deps[diffDep.hashKey()]; ok {
-		if existingDep.depType >= diffDep.depType {
+func (d *SchemaDiff) addDep(diff EntityDiff, dependentDiff EntityDiff, typ DiffDependencyType) *DiffDependency {
+	_, _ = d.r.Relate(diff.CanonicalStatementString(), dependentDiff.CanonicalStatementString())
+	diffDep := NewDiffDependency(diff, dependentDiff, typ)
+	if existingDep, ok := d.dependencies[diffDep.hashKey()]; ok {
+		if existingDep.typ >= diffDep.typ {
 			// nothing new here, the new dependency is weaker or equals to an existing dependency
 			return existingDep
 		}
 	}
 	// Either the dep wasn't found, or we've just introduced a dep with a more severe type
-	d.deps[diffDep.hashKey()] = diffDep
+	d.dependencies[diffDep.hashKey()] = diffDep
 	return diffDep
 }
 
@@ -179,35 +195,35 @@ func (d *SchemaDiff) UnorderedDiffs() []EntityDiff {
 	return d.diffs
 }
 
-// AllDeps returns all known dependencies
-func (d *SchemaDiff) AllDeps() (deps []*DiffDep) {
-	for _, dep := range d.deps {
+// AllDependenciess returns all known dependencies
+func (d *SchemaDiff) AllDependenciess() (deps []*DiffDependency) {
+	for _, dep := range d.dependencies {
 		deps = append(deps, dep)
 	}
 	return deps
 }
 
-// HasDeps returns `true` if there is at least one known diff dependency.
+// HasDependencies returns `true` if there is at least one known diff dependency.
 // If this function returns `false` then that means there is no restriction whatsoever to the order of diffs.
-func (d *SchemaDiff) HasDeps() bool {
-	return len(d.deps) > 0
+func (d *SchemaDiff) HasDependencies() bool {
+	return len(d.dependencies) > 0
 }
 
-// AllSequentialExecutionDeps returns all diffs that are of "sequential execution" type.
-func (d *SchemaDiff) AllSequentialExecutionDeps() (deps []*DiffDep) {
-	for _, dep := range d.deps {
-		if dep.depType >= DiffDepSequentialExecution {
+// AllSequentialExecutionDependencies returns all diffs that are of "sequential execution" type.
+func (d *SchemaDiff) AllSequentialExecutionDependencies() (deps []*DiffDependency) {
+	for _, dep := range d.dependencies {
+		if dep.typ >= DiffDependencySequentialExecution {
 			deps = append(deps, dep)
 		}
 	}
 	return deps
 }
 
-// HasSequentialExecutionDeps return `true` if there is at least one "subsequential execution" type diff.
+// HasSequentialExecutionDependencies return `true` if there is at least one "subsequential execution" type diff.
 // If not, that means all diffs can be applied in parallel.
-func (d *SchemaDiff) HasSequentialExecutionDeps() bool {
-	for _, dep := range d.deps {
-		if dep.depType >= DiffDepSequentialExecution {
+func (d *SchemaDiff) HasSequentialExecutionDependencies() bool {
+	for _, dep := range d.dependencies {
+		if dep.typ >= DiffDependencySequentialExecution {
 			return true
 		}
 	}

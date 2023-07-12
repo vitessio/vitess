@@ -22,27 +22,19 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/slices2"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-
+	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, isRoot bool) (logicalPlan, error) {
@@ -59,8 +51,6 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformSubQueryPlan(ctx, op)
 	case *operators.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryPlan(ctx, op)
-	case *operators.Derived:
-		return transformDerivedPlan(ctx, op)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
@@ -69,9 +59,100 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformProjection(ctx, op)
 	case *operators.Limit:
 		return transformLimit(ctx, op)
+	case *operators.Ordering:
+		return transformOrdering(ctx, op)
+	case *operators.Aggregator:
+		return transformAggregator(ctx, op)
+	case *operators.Distinct:
+		return transformDistinct(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	oa := &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(plan),
+			weightStrings:     make(map[*resultColumn]int),
+		},
+	}
+
+	for _, aggr := range op.Aggregations {
+		if aggr.OpCode == opcode.AggregateUnassigned {
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		}
+		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias)
+		aggrParam.Expr = aggr.Func
+		aggrParam.Original = aggr.Original
+		aggrParam.OrigOpcode = aggr.OriginalOpCode
+		aggrParam.WCol = aggr.WSOffset
+		aggrParam.CollationID = aggr.GetCollation(ctx)
+		oa.aggregates = append(oa.aggregates, aggrParam)
+	}
+	for _, groupBy := range op.Grouping {
+		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+			KeyCol:          groupBy.ColOffset,
+			WeightStringCol: groupBy.WSOffset,
+			Expr:            groupBy.AsAliasedExpr().Expr,
+			CollationID:     ctx.SemTable.CollationForExpr(groupBy.SimplifiedExpr),
+		})
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	oa.truncateColumnCount = op.ResultColumns
+	return oa, nil
+}
+
+func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+	return newDistinct(src, op.Columns, op.Truncate), nil
+}
+
+func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createMemorySort(ctx, plan, op)
+}
+
+func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
+	primitive := &engine.MemorySort{
+		TruncateColumnCount: ordering.ResultColumns,
+	}
+	ms := &memorySort{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(src),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         primitive,
+		},
+		eMemorySort: primitive,
+	}
+
+	for idx, order := range ordering.Order {
+		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
+			Col:               ordering.Offset[idx],
+			WeightStringCol:   ordering.WOffset[idx],
+			Desc:              order.Inner.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: ordering.Offset[idx],
+			CollationID:       collationID,
+		})
+	}
+
+	return ms, nil
 }
 
 func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
@@ -86,14 +167,44 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return useSimpleProjection(op, cols, src)
 	}
 
-	expressions := slices2.Map(op.Columns, func(from operators.ProjExpr) sqlparser.Expr {
+	expressions := slices2.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
 		return from.GetExpr()
 	})
 
+	failed := false
+	evalengineExprs := slices2.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
+		switch e := from.(type) {
+		case operators.Eval:
+			return e.EExpr
+		case operators.Offset:
+			t := ctx.SemTable.ExprTypes[e.Expr]
+			return &evalengine.Column{
+				Offset:    e.Offset,
+				Type:      t.Type,
+				Collation: collations.TypedCollation{},
+			}
+		default:
+			failed = true
+			return nil
+		}
+	})
+	var primitive *engine.Projection
+	columnNames := slices2.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
+		return from.ColumnName()
+	})
+
+	if !failed {
+		primitive = &engine.Projection{
+			Cols:  columnNames,
+			Exprs: evalengineExprs,
+		}
+	}
+
 	return &projection{
 		source:      src,
-		columnNames: op.ColumnNames,
+		columnNames: columnNames,
 		columns:     expressions,
+		primitive:   primitive,
 	}, nil
 }
 
@@ -158,11 +269,14 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 }
 
 func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
+	if op.IsDerived() {
+		return transformDerivedPlan(ctx, op)
+	}
 	source, err := transformToLogicalPlan(ctx, op.Source, isRoot)
 	if err != nil {
 		return nil, err
 	}
-	switch node := op.Select.(type) {
+	switch node := op.Query.(type) {
 	case *sqlparser.Select:
 		hp := horizonPlanning{
 			sel: node,
@@ -233,8 +347,9 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 
 	return &engine.Route{
-		TableName:         strings.Join(tableNames, ", "),
-		RoutingParameters: rp,
+		TableName:           strings.Join(tableNames, ", "),
+		RoutingParameters:   rp,
+		TruncateColumnCount: op.ResultColumns,
 	}, nil
 }
 
@@ -253,6 +368,8 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
+	case *operators.Insert:
+		return transformInsertPlan(ctx, op, src)
 	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
@@ -265,6 +382,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 	replaceSubQuery(ctx, sel)
 	eroute, err := routeToEngineRoute(ctx, op)
+	for _, order := range op.Ordering {
+		collation := ctx.SemTable.CollationForExpr(order.AST)
+		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+			Col:             order.Offset,
+			WeightStringCol: order.WOffset,
+			Desc:            order.Direction == sqlparser.DescOrder,
+			CollationID:     collation,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -275,6 +401,107 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		condition: condition,
 	}, nil
 
+}
+
+func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (i *insert, err error) {
+	eins := &engine.Insert{
+		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
+		Keyspace:          op.Routing.Keyspace(),
+		Table:             ins.VTable,
+		Ignore:            ins.Ignore,
+		ForceNonStreaming: ins.ForceNonStreaming,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		VindexValues:      ins.VindexValues,
+		VindexValueOffset: ins.VindexValueOffset,
+	}
+	i = &insert{eInsert: eins}
+
+	// we would need to generate the query on the fly. The only exception here is
+	// when unsharded query with autoincrement for that there is no input operator.
+	if eins.Opcode != engine.InsertUnsharded || ins.Input != nil {
+		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	}
+
+	if ins.Input == nil {
+		eins.Query = generateQuery(ins.AST)
+	} else {
+		i.source, err = transformToLogicalPlan(ctx, ins.Input, true)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
+	if code == engine.Unsharded {
+		return engine.InsertUnsharded
+	}
+	if insertSelect {
+		return engine.InsertSelect
+	}
+	return engine.InsertSharded
+}
+
+func autoIncGenerate(gen *operators.Generate) *engine.Generate {
+	if gen == nil {
+		return nil
+	}
+	selNext := &sqlparser.Select{
+		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
+		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+	}
+	return &engine.Generate{
+		Keyspace: gen.Keyspace,
+		Query:    sqlparser.String(selNext),
+		Values:   gen.Values,
+		Offset:   gen.Offset,
+	}
+}
+
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {
+	valueTuples, isValues := ins.Rows.(sqlparser.Values)
+	prefixFormat := "insert %v%sinto %v%v "
+	if isValues {
+		// the mid values are filled differently
+		// with select uses sqlparser.String for sqlparser.Values
+		// with rows uses string.
+		prefixFormat += "values "
+	}
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	prefixBuf.Myprintf(prefixFormat,
+		ins.Comments, ins.Ignore.ToString(),
+		ins.Table, ins.Columns)
+	prefix = prefixBuf.String()
+
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf.Myprintf("%v", ins.OnDup)
+	suffix = suffixBuf.String()
+
+	if !isValues {
+		// this is a insert query using select to insert the rows.
+		return
+	}
+
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	mid = make([]string, len(valueTuples))
+	for rowNum, val := range valueTuples {
+		midBuf.Myprintf("%v", val)
+		mid[rowNum] = midBuf.String()
+		midBuf.Reset()
+	}
+	return
+}
+
+// dmlFormatter strips out keyspace name from dmls.
+func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	switch node := node.(type) {
+	case sqlparser.TableName:
+		node.Name.Format(buf)
+		return
+	}
+	node.Format(buf)
 }
 
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
@@ -294,7 +521,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(upd.AST, upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
+	transformDMLPlan(upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
 
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
@@ -321,7 +548,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(del.AST, del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
+	transformDMLPlan(del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
 
 	e := &engine.Delete{
 		DML: edml,
@@ -330,13 +557,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func transformDMLPlan(stmt sqlparser.Commented, vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
-	directives := stmt.GetParsedComments().Directives()
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		edml.MultiShardAutocommit = true
-	}
-	edml.QueryTimeout = queryTimeout(directives)
-
+func transformDMLPlan(vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
 	if routing.OpCode() != engine.Unsharded && setVindex {
 		primary := vtable.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
@@ -462,7 +683,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if err != nil {
 			return nil, err
 		}
-		return newDistinct(result, checkCols, isRoot), nil
+		return newDistinctGen4Legacy(result, checkCols, isRoot), nil
 	}
 	return result, nil
 
@@ -524,25 +745,22 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
 	case *joinGen4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		expr := node.OutputColumns()[offset]
-		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
-		if !isAliased {
-			return 0, vterrors.VT13001("cannot convert JOIN output columns to an aliased-expression")
-		}
-		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
+		joinOffset := node.Cols[offset]
 		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Left, offset)
-			node.Cols = append(node.Cols, -(offset + 1))
-		case deps.IsSolvedBy(rhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
-			node.Cols = append(node.Cols, offset+1)
+		case joinOffset < 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Left, -(joinOffset + 1))
+			offset = -(offset + 1)
+		case joinOffset > 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Right, joinOffset-1)
+			offset = offset + 1
 		default:
-			return 0, vterrors.VT12001("push DISTINCT WEIGHT_STRING to both sides of the join")
+			return 0, vterrors.VT13001("wrong column offset in join plan to push DISTINCT WEIGHT_STRING")
 		}
-		newOffset = len(node.Cols) - 1
+		if err != nil {
+			return 0, err
+		}
+		newOffset = len(node.Cols)
+		node.Cols = append(node.Cols, offset)
 	default:
 		return 0, vterrors.VT13001(fmt.Sprintf("pushWeightStringForDistinct on %T", plan))
 	}
@@ -645,7 +863,7 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []co
 	return colls
 }
 
-func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Derived) (logicalPlan, error) {
+func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizon) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased

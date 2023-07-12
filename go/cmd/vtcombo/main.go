@@ -61,7 +61,13 @@ var (
 	mysqlPort          = flags.Int("mysql_port", 3306, "mysql port")
 	externalTopoServer = flags.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
-	plannerName = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerName           = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, V3Insert, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	vschemaPersistenceDir = flags.String("vschema-persistence-dir", "", "If set, per-keyspace vschema will be persisted in this directory "+
+		"and reloaded into the in-memory topology server across restarts. Bookkeeping is performed using a simple watcher goroutine. "+
+		"This is useful when running vtcombo as an application development container (e.g. vttestserver) where you want to keep the same "+
+		"vschema even if developer's machine reboots. This works in tandem with vttestserver's --persistent_mode flag. Needless to say, "+
+		"this is neither a perfect nor a production solution for vschema persistence. Consider using the --external_topo_server flag if "+
+		"you require a more complete solution. This flag is ignored if --external_topo_server is set.")
 
 	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
@@ -292,6 +298,10 @@ func main() {
 		exit.Return(1)
 	}
 
+	if *vschemaPersistenceDir != "" && !*externalTopoServer {
+		startVschemaWatcher(*vschemaPersistenceDir, tpb.Keyspaces, ts)
+	}
+
 	servenv.OnRun(func() {
 		addStatusParts(vtg)
 	})
@@ -344,4 +354,9 @@ func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) err
 // SetSemiSyncEnabled implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(source, replica bool) error {
 	return nil
+}
+
+// SemiSyncExtensionLoaded implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded() (bool, error) {
+	return true, nil
 }

@@ -17,7 +17,13 @@ limitations under the License.
 package operators
 
 import (
+	"strings"
+
+	"golang.org/x/exp/slices"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -34,24 +40,18 @@ type Filter struct {
 	FinalPredicate evalengine.Expr
 }
 
-var _ ops.PhysicalOperator = (*Filter)(nil)
-
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
 		Source: op, Predicates: []sqlparser.Expr{expr},
 	}
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (f *Filter) IPhysical() {}
-
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
-	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
-	copy(predicatesClone, f.Predicates)
 	return &Filter{
-		Source:     inputs[0],
-		Predicates: predicatesClone,
+		Source:         inputs[0],
+		Predicates:     slices.Clone(f.Predicates),
+		FinalPredicate: f.FinalPredicate,
 	}
 }
 
@@ -87,8 +87,8 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -96,13 +96,21 @@ func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return f, offset, nil
 }
 
-func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
+func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return f.Source.GetColumns()
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (f *Filter) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return f.Source.GetSelectExprs()
+}
+
+func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
+	return f.Source.GetOrdering()
+}
+
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree, nil
+		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
 	}
 
 	other, isFilter := f.Source.(*Filter)
@@ -111,26 +119,25 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Ap
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree, nil
+	return f, rewrite.NewTree("two filters merged into one", f), nil
 }
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
-	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col))
-		if err != nil {
-			return 0, err
-		}
-		f.Source = newSrc
-		return offset, nil
-	}
 	cfg := &evalengine.Config{
-		ResolveType:   ctx.SemTable.TypeForExpr,
-		Collation:     ctx.SemTable.Collation,
-		ResolveColumn: resolveColumn,
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Collation:   ctx.SemTable.Collation,
 	}
 
-	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
+	predicate := sqlparser.AndExpressions(f.Predicates...)
+	rewritten, err := useOffsets(ctx, predicate, f)
 	if err != nil {
+		return err
+	}
+	eexpr, err := evalengine.Translate(rewritten, cfg)
+	if err != nil {
+		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+		}
 		return err
 	}
 
@@ -138,11 +145,6 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (f *Filter) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Filter",
-		Other: map[string]any{
-			"Predicate": sqlparser.String(sqlparser.AndExpressions(f.Predicates...)),
-		},
-	}
+func (f *Filter) ShortDescription() string {
+	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
 }

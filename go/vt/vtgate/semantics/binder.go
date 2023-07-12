@@ -19,9 +19,8 @@ package semantics
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // binder is responsible for finding all the column references in
@@ -62,6 +61,10 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
+		// do not extract subquery in insert statement.
+		if _, isInsert := currScope.stmt.(*sqlparser.Insert); isInsert {
+			return nil
+		}
 		sq, err := b.createExtractedSubquery(cursor, currScope, node)
 		if err != nil {
 			return err
@@ -129,7 +132,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 				}
 			}
 		default:
-			expr := tbl.getExpr()
+			expr := tbl.GetExpr()
 			if expr != nil {
 				setFor := b.tc.tableSetFor(expr)
 				ts = ts.Merge(setFor)
@@ -150,7 +153,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 	if err != nil {
 		return dependency{}, err
 	}
-	alias := infoFor.getExpr().As
+	alias := infoFor.GetExpr().As
 	if alias.IsEmpty() {
 		name, err := infoFor.Name()
 		if err != nil {

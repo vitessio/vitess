@@ -40,7 +40,8 @@ func TestInitTabletShardConversion(t *testing.T) {
 			Cell: cell,
 			Uid:  1,
 		},
-		Shard: "80-C0",
+		Keyspace: "test",
+		Shard:    "80-C0",
 	}
 
 	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
@@ -70,7 +71,8 @@ func TestDeleteTabletBasic(t *testing.T) {
 			Cell: cell,
 			Uid:  1,
 		},
-		Shard: "0",
+		Shard:    "0",
+		Keyspace: "test",
 	}
 
 	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {

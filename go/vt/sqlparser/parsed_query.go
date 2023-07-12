@@ -23,10 +23,9 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	vjson "vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

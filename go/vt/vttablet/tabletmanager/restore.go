@@ -24,6 +24,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/stats"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/hook"
@@ -53,6 +55,9 @@ var (
 	restoreFromBackupTsStr string
 	restoreConcurrency     = 4
 	waitForBackupInterval  time.Duration
+
+	statsRestoreBackupTime     *stats.String
+	statsRestoreBackupPosition *stats.String
 )
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
@@ -93,6 +98,9 @@ func init() {
 
 	servenv.OnParseFor("vtcombo", registerPointInTimeRestoreFlags)
 	servenv.OnParseFor("vttablet", registerPointInTimeRestoreFlags)
+
+	statsRestoreBackupTime = stats.NewString("RestoredBackupTime")
+	statsRestoreBackupPosition = stats.NewString("RestorePosition")
 }
 
 // RestoreData is the main entry point for backup restore.
@@ -222,6 +230,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
+		if backupManifest != nil {
+			statsRestoreBackupPosition.Set(mysql.EncodePosition(backupManifest.Position))
+			statsRestoreBackupTime.Set(backupManifest.BackupTime)
+		}
 		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
 		if waitForBackupInterval == 0 {
 			break

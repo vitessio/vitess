@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -34,18 +36,13 @@ type Delete struct {
 	noPredicates
 }
 
-var _ ops.PhysicalOperator = (*Delete)(nil)
-
 // Introduces implements the PhysicalOperator interface
-func (d *Delete) Introduces() semantics.TableSet {
+func (d *Delete) introducesTableID() semantics.TableSet {
 	return d.QTable.ID
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (d *Delete) IPhysical() {}
-
 // Clone implements the Operator interface
-func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {
+func (d *Delete) Clone([]ops.Operator) ops.Operator {
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,
@@ -61,8 +58,10 @@ func (d *Delete) TablesUsed() []string {
 	return nil
 }
 
-func (d *Delete) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Delete",
-	}
+func (d *Delete) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
+func (d *Delete) ShortDescription() string {
+	return fmt.Sprintf("%s.%s %s", d.VTable.Keyspace.Name, d.VTable.Name.String(), sqlparser.String(d.AST.Where))
 }

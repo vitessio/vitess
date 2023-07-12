@@ -789,7 +789,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				// 'diff' refers to an entity (call it "e") that has changed. But here we find that one of the
 				// entities that "e" depends on, has also changed.
 				relationsMade = true
-				schemaDiff.addDep(diff, dependentDiff, DiffDepOrderUnknown)
+				schemaDiff.addDep(diff, dependentDiff, DiffDependencyOrderUnknown)
 			}
 		}
 		return dependentDiffs, relationsMade
@@ -827,7 +827,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 						case *CreateTableEntityDiff:
 							// We add a foreign key constraint onto a new table... That table must therefore be first created,
 							// and only then can we proceed to add the FK
-							schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 						case *AlterTableEntityDiff:
 							// The current diff is ALTER TABLE ... ADD FOREIGN KEY
 							// and the parent table also has an ALTER TABLE.
@@ -842,17 +842,17 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 								switch node := node.(type) {
 								case *sqlparser.ModifyColumn:
 									if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
-										schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 									}
 								case *sqlparser.AddColumns:
 									for _, col := range node.Columns {
 										if referencedColumnNames[col.Name.Lowered()] {
-											schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+											schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 										}
 									}
 								case *sqlparser.DropColumn:
 									if referencedColumnNames[node.Name.Name.Lowered()] {
-										schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 									}
 								}
 								return true, nil

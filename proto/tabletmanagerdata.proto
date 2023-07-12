@@ -64,7 +64,7 @@ message TableDefinition {
 message SchemaDefinition {
   string database_schema = 1;
   repeated TableDefinition table_definitions = 2;
-  string version = 3;
+  reserved 3;
 }
 
 message SchemaChangeResult {
@@ -553,4 +553,11 @@ message UpdateVRWorkflowRequest {
 
 message UpdateVRWorkflowResponse {
   query.QueryResult result = 1;
+}
+
+message ResetSequencesRequest {
+  repeated string tables = 1;
+}
+
+message ResetSequencesResponse {
 }

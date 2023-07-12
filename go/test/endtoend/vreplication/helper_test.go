@@ -18,6 +18,9 @@ package vreplication
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -122,12 +126,12 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName string, wantCode int64) {
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode int64) {
 	var gotCode int64
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := throttlerCheckSelf(tablet, appName)
+		output, err := throttlerCheckSelf(tablet, throttlerApp)
 		require.NoError(t, err)
 
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
@@ -141,7 +145,7 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 		select {
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
-				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
+				tablet.Name, wantCode, throttlerApp, defaultTimeout, gotCode))
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -533,6 +537,17 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	return string(val), nil
 }
 
+func getDebugVars(t *testing.T, port int) map[string]any {
+	out := map[string]any{}
+	response, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", port))
+	if err != nil {
+		return out
+	}
+	defer response.Body.Close()
+	_ = json.NewDecoder(response.Body).Decode(&out)
+	return out
+}
+
 func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
@@ -639,4 +654,47 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 			time.Sleep(defaultTick)
 		}
 	}
+}
+
+// randHex can be used to generate random strings of
+// hex characters to the given length. This can e.g.
+// be used to generate and insert test data.
+func randHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
+	i, ok := vars[key].(float64)
+	require.True(t, ok)
+	return int(i)
+}
+
+func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (int, int, int, int) {
+	vars := tab.GetVars()
+	insertKey := fmt.Sprintf("%s.insert", key)
+	updateKey := fmt.Sprintf("%s.insert", key)
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
+		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
+		return 0, 0, 0, 0
+	}
+	inserts := getIntVal(t, cacheSizes, insertKey)
+	updates := getIntVal(t, cacheSizes, updateKey)
+	insertQueries := getIntVal(t, queryCounts, insertKey)
+	updateQueries := getIntVal(t, queryCounts, updateKey)
+	return inserts, updates, insertQueries, updateQueries
+}
+
+// check that the connection's binlog row image is set to NOBLOB
+func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
+	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(rs.Rows))
+	mode := strings.ToLower(rs.Rows[0][0].ToString())
+	return mode == "noblob"
 }

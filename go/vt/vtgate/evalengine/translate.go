@@ -75,6 +75,14 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 		return &LikeExpr{BinaryExpr: binaryExpr}, nil
 	case sqlparser.NotLikeOp:
 		return &LikeExpr{BinaryExpr: binaryExpr, Negate: true}, nil
+	case sqlparser.RegexpOp, sqlparser.NotRegexpOp:
+		return &builtinRegexpLike{
+			CallExpr: CallExpr{
+				Arguments: []Expr{left, right},
+				Method:    "REGEXP_LIKE",
+			},
+			Negate: op == sqlparser.NotRegexpOp,
+		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
 	}
@@ -118,6 +126,31 @@ func (ast *astCompiler) translateLogicalExpr(opname string, left, right sqlparse
 		},
 		op:     logic,
 		opname: opname,
+	}, nil
+}
+
+func (ast *astCompiler) translateIntervalExpr(needle sqlparser.Expr, haystack []sqlparser.Expr) (Expr, error) {
+	exprs := make([]Expr, 0, len(haystack)+1)
+
+	expr, err := ast.translateExpr(needle)
+	if err != nil {
+		return nil, err
+	}
+
+	exprs = append(exprs, expr)
+	for _, e := range haystack {
+		expr, err := ast.translateExpr(e)
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, expr)
+	}
+
+	return &IntervalExpr{
+		CallExpr{
+			Arguments: exprs,
+			Method:    "INTERVAL",
+		},
 	}, nil
 }
 
@@ -499,6 +532,8 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return ast.translateCollateExpr(node)
 	case *sqlparser.IntroducerExpr:
 		return ast.translateIntroducerExpr(node)
+	case *sqlparser.IntervalFuncExpr:
+		return ast.translateIntervalExpr(node.Expr, node.Exprs)
 	case *sqlparser.IsExpr:
 		return ast.translateIsExpr(node.Left, node.Right)
 	case sqlparser.Callable:

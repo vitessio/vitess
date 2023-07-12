@@ -410,7 +410,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,L:2,L:3,L:4,L:5,L:6,R:0,R:1",
+        "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4,L:5,R:0,R:1",
         "JoinVars": {
           "kcu_constraint_name": 0
         },
@@ -423,9 +423,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select kcu.constraint_name, kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
-            "OrderBy": "5 ASC",
-            "Query": "select kcu.constraint_name, kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.referenced_column_name is not null order by ordinal_position asc",
+            "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
+            "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.referenced_column_name is not null order by ordinal_position asc",
             "SysTableTableSchema": "[:v1]",
             "Table": "information_schema.key_column_usage"
           },

@@ -18,13 +18,11 @@ package evalengine
 
 import (
 	"math"
-	"strings"
 
 	"golang.org/x/exp/constraints"
 
 	"vitess.io/vitess/go/mysql/decimal"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -717,17 +715,4 @@ func mathMod_dd0(v1, v2 *evalDecimal) (decimal.Decimal, int32) {
 	}
 	_, rem := v1.dec.QuoRem(v2.dec, 0)
 	return rem, length
-}
-
-func parseStringToFloat(str string) float64 {
-	str = strings.TrimSpace(str)
-
-	// We only care to parse as many of the initial float characters of the
-	// string as possible. This functionality is implemented in the `strconv` package
-	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(str, 64)
-	if err != nil {
-		return 0.0
-	}
-	return val
 }

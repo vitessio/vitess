@@ -49,6 +49,9 @@ type MysqlctlClient interface {
 	// RunMysqlUpgrade calls Mysqld.RunMysqlUpgrade remotely.
 	RunMysqlUpgrade(ctx context.Context) error
 
+	// ApplyBinlogFile calls Mysqld.ApplyBinlogFile remotely.
+	ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRestorePosition string) error
+
 	// ReinitConfig calls Mysqld.ReinitConfig remotely.
 	ReinitConfig(ctx context.Context) error
 

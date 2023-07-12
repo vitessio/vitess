@@ -457,18 +457,10 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	}
 	defer conn.Recycle()
 
-	cmds := []string{}
+	var cmds []string
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
-	// Reset replication parameters commands makes the instance forget the source host port
-	// This is required because sometimes MySQL gets stuck due to improper initialization of
-	// master info structure or related failures and throws errors like
-	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
-	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails.
-	// Therefore, we have elected to always reset the replication parameters whenever we try to set the source host port
-	// Since there is no real overhead, but it makes this function robust enough to also handle failures like these.
-	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
 	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
@@ -554,54 +546,6 @@ func FindReplicas(mysqld MysqlDaemon) ([]string, error) {
 	}
 
 	return addrs, nil
-}
-
-// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.EnableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("EnableBinlogPlayback: successfully ran %v", cmd)
-	return nil
-}
-
-// DisableBinlogPlayback returns the server to the normal state after streaming.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.DisableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("DisableBinlogPlayback: successfully ran '%v'", cmd)
-	return nil
 }
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
@@ -712,8 +656,8 @@ func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	if err != nil {
 		return false, false
 	}
-	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
-	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
+	primary = vars["rpl_semi_sync_master_enabled"] == "ON"
+	replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
 	return primary, replica
 }
 
@@ -766,4 +710,17 @@ func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// SemiSyncExtensionLoaded returns whether semi-sync plugins are loaded.
+func (mysqld *Mysqld) SemiSyncExtensionLoaded() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.Background(), "SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'")
+	if err != nil {
+		return false, err
+	}
+	pluginPresent, err := qr.Rows[0][0].ToBool()
+	if err != nil {
+		return false, err
+	}
+	return pluginPresent, nil
 }

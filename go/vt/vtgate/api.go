@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // This file implements a REST-style API for the vtgate web interface.
@@ -41,7 +42,7 @@ func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...a
 }
 
 func handleAPI(apiPath string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
-	http.HandleFunc(apiPrefix+apiPath, func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc(apiPrefix+apiPath, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
 				httpErrorf(w, r, "uncaught panic: %v", x)

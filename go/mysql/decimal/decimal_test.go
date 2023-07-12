@@ -340,6 +340,10 @@ func TestNewFromStringDeepEquals(t *testing.T) {
 		{"10", "10.0", false},
 		{"1.1", "1.10", false},
 		{"1.001", "1.01", false},
+		{" 0 ", "0", true},
+		{" 0.0 ", "0.0", true},
+		{" 1 ", "1", true},
+		{" 0.1 ", "0.1", true},
 	}
 
 	for _, cmp := range tests {

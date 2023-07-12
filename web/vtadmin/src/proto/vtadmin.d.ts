@@ -13014,6 +13014,200 @@ export namespace mysqlctl {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of an ApplyBinlogFileRequest. */
+    interface IApplyBinlogFileRequest {
+
+        /** ApplyBinlogFileRequest binlog_file_name */
+        binlog_file_name?: (string|null);
+
+        /** ApplyBinlogFileRequest binlog_restore_position */
+        binlog_restore_position?: (string|null);
+    }
+
+    /** Represents an ApplyBinlogFileRequest. */
+    class ApplyBinlogFileRequest implements IApplyBinlogFileRequest {
+
+        /**
+         * Constructs a new ApplyBinlogFileRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IApplyBinlogFileRequest);
+
+        /** ApplyBinlogFileRequest binlog_file_name. */
+        public binlog_file_name: string;
+
+        /** ApplyBinlogFileRequest binlog_restore_position. */
+        public binlog_restore_position: string;
+
+        /**
+         * Creates a new ApplyBinlogFileRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyBinlogFileRequest instance
+         */
+        public static create(properties?: mysqlctl.IApplyBinlogFileRequest): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Encodes the specified ApplyBinlogFileRequest message. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
+         * @param message ApplyBinlogFileRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyBinlogFileRequest message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
+         * @param message ApplyBinlogFileRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyBinlogFileRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyBinlogFileRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Verifies an ApplyBinlogFileRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyBinlogFileRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyBinlogFileRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Creates a plain object from an ApplyBinlogFileRequest message. Also converts values to other types if specified.
+         * @param message ApplyBinlogFileRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ApplyBinlogFileRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyBinlogFileRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyBinlogFileRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyBinlogFileResponse. */
+    interface IApplyBinlogFileResponse {
+    }
+
+    /** Represents an ApplyBinlogFileResponse. */
+    class ApplyBinlogFileResponse implements IApplyBinlogFileResponse {
+
+        /**
+         * Constructs a new ApplyBinlogFileResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IApplyBinlogFileResponse);
+
+        /**
+         * Creates a new ApplyBinlogFileResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyBinlogFileResponse instance
+         */
+        public static create(properties?: mysqlctl.IApplyBinlogFileResponse): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Encodes the specified ApplyBinlogFileResponse message. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
+         * @param message ApplyBinlogFileResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyBinlogFileResponse message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
+         * @param message ApplyBinlogFileResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyBinlogFileResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyBinlogFileResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Verifies an ApplyBinlogFileResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyBinlogFileResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyBinlogFileResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Creates a plain object from an ApplyBinlogFileResponse message. Also converts values to other types if specified.
+         * @param message ApplyBinlogFileResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ApplyBinlogFileResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyBinlogFileResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyBinlogFileResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ReinitConfigRequest. */
     interface IReinitConfigRequest {
     }
@@ -13441,6 +13635,20 @@ export namespace mysqlctl {
         public runMysqlUpgrade(request: mysqlctl.IRunMysqlUpgradeRequest): Promise<mysqlctl.RunMysqlUpgradeResponse>;
 
         /**
+         * Calls ApplyBinlogFile.
+         * @param request ApplyBinlogFileRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ApplyBinlogFileResponse
+         */
+        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest, callback: mysqlctl.MysqlCtl.ApplyBinlogFileCallback): void;
+
+        /**
+         * Calls ApplyBinlogFile.
+         * @param request ApplyBinlogFileRequest message or plain object
+         * @returns Promise
+         */
+        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
+
+        /**
          * Calls ReinitConfig.
          * @param request ReinitConfigRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and ReinitConfigResponse
@@ -13491,6 +13699,13 @@ export namespace mysqlctl {
          * @param [response] RunMysqlUpgradeResponse
          */
         type RunMysqlUpgradeCallback = (error: (Error|null), response?: mysqlctl.RunMysqlUpgradeResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#applyBinlogFile}.
+         * @param error Error, if any
+         * @param [response] ApplyBinlogFileResponse
+         */
+        type ApplyBinlogFileCallback = (error: (Error|null), response?: mysqlctl.ApplyBinlogFileResponse) => void;
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#reinitConfig}.
@@ -13928,9 +14143,6 @@ export namespace topodata {
         /** Tablet primary_term_start_time */
         primary_term_start_time?: (vttime.ITime|null);
 
-        /** Tablet db_server_version */
-        db_server_version?: (string|null);
-
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
     }
@@ -13979,9 +14191,6 @@ export namespace topodata {
 
         /** Tablet primary_term_start_time. */
         public primary_term_start_time?: (vttime.ITime|null);
-
-        /** Tablet db_server_version. */
-        public db_server_version: string;
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
@@ -16290,9 +16499,6 @@ export namespace tabletmanagerdata {
 
         /** SchemaDefinition table_definitions */
         table_definitions?: (tabletmanagerdata.ITableDefinition[]|null);
-
-        /** SchemaDefinition version */
-        version?: (string|null);
     }
 
     /** Represents a SchemaDefinition. */
@@ -16309,9 +16515,6 @@ export namespace tabletmanagerdata {
 
         /** SchemaDefinition table_definitions. */
         public table_definitions: tabletmanagerdata.ITableDefinition[];
-
-        /** SchemaDefinition version. */
-        public version: string;
 
         /**
          * Creates a new SchemaDefinition instance using the specified properties.
@@ -26488,6 +26691,194 @@ export namespace tabletmanagerdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a ResetSequencesRequest. */
+    interface IResetSequencesRequest {
+
+        /** ResetSequencesRequest tables */
+        tables?: (string[]|null);
+    }
+
+    /** Represents a ResetSequencesRequest. */
+    class ResetSequencesRequest implements IResetSequencesRequest {
+
+        /**
+         * Constructs a new ResetSequencesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IResetSequencesRequest);
+
+        /** ResetSequencesRequest tables. */
+        public tables: string[];
+
+        /**
+         * Creates a new ResetSequencesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ResetSequencesRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IResetSequencesRequest): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Encodes the specified ResetSequencesRequest message. Does not implicitly {@link tabletmanagerdata.ResetSequencesRequest.verify|verify} messages.
+         * @param message ResetSequencesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IResetSequencesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ResetSequencesRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ResetSequencesRequest.verify|verify} messages.
+         * @param message ResetSequencesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IResetSequencesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ResetSequencesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ResetSequencesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Decodes a ResetSequencesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ResetSequencesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Verifies a ResetSequencesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ResetSequencesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ResetSequencesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ResetSequencesRequest;
+
+        /**
+         * Creates a plain object from a ResetSequencesRequest message. Also converts values to other types if specified.
+         * @param message ResetSequencesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ResetSequencesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ResetSequencesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetSequencesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ResetSequencesResponse. */
+    interface IResetSequencesResponse {
+    }
+
+    /** Represents a ResetSequencesResponse. */
+    class ResetSequencesResponse implements IResetSequencesResponse {
+
+        /**
+         * Constructs a new ResetSequencesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IResetSequencesResponse);
+
+        /**
+         * Creates a new ResetSequencesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ResetSequencesResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IResetSequencesResponse): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Encodes the specified ResetSequencesResponse message. Does not implicitly {@link tabletmanagerdata.ResetSequencesResponse.verify|verify} messages.
+         * @param message ResetSequencesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IResetSequencesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ResetSequencesResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ResetSequencesResponse.verify|verify} messages.
+         * @param message ResetSequencesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IResetSequencesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ResetSequencesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ResetSequencesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Decodes a ResetSequencesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ResetSequencesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Verifies a ResetSequencesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ResetSequencesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ResetSequencesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ResetSequencesResponse;
+
+        /**
+         * Creates a plain object from a ResetSequencesResponse message. Also converts values to other types if specified.
+         * @param message ResetSequencesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ResetSequencesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ResetSequencesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetSequencesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace binlogdata. */
@@ -27832,6 +28223,9 @@ export namespace binlogdata {
 
         /** RowChange after */
         after?: (query.IRow|null);
+
+        /** RowChange data_columns */
+        data_columns?: (binlogdata.RowChange.IBitmap|null);
     }
 
     /** Represents a RowChange. */
@@ -27848,6 +28242,9 @@ export namespace binlogdata {
 
         /** RowChange after. */
         public after?: (query.IRow|null);
+
+        /** RowChange data_columns. */
+        public data_columns?: (binlogdata.RowChange.IBitmap|null);
 
         /**
          * Creates a new RowChange instance using the specified properties.
@@ -27925,6 +28322,112 @@ export namespace binlogdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace RowChange {
+
+        /** Properties of a Bitmap. */
+        interface IBitmap {
+
+            /** Bitmap count */
+            count?: (number|Long|null);
+
+            /** Bitmap cols */
+            cols?: (Uint8Array|null);
+        }
+
+        /** Represents a Bitmap. */
+        class Bitmap implements IBitmap {
+
+            /**
+             * Constructs a new Bitmap.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: binlogdata.RowChange.IBitmap);
+
+            /** Bitmap count. */
+            public count: (number|Long);
+
+            /** Bitmap cols. */
+            public cols: Uint8Array;
+
+            /**
+             * Creates a new Bitmap instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Bitmap instance
+             */
+            public static create(properties?: binlogdata.RowChange.IBitmap): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Encodes the specified Bitmap message. Does not implicitly {@link binlogdata.RowChange.Bitmap.verify|verify} messages.
+             * @param message Bitmap message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: binlogdata.RowChange.IBitmap, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Bitmap message, length delimited. Does not implicitly {@link binlogdata.RowChange.Bitmap.verify|verify} messages.
+             * @param message Bitmap message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: binlogdata.RowChange.IBitmap, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Bitmap message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Bitmap
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Decodes a Bitmap message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Bitmap
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Verifies a Bitmap message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Bitmap message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Bitmap
+             */
+            public static fromObject(object: { [k: string]: any }): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Creates a plain object from a Bitmap message. Also converts values to other types if specified.
+             * @param message Bitmap
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: binlogdata.RowChange.Bitmap, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Bitmap to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Bitmap
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a RowEvent. */
@@ -30900,6 +31403,9 @@ export namespace query {
 
         /** ExecuteOptions WorkloadName */
         WorkloadName?: (string|null);
+
+        /** ExecuteOptions priority */
+        priority?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -30943,6 +31449,9 @@ export namespace query {
 
         /** ExecuteOptions WorkloadName. */
         public WorkloadName: string;
+
+        /** ExecuteOptions priority. */
+        public priority: string;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -31058,7 +31567,8 @@ export namespace query {
             Gen4Greedy = 3,
             Gen4Left2Right = 4,
             Gen4WithFallback = 5,
-            Gen4CompareV3 = 6
+            Gen4CompareV3 = 6,
+            V3Insert = 7
         }
 
         /** Consolidator enum. */

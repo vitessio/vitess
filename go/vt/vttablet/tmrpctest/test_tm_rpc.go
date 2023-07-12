@@ -54,6 +54,11 @@ type fakeRPCTM struct {
 	mu sync.Mutex
 }
 
+func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	//TODO implement me
 	panic("implement me")
@@ -282,7 +287,6 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 			RowCount:          6,
 		},
 	},
-	Version: "xxx",
 }
 
 func (fra *fakeRPCTM) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {

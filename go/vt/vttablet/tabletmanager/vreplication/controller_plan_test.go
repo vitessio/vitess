@@ -218,6 +218,12 @@ func TestControllerPlan(t *testing.T) {
 			query:  "select * from _vt.copy_state",
 		},
 	}, {
+		in: "select * from _vt.vreplication_log",
+		plan: &testControllerPlan{
+			opcode: selectQuery,
+			query:  "select * from _vt.vreplication_log",
+		},
+	}, {
 		in:  "select * from _vt.a",
 		err: "invalid table name: a",
 	}, {

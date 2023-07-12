@@ -23,21 +23,27 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"hash/crc32"
 	"math"
 	"math/bits"
+	"net/netip"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
+
+	"vitess.io/vitess/go/mysql/icuregex"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -771,7 +777,11 @@ func (asm *assembler) Collate(col collations.ID) {
 func (asm *assembler) Convert_bB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && parseStringToFloat(arg.(*evalBytes).string()) != 0.0)
+		var f float64
+		if arg != nil {
+			f, _ = fastparse.ParseFloat64(arg.(*evalBytes).string())
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(f != 0.0)
 		return 1
 	}, "CONV VARBINARY(SP-%d), BOOL", offset)
 }
@@ -1047,6 +1057,20 @@ func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collatio
 			return 1
 		}, "CONV (SP-%d), VARCHAR", offset)
 	}
+}
+
+func (asm *assembler) Convert_xce(offset int, t sqltypes.Type, collation collations.ID) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg, err := evalToVarchar(env.vm.stack[env.vm.sp-offset], collation, true)
+		if err != nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+			env.vm.err = err
+		} else {
+			arg.tt = int16(t)
+			env.vm.stack[env.vm.sp-offset] = arg
+		}
+		return 1
+	}, "CONVE (SP-%d), VARCHAR", offset)
 }
 
 func (asm *assembler) Convert_xd(offset int, m, d int32) {
@@ -1399,6 +1423,14 @@ func (asm *assembler) Fn_ASCII() {
 		}
 		return 1
 	}, "FN ASCII VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_ORD(col collations.ID) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(charOrd(arg.bytes, col))
+		return 1
+	}, "FN ORD VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_CEIL_d() {
@@ -2030,6 +2062,68 @@ func (asm *assembler) Fn_HEX_d(col collations.TypedCollation) {
 	}, "FN HEX NUMERIC(SP-1)")
 }
 
+func (asm *assembler) Fn_UNHEX_i(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if arg.toInt64().i < 0 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.toInt64().i)), tt, collationBinary)
+		return 1
+	}, "FN UNHEX INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_u(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.u)), tt, collationBinary)
+		return 1
+	}, "FN UNHEX UINT64(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_f(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f := arg.f
+		if f != float64(int64(f)) {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.f)), tt, collationBinary)
+		return 1
+	}, "FN UNHEX FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_b(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		decoded := make([]byte, hexDecodedLen(arg.bytes))
+
+		ok := hexDecodeBytes(decoded, arg.bytes)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(decoded, tt, collationBinary)
+		return 1
+	}, "FN UNHEX VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_j(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalJSON)
+		decoded, ok := hexDecodeJSON(arg)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(decoded, tt, collationBinary)
+		return 1
+	}, "FN UNHEX VARBINARY(SP-1)")
+}
+
 func (asm *assembler) Fn_JSON_ARRAY(args int) {
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2286,7 +2380,7 @@ func (asm *assembler) Fn_MULTICMP_c(args int, lessThan bool, tc collations.Typed
 		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalText(x, tc)
 		env.vm.sp -= args - 1
 		return 1
-	}, "FN MULTICMP FLOAT64(SP-%d)...FLOAT64(SP-1)", args)
+	}, "FN MULTICMP VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
 }
 
 func (asm *assembler) Fn_MULTICMP_d(args int, lessThan bool) {
@@ -2362,7 +2456,7 @@ func (asm *assembler) Fn_MULTICMP_u(args int, lessThan bool) {
 	}, "FN MULTICMP UINT64(SP-%d)...UINT64(SP-1)", args)
 }
 
-func (asm *assembler) Fn_REPEAT(i int) {
+func (asm *assembler) Fn_REPEAT() {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2373,7 +2467,7 @@ func (asm *assembler) Fn_REPEAT(i int) {
 			repeat.i = 0
 		}
 
-		if !checkMaxLength(int64(len(str.bytes)), repeat.i) {
+		if !validMaxLength(int64(len(str.bytes)), repeat.i) {
 			env.vm.stack[env.vm.sp-2] = nil
 			env.vm.sp--
 			return 1
@@ -2384,6 +2478,245 @@ func (asm *assembler) Fn_REPEAT(i int) {
 		env.vm.sp--
 		return 1
 	}, "FN REPEAT VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if length.i <= 0 {
+			str.tt = int16(sqltypes.VarChar)
+			str.bytes = nil
+			str.col = col
+			env.vm.sp--
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+		if strLen <= int(length.i) {
+			env.vm.sp--
+			return 1
+		}
+
+		str.bytes = charset.Slice(cs, str.bytes, 0, int(length.i))
+		env.vm.sp--
+		return 1
+	}, "FN LEFT VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if length.i <= 0 {
+			str.tt = int16(sqltypes.VarChar)
+			str.bytes = nil
+			str.col = col
+			env.vm.sp--
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+
+		if strLen <= int(length.i) {
+			env.vm.sp--
+			return 1
+		}
+
+		str.bytes = charset.Slice(cs, str.bytes, strLen-int(length.i), strLen)
+		env.vm.sp--
+		return 1
+	}, "FN RIGHT VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		if length.i < 0 {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		if !validMaxLength(int64(len(pad.bytes)), length.i) {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+		l := int(length.i)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+
+		if strLen >= int(length.i) {
+			str.bytes = charset.Slice(cs, str.bytes, 0, l)
+			env.vm.sp -= 2
+			return 1
+		}
+
+		runeLen := charset.Length(cs, pad.bytes)
+		if runeLen == 0 {
+			str.bytes = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		repeat := (l - strLen) / runeLen
+		remainder := (l - strLen) % runeLen
+
+		res := bytes.Repeat(pad.bytes, repeat)
+		if remainder > 0 {
+			res = append(res, charset.Slice(cs, pad.bytes, 0, remainder)...)
+		}
+		str.bytes = append(res, str.bytes...)
+
+		env.vm.sp -= 2
+		return 1
+	}, "FN LPAD VARCHAR(SP-3) INT64(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		if length.i < 0 {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		if !validMaxLength(int64(len(pad.bytes)), length.i) {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+		l := int(length.i)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+
+		if strLen >= int(length.i) {
+			str.bytes = charset.Slice(cs, str.bytes, 0, int(length.i))
+			env.vm.sp -= 2
+			return 1
+		}
+
+		runeLen := charset.Length(cs, pad.bytes)
+		if runeLen == 0 {
+			str.bytes = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		repeat := (l - strLen) / runeLen
+		remainder := (l - strLen) % runeLen
+
+		str.bytes = append(str.bytes, bytes.Repeat(pad.bytes, repeat)...)
+		if remainder > 0 {
+			str.bytes = append(str.bytes, charset.Slice(cs, pad.bytes, 0, remainder)...)
+		}
+
+		env.vm.sp -= 2
+		return 1
+	}, "FN RPAD VARCHAR(SP-3) INT64(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimLeft(str.bytes, " ")
+		str.col = col
+		return 1
+	}, "FN LTRIM VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimRight(str.bytes, " ")
+		str.col = col
+		return 1
+	}, "FN RTRIM VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_TRIM1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.Trim(str.bytes, " ")
+		str.col = col
+		return 1
+	}, "FN TRIM VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimPrefix(str.bytes, pat.bytes)
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN LTRIM VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimSuffix(str.bytes, pat.bytes)
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN RTRIM VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimPrefix(bytes.TrimSuffix(str.bytes, pat.bytes), pat.bytes)
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN TRIM VARCHAR(SP-2) VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {
@@ -2654,6 +2987,19 @@ func (asm *assembler) Like_collate(expr *LikeExpr, collation collations.Collatio
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
 
+func (asm *assembler) Strcmp(collation collations.TypedCollation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp--
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(strcmpCollate(l.bytes, r.bytes, collation.Collation))
+		return 1
+	}, "STRCMP VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
 func (asm *assembler) Mul_dd() {
 	asm.adjustStack(-1)
 
@@ -2814,6 +3160,26 @@ func (asm *assembler) NullCheck3(j *jump) {
 		}
 		return 1
 	}, "NULLCHECK SP-1, SP-2, SP-3")
+}
+
+func (asm *assembler) NullCheckArg(j *jump, offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-offset-1] = nil
+			env.vm.sp -= offset
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1 [argument %d]", offset)
+}
+
+func (asm *assembler) NullCheckOffset(j *jump, offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-offset] == nil {
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1 [offset %d]", offset)
 }
 
 func (asm *assembler) Cmp_nullsafe(j *jump) {
@@ -2979,7 +3345,7 @@ func (asm *assembler) Fn_Sysdate(prec uint8) {
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = datetime.FromStdTime(now).Format(prec)
+		val.bytes = datetime.NewDateTimeFromStd(now).Format(prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3227,7 +3593,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_i() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), 0)
 		return 1
 	}, "FN FROM_UNIXTIME INT64(SP-1)")
 }
@@ -3243,7 +3609,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_u() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), 0)
 		return 1
 	}, "FN FROM_UNIXTIME UINT64(SP-1)")
 }
@@ -3267,7 +3633,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_d() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), int(arg.length))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), int(arg.length))
 		return 1
 	}, "FN FROM_UNIXTIME DECIMAL(SP-1)")
 }
@@ -3284,7 +3650,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_f() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 6)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), 6)
 		return 1
 	}, "FN FROM_UNIXTIME FLOAT(SP-1)")
 }
@@ -3310,7 +3676,7 @@ func (asm *assembler) Fn_MAKEDATE() {
 		if t.IsZero() {
 			env.vm.stack[env.vm.sp-2] = nil
 		} else {
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDate(datetime.FromStdTime(t).Date)
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDate(datetime.NewDateTimeFromStd(t).Date)
 		}
 		env.vm.sp--
 		return 1
@@ -3576,4 +3942,783 @@ func (asm *assembler) Fn_YEARWEEK() {
 		env.vm.sp--
 		return 1
 	}, "FN YEARWEEK DATE(SP-1)")
+}
+
+func (asm *assembler) Interval_i(l int) {
+	asm.adjustStack(-l)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-l] == nil {
+			env.vm.stack[env.vm.sp-l] = env.vm.arena.newEvalInt64(-1)
+			env.vm.sp -= l
+			return 1
+		}
+
+		env.vm.sp -= l
+		return 1
+	}, "INTERVAL INT64(SP-1)...INT64(SP-%d)", l)
+}
+
+func (asm *assembler) Interval(l int) {
+	asm.adjustStack(-l)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-l-1] == nil {
+			env.vm.stack[env.vm.sp-l-1] = env.vm.arena.newEvalInt64(-1)
+			env.vm.sp -= l
+			return 1
+		}
+
+		args := env.vm.stack[env.vm.sp-l-1:]
+		idx, err := findInterval(args)
+		if err != nil {
+			env.vm.err = err
+		} else {
+			env.vm.stack[env.vm.sp-l-1] = env.vm.arena.newEvalInt64(idx)
+		}
+		env.vm.sp -= l
+		return 1
+
+	}, "INTERVAL NUMERIC(SP-1)...NUMERIC(SP-%d)", l)
+}
+
+func (asm *assembler) Fn_INET_ATON() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, err := netip.ParseAddr(arg.string())
+		if err != nil || !ip.Is4() {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalUint64(uint64(binary.BigEndian.Uint32(ip.AsSlice())))
+		return 1
+	}, "FN INET_ATON VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_INET_NTOA(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		if arg.u > math.MaxUint32 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		b := binary.BigEndian.AppendUint32(nil, uint32(arg.u))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hack.StringBytes(netip.AddrFrom4([4]byte(b)).String()), col)
+		return 1
+	}, "FN INET_NTOA VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_INET6_ATON() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, err := netip.ParseAddr(arg.string())
+		if err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(ip.AsSlice())
+		return 1
+	}, "INET6_ATON VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_INET6_NTOA(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		ip, ok := netip.AddrFromSlice(arg.bytes)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		if ip, ok := printIPv6AsIPv4(ip); ok {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hack.StringBytes("::"+ip.String()), col)
+		} else {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hack.StringBytes(ip.String()), col)
+		}
+		return 1
+	}, "FN INET6_NTOA VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV4() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		ip, err := netip.ParseAddr(arg.string())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is4())
+		return 1
+	}, "FN IS_IPV4 VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV4_COMPAT() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, ok := netip.AddrFromSlice(arg.bytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(ok && isIPv4Compat(ip))
+		return 1
+	}, "FN IS_IPV4_COMPAT VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV4_MAPPED() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, ok := netip.AddrFromSlice(arg.bytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(ok && ip.Is4In6())
+		return 1
+	}, "FN IS_IPV4_MAPPED VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV6() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		ip, err := netip.ParseAddr(arg.string())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is6())
+		return 1
+	}, "FN IS_IPV6 VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_CONCAT(tt querypb.Type, tc collations.TypedCollation, args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var buf []byte
+		for i := 0; i < args; i++ {
+			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
+			buf = append(buf, arg.bytes...)
+		}
+
+		ret := env.vm.stack[env.vm.sp-args].(*evalBytes)
+		ret.bytes = buf
+		ret.tt = int16(tt)
+		ret.col = tc
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN CONCAT VARCHAR(SP-1)...VARCHAR(SP-N)")
+}
+
+func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation, args int) {
+	asm.adjustStack(-args)
+	asm.emit(func(env *ExpressionEnv) int {
+		var buf []byte
+		sep := env.vm.stack[env.vm.sp-args-1].(*evalBytes).bytes
+
+		first := true
+		for i := 0; i < args; i++ {
+			if env.vm.stack[env.vm.sp-args+i] == nil {
+				continue
+			}
+			if !first {
+				buf = append(buf, sep...)
+			}
+			first = false
+			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
+			buf = append(buf, arg.bytes...)
+		}
+
+		ret := env.vm.stack[env.vm.sp-args-1].(*evalBytes)
+		ret.bytes = buf
+		ret.tt = int16(tt)
+		ret.col = tc
+		env.vm.sp -= args
+		return 1
+	}, "FN CONCAT_WS VARCHAR(SP-1) VARCHAR(SP-2)...VARCHAR(SP-N)")
+}
+
+func (asm *assembler) Fn_BIN_TO_UUID0(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		parsed, err := uuid.FromBytes(arg.bytes)
+		if err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "bin_to_uuid")
+			return 1
+		}
+		arg.bytes = hack.StringBytes(parsed.String())
+		arg.tt = int16(sqltypes.VarChar)
+		arg.col = col
+		return 1
+	}, "FN BIN_TO_UUID VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_BIN_TO_UUID1(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		b := arg.bytes
+
+		if env.vm.stack[env.vm.sp-1] != nil &&
+			env.vm.stack[env.vm.sp-1].(*evalInt64).i != 0 {
+			b = swapUUIDFrom(b)
+		}
+
+		parsed, err := uuid.FromBytes(b)
+		if err != nil {
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "bin_to_uuid")
+			env.vm.sp--
+			return 1
+		}
+		arg.bytes = hack.StringBytes(parsed.String())
+		arg.tt = int16(sqltypes.VarChar)
+		arg.col = col
+		env.vm.sp--
+		return 1
+	}, "FN BIN_TO_UUID VARBINARY(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_UUID() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		_, err := uuid.ParseBytes(arg.bytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil)
+		return 1
+	}, "FN IS_UUID VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_UUID() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		v, err := uuid.NewUUID()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp++
+			return 1
+		}
+		m, err := v.MarshalText()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp++
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText(m, collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN UUID")
+}
+
+func (asm *assembler) Fn_UUID_TO_BIN0() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		parsed, err := uuid.ParseBytes(arg.bytes)
+		if err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "uuid_to_bin")
+			return 1
+		}
+		arg.bytes = parsed[:]
+		arg.tt = int16(sqltypes.VarBinary)
+		arg.col = collationBinary
+		return 1
+	}, "FN UUID_TO_BIN VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_UUID_TO_BIN1() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		parsed, err := uuid.ParseBytes(arg.bytes)
+		if err != nil {
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "uuid_to_bin")
+			env.vm.sp--
+			return 1
+		}
+		b := parsed[:]
+		if env.vm.stack[env.vm.sp-1] != nil &&
+			env.vm.stack[env.vm.sp-1].(*evalInt64).i != 0 {
+			b = swapUUIDTo(b)
+		}
+		arg.bytes = b
+		arg.tt = int16(sqltypes.VarBinary)
+		arg.col = collationBinary
+		env.vm.sp--
+		return 1
+	}, "FN UUID_TO_BIN VARBINARY(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_DATEADD_D(unit datetime.IntervalType, sub bool) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		interval := evalToInterval(env.vm.stack[env.vm.sp-1], unit, sub)
+		if interval == nil {
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.sp--
+			return 1
+		}
+
+		tmp := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{})
+		env.vm.sp--
+		return 1
+	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
+}
+
+func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var interval *datetime.Interval
+		var tmp *evalTemporal
+
+		interval = evalToInterval(env.vm.stack[env.vm.sp-1], unit, sub)
+		if interval == nil {
+			goto baddate
+		}
+
+		tmp = evalToTemporal(env.vm.stack[env.vm.sp-2])
+		if tmp == nil {
+			goto baddate
+		}
+
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, col)
+		env.vm.sp--
+		return 1
+
+	baddate:
+		env.vm.stack[env.vm.sp-2] = nil
+		env.vm.sp--
+		return 1
+	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
+
+}
+
+func (asm *assembler) Fn_REGEXP_LIKE(m *icuregex.Matcher, negate bool, c charset.Charset, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		m.Reset(charset.Expand(nil, input.bytes, c))
+
+		ok, err := m.Find()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+		if negate {
+			ok = !ok
+		}
+		env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalBool(ok)
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_LIKE VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_LIKE_slow(negate bool, c collations.Charset, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		var err error
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+
+		if offset > 1 {
+			fe := env.vm.stack[env.vm.sp-offset+1]
+			flags, err = regexpFlags(fe, flags, "regexp_like")
+			if err != nil {
+				env.vm.err = err
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(charset.Expand(nil, input.bytes, c))
+
+		ok, err := m.Find()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp--
+			return 1
+		}
+		if negate {
+			ok = !ok
+		}
+		env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalBool(ok)
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_LIKE_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_INSTR(m *icuregex.Matcher, c charset.Charset, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		runes := charset.Expand(nil, input.bytes, c)
+
+		if len(runes) == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= offset
+			return 1
+		}
+
+		pos := int64(1)
+		if offset > 1 {
+			pos, env.vm.err = positionInstr(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), int64(len(runes)))
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		returnOpt := int64(0)
+		if offset > 3 {
+			returnOpt, env.vm.err = returnOption(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), "regexp_instr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+		} else if returnOpt == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.Start()) + pos)
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.End()) + pos)
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_INSTR VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_INSTR_slow(c collations.Charset, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+
+		if offset > 4 {
+			fe := env.vm.stack[env.vm.sp-offset+4]
+			flags, env.vm.err = regexpFlags(fe, flags, "regexp_instr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		runes := charset.Expand(nil, input.bytes, c)
+		if len(runes) == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= offset
+			return 1
+		}
+
+		pos := int64(1)
+		if offset > 1 {
+			pos, env.vm.err = positionInstr(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), int64(len(runes)))
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		returnOpt := int64(0)
+		if offset > 3 {
+			returnOpt, env.vm.err = returnOption(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), "regexp_instr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(0)
+		} else if returnOpt == 0 {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.Start()) + pos)
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalInt64(int64(m.End()) + pos)
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_INSTR_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_SUBSTR(m *icuregex.Matcher, merged collations.TypedCollation, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		c := merged.Collation.Get().Charset()
+		runes := charset.Expand(nil, input.bytes, c)
+
+		pos := int64(1)
+		if offset > 1 {
+			limit := int64(len(runes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), limit, "regexp_substr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = nil
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = nil
+		} else {
+			out := runes[int64(m.Start())+pos-1 : int64(m.End())+pos-1]
+			b := charset.Collapse(nil, out, c)
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalText(b, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_SUBSTR VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_SUBSTR_slow(merged collations.TypedCollation, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		c := merged.Collation.Get().Charset()
+		runes := charset.Expand(nil, input.bytes, c)
+
+		pos := int64(1)
+		if offset > 1 {
+			limit := int64(len(runes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+1].(*evalInt64), limit, "regexp_substr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = nil
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(1)
+		if offset > 2 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
+		}
+
+		if offset > 3 {
+			fe := env.vm.stack[env.vm.sp-offset+3]
+			flags, env.vm.err = regexpFlags(fe, flags, "regexp_substr")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(runes[pos-1:])
+
+		found := false
+		for i := int64(0); i < occ; i++ {
+			found, env.vm.err = m.Find()
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if !found {
+				break
+			}
+		}
+
+		if !found {
+			env.vm.stack[env.vm.sp-offset-1] = nil
+		} else {
+			out := runes[int64(m.Start())+pos-1 : int64(m.End())+pos-1]
+			b := charset.Collapse(nil, out, c)
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalText(b, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_SUBSTR_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_REPLACE(m *icuregex.Matcher, merged collations.TypedCollation, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		repl := env.vm.stack[env.vm.sp-offset+1].(*evalBytes)
+
+		c := merged.Collation.Get().Charset()
+		inputRunes := charset.Expand(nil, input.bytes, c)
+		replRunes := charset.Expand(nil, repl.bytes, c)
+
+		pos := int64(1)
+		if offset > 2 {
+			limit := int64(len(inputRunes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), limit, "regexp_replace")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(0)
+		if offset > 3 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), occ)
+		}
+
+		m.Reset(inputRunes[pos-1:])
+
+		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, merged.Collation.Get().Charset())
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+		if !replaced {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(b, sqltypes.Text, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_REPLACE VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_REGEXP_REPLACE_slow(merged collations.TypedCollation, flags icuregex.RegexpFlag, offset int) {
+	asm.adjustStack(-offset)
+	asm.emit(func(env *ExpressionEnv) int {
+		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
+		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		repl := env.vm.stack[env.vm.sp-offset+1].(*evalBytes)
+
+		c := merged.Collation.Get().Charset()
+		inputRunes := charset.Expand(nil, input.bytes, c)
+		replRunes := charset.Expand(nil, repl.bytes, c)
+
+		pos := int64(1)
+		if offset > 2 {
+			limit := int64(len(inputRunes))
+			pos, env.vm.err = position(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), limit, "regexp_replace")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+			if pos-1 == limit {
+				env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		occ := int64(0)
+		if offset > 3 {
+			occ = occurrence(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), 0)
+		}
+
+		if offset > 4 {
+			fe := env.vm.stack[env.vm.sp-offset+4]
+			flags, env.vm.err = regexpFlags(fe, flags, "regexp_replace")
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+
+		p, err := compileRegex(pattern, c, flags)
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+
+		m := icuregex.NewMatcher(p)
+		m.Reset(inputRunes[pos-1:])
+
+		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, merged.Collation.Get().Charset())
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp -= offset
+			return 1
+		}
+		if !replaced {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(input.bytes, sqltypes.Text, resultCollation(merged))
+		} else {
+			env.vm.stack[env.vm.sp-offset-1] = env.vm.arena.newEvalRaw(b, sqltypes.Text, resultCollation(merged))
+		}
+		env.vm.sp -= offset
+		return 1
+	}, "FN REGEXP_REPLACE_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
 }

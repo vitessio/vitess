@@ -40,11 +40,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*Table)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (to *Table) IPhysical() {}
-
 // Clone implements the Operator interface
 func (to *Table) Clone([]ops.Operator) ops.Operator {
 	var columns []*sqlparser.ColName
@@ -59,7 +54,7 @@ func (to *Table) Clone([]ops.Operator) ops.Operator {
 }
 
 // Introduces implements the PhysicalOperator interface
-func (to *Table) Introduces() semantics.TableSet {
+func (to *Table) introducesTableID() semantics.TableSet {
 	return to.QTable.ID
 }
 
@@ -68,7 +63,10 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+	}
 	offset, err := addColumn(ctx, to, expr.Expr)
 	if err != nil {
 		return nil, 0, err
@@ -77,8 +75,16 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return to, offset, nil
 }
 
-func (to *Table) GetColumns() ([]sqlparser.Expr, error) {
+func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(to)
+}
+
+func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
 }
 
 func (to *Table) GetColNames() []*sqlparser.ColName {
@@ -98,7 +104,7 @@ func (to *Table) TablesUsed() []string {
 func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push this expression to a table/vindex")
+		return 0, vterrors.VT13001("cannot push this expression to a table/vindex: %s", sqlparser.String(e))
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
 	cols := op.GetColNames()
@@ -111,13 +117,6 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 	return offset, nil
 }
 
-func (to *Table) Description() ops.OpDescription {
-	var columns []string
-	for _, col := range to.Columns {
-		columns = append(columns, sqlparser.String(col))
-	}
-	return ops.OpDescription{
-		OperatorType: "Table",
-		Other:        map[string]any{"Columns": columns},
-	}
+func (to *Table) ShortDescription() string {
+	return to.VTable.String()
 }

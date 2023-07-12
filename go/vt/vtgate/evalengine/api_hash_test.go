@@ -31,6 +31,33 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+func TestHashCodes(t *testing.T) {
+	var cases = []struct {
+		static, dynamic sqltypes.Value
+		equal           bool
+		err             error
+	}{
+		{sqltypes.NewInt64(-1), sqltypes.NewUint64(^uint64(0)), true, nil},
+		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewInt64(-1), true, nil},
+		{sqltypes.NewFloat64(-1), sqltypes.NewVarChar("-1"), true, nil},
+		{sqltypes.NewDecimal("-1"), sqltypes.NewVarChar("-1"), true, nil},
+	}
+
+	for _, tc := range cases {
+		cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
+		require.NoError(t, err)
+		require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
+
+		h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
+		require.NoError(t, err)
+
+		h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
+		require.ErrorIs(t, err, tc.err)
+
+		assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
+	}
+}
+
 // The following test tries to produce lots of different values and compares them both using hash code and compare,
 // to make sure that these two methods agree on what values are equal
 func TestHashCodesRandom(t *testing.T) {
@@ -179,6 +206,7 @@ var randomGenerators = []func() sqltypes.Value{
 	randomUint32,
 	randomVarChar,
 	randomComplexVarChar,
+	randomDecimal,
 }
 
 func randomValue() sqltypes.Value {
@@ -192,7 +220,9 @@ func randomInt32() sqltypes.Value   { return sqltypes.NewInt32(rand.Int31()) }
 func randomInt64() sqltypes.Value   { return sqltypes.NewInt64(rand.Int63()) }
 func randomUint32() sqltypes.Value  { return sqltypes.NewUint32(rand.Uint32()) }
 func randomUint64() sqltypes.Value  { return sqltypes.NewUint64(rand.Uint64()) }
+func randomDecimal() sqltypes.Value { return sqltypes.NewDecimal(fmt.Sprintf("%d", rand.Int63())) }
 func randomVarChar() sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
+
 func randomComplexVarChar() sqltypes.Value {
 	return sqltypes.NewVarChar(fmt.Sprintf(" \t %f apa", float64(rand.Intn(1000))*1.10))
 }

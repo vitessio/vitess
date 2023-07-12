@@ -22,19 +22,18 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/sqlparser"
-	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
 func TestUpdateEqual(t *testing.T) {
@@ -1672,7 +1671,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
@@ -1721,7 +1720,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	result, err := executorExec(executor, "insert into main1(id, name) values (null, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into main1(id, `name`) values (:__seq0, 'myname')",
@@ -1812,7 +1811,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0)",
@@ -1889,6 +1888,7 @@ func TestInsertPartialFail1(t *testing.T) {
 
 	_, err := executor.Execute(
 		context.Background(),
+		nil,
 		"TestExecute",
 		NewSafeSession(&vtgatepb.Session{InTransaction: true}),
 		"insert into user(id, v, name) values (1, 2, 'myname')",
@@ -1909,6 +1909,7 @@ func TestInsertPartialFail2(t *testing.T) {
 	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executor.Execute(
 		context.Background(),
+		nil,
 		"TestExecute",
 		safeSession,
 		"insert into user(id, v, name) values (1, 2, 'myname')",
@@ -2069,7 +2070,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1)",
@@ -2117,7 +2118,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1), (:music_id_2, :user_id_2)",
@@ -2457,7 +2458,7 @@ func TestReservedConnDML(t *testing.T) {
 	ctx := context.Background()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true})
 
-	_, err := executor.Execute(ctx, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil)
+	_, err := executor.Execute(ctx, nil, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{
@@ -2466,24 +2467,24 @@ func TestReservedConnDML(t *testing.T) {
 	sbc.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
 	})
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "set default_week_format = 1", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "set default_week_format = 1", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
 
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "begin", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "begin", nil)
 	require.NoError(t, err)
 
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
 
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "commit", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "commit", nil)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "begin", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "begin", nil)
 	require.NoError(t, err)
 
 	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, "connection gone")
@@ -2491,11 +2492,11 @@ func TestReservedConnDML(t *testing.T) {
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
 
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "commit", nil)
+	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "commit", nil)
 	require.NoError(t, err)
 }
 
@@ -2568,7 +2569,7 @@ func TestStreamingDML(t *testing.T) {
 	for _, tcase := range tcases {
 		sbc.Queries = nil
 		sbc.SetResults([]*sqltypes.Result{tcase.result})
-		err := executor.StreamExecute(ctx, method, session, tcase.query, nil, func(result *sqltypes.Result) error {
+		err := executor.StreamExecute(ctx, nil, method, session, tcase.query, nil, func(result *sqltypes.Result) error {
 			qr = result
 			return nil
 		})
@@ -2762,10 +2763,10 @@ func TestInsertSelectFromDual(t *testing.T) {
 		sbc2.Queries = nil
 		sbclookup.Queries = nil
 		wQuery := fmt.Sprintf("set @@workload = %s", workload)
-		_, err := executor.Execute(context.Background(), "TestInsertSelect", session, wQuery, nil)
+		_, err := executor.Execute(context.Background(), nil, "TestInsertSelect", session, wQuery, nil)
 		require.NoError(t, err)
 
-		_, err = executor.Execute(context.Background(), "TestInsertSelect", session, query, nil)
+		_, err = executor.Execute(context.Background(), nil, "TestInsertSelect", session, query, nil)
 		require.NoError(t, err)
 
 		assertQueries(t, sbc1, wantQueries)
@@ -2823,10 +2824,10 @@ func TestInsertSelectFromTable(t *testing.T) {
 		sbc2.Queries = nil
 		sbclookup.Queries = nil
 		wQuery := fmt.Sprintf("set @@workload = %s", workload)
-		_, err := executor.Execute(context.Background(), "TestInsertSelect", session, wQuery, nil)
+		_, err := executor.Execute(context.Background(), nil, "TestInsertSelect", session, wQuery, nil)
 		require.NoError(t, err)
 
-		_, err = executor.Execute(context.Background(), "TestInsertSelect", session, query, nil)
+		_, err = executor.Execute(context.Background(), nil, "TestInsertSelect", session, query, nil)
 		require.NoError(t, err)
 
 		assertQueries(t, sbc1, wantQueries)

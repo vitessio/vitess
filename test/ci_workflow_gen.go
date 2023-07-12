@@ -76,6 +76,7 @@ var (
 		"18",
 		"xb_backup",
 		"backup_pitr",
+		"backup_pitr_xtrabackup",
 		"21",
 		"22",
 		"mysql_server_vault",
@@ -120,6 +121,8 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
+		"vreplication_partial_movetables_simple",
+		"vreplication_partial_movetables_sequences",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
@@ -131,6 +134,7 @@ var (
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
 		"xb_recovery",
+		"backup_pitr_xtrabackup",
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
@@ -145,12 +149,13 @@ type unitTest struct {
 }
 
 type clusterTest struct {
-	Name, Shard, Platform        string
-	FileName                     string
-	MakeTools, InstallXtraBackup bool
-	Docker                       bool
-	LimitResourceUsage           bool
-	PartialKeyspace              bool
+	Name, Shard, Platform              string
+	FileName                           string
+	MakeTools, InstallXtraBackup       bool
+	Docker                             bool
+	LimitResourceUsage                 bool
+	EnableBinlogTransactionCompression bool
+	PartialKeyspace                    bool
 }
 
 type selfHostedTest struct {
@@ -167,6 +172,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
 	case clusterName == "backup_pitr":
+		return allMySQLVersions
+	case clusterName == "backup_pitr_xtrabackup":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
@@ -345,6 +352,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
+			}
+			if strings.Contains(cluster, "vrepl") {
+				test.EnableBinlogTransactionCompression = true
 			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {

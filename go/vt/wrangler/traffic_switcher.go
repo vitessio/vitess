@@ -397,7 +397,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		return sw.logs(), nil
 	}
 	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
-	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
+	if err := sw.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
@@ -434,7 +434,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
-			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			tp, err := discovery.NewTabletPicker(ctx, wr.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypes, discovery.TabletPickerOptions{})
 			if err != nil {
 				allErrors.RecordError(err)
 				return
@@ -577,6 +577,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
 			ts.Logger().Errorf("migrateStreams failed: %v", err)
+			sw.cancelMigration(ctx, sm)
+			return 0, nil, err
+		}
+
+		ts.Logger().Infof("Resetting sequences")
+		if err := sw.resetSequences(ctx); err != nil {
+			ts.Logger().Errorf("resetSequences failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
@@ -1309,11 +1316,25 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
 					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema1", rule.Match)
+						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
 					}
-					// TODO(sougou): handle degenerate cases like sequence, etc.
-					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+					// We currently assume the primary vindex is the best way to filter rows
+					// for the table, which may not always be true.
+					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+					switch vtable.Type {
+					case vindexes.TypeReference:
+						// For reference tables there are no vindexes and thus no filter to apply.
+					default:
+						// For non-reference tables we return an error if there's no primary
+						// vindex as it's not clear what to do.
+						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+						} else {
+							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+								vtable.Name.String(), ts.SourceKeyspaceName())
+						}
+					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}
@@ -1687,6 +1708,14 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	// VReplication does NOT create the vschema entries in SHARDED
+	// TARGET keyspaces -- as we cannot know the proper vindex
+	// definitions to use -- and we should not delete them either
+	// (on workflow Cancel) as the user must create them separately
+	// and they contain information about the vindex definitions, etc.
+	if vschema.Sharded && keyspace == ts.TargetKeyspaceName() {
+		return nil
+	}
 	for _, tableName := range ts.Tables() {
 		delete(vschema.Tables, tableName)
 	}
@@ -1774,7 +1803,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	}
 
 	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.TargetKeyspaceName())
-
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
@@ -1846,4 +1874,52 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		}
 	}
 	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+}
+
+func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, error) {
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return false, err
+	}
+	if vschema == nil || vschema.Tables == nil {
+		return false, nil
+	}
+	sequenceFound := false
+	for _, table := range ts.Tables() {
+		vs, ok := vschema.Tables[table]
+		if !ok || vs == nil {
+			continue
+		}
+		if vs.Type == vindexes.TypeSequence {
+			sequenceFound = true
+			break
+		}
+	}
+	return sequenceFound, nil
+}
+
+func (ts *trafficSwitcher) mustResetSequences(ctx context.Context) (bool, error) {
+	switch ts.workflowType {
+	case binlogdatapb.VReplicationWorkflowType_Migrate,
+		binlogdatapb.VReplicationWorkflowType_MoveTables:
+		return ts.isSequenceParticipating(ctx)
+	default:
+		return false, nil
+	}
+}
+
+func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
+	var err error
+	mustReset := false
+	if mustReset, err = ts.mustResetSequences(ctx); err != nil {
+		return err
+	}
+	if !mustReset {
+		return nil
+	}
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		ts.Logger().Infof("Resetting sequences for source shard %s.%s on tablet %s",
+			source.GetShard().Keyspace(), source.GetShard().ShardName(), source.GetPrimary().String())
+		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
+	})
 }

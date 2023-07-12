@@ -167,12 +167,12 @@ func newStatusPage(name string) *statusPage {
 	}
 	sp.tmpl = template.Must(sp.reparse(nil))
 	if name == "" {
-		http.HandleFunc(StatusURLPath(), sp.statusHandler)
+		HTTPHandleFunc(StatusURLPath(), sp.statusHandler)
 		// Debug profiles are only supported for the top level status page.
 		registerDebugBlockProfileRate()
 		registerDebugMutexProfileFraction()
 	} else {
-		http.HandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
+		HTTPHandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
 	}
 	return sp
 }
@@ -277,7 +277,7 @@ func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
 
 // Toggle the block profile rate to/from 100%, unless specific rate is passed in
 func registerDebugBlockProfileRate() {
-	http.HandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
+	HTTPHandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -307,7 +307,7 @@ func registerDebugBlockProfileRate() {
 
 // Toggle the mutex profiling fraction to/from 100%, unless specific fraction is passed in
 func registerDebugMutexProfileFraction() {
-	http.HandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
+	HTTPHandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return

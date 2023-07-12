@@ -17,10 +17,8 @@ limitations under the License.
 package topo
 
 import (
-	"path"
-	"strings"
-
 	"context"
+	"path"
 
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -54,18 +52,10 @@ func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 	ki.keyspace = name
 }
 
-var invalidKeyspaceNameChars = "/"
-
 // ValidateKeyspaceName checks if the provided name is a valid name for a
 // keyspace.
-//
-// As of v17, "all invalid characters" is just the forward slash ("/").
 func ValidateKeyspaceName(name string) error {
-	if strings.ContainsAny(name, invalidKeyspaceNameChars) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; may not contain any of the following: %+v", name, strings.Split(invalidKeyspaceNameChars, ""))
-	}
-
-	return nil
+	return validateObjectName(name)
 }
 
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.

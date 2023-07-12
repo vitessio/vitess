@@ -16,22 +16,38 @@ limitations under the License.
 
 package ops
 
-import "encoding/json"
+import (
+	"fmt"
+	"reflect"
 
-// ToJSON is a debug only function. It can panic, so do not use this in production code
-func ToJSON(op Operator) string {
-	descr := buildDescriptionTree(op)
-	out, err := json.MarshalIndent(descr, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	return string(out)
+	"github.com/xlab/treeprint"
+)
+
+// ToTree returns the operator as ascii tree. Should only be used for debugging
+func ToTree(op Operator) string {
+	tree := asTree(op, nil)
+	return tree.String()
 }
 
-func buildDescriptionTree(op Operator) OpDescription {
-	descr := op.Description()
-	for _, in := range op.Inputs() {
-		descr.Inputs = append(descr.Inputs, buildDescriptionTree(in))
+func opDescr(op Operator) string {
+	typ := reflect.TypeOf(op).Elem().Name()
+	shortDescription := op.ShortDescription
+	if shortDescription() == "" {
+		return typ
 	}
-	return descr
+	return fmt.Sprintf("%s (%s)", typ, shortDescription())
+}
+
+func asTree(op Operator, root treeprint.Tree) treeprint.Tree {
+	txt := opDescr(op)
+	var branch treeprint.Tree
+	if root == nil {
+		branch = treeprint.NewWithRoot(txt)
+	} else {
+		branch = root.AddBranch(txt)
+	}
+	for _, child := range op.Inputs() {
+		asTree(child, branch)
+	}
+	return branch
 }

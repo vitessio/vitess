@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"fmt"
-	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -75,7 +74,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// the rows be correctly ordered.
 	case *orderedAggregate:
 		if aggrFunc, isAggregate := expr.Expr.(sqlparser.AggrFunc); isAggregate {
-			if _, ok := popcode.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]; ok {
+			if _, ok := popcode.SupportedAggregates[aggrFunc.AggrName()]; ok {
 				rc, colNumber, err := node.pushAggr(pb, expr, origin)
 				if err != nil {
 					return nil, nil, 0, err

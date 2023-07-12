@@ -60,7 +60,7 @@ func newScoper() *scoper {
 func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
-	case *sqlparser.Update, *sqlparser.Delete:
+	case *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
 		s.pushDMLScope(node)
 	case *sqlparser.Select:
 		s.pushSelectScope(node)
@@ -180,7 +180,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update:
+	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {

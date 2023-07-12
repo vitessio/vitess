@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -117,6 +118,9 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
+	// StopReplicationError error is used by StopReplication
+	StopReplicationError error
+
 	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
 	// in it, then the function returns nil, else the function returns an error
 	WaitPrimaryPositions []mysql.Position
@@ -157,9 +161,6 @@ type FakeMysqlDaemon struct {
 
 	// FetchSuperQueryResults is used by FetchSuperQuery
 	FetchSuperQueryMap map[string]*sqltypes.Result
-
-	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
-	BinlogPlayerEnabled atomic.Bool
 
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_master_enabled.
 	SemiSyncPrimaryEnabled bool
@@ -224,7 +225,12 @@ func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMys
 }
 
 // RunMysqlUpgrade is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
+func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
+	return nil
+}
+
+// ApplyBinlogFile is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
 	return nil
 }
 
@@ -414,6 +420,9 @@ func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos 
 
 // StopReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
+	if fmd.StopReplicationError != nil {
+		return fmd.StopReplicationError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 	})
@@ -455,11 +464,12 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if stopReplicationBefore {
 		cmds = append(cmds, "STOP SLAVE")
 	}
-	cmds = append(cmds, "RESET SLAVE ALL")
 	cmds = append(cmds, "FAKE SET MASTER")
 	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")
 	}
+	fmd.CurrentSourceHost = host
+	fmd.CurrentSourcePort = port
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
 
@@ -532,23 +542,15 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
 
-	qr, ok := fmd.FetchSuperQueryMap[query]
-	if !ok {
-		return nil, fmt.Errorf("unexpected query: %v", query)
+	if qr, ok := fmd.FetchSuperQueryMap[query]; ok {
+		return qr, nil
 	}
-	return qr, nil
-}
-
-// EnableBinlogPlayback is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Store(true)
-	return nil
-}
-
-// DisableBinlogPlayback disable playback of binlog events
-func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Store(false)
-	return nil
+	for k, qr := range fmd.FetchSuperQueryMap {
+		if ok, _ := regexp.MatchString(k, query); ok {
+			return qr, nil
+		}
+	}
+	return nil, fmt.Errorf("unexpected query: %v", query)
 }
 
 // Close is part of the MysqlDaemon interface
@@ -667,6 +669,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncClients() uint32 {
 	return 0
 }
 
+// SemiSyncExtensionLoaded is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded() (bool, error) {
+	return true, nil
+}
+
 // SemiSyncSettings is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
 	return 10000000, 1
@@ -678,12 +685,12 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	return fmd.SemiSyncReplicaEnabled, nil
 }
 
-// GetVersionString is part of the MysqlDeamon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString() string {
+// GetVersionString is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
 	return ""
 }
 
-// GetVersionComment is part of the MysqlDeamon interface.
+// GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
 	return ""
 }

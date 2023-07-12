@@ -18,10 +18,12 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +43,6 @@ import (
 	// Register topo implementations.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
-	_ "vitess.io/vitess/go/vt/topo/k8stopo"
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
 
@@ -66,11 +67,10 @@ type CellInfo struct {
 
 // VTOrcClusterInfo stores the information for a cluster. This is supposed to be used only for VTOrc tests.
 type VTOrcClusterInfo struct {
-	ClusterInstance     *cluster.LocalProcessCluster
-	Ts                  *topo.Server
-	CellInfos           []*CellInfo
-	VtctldClientProcess *cluster.VtctldClientProcess
-	lastUsedValue       int
+	ClusterInstance *cluster.LocalProcessCluster
+	Ts              *topo.Server
+	CellInfos       []*CellInfo
+	lastUsedValue   int
 }
 
 // CreateClusterAndStartTopo starts the cluster and topology service
@@ -99,17 +99,13 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VTOrcClusterInfo, error)
 		return nil, err
 	}
 
-	// store the vtctldclient process
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	return &VTOrcClusterInfo{
-		ClusterInstance:     clusterInstance,
-		Ts:                  ts,
-		CellInfos:           cellInfos,
-		lastUsedValue:       100,
-		VtctldClientProcess: vtctldClientProcess,
+		ClusterInstance: clusterInstance,
+		Ts:              ts,
+		CellInfos:       cellInfos,
+		lastUsedValue:   100,
 	}, err
 }
 
@@ -306,7 +302,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	if durability == "" {
 		durability = "none"
 	}
-	out, err := clusterInfo.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)
 
 	// start vtorc
@@ -737,12 +733,10 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 }
 
 // MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
-func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string) {
+func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string, err error) {
 	t.Helper()
-	var err error
 	status, response, err = vtorc.MakeAPICall(url)
-	require.NoError(t, err)
-	return status, response
+	return status, response, err
 }
 
 // MakeAPICallRetry is used to make an API call and retry on the given condition.
@@ -756,7 +750,7 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 			t.Fatal("timed out waiting for api to work")
 			return
 		default:
-			status, response = MakeAPICall(t, vtorc, url)
+			status, response, _ := MakeAPICall(t, vtorc, url)
 			if retry(status, response) {
 				time.Sleep(1 * time.Second)
 				break
@@ -830,20 +824,17 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 		require.NoError(t, err)
 	}
 
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-
-	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 	clusterInfo := &VTOrcClusterInfo{
-		ClusterInstance:     clusterInstance,
-		Ts:                  ts,
-		CellInfos:           nil,
-		lastUsedValue:       100,
-		VtctldClientProcess: vtctldClientProcess,
+		ClusterInstance: clusterInstance,
+		Ts:              ts,
+		CellInfos:       nil,
+		lastUsedValue:   100,
 	}
 	return clusterInfo
 }
@@ -965,4 +956,35 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 	successCount := successfulRecoveriesMap[recoveryName]
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
+// It expects to find minimum occurrence or exact count of `keyName` provided.
+func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
+	t.Helper()
+	var sinceInSeconds = 30
+	duration := time.Duration(sinceInSeconds)
+	time.Sleep(duration * time.Second)
+
+	statusCode, res, err := vtorcInstance.MakeAPICall("api/aggregated-discovery-metrics?seconds=" + strconv.Itoa(sinceInSeconds))
+	if err != nil {
+		assert.Fail(t, "Not able to call api/aggregated-discovery-metrics")
+	}
+	if statusCode == 200 {
+		resultMap := make(map[string]any)
+		err := json.Unmarshal([]byte(res), &resultMap)
+		if err != nil {
+			assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+		}
+		successCount := resultMap[keyName]
+		if iSuccessCount, ok := successCount.(float64); ok {
+			if enforceEquality {
+				assert.Equal(t, iSuccessCount, minCountExpected)
+			} else {
+				assert.GreaterOrEqual(t, iSuccessCount, minCountExpected)
+			}
+			return
+		}
+	}
+	assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
 }

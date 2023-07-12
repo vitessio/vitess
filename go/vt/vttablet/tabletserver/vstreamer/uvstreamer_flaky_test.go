@@ -52,6 +52,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -320,6 +321,7 @@ func validateReceivedEvents(t *testing.T) {
 
 func resetMetrics(t *testing.T) {
 	engine.vstreamerEventsStreamed.Reset()
+	engine.vstreamerCompressedTransactionsDecoded.Reset()
 	engine.resultStreamerNumRows.Reset()
 	engine.rowStreamerNumRows.Reset()
 	engine.vstreamerPhaseTimings.Reset()
@@ -439,7 +441,7 @@ func getEventCallback(event *binlogdatapb.VEvent) func() {
 func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) {
 	pos := ""
 	go func() {
-		err := engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
+		err := engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 			//t.Logf("Received events: %v", evs)
 			muAllEvents.Lock()
 			defer muAllEvents.Unlock()

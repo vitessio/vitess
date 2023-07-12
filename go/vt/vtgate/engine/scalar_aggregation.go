@@ -20,7 +20,6 @@ import (
 	"context"
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -32,11 +31,6 @@ var _ Primitive = (*ScalarAggregate)(nil)
 
 // ScalarAggregate is a primitive used to do aggregations without grouping keys
 type ScalarAggregate struct {
-	// PreProcess is true if one of the aggregates needs preprocessing.
-	PreProcess bool `json:",omitempty"`
-
-	AggrOnEngine bool
-
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
@@ -45,10 +39,6 @@ type ScalarAggregate struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
-
-	// Collations stores the collation ID per column offset.
-	// It is used for grouping keys and distinct aggregate functions
-	Collations map[int]collations.ID
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
@@ -76,7 +66,7 @@ func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindV
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)}
+	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.Aggregates)}
 	return qr.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -91,18 +81,19 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
+	fields := convertFields(result.Fields, sa.Aggregates)
 	out := &sqltypes.Result{
-		Fields: convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine),
+		Fields: fields,
 	}
 
 	var resultRow []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if resultRow == nil {
-			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+			resultRow, curDistincts = convertRow(fields, row, sa.Aggregates)
 			continue
 		}
-		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Collations, sa.Aggregates)
+		resultRow, curDistincts, err = merge(fields, resultRow, row, curDistincts, sa.Aggregates)
 		if err != nil {
 			return nil, err
 		}
@@ -112,14 +103,11 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
 		// different aggregation functions
 		resultRow, err = sa.createEmptyRow()
-		if err != nil {
-			return nil, err
-		}
 	} else {
 		resultRow, err = convertFinal(resultRow, sa.Aggregates)
-		if err != nil {
-			return nil, err
-		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	out.Rows = [][]sqltypes.Value{resultRow}
@@ -144,7 +132,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		mu.Lock()
 		defer mu.Unlock()
 		if len(result.Fields) != 0 && !fieldsSent {
-			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+			fields = convertFields(result.Fields, sa.Aggregates)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
@@ -154,11 +142,11 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+				current, curDistincts = convertRow(fields, row, sa.Aggregates)
 				continue
 			}
 			var err error
-			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Collations, sa.Aggregates)
+			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Aggregates)
 			if err != nil {
 				return err
 			}
@@ -214,7 +202,9 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 		AggregateSumDistinct,
 		AggregateSum,
 		AggregateMin,
-		AggregateMax:
+		AggregateMax,
+		AggregateAnyValue,
+		AggregateGroupConcat:
 		return sqltypes.NULL, nil
 
 	}

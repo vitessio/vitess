@@ -77,7 +77,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "17", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "19", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -188,11 +188,6 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			testCmd = append(testCmd, "--partial-keyspace")
 		}
 		testCmd = append(testCmd, extraArgs...)
-		if *docker {
-			// Teardown is unnecessary since Docker kills everything.
-			// Go cluster doesn't recognize 'skip-teardown' flag so commenting it out for now.
-			// testCmd = append(testCmd, "--skip-teardown")
-		}
 	}
 
 	var cmd *exec.Cmd

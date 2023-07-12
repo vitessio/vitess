@@ -273,6 +273,10 @@ func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetPriority(string) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetConsolidator(querypb.ExecuteOptions_Consolidator) {
 	panic("implement me")
 }
@@ -706,6 +710,10 @@ func (f *loggingVCursor) SetWorkloadName(string) {
 }
 
 func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
 }
 

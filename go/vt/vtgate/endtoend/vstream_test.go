@@ -615,9 +615,9 @@ func TestVStreamSharded(t *testing.T) {
 		received bool
 	}
 	expectedEvents := []*expectedEvent{
-		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768} keyspace:"ks" shard:"-80"}`, false},
+		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"-80"}`, false},
 		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"11"}} keyspace:"ks" shard:"-80"}`, false},
-		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768} keyspace:"ks" shard:"80-"}`, false},
+		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"80-"}`, false},
 		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"44"}} keyspace:"ks" shard:"80-"}`, false},
 	}
 	for {
@@ -642,7 +642,7 @@ func TestVStreamSharded(t *testing.T) {
 				for _, ev := range evs {
 					s := fmt.Sprintf("%v", ev)
 					for _, expectedEv := range expectedEvents {
-						if expectedEv.ev == s {
+						if removeAnyDeprecatedDisplayWidths(expectedEv.ev) == removeAnyDeprecatedDisplayWidths(s) {
 							expectedEv.received = true
 							break
 						}
@@ -664,6 +664,17 @@ func TestVStreamSharded(t *testing.T) {
 		}
 	}
 
+}
+
+func removeAnyDeprecatedDisplayWidths(orig string) string {
+	var adjusted string
+	baseIntType := "int"
+	intRE := regexp.MustCompile(`(?i)int\(([0-9]*)?\)`)
+	adjusted = intRE.ReplaceAllString(orig, baseIntType)
+	baseYearType := "year"
+	yearRE := regexp.MustCompile(`(?i)year\(([0-9]*)?\)`)
+	adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
+	return adjusted
 }
 
 var printMu sync.Mutex

@@ -105,7 +105,7 @@ func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *DerivedTable) getExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
 }
 

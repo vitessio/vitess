@@ -41,6 +41,13 @@ message RunMysqlUpgradeRequest{}
 
 message RunMysqlUpgradeResponse{}
 
+message ApplyBinlogFileRequest{
+  string binlog_file_name = 1;
+  string binlog_restore_position = 2;
+}
+
+message ApplyBinlogFileResponse{}
+
 message ReinitConfigRequest{}
 
 message ReinitConfigResponse{}
@@ -54,6 +61,7 @@ service MysqlCtl {
   rpc Start(StartRequest) returns (StartResponse) {};
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse) {};
   rpc RunMysqlUpgrade(RunMysqlUpgradeRequest) returns (RunMysqlUpgradeResponse) {};
+  rpc ApplyBinlogFile(ApplyBinlogFileRequest) returns (ApplyBinlogFileResponse) {};
   rpc ReinitConfig(ReinitConfigRequest) returns (ReinitConfigResponse) {};
   rpc RefreshConfig(RefreshConfigRequest) returns (RefreshConfigResponse) {};
 }

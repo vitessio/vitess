@@ -176,6 +176,11 @@ func (fhc *FakeHealthCheck) SetTabletType(tablet *topodatapb.Tablet, tabletType 
 func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }
 
+// GetLoadTabletsTrigger is not implemented.
+func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan struct{} {
+	return nil
+}
+
 // AddTablet adds the tablet.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	key := TabletToMapKey(tablet)

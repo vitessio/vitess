@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
 	"encoding/base64"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -59,7 +60,8 @@ func mysqlBase64Encode(in []byte) []byte {
 }
 
 func mysqlBase64Decode(in []byte) ([]byte, error) {
-	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(in)))
+	in = bytes.Trim(in, " \t\r\n")
+	decoded := make([]byte, len(in)/4*3)
 
 	n, err := base64.StdEncoding.Decode(decoded, in)
 	if err != nil {
@@ -113,12 +115,7 @@ func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, t, 0, false)
 	}
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_TO_BASE64(t, col)
 	c.asm.jumpDestination(skip)
 

@@ -22,7 +22,7 @@ The operators go through a few phases while planning:
    It will contain logical joins - we still haven't decided on the join algorithm to use yet.
    At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
    that we can easily do join ordering on. The logical tree will represent the full query,
-   including projections, grouping, ordering and so on.
+   including projections, Grouping, ordering and so on.
 2. Physical
    Once the logical plan has been fully built, we go bottom up and plan which routes that will be used.
    During this phase, we will also decide which join algorithms should be used on the vtgate level
@@ -34,6 +34,7 @@ The operators go through a few phases while planning:
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -52,9 +53,13 @@ type (
 )
 
 // PlanQuery creates a query plan for a given SQL statement
-func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
-	op, err := createLogicalOperatorFromAST(ctx, selStmt)
+func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+	op, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
+		return nil, err
+	}
+
+	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
 
@@ -83,66 +88,6 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	return op, err
 }
 
-func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (output ops.Operator, err error) {
-	backup := Clone(op)
-	defer func() {
-		if err == errHorizonNotPlanned {
-			err = planOffsetsOnJoins(ctx, backup)
-			if err == nil {
-				output = backup
-			}
-		}
-	}()
-
-	_, ok := op.(*Horizon)
-
-	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
-		// we are not ready to deal with subqueries yet
-		return op, errHorizonNotPlanned
-	}
-
-	output, err = planHorizons(ctx, op)
-	if err != nil {
-		return nil, err
-	}
-
-	output, err = planOffsets(ctx, output)
-	if err != nil {
-		return nil, err
-	}
-
-	err = makeSureOutputIsCorrect(ctx, op, output)
-	if err != nil {
-		return nil, err
-	}
-
-	return
-}
-
-func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, output ops.Operator) error {
-	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
-	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
-	// old horizon planning instead
-	cols, err := output.GetColumns()
-	if err != nil {
-		return err
-	}
-
-	horizon := op.(*Horizon)
-
-	sel := sqlparser.GetFirstSelect(horizon.Select)
-	if len(sel.SelectExprs) != len(cols) {
-		return errHorizonNotPlanned
-	}
-	for i, expr := range sel.SelectExprs {
-		ae, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i]) {
-			return errHorizonNotPlanned
-		}
-	}
-	return nil
-}
-
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []ops.Operator {
 	return nil
@@ -156,15 +101,57 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
+	return nil, 0, vterrors.VT13001("noColumns operators have no column")
 }
 
-func (noColumns) GetColumns() ([]sqlparser.Expr, error) {
-	return nil, vterrors.VT13001("the noColumns operator cannot accept columns")
+func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
+}
+
+func (noColumns) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
 }
 
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+}
+
+// tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
+func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
+	type columnTruncator interface {
+		setTruncateColumnCount(offset int)
+	}
+
+	truncator, ok := op.(columnTruncator)
+	if ok {
+		truncator.setTruncateColumnCount(truncateAt)
+		return true
+	}
+
+	inputs := op.Inputs()
+	if len(inputs) != 1 {
+		return false
+	}
+
+	switch op.(type) {
+	case *Limit:
+		// empty by design
+	default:
+		return false
+	}
+
+	return tryTruncateColumnsAt(inputs[0], truncateAt)
+}
+
+func transformColumnsToSelectExprs(op ops.Operator) (sqlparser.SelectExprs, error) {
+	columns, err := op.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	selExprs := slices2.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
+		return from
+	})
+	return selExprs, nil
 }

@@ -44,17 +44,14 @@ func (c *Column) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.T
 	// if we have an active row in the expression Env, use that as an authoritative source
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
-		if value.IsNull() {
-			return sqltypes.Null, flagNull | flagNullable
+		if !value.IsNull() {
+			// if we have a NULL value, we'll instead use the field information
+			return value.Type(), 0
 		}
-		return value.Type(), typeFlag(0)
 	}
 	if c.Offset < len(fields) {
-		var f typeFlag
-		if fields[c.Offset].Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) == 0 {
-			f |= flagNullable
-		}
-		return fields[c.Offset].Type, f
+		return fields[c.Offset].Type, flagNullable // we probably got here because the value was NULL,
+		// so let's assume we are on a nullable field
 	}
 	if c.typed {
 		return c.Type, flagNullable

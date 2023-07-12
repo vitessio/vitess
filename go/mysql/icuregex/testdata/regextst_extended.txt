@@ -1,0 +1,126 @@
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2001-2015 International Business Machines
+# Corporation and others. All Rights Reserved.
+#
+#  file:
+#
+#   ICU regular expression test cases.
+#
+#   format:   one test case per line,
+#               <test case>    =  <pattern>   <flags>  <match string>  [# comment]
+#               <pattern>      =  "<regular expression pattern>"
+#               <match string> =  "<tagged string>"
+#                                 the quotes on the pattern and match string can be " or ' or /
+#               <tagged string> = text, with the start and end of each
+#                                 capture group tagged with <n>...</n>.  The overall match,
+#                                 if any, is group 0, as in <0>matched text</0>
+#                                  A region can be specified with <r>...</r> tags.
+#                                 Standard ICU unescape will be applied, allowing \u, \U, etc. to appear.
+#
+#               <flags>         = any combination of
+#                                   i      case insensitive match
+#                                   x      free spacing and comments
+#                                   s      dot-matches-all mode
+#                                   m      multi-line mode.
+#                                            ($ and ^ match at embedded new-lines)
+#                                   D      Unix Lines mode (only recognize 0x0a as new-line)
+#                                   Q      UREGEX_LITERAL flag.  Entire pattern is literal string.
+#                                   v      If icu configured without break iteration, this
+#                                          regex test pattern should not compile.
+#                                   e      set the UREGEX_ERROR_ON_UNKNOWN_ESCAPES flag
+#                                   d      dump the compiled pattern
+#                                   t      trace operation of match engine.
+#                                   2-9    a digit between 2 and 9, specifies the number of
+#                                          times to execute find().  The expected results are
+#                                          for the last find() in the sequence.
+#                                   G      Only check match / no match.  Do not check capture groups.
+#                                   E      Pattern compilation error expected
+#                                   L      Use LookingAt() rather than find()
+#                                   M      Use matches() rather than find().
+#
+#                                   a      Use non-Anchoring Bounds.
+#                                   b      Use Transparent Bounds.
+#                                          The a and b options only make a difference if
+#                                          a <r>region</r> has been specified in the string.
+#                                   z|Z    hitEnd was expected(z) or not expected (Z).
+#                                          With neither, hitEnd is not checked.
+#                                   y|Y    Require End expected(y) or not expected (Y).
+#
+#                                 White space must be present between the flags and the match string.
+#
+
+"[:xdigit:]"                " <0>4f</0>"
+"\P{XDIGIT}+"               "4f<0> </0>"
+
+"[:blank:]"                 "<0> </0>4f"
+"\P{BLANK}+"                "<0>4f</0> "
+
+"[:print:]"                 "<0> 4f</0>\x07"
+"\P{PRINT}+"                " 4f<0>\x07</0>"
+
+"\p{Age=1.1}"         "<0>4f</0>🥱"
+"\p{Age=11}"         "4f🥱"
+"\p{Age=12}"         "4f<0>🥱</0>"
+
+"\p{Name=LATIN SMALL LETTER B}"   "Good<0>b</0>ye"
+
+"\p{Numeric_Value=3}"   "Good<0>3</0>ye"
+"\p{Numeric_Value=14}"  "Good<0>⑭</0>ye"
+
+"\p{Script_Extensions=Greek}"  "Good<0>β</0>ye"
+
+"\p{Bidi_Control}"  "Good<0>\u200E</0>ye"
+"\p{Bidi_Class=LeftToRight}"  "<0>Goodbye</0>"
+"\p{Bidi_Class=RightToLeft}"  "Goodbye"
+"\p{Bidi_Class=LeftToRight}"  "؈"
+"\p{Bidi_Paired_Bracket_Type=Open}"  "Good<0>(</0>ye"
+
+"\p{Soft_Dotted}" "Good<0>i</0>ye"
+
+"\p{Changes_When_Lowercased}" "<0>G</0>oodbye"
+"\p{Changes_When_Titlecased}" "<0>g</0>oodbye"
+"\p{Changes_When_Uppercased}" "G<0>oodbye</0>"
+"\p{Changes_When_CaseMapped}" " <0>Goodbye</0>3"
+"\p{Cased}" " <0>G</0>oodbye3"
+"\p{CaseIgnorable}" "foo<0>.</0>bar"
+
+"\p{Indic_Syllabic_Category=Avagraha}" "foo<0>\u09BD</0>bar"
+"\p{IndicPositionalCategory=Top_And_Left_And_Right}" "foo<0>\u0B4C</0>bar"
+"\p{VerticalOrientation=U}" "foo<0>\uA015</0>bar"
+
+"\p{Canonical_Combining_Class=Nukta}" "foo<0>\u093C</0>bar"
+"\p{Lead_Canonical_Combining_Class=Above}" "foo<0>\u0300</0>bar"
+"\p{Trail_Canonical_Combining_Class=Above}" "foo<0>\u0300</0>bar"
+
+"\p{Changes_When_Casefolded}"   "<0>\uFB03</0>Goodbye"
+"\p{Changes_When_Casefolded}" 2 "\uFB03<0>G</0>oodbye"
+
+"\p{NFC_Inert}" "foo<0>\uFB03</0>bar"
+"\p{NFKC_Inert}" "foo<0>\uFB03</0>bar"
+"\P{NFD_Inert}" "foo<0>À</0>bar"
+"\P{NFKD_Inert}" "foo<0>À</0>bar"
+
+"\p{NFC_Quick_Check=No}" "foo<0>\u0340</0>bar"
+"\p{NFKC_Quick_Check=No}" "foo<0>\u0340</0>bar"
+"\p{NFD_Quick_Check=No}" "foo<0>\u00C0</0>bar"
+"\p{NFKD_Quick_Check=No}" "foo<0>\u00C0</0>bar"
+
+"\p{Full_Composition_Exclusion}" "foo<0>\u0374</0>bar"
+
+"\p{Numeric_Type=Decimal}" "foo<0>3</0>bar"
+"\p{Joining_Type=Dual_Joining}" "foo<0>\u0626</0>bar"
+"\p{Joining_Group=African_Feh}" "foo<0>\u08BB</0>bar"
+"\p{General_Category=Close_Punctuation}" "foo[bar"
+"\p{General_Category=Close_Punctuation}" "foo<0>]</0>]bar"
+"\p{General_Category=Close_Punctuation}" 2 "foo]<0>]</0>bar"
+
+"\p{Hangul_Syllable_Type=Not_Applicable}" "<0>f</0>"
+"\p{Hangul_Syllable_Type=Leading_Jamo}" "foo<0>\u1100</0>bar"
+
+"\p{Regional_Indicator=Yes}" "foo<0>\U0001F1E6</0>bar"
+
+# Currently unsupported property classes below. They require
+# significant additional code to support.
+"\p{Changes_When_NFKC_Casefolded}" E "foo<0>\uFB03</0>bar"
+"\p{Segment_Starter}" E "<0>\uFB03</0>Goodbye"

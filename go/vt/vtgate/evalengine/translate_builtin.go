@@ -67,6 +67,8 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		return builtinIfNullRewrite(args)
 	case "nullif":
 		return builtinNullIfRewrite(args)
+	case "if":
+		return builtinIfRewrite(args)
 	case "coalesce":
 		if len(args) == 0 {
 			return nil, argError(method)
@@ -97,6 +99,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinHex{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "unhex":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinUnhex{CallExpr: call}, nil
 	case "ceil", "ceiling":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -248,6 +255,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "left", "right":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinLeftRight{CallExpr: call, collate: ast.cfg.Collation, left: method == "left"}, nil
+	case "lpad", "rpad":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinPad{CallExpr: call, collate: ast.cfg.Collation, left: method == "lpad"}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -278,11 +295,26 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinASCII{CallExpr: call}, nil
+	case "ord":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinOrd{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "repeat":
 		if len(args) != 2 {
 			return nil, argError(method)
 		}
 		return &builtinRepeat{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "concat":
+		if len(args) < 1 {
+			return nil, argError(method)
+		}
+		return &builtinConcat{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "concat_ws":
+		if len(args) < 2 {
+			return nil, argError(method)
+		}
+		return &builtinConcatWs{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "from_base64":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -433,6 +465,70 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		default:
 			return nil, argError(method)
 		}
+	case "inet_aton":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInetAton{CallExpr: call}, nil
+	case "inet_ntoa":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInetNtoa{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "inet6_aton":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInet6Aton{CallExpr: call}, nil
+	case "inet6_ntoa":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInet6Ntoa{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "is_ipv4":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV4{CallExpr: call}, nil
+	case "is_ipv4_compat":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV4Compat{CallExpr: call}, nil
+	case "is_ipv4_mapped":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV4Mapped{CallExpr: call}, nil
+	case "is_ipv6":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV6{CallExpr: call}, nil
+	case "bin_to_uuid":
+		switch len(args) {
+		case 1, 2:
+			return &builtinBinToUUID{CallExpr: call, collate: ast.cfg.Collation}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "is_uuid":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsUUID{CallExpr: call}, nil
+	case "uuid":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUUID{CallExpr: call}, nil
+	case "uuid_to_bin":
+		switch len(args) {
+		case 1, 2:
+			return &builtinUUIDToBin{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)
@@ -473,6 +569,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinConvertTz{CallExpr: call}, nil
+	case "strcmp":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinStrcmp{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -621,6 +722,210 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			prec:     uint8(call.Fsp),
 		}, nil
 
+	case *sqlparser.TrimFuncExpr:
+		var args []Expr
+		str, err := ast.translateExpr(call.StringArg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+		if call.TrimArg != nil {
+			trim, err := ast.translateExpr(call.TrimArg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, trim)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: call.TrimFuncType.ToString()}
+		return &builtinTrim{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+			trim:     call.Type,
+		}, nil
+
+	case *sqlparser.IntervalDateExpr:
+		var err error
+		args := make([]Expr, 2)
+
+		args[0], err = ast.translateExpr(call.Date)
+		if err != nil {
+			return nil, err
+		}
+		args[1], err = ast.translateExpr(call.Interval)
+		if err != nil {
+			return nil, err
+		}
+
+		cexpr := CallExpr{Arguments: args, Method: call.FnName()}
+		return &builtinDateMath{
+			CallExpr: cexpr,
+			sub:      call.IsSubtraction(),
+			unit:     call.NormalizedUnit(),
+			collate:  ast.cfg.Collation,
+		}, nil
+
+	case *sqlparser.RegexpLikeExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpLike{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_LIKE"},
+			Negate:   false,
+		}, nil
+
+	case *sqlparser.RegexpInstrExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.Position != nil {
+			position, err := ast.translateExpr(call.Position)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, position)
+		}
+
+		if call.Occurrence != nil {
+			occurrence, err := ast.translateExpr(call.Occurrence)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, occurrence)
+		}
+
+		if call.ReturnOption != nil {
+			returnOption, err := ast.translateExpr(call.ReturnOption)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, returnOption)
+		}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpInstr{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_INSTR"},
+		}, nil
+
+	case *sqlparser.RegexpSubstrExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern}
+
+		if call.Position != nil {
+			position, err := ast.translateExpr(call.Position)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, position)
+		}
+
+		if call.Occurrence != nil {
+			occurrence, err := ast.translateExpr(call.Occurrence)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, occurrence)
+		}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpSubstr{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_SUBSTR"},
+		}, nil
+
+	case *sqlparser.RegexpReplaceExpr:
+		input, err := ast.translateExpr(call.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, err := ast.translateExpr(call.Pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		repl, err := ast.translateExpr(call.Repl)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []Expr{input, pattern, repl}
+
+		if call.Position != nil {
+			position, err := ast.translateExpr(call.Position)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, position)
+		}
+
+		if call.Occurrence != nil {
+			occurrence, err := ast.translateExpr(call.Occurrence)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, occurrence)
+		}
+
+		if call.MatchType != nil {
+			matchType, err := ast.translateExpr(call.MatchType)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, matchType)
+		}
+
+		return &builtinRegexpReplace{
+			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_REPLACE"},
+		}, nil
 	default:
 		return nil, translateExprNotSupported(call)
 	}
@@ -666,36 +971,55 @@ func builtinIfNullRewrite(args []Expr) (Expr, error) {
 	if len(args) != 2 {
 		return nil, argError("IFNULL")
 	}
-	var result CaseExpr
-	result.cases = append(result.cases, WhenThen{
-		when: &IsExpr{
-			UnaryExpr: UnaryExpr{args[0]},
-			Op:        sqlparser.IsNullOp,
-			Check: func(e eval) bool {
-				return e == nil
+	return &CaseExpr{
+		cases: []WhenThen{{
+			when: &IsExpr{
+				UnaryExpr: UnaryExpr{args[0]},
+				Op:        sqlparser.IsNullOp,
+				Check: func(e eval) bool {
+					return e == nil
+				},
 			},
-		},
-		then: args[1],
-	})
-	result.Else = args[0]
-	return &result, nil
+			then: args[1],
+		}},
+		Else: args[0],
+	}, nil
 }
 
 func builtinNullIfRewrite(args []Expr) (Expr, error) {
 	if len(args) != 2 {
 		return nil, argError("NULLIF")
 	}
-	var result CaseExpr
-	result.cases = append(result.cases, WhenThen{
-		when: &ComparisonExpr{
-			BinaryExpr: BinaryExpr{
-				Left:  args[0],
-				Right: args[1],
+	return &CaseExpr{
+		cases: []WhenThen{{
+			when: &ComparisonExpr{
+				BinaryExpr: BinaryExpr{
+					Left:  args[0],
+					Right: args[1],
+				},
+				Op: compareEQ{},
 			},
-			Op: compareEQ{},
-		},
-		then: NullExpr,
-	})
-	result.Else = args[0]
-	return &result, nil
+			then: NullExpr,
+		}},
+		Else: args[0],
+	}, nil
+}
+
+func builtinIfRewrite(args []Expr) (Expr, error) {
+	if len(args) != 3 {
+		return nil, argError("IF")
+	}
+	return &CaseExpr{
+		cases: []WhenThen{{
+			when: &IsExpr{
+				UnaryExpr: UnaryExpr{args[0]},
+				Op:        sqlparser.IsTrueOp,
+				Check: func(e eval) bool {
+					return evalIsTruthy(e) == boolTrue
+				},
+			},
+			then: args[1],
+		}},
+		Else: args[2],
+	}, nil
 }

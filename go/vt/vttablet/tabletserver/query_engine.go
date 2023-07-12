@@ -299,7 +299,7 @@ func (qe *QueryEngine) Open() error {
 	}
 
 	qe.streamConns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
-	qe.se.RegisterNotifier("qe", qe.schemaChanged)
+	qe.se.RegisterNotifier("qe", qe.schemaChanged, true)
 	qe.isOpen = true
 	return nil
 }
@@ -436,7 +436,7 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 	return nil
 }
 
-func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
 	qe.tables = tables

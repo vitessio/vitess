@@ -22,10 +22,9 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -46,8 +45,8 @@ type (
 		// authoritative is true if we have exhaustive column information
 		authoritative() bool
 
-		// getExpr returns the AST struct behind this table
-		getExpr() *sqlparser.AliasedTableExpr
+		// GetExpr returns the AST struct behind this table
+		GetExpr() *sqlparser.AliasedTableExpr
 
 		// getColumns returns the known column information for this table
 		getColumns() []ColumnInfo
@@ -138,6 +137,19 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
+// CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
+func (st *SemTable) CopyDependenciesOnSQLNodes(from, to sqlparser.SQLNode) {
+	f, ok := from.(sqlparser.Expr)
+	if !ok {
+		return
+	}
+	t, ok := to.(sqlparser.Expr)
+	if !ok {
+		return
+	}
+	st.CopyDependencies(f, t)
+}
+
 // Cloned copies the dependencies from one expression into the other
 func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 	f, fromOK := from.(sqlparser.Expr)
@@ -160,7 +172,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.getExpr() {
+		if t == t2.GetExpr() {
 			return SingleTableSet(idx)
 		}
 	}
@@ -384,7 +396,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		vindexTable := table.GetVindexTable()
 
 		if vindexTable == nil {
-			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			_, isDT := table.GetExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
@@ -395,11 +407,12 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		if vindexTable.Type != "" {
 			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
 			if vindexTable.Type == vindexes.TypeReference {
+				tables = append(tables, vindexTable)
 				continue
 			}
 			return nil, nil
 		}
-		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		name, ok := table.GetExpr().Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, nil
 		}
@@ -431,6 +444,24 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	return st.ASTEquals().Expr(a, b)
+}
+
+// EqualsExprWithDeps compares two expressions taking into account their semantic
+// information. Dependency data typically pertains only to column expressions,
+// this method considers them for all expression types. The method checks
+// if dependency information exists for both expressions. If it does, the dependencies
+// must match. If we are missing dependency information for either
+func (st *SemTable) EqualsExprWithDeps(a, b sqlparser.Expr) bool {
+	eq := st.ASTEquals().Expr(a, b)
+	if !eq {
+		return false
+	}
+	adeps := st.DirectDeps(a)
+	bdeps := st.DirectDeps(b)
+	if adeps.IsEmpty() || bdeps.IsEmpty() || adeps == bdeps {
+		return true
+	}
+	return false
 }
 
 func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool {

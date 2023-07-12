@@ -24,6 +24,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 const listHTML = `<!DOCTYPE html>
@@ -50,7 +51,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/throttlerz/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/throttlerz/", func(w http.ResponseWriter, r *http.Request) {
 		throttlerzHandler(w, r, GlobalManager)
 	})
 }

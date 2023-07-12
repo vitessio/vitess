@@ -18,9 +18,10 @@ package datetime
 
 import (
 	"math"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/decimal"
-	"vitess.io/vitess/go/mysql/json/fastparse"
+	"vitess.io/vitess/go/mysql/fastparse"
 )
 
 func parsetimeHours(tp *timeparts, in string) (out string, ok bool) {
@@ -73,17 +74,24 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 }
 
 func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
+	orig := in
 	for i := 0; i < len(in); i++ {
 		switch r := in[i]; {
 		case isSpace(r):
 			tp.day, in, ok = getnum(in, false)
-			if !ok || tp.day > 34 || !isSpace(in[0]) {
+			if !ok || !isSpace(in[0]) {
 				tp.day = 0
-				return "", false
+				return parsetimeNoDelimiters(tp, orig)
 			}
-
 			for len(in) > 0 && isSpace(in[0]) {
 				in = in[1:]
+			}
+			if !isDigit(in, 0) {
+				tp.day = 0
+				return parsetimeNoDelimiters(tp, orig)
+			}
+			if tp.day > 34 {
+				return "", clampTimeparts(tp)
 			}
 			return parsetimeHours(tp, in)
 		case r == ':':
@@ -148,6 +156,10 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		in = in[n:]
 	}
 
+	return in, clampTimeparts(tp) && ok
+}
+
+func clampTimeparts(tp *timeparts) bool {
 	// Maximum time is 838:59:59, so we have to clamp
 	// it to that value here if we otherwise successfully
 	// parser the time.
@@ -156,13 +168,13 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		tp.hour = 22
 		tp.min = 59
 		tp.sec = 59
-		ok = false
+		return false
 	}
-
-	return in, ok
+	return true
 }
 
 func ParseTime(in string, prec int) (t Time, l int, ok bool) {
+	in = strings.Trim(in, " \t\r\n")
 	if len(in) == 0 {
 		return Time{}, 0, false
 	}
@@ -174,6 +186,7 @@ func ParseTime(in string, prec int) (t Time, l int, ok bool) {
 
 	var tp timeparts
 	in, ok = parsetimeAny(&tp, in)
+	ok = clampTimeparts(&tp) && ok
 
 	hours := uint16(24*tp.day + tp.hour)
 	if !tp.isZero() && neg {
