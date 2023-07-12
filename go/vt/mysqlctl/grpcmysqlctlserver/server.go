@@ -71,6 +71,15 @@ func (s *server) RefreshConfig(ctx context.Context, request *mysqlctlpb.RefreshC
 	return &mysqlctlpb.RefreshConfigResponse{}, s.mysqld.RefreshConfig(ctx, s.cnf)
 }
 
+// VersionString registers the Server for RPCs.
+func (s *server) VersionString(ctx context.Context, request *mysqlctlpb.VersionStringRequest) (*mysqlctlpb.VersionStringResponse, error) {
+	version, err := s.mysqld.GetVersionString(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &mysqlctlpb.VersionStringResponse{Version: version}, nil
+}
+
 // StartServer registers the Server for RPCs.
 func StartServer(s *grpc.Server, cnf *mysqlctl.Mycnf, mysqld *mysqlctl.Mysqld) {
 	mysqlctlpb.RegisterMysqlCtlServer(s, &server{cnf: cnf, mysqld: mysqld})
