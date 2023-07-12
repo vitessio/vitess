@@ -24,19 +24,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -99,22 +91,37 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 		},
 		{
 			name: "all values",
+			schema: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name:              "t1",
+						Columns:           []string{"c1", "c2"},
+						PrimaryKeyColumns: []string{"c1"},
+						Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+					},
+					{
+						Name:              "wut",
+						Columns:           []string{"c1"},
+						PrimaryKeyColumns: []string{"c1"},
+						Fields:            sqltypes.MakeTestFields("c1", "int64"),
+					},
+				},
+			},
 			req: &vtctldatapb.MoveTablesCreateRequest{
-				SourceKeyspace: sourceKs,
-				TargetKeyspace: targetKs,
-				Workflow:       wf,
-				Cells:          tenv.cells,
-				IncludeTables:  []string{defaultSchema.TableDefinitions[0].Name},
-				// TODO: see why setting these causes the test to fail
-				//ExcludeTables:  []string{"wut"},
-				//SourceTimeZone:     "EDT",
+				SourceKeyspace:     sourceKs,
+				TargetKeyspace:     targetKs,
+				Workflow:           wf,
+				Cells:              tenv.cells,
+				IncludeTables:      []string{defaultSchema.TableDefinitions[0].Name},
+				ExcludeTables:      []string{"wut"},
+				SourceTimeZone:     "EDT",
 				OnDdl:              binlogdatapb.OnDDLAction_EXEC.String(),
 				StopAfterCopy:      true,
 				DropForeignKeys:    true,
 				DeferSecondaryKeys: true,
 				AutoStart:          true,
 			},
-			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
 				insertPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 	}
@@ -160,33 +167,16 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
 	workflow := "testwf"
-	dbName := "test"
+	keyspace := "testks"
 	vreplID := 1
-	cp := mysql.ConnParams{}
-	db := fakesqldb.New(t)
-	ts := memorytopo.NewServer(cells[0])
-	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
-	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	// Intentionally using Sprintf here as the query matching is exact
-	// and the engine uses `db_name=` w/o any spacing and the parser
-	// will add spacing.
-	dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName),
-		&sqltypes.Result{}, nil)
-	vre := vreplication.NewSimpleTestEngine(ts, cells[0], mysqld, dbClientFactory, dbClientFactory, dbName, nil)
-	vre.Open(context.Background())
-	tm := &TabletManager{
-		MysqlDaemon:         mysqld,
-		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, dbName),
-		QueryServiceControl: tabletservermock.NewController(),
-		VREngine:            vre,
-	}
-	defer func() {
-		vre.Close()
-		dbClient.Close()
-		mysqld.Close()
-		db.Close()
-	}()
+	tabletUID := 100
+
+	tenv := newTestEnv(t)
+	defer tenv.close()
+
+	tablet := tenv.addTablet(tabletUID, keyspace, shard)
+	defer tenv.deleteTablet(tablet.tablet)
+
 	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecardb.DefaultName, ":wf")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
@@ -296,17 +286,17 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			tt.request.State = binlogdatapb.VReplicationWorkflowState_Stopped
 
 			// These are the same for each RPC call.
-			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
-			dbClient.ExpectRequest(selectQuery, selectRes, nil)
-			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
-			dbClient.ExpectRequest(idQuery, idRes, nil)
+			tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+			tenv.vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
+			tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+			tenv.vrdbClient.ExpectRequest(idQuery, idRes, nil)
 
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
-			dbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
-			_, err = tm.UpdateVReplicationWorkflow(ctx, tt.request)
-			dbClient.Wait()
+			tenv.vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
+			_, err = tenv.tmc.tm.UpdateVReplicationWorkflow(ctx, tt.request)
+			tenv.vrdbClient.Wait()
 			require.ErrorIs(t, err, errShortCircuit)
 		})
 	}

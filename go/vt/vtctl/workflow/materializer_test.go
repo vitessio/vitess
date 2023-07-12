@@ -3096,6 +3096,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// TODO: we cannot test the actual query generated w/o having a
 			// TabletManager. Importing the tabletmanager package, however, causes
 			// a circular dependency.
+			// The TabletManager portion is tested in rpc_vreplication_test.go.
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)

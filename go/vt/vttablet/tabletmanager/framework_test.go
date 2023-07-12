@@ -42,9 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -95,7 +93,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	tenv.vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t)), dbClientFactory, dbClientFactory, tenv.dbName, nil)
 	tenv.vrdbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", tenv.dbName), &sqltypes.Result{}, nil)
 	tenv.vrengine.Open(tenv.ctx)
-	require.True(t, tenv.vrengine.IsOpen())
+	require.True(t, tenv.vrengine.IsOpen(), "vreplication engine was not open")
 
 	tenv.tmc.tm = TabletManager{
 		VREngine: tenv.vrengine,
@@ -159,9 +157,7 @@ func (tenv *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 	topo.DeleteTabletReplicationData(tenv.ctx, tenv.ts, tablet)
 }
 
-// fakeTabletConn implement TabletConn interface. We only care about the
-// health check part. The state reported by the tablet will depend
-// on the Tag values "serving" and "healthy".
+// fakeTabletConn implements the TabletConn interface.
 type fakeTabletConn struct {
 	queryservice.QueryService
 	tablet *topodatapb.Tablet
@@ -192,6 +188,19 @@ func (tmc *fakeTMClient) SetSchema(schema *tabletmanagerdatapb.SchemaDefinition)
 	tmc.schema = schema
 }
 
+// ExecuteFetchAsApp is is needed for the materializer's checkTZConversion function.
+func (tmc *fakeTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
+	return sqltypes.ResultToProto3(
+		&sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "convert_tz",
+			}},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewVarChar("2023-07-14 09:05:01"),
+			}},
+		}), nil
+}
+
 // setVReplicationExecResults allows you to specify VReplicationExec queries
 // and their results. You can specify exact strings or strings prefixed with
 // a '/', in which case they will be treated as a valid regexp.
@@ -219,7 +228,7 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 }
 
-func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.CreateVReplicationWorkflowRequest) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error) {
+func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	return tmc.tm.CreateVReplicationWorkflow(ctx, req)
 }
 
