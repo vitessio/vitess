@@ -17,12 +17,16 @@ limitations under the License.
 package mysqlctld
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -101,6 +105,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 			if err != nil {
 				return err
 			}
+			mysqlctldProcess.SocketFile = path.Join(clusterInstance.TmpDirectory, fmt.Sprintf("mysqlctld_%d.sock", tablet.TabletUID))
 			tablet.MysqlctldProcess = *mysqlctldProcess
 			err = tablet.MysqlctldProcess.Start()
 			if err != nil {
@@ -155,4 +160,12 @@ func TestAutoDetect(t *testing.T) {
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
+}
+
+func TestVersionString(t *testing.T) {
+	client, err := mysqlctlclient.New("unix", primaryTablet.MysqlctldProcess.SocketFile)
+	require.NoError(t, err)
+	version, err := client.VersionString(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, version)
 }
