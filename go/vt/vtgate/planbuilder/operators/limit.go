@@ -64,6 +64,9 @@ func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	l.Source = newSrc
 	return l, offset, nil
 }
+func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	return l.Source.FindCol(ctx, expr)
+}
 
 func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return l.Source.GetColumns(ctx)

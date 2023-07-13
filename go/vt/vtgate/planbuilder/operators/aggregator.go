@@ -118,7 +118,7 @@ func (a *Aggregator) isDerived() bool {
 	return a.TableID != nil
 }
 
-func (a *Aggregator) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	if a.isDerived() {
 		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
 		if err != nil {
@@ -133,7 +133,7 @@ func (a *Aggregator) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	offset, err := a.findCol(ctx, expr.Expr)
+	offset, err := a.FindCol(ctx, expr.Expr)
 	if err != nil {
 		return nil, 0, err
 	}

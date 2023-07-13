@@ -82,6 +82,16 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 	}
 }
 
+func (v *Vindex) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	for idx, col := range v.Columns {
+		if ctx.SemTable.EqualsExprWithDeps(expr, col) {
+			return idx, nil
+		}
+	}
+
+	return -1, nil
+}
+
 func (v *Vindex) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return slice.Map(v.Columns, colNameToExpr), nil
 }

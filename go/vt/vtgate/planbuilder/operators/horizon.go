@@ -196,6 +196,20 @@ func canReuseColumn[T any](
 	return
 }
 
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
+		ae, ok := se.(*sqlparser.AliasedExpr)
+		if !ok {
+			return 0, vterrors.VT09015()
+		}
+		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, expr) {
+			return idx, nil
+		}
+	}
+
+	return -1, nil
+}
+
 func (h *Horizon) GetColumns(*plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)

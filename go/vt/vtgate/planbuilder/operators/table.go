@@ -77,6 +77,21 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return to, offset, nil
 }
 
+func (to *Table) FindCol(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	colToFind, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return -1, nil
+	}
+
+	for idx, colName := range to.Columns {
+		if colName.Name.Equal(colToFind.Name) {
+			return idx, nil
+		}
+	}
+
+	return -1, nil
+}
+
 func (to *Table) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return slice.Map(to.Columns, colNameToExpr), nil
 }

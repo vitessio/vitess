@@ -258,6 +258,21 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 	return
 }
 
+func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	columns, err := u.GetColumns(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	for idx, col := range columns {
+		if ctx.SemTable.EqualsExprWithDeps(expr, col.Expr) {
+			return idx, nil
+		}
+	}
+
+	return -1, nil
+}
+
 func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr, err error) {
 	if u.columns != nil {
 		return u.columns, nil

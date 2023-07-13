@@ -112,6 +112,9 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr,
 func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }
+func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.VT13001("noColumns operators have no column")
+}
 
 func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")

@@ -116,7 +116,7 @@ func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
-func (p *Projection) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	if p.isDerived() {
 		derivedTBL, err := ctx.SemTable.TableInfoFor(*p.TableID)
 		if err != nil {
@@ -131,7 +131,7 @@ func (p *Projection) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	offset, err := p.findCol(ctx, expr.Expr)
+	offset, err := p.FindCol(ctx, expr.Expr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -310,7 +310,8 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		rewritten, err := useOffsets(ctx, col.GetExpr(), p)
+		expr := col.GetExpr()
+		rewritten, err := useOffsets(ctx, expr, p)
 		if err != nil {
 			return err
 		}
@@ -319,7 +320,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		if ok {
 			// we got a pure offset back. No need to do anything else
 			p.Projections[i] = Offset{
-				Expr:   col.GetExpr(),
+				Expr:   expr,
 				Offset: offset.V,
 			}
 			continue
