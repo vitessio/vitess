@@ -116,8 +116,11 @@ func (c *client) VersionString(ctx context.Context) (string, error) {
 	var version string
 	err := c.withRetry(ctx, func() error {
 		r, err := c.c.VersionString(ctx, &mysqlctlpb.VersionStringRequest{})
+		if err != nil {
+			return err
+		}
 		version = r.Version
-		return err
+		return nil
 	})
 	return version, err
 }
