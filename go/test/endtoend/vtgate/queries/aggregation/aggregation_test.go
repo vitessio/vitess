@@ -528,3 +528,37 @@ func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grp
 		require.True(t, foundKey, "mysql and vitess result does not same row: vitess:%v, mysql:%v", vtRes.Rows, mRes.Rows)
 	}
 }
+
+func TestDistinctAggregation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
+
+	tcases := []struct {
+		query       string
+		expectedErr string
+	}{{
+		query:       `SELECT /*vt+ PLANNER=gen4 */ COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
+		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct shardkey) (errno 1235) (sqlstate 42000)",
+	}, {
+		query: `SELECT /*vt+ PLANNER=gen4 */ a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
+	}, {
+		query: `SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.value`,
+	}, {
+		query:       `SELECT /*vt+ PLANNER=gen4 */ count(distinct a.value), SUM(DISTINCT b.t1_id) FROM t1 a, t1 b`,
+		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct b.t1_id) (errno 1235) (sqlstate 42000)",
+	}, {
+		query: `SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
+	}}
+
+	for _, tc := range tcases {
+		mcmp.Run(tc.query, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.ExecAllowError(tc.query)
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.expectedErr)
+		})
+	}
+}
