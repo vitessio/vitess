@@ -45,6 +45,7 @@ const (
 	cutOverThresholdFlag   = "cut-over-threshold"
 	vreplicationTestSuite  = "vreplication-test-suite"
 	allowForeignKeysFlag   = "unsafe-allow-foreign-keys"
+	analyzeTableFlag       = "analyze-table"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -221,6 +222,11 @@ func (setting *DDLStrategySetting) IsAllowForeignKeysFlag() bool {
 	return setting.hasFlag(allowForeignKeysFlag)
 }
 
+// IsAnalyzeTableFlag checks if strategy options include --analyze-table
+func (setting *DDLStrategySetting) IsAnalyzeTableFlag() bool {
+	return setting.hasFlag(analyzeTableFlag)
+}
+
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
@@ -243,6 +249,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, fastRangeRotationFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		case isFlag(opt, allowForeignKeysFlag):
+		case isFlag(opt, analyzeTableFlag):
 		default:
 			validOpts = append(validOpts, opt)
 		}
