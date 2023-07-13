@@ -700,9 +700,11 @@ message UpdateThrottlerConfigRequest {
   // CustomQuerySet indicates that the value of CustomQuery has changed
   bool custom_query_set = 6;
   // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
-  bool check_as_check_self=7;
+  bool check_as_check_self = 7;
   // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
-  bool check_as_check_shard=8;
+  bool check_as_check_shard = 8;
+  // ThrottledApp indicates a single throttled app rule (ignored if name is empty)
+  topodata.ThrottledAppRule throttled_app = 9;
 }
 
 message UpdateThrottlerConfigResponse {

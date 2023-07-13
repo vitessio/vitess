@@ -1570,6 +1570,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
+		if throttlerConfig.ThrottledApps == nil {
+			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+		}
 		if req.CustomQuerySet {
 			// custom query provided
 			throttlerConfig.CustomQuery = req.CustomQuery
@@ -1591,6 +1594,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if req.CheckAsCheckShard {
 			throttlerConfig.CheckAsCheckSelf = false
+		}
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
 		}
 		return throttlerConfig
 	}

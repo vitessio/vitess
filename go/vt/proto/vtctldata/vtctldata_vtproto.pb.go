@@ -4633,6 +4633,16 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ThrottledApp != nil {
+		size, err := m.ThrottledApp.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x4a
+	}
 	if m.CheckAsCheckShard {
 		i--
 		if m.CheckAsCheckShard {
@@ -11613,6 +11623,10 @@ func (m *UpdateThrottlerConfigRequest) SizeVT() (n int) {
 	}
 	if m.CheckAsCheckShard {
 		n += 2
+	}
+	if m.ThrottledApp != nil {
+		l = m.ThrottledApp.SizeVT()
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -24526,6 +24540,42 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.CheckAsCheckShard = bool(v != 0)
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottledApp", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ThrottledApp == nil {
+				m.ThrottledApp = &topodata.ThrottledAppRule{}
+			}
+			if err := m.ThrottledApp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
