@@ -152,12 +152,11 @@ func WaitForSrvKeyspace(clusterInstance *cluster.LocalProcessCluster, cell, keys
 func throttleAppRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name, throttle bool) (result string, err error) {
 	args := []string{}
 	args = append(args, "UpdateThrottlerConfig")
-	args = append(args, "--throttle-app", throttlerApp.String())
-	args = append(args, "--throttle-app-duration")
 	if throttle {
-		args = append(args, "1h")
+		args = append(args, "--throttle-app", throttlerApp.String())
+		args = append(args, "--throttle-app-duration", "1h")
 	} else {
-		args = append(args, "-1h")
+		args = append(args, "--unthrottle-app", throttlerApp.String())
 	}
 	args = append(args, keyspaceName)
 
