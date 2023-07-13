@@ -70,11 +70,10 @@ func TestMain(m *testing.M) {
 func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
 	t.Helper()
 	env := &testMaterializerEnv{
-		ms:      ms,
-		sources: sources,
-		targets: targets,
-		tablets: make(map[int]*topodatapb.Tablet),
-		//tms:      make(map[int]*tabletmanager.TabletManager),
+		ms:       ms,
+		sources:  sources,
+		targets:  targets,
+		tablets:  make(map[int]*topodatapb.Tablet),
 		topoServ: memorytopo.NewServer("cell"),
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
@@ -150,12 +149,6 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 		},
 	}
 	env.tablets[id] = tablet
-	/*
-		env.tms[id] = &tabletmanager.TabletManager{
-			TopoServer: env.topoServ,
-			VREngine:   vreplication.NewSimpleTestEngine(env.topoServ, env.cell, nil, binlogplayer.DBClient, binlogplayer.DBClient, dbname, externalConfig),
-		}
-	*/
 	if err := env.ws.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
@@ -209,13 +202,6 @@ func (tmc *testMaterializerTMClient) schemaRequested(uid uint32) {
 	}
 }
 
-func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
-	tmc.muSchemaCount.Lock()
-	defer tmc.muSchemaCount.Unlock()
-	key := strconv.Itoa(int(uid))
-	return tmc.getSchemaCounts[key]
-}
-
 func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields("rowsaffected", "int64"), "1")
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
@@ -223,25 +209,24 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 
 func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-			Workflow: "workflow",
-			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-				{
-					Id: 1,
-					Bls: &binlogdatapb.BinlogSource{
-						Keyspace: "sourceks",
-						Shard:    "0",
-						Filter: &binlogdatapb.Filter{
-							Rules: []*binlogdatapb.Rule{
-								{
-									Match: ".*",
-								},
+		Workflow: "workflow",
+		Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+			{
+				Id: 1,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace: "sourceks",
+					Shard:    "0",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match: ".*",
 							},
 						},
 					},
 				},
 			},
 		},
-		nil
+	}, nil
 }
 
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
@@ -302,23 +287,6 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	// Reuse VReplicationExec
 	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
-}
-
-func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
-	t.Helper()
-
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
-
-	for tabletID, qrs := range tmc.vrQueries {
-		if len(qrs) != 0 {
-			var list []string
-			for _, qr := range qrs {
-				list = append(list, qr.query)
-			}
-			t.Errorf("tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
-		}
-	}
 }
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
