@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -832,7 +833,7 @@ func TestExecutorShow(t *testing.T) {
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("aa", "TestExecutor", "-20", "PRIMARY", "SERVING", "aa-0000000001", "-20", "1970-01-01T00:00:01Z"),
-			buildVarCharRow("aa", "TestXBadVSchema", "-20", "PRIMARY", "SERVING", "aa-0000000009", "random", "1970-01-01T00:00:01Z"),
+			buildVarCharRow("aa", "TestUnsharded", "0", "REPLICA", "SERVING", "aa-0000000010", "2", "1970-01-01T00:00:01Z"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -2061,6 +2062,49 @@ func TestExecutorClearsWarnings(t *testing.T) {
 	_, err := executor.Execute(context.Background(), nil, "TestExecute", session, "select 42", nil)
 	require.NoError(t, err)
 	require.Empty(t, session.Warnings)
+}
+
+// TestServingKeyspaces tests that the dual queries are routed to the correct keyspaces from the list of serving keyspaces.
+func TestServingKeyspaces(t *testing.T) {
+	executor, sbc1, _, sbclookup := createExecutorEnv()
+	executor.pv = querypb.ExecuteOptions_Gen4
+	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
+	require.True(t, ok)
+	hc := gw.hc.(*discovery.FakeHealthCheck)
+
+	// We broadcast twice because we want to ensure the keyspace event watcher has processed all the healthcheck updates
+	// from the first broadcast. Since we use a channel for broadcasting, it is blocking and hence the second call ensures
+	// all the updates (specifically the last one) has been processed by the keyspace-event-watcher.
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace", "varchar"), "TestExecutor"),
+	})
+	sbclookup.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace", "varchar"), "TestUnsharded"),
+	})
+
+	require.ElementsMatch(t, []string{"TestExecutor", "TestUnsharded"}, gw.GetServingKeyspaces())
+	result, err := executor.Execute(ctx, nil, "TestServingKeyspaces", NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[VARCHAR("TestExecutor")]]`, fmt.Sprintf("%v", result.Rows))
+
+	for _, tablet := range hc.GetAllTablets() {
+		if tablet.Keyspace == "TestExecutor" {
+			hc.SetServing(tablet, false)
+		}
+	}
+	// Two broadcast calls for the same reason as above.
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+
+	// Clear plan cache, to force re-planning of the query.
+	executor.plans.Clear()
+	require.ElementsMatch(t, []string{"TestUnsharded"}, gw.GetServingKeyspaces())
+	result, err = executor.Execute(ctx, nil, "TestServingKeyspaces", NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[VARCHAR("TestUnsharded")]]`, fmt.Sprintf("%v", result.Rows))
 }
 
 func TestExecutorOtherRead(t *testing.T) {

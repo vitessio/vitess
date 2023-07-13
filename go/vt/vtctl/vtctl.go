@@ -125,6 +125,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -587,8 +588,8 @@ var commands = []commandGroup{
 			{
 				name:   "ApplySchema",
 				method: commandApplySchema,
-				params: "[--allow_long_unavailability] [--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
-				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If --allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
+				params: "[--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
+				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
 			},
 			{
 				name:   "CopySchemaShard",
@@ -609,8 +610,19 @@ var commands = []commandGroup{
 					" \nvtctl OnlineDDL test_keyspace show running" +
 					" \nvtctl OnlineDDL test_keyspace show complete" +
 					" \nvtctl OnlineDDL test_keyspace show failed" +
+					" \nvtctl OnlineDDL test_keyspace cleanup 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
 					" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
-					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace cancel-all" +
+					" \nvtctl OnlineDDL test_keyspace launch 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace launch-all" +
+					" \nvtctl OnlineDDL test_keyspace complete 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace complete-all" +
+					" \nvtctl OnlineDDL test_keyspace throttle 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace throttle-all" +
+					" \nvtctl OnlineDDL test_keyspace unthrottle 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace unthrottle-all" +
+					"",
 			},
 			{
 				name:   "ValidateVersionShard",
@@ -691,7 +703,7 @@ var commands = []commandGroup{
 			{
 				name:   "UpdateThrottlerConfig",
 				method: commandUpdateThrottlerConfig,
-				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
 				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
@@ -2861,7 +2873,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
+	subFlags.MarkDeprecated("allow_long_unavailability", "")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
@@ -2908,15 +2920,14 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	log.Info("Calling ApplySchema on VtctldServer")
 
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
-		Keyspace:                keyspace,
-		AllowLongUnavailability: *allowLongUnavailability,
-		DdlStrategy:             *ddlStrategy,
-		Sql:                     parts,
-		SkipPreflight:           true,
-		UuidList:                textutil.SplitDelimitedList(*uuidList),
-		MigrationContext:        *migrationContext,
-		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
-		CallerId:                cID,
+		Keyspace:            keyspace,
+		DdlStrategy:         *ddlStrategy,
+		Sql:                 parts,
+		SkipPreflight:       true,
+		UuidList:            textutil.SplitDelimitedList(*uuidList),
+		MigrationContext:    *migrationContext,
+		WaitReplicasTimeout: protoutil.DurationToProto(*waitReplicasTimeout),
+		CallerId:            cID,
 	})
 
 	if err != nil {
@@ -2929,6 +2940,34 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	}
 
 	return nil
+}
+
+func generateOnlineDDLQuery(command string, arg string, allSupported bool) (string, error) {
+	// Accept inputs like so:
+	//  "launch", "all"
+	//  "launch", <uuid>
+	//  "launch-all", <empty>
+	if tokens := strings.Split(command, "-"); len(tokens) == 2 && tokens[1] == "all" {
+		// command is e.g. "launch-all"
+		if arg != "" {
+			return "", fmt.Errorf("UUID not allowed in '%s' command", command)
+		}
+		// transform "launch-all" into "launch", "all"
+		command = tokens[0]
+		arg = "all"
+	}
+	switch arg {
+	case "":
+		return "", fmt.Errorf("UUID|all required")
+	case "all":
+		if !allSupported {
+			return "", fmt.Errorf("'all' not supported for '%s' command", command)
+		}
+		return fmt.Sprintf(`alter vitess_migration %s all`, command), nil
+	default:
+		query := `alter vitess_migration %a ` + command
+		return sqlparser.ParseAndBind(query, sqltypes.StringBindVariable(arg))
+	}
 }
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -2954,7 +2993,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 
 	applySchemaQuery := ""
 	executeFetchQuery := ""
-	var bindErr error
+	var err error
 	switch command {
 	case "show":
 		condition := ""
@@ -2970,12 +3009,12 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			string(schema.OnlineDDLStatusRunning),
 			string(schema.OnlineDDLStatusComplete),
 			string(schema.OnlineDDLStatusFailed):
-			condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
+			condition, err = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
 		default:
 			if schema.IsOnlineDDLUUID(arg) {
-				condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
+				condition, err = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
 			} else {
-				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
+				condition, err = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
 		}
 		order := " order by `id` "
@@ -2994,31 +3033,29 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 		executeFetchQuery = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
-	case "retry":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a retry`, sqltypes.StringBindVariable(arg))
-	case "complete":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a complete`, sqltypes.StringBindVariable(arg))
-	case "cancel":
-		if arg == "" {
-			return fmt.Errorf("UUID required")
-		}
-		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a cancel`, sqltypes.StringBindVariable(arg))
-	case "cancel-all":
-		if arg != "" {
-			return fmt.Errorf("UUID not allowed in %s", command)
-		}
-		applySchemaQuery = `alter vitess_migration cancel all`
+	case
+		"retry",
+		"cleanup":
+		// Do not support 'ALL' argument
+		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, false)
+	case
+		"launch",
+		"launch-all",
+		"complete",
+		"complete-all",
+		"cancel",
+		"cancel-all",
+		"throttle",
+		"throttle-all",
+		"unthrottle",
+		"unthrottle-all":
+		// Support 'ALL' argument
+		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, true)
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
-	if bindErr != nil {
-		return fmt.Errorf("Error generating OnlineDDL query: %+v", bindErr)
+	if err != nil {
+		return fmt.Errorf("Error generating OnlineDDL query: %+v", err)
 	}
 
 	if applySchemaQuery != "" {
@@ -3528,7 +3565,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
 	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
-
+	throttledApp := subFlags.String("throttle-app", "", "an app name to throttle")
+	throttledAppRatio := subFlags.Float64("throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
+	throttledAppDuration := subFlags.Duration("throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specified in --throttled-app)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3543,9 +3582,16 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
+	if subFlags.Changed("throttle-app-ratio") && *throttledApp == "" {
+		return fmt.Errorf("--throttle-app-ratio requires --throttle-app")
+	}
+	if subFlags.Changed("throttle-app-duration") && *throttledApp == "" {
+		return fmt.Errorf("--throttle-app-duration requires --throttle-app")
+	}
+
 	keyspace := subFlags.Arg(0)
 
-	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, &vtctldatapb.UpdateThrottlerConfigRequest{
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{
 		Keyspace:          keyspace,
 		Enable:            *enable,
 		Disable:           *disable,
@@ -3554,7 +3600,15 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		Threshold:         *threshold,
 		CheckAsCheckSelf:  *checkAsCheckSelf,
 		CheckAsCheckShard: *checkAsCheckShard,
-	})
+	}
+	if *throttledApp != "" {
+		req.ThrottledApp = &topodatapb.ThrottledAppRule{
+			Name:      *throttledApp,
+			Ratio:     *throttledAppRatio,
+			ExpiresAt: logutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
+		}
+	}
+	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)
 	return err
 }
 

@@ -558,7 +558,7 @@ func (vr *vreplicator) throttlerAppName() string {
 	if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		names = append(names, throttlerapp.OnlineDDLName.String())
 	}
-	return strings.Join(names, ":")
+	return throttlerapp.Concatenate(names...)
 }
 
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {

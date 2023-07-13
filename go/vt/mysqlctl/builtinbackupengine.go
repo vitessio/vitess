@@ -208,6 +208,22 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	return be.executeFullBackup(ctx, params, bh)
 }
 
+// getIncrementalFromPosGTIDSet turns the given string into a valid Mysql56GTIDSet
+func getIncrementalFromPosGTIDSet(incrementalFromPos string) (mysql.Mysql56GTIDSet, error) {
+	pos, err := mysql.DecodePositionDefaultFlavor(incrementalFromPos, mysql.Mysql56FlavorID)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", incrementalFromPos)
+	}
+	if !pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", incrementalFromPos)
+	}
+	ifPosGTIDSet, ok := pos.GTIDSet.(mysql.Mysql56GTIDSet)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
+	}
+	return ifPosGTIDSet, nil
+}
+
 // executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
 // - A valid position
 // - "auto", indicating the incremental backup should begin with last successful backup end position.
@@ -264,21 +280,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	}
 
 	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
-	getIncrementalFromPosGTIDSet := func() (mysql.Mysql56GTIDSet, error) {
-		pos, err := mysql.DecodePosition(params.IncrementalFromPos)
-		if err != nil {
-			return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", params.IncrementalFromPos)
-		}
-		if !pos.MatchesFlavor(mysql.Mysql56FlavorID) {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", params.IncrementalFromPos)
-		}
-		ifPosGTIDSet, ok := pos.GTIDSet.(mysql.Mysql56GTIDSet)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
-		}
-		return ifPosGTIDSet, nil
-	}
-	backupFromGTIDSet, err := getIncrementalFromPosGTIDSet()
+	backupFromGTIDSet, err := getIncrementalFromPosGTIDSet(params.IncrementalFromPos)
 	if err != nil {
 		return false, err
 	}

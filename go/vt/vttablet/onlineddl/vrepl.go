@@ -104,6 +104,8 @@ type VRepl struct {
 	alterQuery  string
 	tableRows   int64
 
+	analyzeTable bool
+
 	sourceSharedColumns              *vrepl.ColumnList
 	targetSharedColumns              *vrepl.ColumnList
 	droppedSourceNonGeneratedColumns *vrepl.ColumnList
@@ -130,7 +132,7 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string, analyzeTable bool) *VRepl {
 	return &VRepl{
 		workflow:       workflow,
 		keyspace:       keyspace,
@@ -139,6 +141,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		sourceTable:    sourceTable,
 		targetTable:    targetTable,
 		alterQuery:     alterQuery,
+		analyzeTable:   analyzeTable,
 		parser:         vrepl.NewAlterTableParser(),
 		enumToTextMap:  map[string]string{},
 		intToEnumMap:   map[string]bool{},
@@ -224,6 +227,13 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		uniqueKeys = append(uniqueKeys, uniqueKey)
 	}
 	return uniqueKeys, nil
+}
+
+// executeAnalyzeTable runs an ANALYZE TABLE command
+func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, tableName)
+	_, err := conn.ExecuteFetch(parsed.Query, 1, false)
+	return err
 }
 
 // readTableStatus reads table status information
@@ -335,6 +345,11 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 }
 
 func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	if v.analyzeTable {
+		if err := v.executeAnalyzeTable(ctx, conn, v.sourceTable); err != nil {
+			return err
+		}
+	}
 	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTable)
 	if err != nil {
 		return err

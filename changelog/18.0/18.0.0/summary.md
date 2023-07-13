@@ -9,6 +9,7 @@
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Flags](#deprecated-flags)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
   - **[New stats](#new-stats)**
@@ -38,6 +39,17 @@ in https://nodejs.org/en/blog/release/v18.0.0, but none apply to VTAdmin. Full d
 here https://nodejs.org/en/blog/release/v18.16.0.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
+
+#### <a id="deprecated-flags"/>Deprecated Command Line Flags
+
+Throttler related `vttablet` flags:
+
+- `--enable-lag-throttler` is now removed after being deprecated in `v17.0`
+- `--throttle_threshold` is deprecated and will be removed in `v19.0`
+- `--throttle_metrics_query` is deprecated and will be removed in `v19.0`
+- `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
+- `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
+- `--throttler-config-via-topo` is deprecated after asummed `true` in `v17.0`. It will be removed in a future version.
 
 #### <a id="deleted-k8stopo"/>Deleted `k8stopo`
 
