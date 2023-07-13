@@ -57,11 +57,8 @@ func appendCompression(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 }
 
 func init() {
-	compressors := []encoding.Compressor{}
-	compressors = append(compressors, SnappyCompressor{})
-	compressors = append(compressors, ZstdCompressor{})
+	compressors := []encoding.Compressor{SnappyCompressor{}, ZstdCompressor{}}
 
-	compressionTypes = []string{}
 	for _, compressor := range compressors {
 		compressionTypes = append(compressionTypes, compressor.Name())
 		encoding.RegisterCompressor(compressor)
