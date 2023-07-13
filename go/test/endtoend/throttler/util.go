@@ -44,7 +44,7 @@ type Config struct {
 
 const (
 	DefaultQuery     = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat"
-	DefaultThreshold = 1 * time.Second
+	DefaultThreshold = 5 * time.Second
 	ConfigTimeout    = 60 * time.Second
 )
 
