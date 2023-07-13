@@ -68,12 +68,8 @@ const (
 
 var (
 	// flag vars
-	throttleThreshold         = 1 * time.Second
-	throttleTabletTypes       = "replica"
-	throttleMetricQuery       string
-	throttleMetricThreshold   = math.MaxFloat64
-	throttlerCheckAsCheckSelf = false
-	throttlerConfigViaTopo    = true
+	defaultThrottleLagThreshold = 5 * time.Second
+	throttleTabletTypes         = "replica"
 )
 
 func init() {
@@ -84,11 +80,11 @@ func init() {
 func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
 
-	fs.DurationVar(&throttleThreshold, "throttle_threshold", throttleThreshold, "Replication lag threshold for default lag throttling")
-	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
-	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
+	fs.MarkDeprecated("throttle_threshold", "Replication lag threshold for default lag throttling")
+	fs.MarkDeprecated("throttle_metrics_query", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	fs.MarkDeprecated("throttle_metrics_threshold", "Override default throttle threshold, respective to --throttle_metrics_query")
+	fs.MarkDeprecated("throttle_check_as_check_self", "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+	fs.MarkDeprecated("throttler-config-via-topo", "Assumed to be 'true'")
 }
 
 var (
@@ -145,6 +141,7 @@ type Throttler struct {
 
 	metricsQuery     atomic.Value
 	MetricsThreshold atomic.Uint64
+	checkAsCheckSelf atomic.Bool
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -216,10 +213,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	throttler.StoreMetricsThreshold(throttleThreshold.Seconds()) //default
-	if throttleMetricThreshold != math.MaxFloat64 {
-		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
-	}
+	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 
 	return throttler
 }
@@ -302,7 +296,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb
 	if throttlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
 		if throttlerConfig.Threshold == 0 {
-			throttlerConfig.Threshold = throttleThreshold.Seconds()
+			throttlerConfig.Threshold = defaultThrottleLagThreshold.Seconds()
 		}
 	}
 	return throttlerConfig
@@ -337,9 +331,6 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 // This may cause the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
 // Note: you should be holding the initMutex when calling this function.
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
-	if !throttlerConfigViaTopo {
-		return
-	}
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
@@ -347,7 +338,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
-	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
+	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	for _, appRule := range throttlerConfig.ThrottledApps {
 		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio)
 	}
@@ -428,10 +419,6 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
-	// TODO: remove `EnableLagThrottler` in v18
-	if throttler.env.Config().EnableLagThrottler {
-		log.Warningf("The flags `--enable_lag_throttler` and `--throttle_threshold` will be removed in v18. Use 'vtctl UpdateThrottlerConfig', see https://vitess.io/docs/17.0/reference/programs/vtctldclient/vtctldclient_updatethrottlerconfig/")
-	}
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
@@ -446,63 +433,51 @@ func (throttler *Throttler) Open() error {
 	// is not known when the TabletServer is created, which in turn creates the
 	// Throttler.
 	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
-	if throttleMetricQuery != "" {
-		throttler.metricsQuery.Store(throttleMetricQuery) // override
-	}
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 
-	if throttlerConfigViaTopo {
-		log.Infof("Throttler: throttler-config-via-topo detected")
-		// We want to read throttler config from topo and apply it.
-		// But also, we're in an Open() function, which blocks state manager's operation, and affects
-		// opening of all other components. We thus read the throttler config in the background.
-		// However, we want to handle a situation where the read errors out.
-		// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
-		retryReadAndApplyThrottlerConfig := func() {
-			retryInterval := 10 * time.Second
-			retryTicker := time.NewTicker(retryInterval)
-			defer retryTicker.Stop()
-			for {
-				if !throttler.IsOpen() {
-					// Throttler is not open so no need to keep retrying.
-					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
-					return
-				}
-
-				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
-				if err == nil {
-					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
-					// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
-					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
-					// attempt to read the throttler config; but we just want to ensure they don't step on each other
-					// while applying the changes.
-					throttler.initMutex.Lock()
-					defer throttler.initMutex.Unlock()
-					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
-					go throttler.watchSrvKeyspaceOnce.Do(func() {
-						// We start watching SrvKeyspace only after we know it's been created. Now is that time!
-						throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
-					})
-					return
-				}
-				// It's possible, especially in CI, that this throttler opened before the SrvKeyspace entry is created in topo.
-				// We thus retry until the entry is found.
-				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
-				<-retryTicker.C
+	log.Infof("Throttler: throttler-config-via-topo detected")
+	// We want to read throttler config from topo and apply it.
+	// But also, we're in an Open() function, which blocks state manager's operation, and affects
+	// opening of all other components. We thus read the throttler config in the background.
+	// However, we want to handle a situation where the read errors out.
+	// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
+	retryReadAndApplyThrottlerConfig := func() {
+		retryInterval := 10 * time.Second
+		retryTicker := time.NewTicker(retryInterval)
+		defer retryTicker.Stop()
+		for {
+			if !throttler.IsOpen() {
+				// Throttler is not open so no need to keep retrying.
+				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+				return
 			}
-		}
-		go retryReadAndApplyThrottlerConfig()
-	} else {
-		// backwards-cmpatible: check for --enable-lag-throttler flag in vttablet
-		// this will be removed in a future version
-		if throttler.env.Config().EnableLagThrottler {
-			go throttler.Enable(ctx)
+
+			throttlerConfig, err := throttler.readThrottlerConfig(ctx)
+			if err == nil {
+				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+				// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
+				// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
+				// attempt to read the throttler config; but we just want to ensure they don't step on each other
+				// while applying the changes.
+				throttler.initMutex.Lock()
+				defer throttler.initMutex.Unlock()
+				throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+				go throttler.watchSrvKeyspaceOnce.Do(func() {
+					// We start watching SrvKeyspace only after we know it's been created. Now is that time!
+					throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+				})
+				return
+			}
+			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
+			<-retryTicker.C
 		}
 	}
+	go retryReadAndApplyThrottlerConfig()
+
 	return nil
 }
 
@@ -1100,7 +1075,7 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 	case ThrottleCheckPrimaryWrite:
-		if throttlerCheckAsCheckSelf {
+		if throttler.checkAsCheckSelf.Load() {
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
