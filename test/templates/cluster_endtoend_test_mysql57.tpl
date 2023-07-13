@@ -155,7 +155,7 @@ jobs:
         launchable verify || true
 
         # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
+        launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
