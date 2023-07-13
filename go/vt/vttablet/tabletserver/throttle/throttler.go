@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -55,9 +56,9 @@ const (
 
 	nonDeprioritizedAppMapExpiration = time.Second
 
-	dormantPeriod             = time.Minute
-	defaultThrottleTTLMinutes = 60
-	defaultThrottleRatio      = 1.0
+	dormantPeriod              = time.Minute
+	DefaultAppThrottleDuration = time.Hour
+	DefaultThrottleRatio       = 1.0
 
 	shardStoreName = "shard"
 	selfStoreName  = "self"
@@ -291,17 +292,20 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 }
 
 // normalizeThrottlerConfig noramlizes missing throttler config information, as needed.
-func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
-	if thottlerConfig == nil {
-		thottlerConfig = &topodatapb.ThrottlerConfig{}
+func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
+	if throttlerConfig == nil {
+		throttlerConfig = &topodatapb.ThrottlerConfig{}
 	}
-	if thottlerConfig.CustomQuery == "" {
+	if throttlerConfig.ThrottledApps == nil {
+		throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+	}
+	if throttlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
-		if thottlerConfig.Threshold == 0 {
-			thottlerConfig.Threshold = throttleThreshold.Seconds()
+		if throttlerConfig.Threshold == 0 {
+			throttlerConfig.Threshold = throttleThreshold.Seconds()
 		}
 	}
-	return thottlerConfig
+	return throttlerConfig
 }
 
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
@@ -344,6 +348,9 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	}
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
+	for _, appRule := range throttlerConfig.ThrottledApps {
+		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio)
+	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
 	} else {
@@ -446,7 +453,7 @@ func (throttler *Throttler) Open() error {
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
-	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 
 	if throttlerConfigViaTopo {
 		log.Infof("Throttler: throttler-config-via-topo detected")
@@ -931,10 +938,10 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 	} else {
 		if expireAt.IsZero() {
-			expireAt = now.Add(defaultThrottleTTLMinutes * time.Minute)
+			expireAt = now.Add(DefaultAppThrottleDuration)
 		}
 		if ratio < 0 {
-			ratio = defaultThrottleRatio
+			ratio = DefaultThrottleRatio
 		}
 		appThrottle = base.NewAppThrottle(appName, expireAt, ratio)
 	}

@@ -455,7 +455,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary}
+	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
 }
@@ -467,6 +467,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		Concurrency:        int64(req.Concurrency),
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
+		UpgradeSafe:        req.UpgradeSafe,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -1569,6 +1570,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
+		if throttlerConfig.ThrottledApps == nil {
+			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+		}
 		if req.CustomQuerySet {
 			// custom query provided
 			throttlerConfig.CustomQuery = req.CustomQuery
@@ -1590,6 +1594,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if req.CheckAsCheckShard {
 			throttlerConfig.CheckAsCheckSelf = false
+		}
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
 		}
 		return throttlerConfig
 	}

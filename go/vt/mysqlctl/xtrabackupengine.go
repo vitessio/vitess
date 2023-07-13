@@ -179,7 +179,6 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 // executeFullBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
-
 	if params.IncrementalFromPos != "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
 	}
@@ -209,6 +208,11 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	serverUUID, err := conn.GetServerUUID()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
+
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
 	flavor := pos.GTIDSet.Flavor()
@@ -250,6 +254,10 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			Shard:          params.Shard,
 			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
+			MySQLVersion:   mysqlVersion,
+			// xtrabackup backups are always created such that they
+			// are safe to use for upgrades later on.
+			UpgradeSafe: true,
 		},
 
 		// XtraBackup-specific fields

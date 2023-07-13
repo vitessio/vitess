@@ -73,22 +73,25 @@ type BackupParams struct {
 	IncrementalFromPos string
 	// Stats let's backup engines report detailed backup timings.
 	Stats backupstats.Stats
+	// UpgradeSafe indicates whether the backup is safe for upgrade and created with innodb_fast_shutdown=0
+	UpgradeSafe bool
 }
 
-func (b BackupParams) Copy() BackupParams {
+func (b *BackupParams) Copy() BackupParams {
 	return BackupParams{
-		b.Cnf,
-		b.Mysqld,
-		b.Logger,
-		b.Concurrency,
-		b.HookExtraEnv,
-		b.TopoServer,
-		b.Keyspace,
-		b.Shard,
-		b.TabletAlias,
-		b.BackupTime,
-		b.IncrementalFromPos,
-		b.Stats,
+		Cnf:                b.Cnf,
+		Mysqld:             b.Mysqld,
+		Logger:             b.Logger,
+		Concurrency:        b.Concurrency,
+		HookExtraEnv:       b.HookExtraEnv,
+		TopoServer:         b.TopoServer,
+		Keyspace:           b.Keyspace,
+		Shard:              b.Shard,
+		TabletAlias:        b.TabletAlias,
+		BackupTime:         b.BackupTime,
+		IncrementalFromPos: b.IncrementalFromPos,
+		Stats:              b.Stats,
+		UpgradeSafe:        b.UpgradeSafe,
 	}
 }
 
@@ -123,21 +126,21 @@ type RestoreParams struct {
 	Stats backupstats.Stats
 }
 
-func (p RestoreParams) Copy() RestoreParams {
+func (p *RestoreParams) Copy() RestoreParams {
 	return RestoreParams{
-		p.Cnf,
-		p.Mysqld,
-		p.Logger,
-		p.Concurrency,
-		p.HookExtraEnv,
-		p.DeleteBeforeRestore,
-		p.DbName,
-		p.Keyspace,
-		p.Shard,
-		p.StartTime,
-		p.RestoreToPos,
-		p.DryRun,
-		p.Stats,
+		Cnf:                 p.Cnf,
+		Mysqld:              p.Mysqld,
+		Logger:              p.Logger,
+		Concurrency:         p.Concurrency,
+		HookExtraEnv:        p.HookExtraEnv,
+		DeleteBeforeRestore: p.DeleteBeforeRestore,
+		DbName:              p.DbName,
+		Keyspace:            p.Keyspace,
+		Shard:               p.Shard,
+		StartTime:           p.StartTime,
+		RestoreToPos:        p.RestoreToPos,
+		DryRun:              p.DryRun,
+		Stats:               p.Stats,
 	}
 }
 
@@ -273,6 +276,12 @@ type BackupManifest struct {
 	Keyspace string
 
 	Shard string
+
+	// MySQLversion is the version of MySQL when the backup was taken.
+	MySQLVersion string
+
+	// UpgradeSafe indicates whether the backup is safe to use for an upgrade to a newer MySQL version
+	UpgradeSafe bool
 }
 
 func (m *BackupManifest) HashKey() string {
@@ -392,6 +401,11 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	manifests := make([]*BackupManifest, len(bhs))
 	manifestHandleMap := NewManifestHandleMap()
 
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	fullBackupIndex := func() int {
 		for index := len(bhs) - 1; index >= 0; index-- {
 			bh := bhs[index]
@@ -407,6 +421,14 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			if bm.Incremental {
 				// We're looking for a full backup
 				continue
+			}
+
+			// check if the backup can be used with this MySQL version.
+			if bm.MySQLVersion != "" {
+				if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
+					params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
+					continue
+				}
 			}
 
 			var backupTime time.Time
@@ -461,12 +483,46 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	// restore to a position (using incremental backups):
 	// we calculate a possible restore path based on the manifests. The resulting manifests are
 	// a sorted subsequence, with the full backup first, and zero or more incremental backups to follow.
-	manifests, err := FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
+	restorePath.manifests, err = FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
 	if err != nil {
 		return nil, err
 	}
-	restorePath.manifests = manifests
 	return restorePath, nil
+}
+
+func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe bool) error {
+	// It's always safe to use the same version.
+	if to == from {
+		return nil
+	}
+
+	flavorTo, parsedTo, err := ParseVersionString(to)
+	if err != nil {
+		return err
+	}
+
+	flavorFrom, parsedFrom, err := ParseVersionString(from)
+	if err != nil {
+		return err
+	}
+
+	if flavorTo != flavorFrom {
+		return fmt.Errorf("cannot use backup between different flavors: %q vs. %q", from, to)
+	}
+
+	if parsedTo == parsedFrom {
+		return nil
+	}
+
+	if !parsedTo.atLeast(parsedFrom) {
+		return fmt.Errorf("running MySQL version %q is older than backup MySQL version %q", to, from)
+	}
+
+	if upgradeSafe {
+		return nil
+	}
+
+	return fmt.Errorf("running MySQL version %q is newer than backup MySQL version %q which is not safe to upgrade", to, from)
 }
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {

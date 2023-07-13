@@ -13572,6 +13572,194 @@ export namespace mysqlctl {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a VersionStringRequest. */
+    interface IVersionStringRequest {
+    }
+
+    /** Represents a VersionStringRequest. */
+    class VersionStringRequest implements IVersionStringRequest {
+
+        /**
+         * Constructs a new VersionStringRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IVersionStringRequest);
+
+        /**
+         * Creates a new VersionStringRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VersionStringRequest instance
+         */
+        public static create(properties?: mysqlctl.IVersionStringRequest): mysqlctl.VersionStringRequest;
+
+        /**
+         * Encodes the specified VersionStringRequest message. Does not implicitly {@link mysqlctl.VersionStringRequest.verify|verify} messages.
+         * @param message VersionStringRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IVersionStringRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VersionStringRequest message, length delimited. Does not implicitly {@link mysqlctl.VersionStringRequest.verify|verify} messages.
+         * @param message VersionStringRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IVersionStringRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VersionStringRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VersionStringRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.VersionStringRequest;
+
+        /**
+         * Decodes a VersionStringRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VersionStringRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.VersionStringRequest;
+
+        /**
+         * Verifies a VersionStringRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VersionStringRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VersionStringRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.VersionStringRequest;
+
+        /**
+         * Creates a plain object from a VersionStringRequest message. Also converts values to other types if specified.
+         * @param message VersionStringRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.VersionStringRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VersionStringRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VersionStringRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VersionStringResponse. */
+    interface IVersionStringResponse {
+
+        /** VersionStringResponse version */
+        version?: (string|null);
+    }
+
+    /** Represents a VersionStringResponse. */
+    class VersionStringResponse implements IVersionStringResponse {
+
+        /**
+         * Constructs a new VersionStringResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IVersionStringResponse);
+
+        /** VersionStringResponse version. */
+        public version: string;
+
+        /**
+         * Creates a new VersionStringResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VersionStringResponse instance
+         */
+        public static create(properties?: mysqlctl.IVersionStringResponse): mysqlctl.VersionStringResponse;
+
+        /**
+         * Encodes the specified VersionStringResponse message. Does not implicitly {@link mysqlctl.VersionStringResponse.verify|verify} messages.
+         * @param message VersionStringResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IVersionStringResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VersionStringResponse message, length delimited. Does not implicitly {@link mysqlctl.VersionStringResponse.verify|verify} messages.
+         * @param message VersionStringResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IVersionStringResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VersionStringResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VersionStringResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.VersionStringResponse;
+
+        /**
+         * Decodes a VersionStringResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VersionStringResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.VersionStringResponse;
+
+        /**
+         * Verifies a VersionStringResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VersionStringResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VersionStringResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.VersionStringResponse;
+
+        /**
+         * Creates a plain object from a VersionStringResponse message. Also converts values to other types if specified.
+         * @param message VersionStringResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.VersionStringResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VersionStringResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VersionStringResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Represents a MysqlCtl */
     class MysqlCtl extends $protobuf.rpc.Service {
 
@@ -13675,6 +13863,20 @@ export namespace mysqlctl {
          * @returns Promise
          */
         public refreshConfig(request: mysqlctl.IRefreshConfigRequest): Promise<mysqlctl.RefreshConfigResponse>;
+
+        /**
+         * Calls VersionString.
+         * @param request VersionStringRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VersionStringResponse
+         */
+        public versionString(request: mysqlctl.IVersionStringRequest, callback: mysqlctl.MysqlCtl.VersionStringCallback): void;
+
+        /**
+         * Calls VersionString.
+         * @param request VersionStringRequest message or plain object
+         * @returns Promise
+         */
+        public versionString(request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
     }
 
     namespace MysqlCtl {
@@ -13720,6 +13922,13 @@ export namespace mysqlctl {
          * @param [response] RefreshConfigResponse
          */
         type RefreshConfigCallback = (error: (Error|null), response?: mysqlctl.RefreshConfigResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#versionString}.
+         * @param error Error, if any
+         * @param [response] VersionStringResponse
+         */
+        type VersionStringCallback = (error: (Error|null), response?: mysqlctl.VersionStringResponse) => void;
     }
 
     /** Properties of a BackupInfo. */
@@ -15406,6 +15615,115 @@ export namespace topodata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ThrottledAppRule. */
+    interface IThrottledAppRule {
+
+        /** ThrottledAppRule name */
+        name?: (string|null);
+
+        /** ThrottledAppRule ratio */
+        ratio?: (number|null);
+
+        /** ThrottledAppRule expires_at */
+        expires_at?: (vttime.ITime|null);
+    }
+
+    /** Represents a ThrottledAppRule. */
+    class ThrottledAppRule implements IThrottledAppRule {
+
+        /**
+         * Constructs a new ThrottledAppRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IThrottledAppRule);
+
+        /** ThrottledAppRule name. */
+        public name: string;
+
+        /** ThrottledAppRule ratio. */
+        public ratio: number;
+
+        /** ThrottledAppRule expires_at. */
+        public expires_at?: (vttime.ITime|null);
+
+        /**
+         * Creates a new ThrottledAppRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottledAppRule instance
+         */
+        public static create(properties?: topodata.IThrottledAppRule): topodata.ThrottledAppRule;
+
+        /**
+         * Encodes the specified ThrottledAppRule message. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
+         * @param message ThrottledAppRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottledAppRule message, length delimited. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
+         * @param message ThrottledAppRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottledAppRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottledAppRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottledAppRule;
+
+        /**
+         * Decodes a ThrottledAppRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottledAppRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottledAppRule;
+
+        /**
+         * Verifies a ThrottledAppRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottledAppRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottledAppRule
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ThrottledAppRule;
+
+        /**
+         * Creates a plain object from a ThrottledAppRule message. Also converts values to other types if specified.
+         * @param message ThrottledAppRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ThrottledAppRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottledAppRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottledAppRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ThrottlerConfig. */
     interface IThrottlerConfig {
 
@@ -15420,6 +15738,9 @@ export namespace topodata {
 
         /** ThrottlerConfig check_as_check_self */
         check_as_check_self?: (boolean|null);
+
+        /** ThrottlerConfig throttled_apps */
+        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
     }
 
     /** Represents a ThrottlerConfig. */
@@ -15442,6 +15763,9 @@ export namespace topodata {
 
         /** ThrottlerConfig check_as_check_self. */
         public check_as_check_self: boolean;
+
+        /** ThrottlerConfig throttled_apps. */
+        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
 
         /**
          * Creates a new ThrottlerConfig instance using the specified properties.
@@ -25377,6 +25701,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupRequest upgrade_safe */
+        upgrade_safe?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -25396,6 +25723,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupRequest upgrade_safe. */
+        public upgrade_safe: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -42773,6 +43103,9 @@ export namespace vtctldata {
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupRequest upgrade_safe */
+        upgrade_safe?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -42795,6 +43128,9 @@ export namespace vtctldata {
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupRequest upgrade_safe. */
+        public upgrade_safe: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -43003,6 +43339,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest concurrency */
         concurrency?: (number|Long|null);
+
+        /** BackupShardRequest upgrade_safe */
+        upgrade_safe?: (boolean|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -43025,6 +43364,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest concurrency. */
         public concurrency: (number|Long);
+
+        /** BackupShardRequest upgrade_safe. */
+        public upgrade_safe: boolean;
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
@@ -48908,6 +49250,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest check_as_check_shard */
         check_as_check_shard?: (boolean|null);
+
+        /** UpdateThrottlerConfigRequest throttled_app */
+        throttled_app?: (topodata.IThrottledAppRule|null);
     }
 
     /** Represents an UpdateThrottlerConfigRequest. */
@@ -48942,6 +49287,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest check_as_check_shard. */
         public check_as_check_shard: boolean;
+
+        /** UpdateThrottlerConfigRequest throttled_app. */
+        public throttled_app?: (topodata.IThrottledAppRule|null);
 
         /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.
