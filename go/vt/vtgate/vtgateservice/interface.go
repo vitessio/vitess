@@ -22,7 +22,6 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -32,10 +31,9 @@ import (
 // VTGateService is the interface implemented by the VTGate service,
 // that RPC server implementations will call.
 type VTGateService interface {
-	// V3 API
-	Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
+	Execute(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
-	StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error)
+	StreamExecute(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error)
 	// Prepare statement support
 	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)
 
@@ -53,4 +51,13 @@ type VTGateService interface {
 	// HandlePanic should be called with defer at the beginning of each
 	// RPC implementation method, before calling any of the previous methods
 	HandlePanic(err *error)
+}
+
+// MySQLConnection is an interface that allows to execute operations on the provided connection id.
+// This is used by vtgate executor to execute kill queries.
+type MySQLConnection interface {
+	// KillQuery stops the an executing query on the connection.
+	KillQuery(uint32) error
+	// KillConnection closes the connection and also stops any executing query on it.
+	KillConnection(context.Context, uint32) error
 }

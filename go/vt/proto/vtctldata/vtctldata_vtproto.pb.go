@@ -1604,6 +1604,16 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.UpgradeSafe {
+		i--
+		if m.UpgradeSafe {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
 	if len(m.IncrementalFromPos) > 0 {
 		i -= len(m.IncrementalFromPos)
 		copy(dAtA[i:], m.IncrementalFromPos)
@@ -1735,6 +1745,16 @@ func (m *BackupShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.UpgradeSafe {
+		i--
+		if m.UpgradeSafe {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
 	}
 	if m.Concurrency != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Concurrency))
@@ -4612,6 +4632,16 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ThrottledApp != nil {
+		size, err := m.ThrottledApp.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x4a
 	}
 	if m.CheckAsCheckShard {
 		i--
@@ -10517,6 +10547,9 @@ func (m *BackupRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.UpgradeSafe {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -10566,6 +10599,9 @@ func (m *BackupShardRequest) SizeVT() (n int) {
 	}
 	if m.Concurrency != 0 {
 		n += 1 + sov(uint64(m.Concurrency))
+	}
+	if m.UpgradeSafe {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -11597,6 +11633,10 @@ func (m *UpdateThrottlerConfigRequest) SizeVT() (n int) {
 	}
 	if m.CheckAsCheckShard {
 		n += 2
+	}
+	if m.ThrottledApp != nil {
+		l = m.ThrottledApp.SizeVT()
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -17704,6 +17744,26 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.IncrementalFromPos = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UpgradeSafe", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.UpgradeSafe = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -18045,6 +18105,26 @@ func (m *BackupShardRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UpgradeSafe", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.UpgradeSafe = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -24474,6 +24554,42 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.CheckAsCheckShard = bool(v != 0)
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottledApp", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ThrottledApp == nil {
+				m.ThrottledApp = &topodata.ThrottledAppRule{}
+			}
+			if err := m.ThrottledApp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

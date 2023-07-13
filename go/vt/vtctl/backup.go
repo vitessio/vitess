@@ -73,6 +73,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
+	upgradeSafe := subFlags.Bool("upgrade_safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -91,6 +92,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		Concurrency:        uint64(*concurrency),
 		AllowPrimary:       *allowPrimary,
 		IncrementalFromPos: *incrementalFromPos,
+		UpgradeSafe:        *upgradeSafe,
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
@@ -112,6 +114,7 @@ func (b *backupEventStreamLogger) Send(resp *vtctldatapb.BackupResponse) error {
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
+	upgradeSafe := subFlags.Bool("upgrade_safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -130,6 +133,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		Shard:        shard,
 		Concurrency:  uint64(*concurrency),
 		AllowPrimary: *allowPrimary,
+		UpgradeSafe:  *upgradeSafe,
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 

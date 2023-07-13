@@ -220,6 +220,11 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
+	}
+
 	// @@gtid_purged
 	getPurgedGTIDSet := func() (mysql.Position, mysql.Mysql56GTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
@@ -352,7 +357,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
-	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID, incrDetails); err != nil {
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID, mysqlVersion, incrDetails); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -442,6 +447,18 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
+	}
+
+	// check if we need to set innodb_fast_shutdown=0 for a backup safe for upgrades
+	if params.UpgradeSafe {
+		if _, err := params.Mysqld.FetchSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
+			return false, vterrors.Wrapf(err, "failed to disable fast shutdown")
+		}
+	}
+
 	// shutdown mysqld
 	shutdownCtx, cancel := context.WithTimeout(ctx, BuiltinBackupMysqldTimeout)
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
@@ -451,7 +468,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID, nil)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID, mysqlVersion, nil)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -536,6 +553,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	fromPosition mysql.Position,
 	binlogFiles []string,
 	serverUUID string,
+	mysqlVersion string,
 	incrDetails *IncrementalBackupDetails,
 ) (finalErr error) {
 	// Get the files to backup.
@@ -629,8 +647,10 @@ func (be *BuiltinBackupEngine) backupFiles(
 			TabletAlias:        params.TabletAlias,
 			Keyspace:           params.Keyspace,
 			Shard:              params.Shard,
-			BackupTime:         FormatRFC3339(params.BackupTime.UTC()),
-			FinishedTime:       FormatRFC3339(time.Now().UTC()),
+			BackupTime:         params.BackupTime.UTC().Format(time.RFC3339),
+			FinishedTime:       time.Now().UTC().Format(time.RFC3339),
+			MySQLVersion:       mysqlVersion,
+			UpgradeSafe:        params.UpgradeSafe,
 			IncrementalDetails: incrDetails,
 		},
 

@@ -810,6 +810,7 @@ func terminatedRestore(t *testing.T) {
 }
 
 func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
+	t.Helper()
 	// for loop for 15 seconds to check if tablet type is correct
 	for i := 0; i < 15; i++ {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
@@ -1060,8 +1061,8 @@ func terminateRestore(t *testing.T) {
 				assert.Fail(t, "restore in progress file missing")
 			}
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true //nolint
-			return
+			found = true
+			break
 		}
 	}
 	assert.True(t, found, "Restore message not found")

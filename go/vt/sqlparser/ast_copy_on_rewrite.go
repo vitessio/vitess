@@ -286,6 +286,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfJtOnResponse(n, parent)
 	case *KeyState:
 		return c.copyOnRewriteRefOfKeyState(n, parent)
+	case *Kill:
+		return c.copyOnRewriteRefOfKill(n, parent)
 	case *LagLeadExpr:
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
 	case *Limit:
@@ -3632,6 +3634,18 @@ func (c *cow) copyOnRewriteRefOfJtOnResponse(n *JtOnResponse, parent SQLNode) (o
 	return
 }
 func (c *cow) copyOnRewriteRefOfKeyState(n *KeyState, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfKill(n *Kill, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
@@ -7343,6 +7357,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfFlush(n, parent)
 	case *Insert:
 		return c.copyOnRewriteRefOfInsert(n, parent)
+	case *Kill:
+		return c.copyOnRewriteRefOfKill(n, parent)
 	case *Load:
 		return c.copyOnRewriteRefOfLoad(n, parent)
 	case *LockTables:

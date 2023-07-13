@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
@@ -213,6 +215,91 @@ func TestExecuteBackup(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.False(t, ok)
+}
+
+func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
+	// Set up local backup directory
+	backupRoot := "testdata/builtinbackup_test"
+	filebackupstorage.FileBackupStorageRoot = backupRoot
+	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
+	dataDir := path.Join(backupRoot, "datadir")
+	// Add some files under data directory to force backup to actually backup files.
+	require.NoError(t, createBackupDir(dataDir, "test1"))
+	require.NoError(t, createBackupDir(dataDir, "test2"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	defer os.RemoveAll(backupRoot)
+
+	ctx := context.Background()
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
+		if err := createBackupDir(backupRoot, fpath); err != nil {
+			require.Failf(t, err.Error(), "failed to create directory: %s", fpath)
+		}
+	}
+
+	// Set up topo
+	keyspace, shard := "mykeyspace", "-80"
+	ts := memorytopo.NewServer("cell1")
+	defer ts.Close()
+
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+
+	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
+	tablet.Keyspace = keyspace
+	tablet.Shard = shard
+
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
+
+		now := time.Now()
+		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+
+	// Configure a tight deadline to force a timeout
+	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
+	defer setBuiltinBackupMysqldDeadline(oldDeadline)
+
+	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
+
+	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
+	//  "STOP SLAVE", "START SLAVE", in that order.
+	// It also needs to be allowed to receive the query to disable the innodb_fast_shutdown flag.
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SET GLOBAL innodb_fast_shutdown=0": {},
+	}
+
+	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Concurrency: 2,
+		TopoServer:  ts,
+		Keyspace:    keyspace,
+		Shard:       shard,
+		Stats:       backupstats.NewFakeStats(),
+		UpgradeSafe: true,
+	}, bh)
+
+	require.NoError(t, err)
+	assert.True(t, ok)
 }
 
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors

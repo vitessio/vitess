@@ -54,6 +54,12 @@ var collationUtf8mb3 = collations.TypedCollation{
 	Repertoire:   collations.RepertoireUnicode,
 }
 
+var collationRegexpFallback = collations.TypedCollation{
+	Collation:    collations.CollationLatin1Swedish,
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 type (
 	CollateExpr struct {
 		UnaryExpr
@@ -152,16 +158,16 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (co
 	})
 }
 
-func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.ID, error) {
+func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.TypedCollation, error) {
 	lt := left.SQLType()
 	rt := right.SQLType()
 
 	mc, coerceLeft, coerceRight, err := mergeCollations(evalCollation(left), evalCollation(right), lt, rt)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, collations.TypedCollation{}, err
 	}
 	if coerceLeft == nil && coerceRight == nil {
-		return left, right, mc.Collation, nil
+		return left, right, mc, nil
 	}
 
 	left1 := newEvalRaw(lt, left.(*evalBytes).bytes, mc)
@@ -170,16 +176,16 @@ func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.ID, erro
 	if coerceLeft != nil {
 		left1.bytes, err = coerceLeft(nil, left1.bytes)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, collations.TypedCollation{}, err
 		}
 	}
 	if coerceRight != nil {
 		right1.bytes, err = coerceRight(nil, right1.bytes)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, collations.TypedCollation{}, err
 		}
 	}
-	return left1, right1, mc.Collation, nil
+	return left1, right1, mc, nil
 }
 
 type collationAggregation struct {

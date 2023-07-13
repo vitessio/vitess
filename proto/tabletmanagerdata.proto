@@ -478,6 +478,9 @@ message BackupRequest {
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 3;
+  // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
+  // so that it's a backup that can be used for an upgrade.
+  bool upgrade_safe = 4;
 }
 
 message BackupResponse {

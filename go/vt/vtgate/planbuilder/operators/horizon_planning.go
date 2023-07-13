@@ -33,14 +33,6 @@ type (
 		cols  []ProjExpr
 		names []*sqlparser.AliasedExpr
 	}
-
-	// horizonLike should be removed. we should use Horizon for both these cases
-	horizonLike interface {
-		ops.Operator
-		selectStatement() sqlparser.SelectStatement
-		src() ops.Operator
-		getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
-	}
 )
 
 func errHorizonNotPlanned() error {
@@ -120,7 +112,7 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
-		case horizonLike:
+		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
@@ -151,12 +143,11 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return newOp, nil
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
-	if derived, ok := in.(*Derived); ok {
-		if len(derived.ColumnAliases) > 0 {
-			return nil, nil, errHorizonNotPlanned()
-		}
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
+	if len(in.ColumnAliases) > 0 {
+		return nil, nil, errHorizonNotPlanned()
 	}
+
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
 		return rewrite.Swap(in, rb, "push horizon into route")
@@ -621,14 +612,14 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
 func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
-	cols, err := output.GetColumns()
+	cols, err := output.GetSelectExprs()
 	if err != nil {
 		return nil, err
 	}
 
 	horizon := oldHorizon.(*Horizon)
 
-	sel := sqlparser.GetFirstSelect(horizon.Select)
+	sel := sqlparser.GetFirstSelect(horizon.Query)
 
 	if len(sel.SelectExprs) == len(cols) {
 		return output, nil

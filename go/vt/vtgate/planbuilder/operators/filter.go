@@ -100,6 +100,10 @@ func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return f.Source.GetColumns()
 }
 
+func (f *Filter) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return f.Source.GetSelectExprs()
+}
+
 func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
 	return f.Source.GetOrdering()
 }

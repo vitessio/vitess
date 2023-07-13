@@ -7459,8 +7459,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select music.id from music, (select max(id) as maxt from music where 1 != 1) as other where 1 != 1",
-        "Query": "select music.id from music, (select max(id) as maxt from music where music.user_id = 5) as other where other.maxt = music.id",
+        "FieldQuery": "select music.id from (select max(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
         "Table": "music",
         "Values": [
           "INT64(5)"
@@ -7500,8 +7500,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select music.id from music, (select id from music where 1 != 1) as other where 1 != 1",
-        "Query": "select music.id from music, (select id from music where music.user_id = 5) as other where other.id = music.id",
+        "FieldQuery": "select music.id from (select id from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select id from music where music.user_id = 5) as other, music where other.id = music.id",
         "Table": "music",
         "Values": [
           "INT64(5)"
@@ -7541,8 +7541,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select music.id from music, (select id from music where 1 != 1) as other where 1 != 1",
-        "Query": "select music.id from music, (select id from music where music.user_id in ::__vals) as other where other.id = music.id",
+        "FieldQuery": "select music.id from (select id from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select id from music where music.user_id in ::__vals) as other, music where other.id = music.id",
         "Table": "music",
         "Values": [
           "(INT64(5), INT64(6), INT64(7))"
@@ -7620,24 +7620,24 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:1",
+        "JoinColumnIndexes": "R:0,L:0",
         "JoinVars": {
-          "t_id": 0
+          "t_id": 1
         },
         "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
             "Columns": [
-              0,
-              1
+              1,
+              0
             ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS b",
-                "GroupBy": "(0|3), (2|4)",
+                "GroupBy": "(2|3), (0|4)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -7646,9 +7646,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra where 1 != 1 group by id, weight_string(id), req, weight_string(req)",
-                    "OrderBy": "(0|3) ASC, (2|4) ASC",
-                    "Query": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra group by id, weight_string(id), req, weight_string(req) order by id asc, req asc",
+                    "FieldQuery": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra where 1 != 1 group by req, id, weight_string(req), weight_string(id)",
+                    "OrderBy": "(2|3) ASC, (0|4) ASC",
+                    "Query": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra group by req, id, weight_string(req), weight_string(id) order by req asc, id asc",
                     "Table": "user_extra"
                   }
                 ]

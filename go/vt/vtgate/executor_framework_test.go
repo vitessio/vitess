@@ -130,7 +130,7 @@ func init() {
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck(nil)
+	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
@@ -162,7 +162,6 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	_ = hc.AddTestTablet(cell, "c0-e0", 1, "TestExecutor", "c0-e0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "e0-", 1, "TestExecutor", "e0-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	// Below is needed so that SendAnyWherePlan doesn't fail
-	_ = hc.AddTestTablet(cell, "random", 1, "TestXBadVSchema", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -238,6 +237,7 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 func executorExecSession(executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	return executor.Execute(
 		context.Background(),
+		nil,
 		"TestExecute",
 		NewSafeSession(session),
 		sql,
@@ -261,6 +261,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	results := make(chan *sqltypes.Result, 100)
 	err = executor.StreamExecute(
 		context.Background(),
+		nil,
 		"TestExecuteStream",
 		NewSafeSession(nil),
 		sql,

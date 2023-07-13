@@ -119,6 +119,9 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
+	// StopReplicationError error is used by StopReplication
+	StopReplicationError error
+
 	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
 	// in it, then the function returns nil, else the function returns an error
 	WaitPrimaryPositions []mysql.Position
@@ -168,6 +171,9 @@ type FakeMysqlDaemon struct {
 	// TimeoutHook is a func that can be called at the beginning of any method to fake a timeout.
 	// all a test needs to do is make it { return context.DeadlineExceeded }
 	TimeoutHook func() error
+
+	// Version is the version that will be returned by GetVersionString.
+	Version string
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -178,6 +184,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		db:              db,
 		Running:         true,
 		IOThreadRunning: true,
+		Version:         "8.0.32",
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0, 0)
@@ -423,6 +430,9 @@ func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos 
 
 // StopReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
+	if fmd.StopReplicationError != nil {
+		return fmd.StopReplicationError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 	})
@@ -468,6 +478,8 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")
 	}
+	fmd.CurrentSourceHost = host
+	fmd.CurrentSourcePort = port
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
 
@@ -684,11 +696,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 }
 
 // GetVersionString is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
+	return fmd.Version, nil
 }
 
 // GetVersionComment is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
+	return "", nil
 }

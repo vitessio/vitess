@@ -62,6 +62,9 @@ type MysqlctlClient interface {
 	// RefreshConfig calls Mysqld.RefreshConfig remotely.
 	RefreshConfig(ctx context.Context) error
 
+	// VersionString calls Mysqld.VersionString remotely.
+	VersionString(ctx context.Context) (string, error)
+
 	// Close will terminate the connection. This object won't be used anymore.
 	Close()
 }

@@ -2942,3 +2942,8 @@ func (node *GeomFromGeoJSONExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// Format formats the kill statement
+func (node *Kill) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "kill %s %d", node.Type.ToString(), node.ProcesslistID)
+}
