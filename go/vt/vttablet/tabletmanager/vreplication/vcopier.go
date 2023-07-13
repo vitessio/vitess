@@ -142,7 +142,7 @@ type vcopierCopyWorker struct {
 func newVCopier(vr *vreplicator) *vcopier {
 	return &vcopier{
 		vr:               vr,
-		throttlerAppName: vr.throttlerAppName(),
+		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
 	}
 }
 
