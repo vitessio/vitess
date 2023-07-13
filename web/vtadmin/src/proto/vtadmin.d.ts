@@ -15615,6 +15615,115 @@ export namespace topodata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ThrottledAppRule. */
+    interface IThrottledAppRule {
+
+        /** ThrottledAppRule name */
+        name?: (string|null);
+
+        /** ThrottledAppRule ratio */
+        ratio?: (number|null);
+
+        /** ThrottledAppRule expires_at */
+        expires_at?: (vttime.ITime|null);
+    }
+
+    /** Represents a ThrottledAppRule. */
+    class ThrottledAppRule implements IThrottledAppRule {
+
+        /**
+         * Constructs a new ThrottledAppRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IThrottledAppRule);
+
+        /** ThrottledAppRule name. */
+        public name: string;
+
+        /** ThrottledAppRule ratio. */
+        public ratio: number;
+
+        /** ThrottledAppRule expires_at. */
+        public expires_at?: (vttime.ITime|null);
+
+        /**
+         * Creates a new ThrottledAppRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottledAppRule instance
+         */
+        public static create(properties?: topodata.IThrottledAppRule): topodata.ThrottledAppRule;
+
+        /**
+         * Encodes the specified ThrottledAppRule message. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
+         * @param message ThrottledAppRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottledAppRule message, length delimited. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
+         * @param message ThrottledAppRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottledAppRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottledAppRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottledAppRule;
+
+        /**
+         * Decodes a ThrottledAppRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottledAppRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottledAppRule;
+
+        /**
+         * Verifies a ThrottledAppRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottledAppRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottledAppRule
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ThrottledAppRule;
+
+        /**
+         * Creates a plain object from a ThrottledAppRule message. Also converts values to other types if specified.
+         * @param message ThrottledAppRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ThrottledAppRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottledAppRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottledAppRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ThrottlerConfig. */
     interface IThrottlerConfig {
 
@@ -15629,6 +15738,9 @@ export namespace topodata {
 
         /** ThrottlerConfig check_as_check_self */
         check_as_check_self?: (boolean|null);
+
+        /** ThrottlerConfig throttled_apps */
+        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
     }
 
     /** Represents a ThrottlerConfig. */
@@ -15651,6 +15763,9 @@ export namespace topodata {
 
         /** ThrottlerConfig check_as_check_self. */
         public check_as_check_self: boolean;
+
+        /** ThrottlerConfig throttled_apps. */
+        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
 
         /**
          * Creates a new ThrottlerConfig instance using the specified properties.
@@ -49135,6 +49250,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest check_as_check_shard */
         check_as_check_shard?: (boolean|null);
+
+        /** UpdateThrottlerConfigRequest throttled_app */
+        throttled_app?: (topodata.IThrottledAppRule|null);
     }
 
     /** Represents an UpdateThrottlerConfigRequest. */
@@ -49169,6 +49287,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest check_as_check_shard. */
         public check_as_check_shard: boolean;
+
+        /** UpdateThrottlerConfigRequest throttled_app. */
+        public throttled_app?: (topodata.IThrottledAppRule|null);
 
         /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.
