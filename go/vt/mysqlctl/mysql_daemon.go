@@ -103,10 +103,10 @@ type MysqlDaemon interface {
 	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// GetVersionString returns the database version as a string
-	GetVersionString(ctx context.Context) string
+	GetVersionString(ctx context.Context) (string, error)
 
 	// GetVersionComment returns the version comment
-	GetVersionComment(ctx context.Context) string
+	GetVersionComment(ctx context.Context) (string, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error

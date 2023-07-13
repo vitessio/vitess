@@ -101,10 +101,21 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Version string "majorVersion.minorVersion.patchRelease"
-	version := tm.MysqlDaemon.GetVersionString(ctx)
+	version, err := tm.MysqlDaemon.GetVersionString(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, v, err := mysqlctl.ParseVersionString(version)
+	if err != nil {
+		return nil, err
+	}
+	version = fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
 
 	// Version comment "select @@global.version_comment"
-	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)
+	versionComment, err := tm.MysqlDaemon.GetVersionComment(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// Read only - "SHOW VARIABLES LIKE 'read_only'"
 	readOnly, err := tm.MysqlDaemon.IsReadOnly()
