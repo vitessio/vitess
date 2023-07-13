@@ -53,7 +53,7 @@ func TestRandomExprWithTables(t *testing.T) {
 	r := rand.New(rand.NewSource(seed))
 	g := sqlparser.NewGenerator(r, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 	for i := 0; i < 100; i++ {
-		expr := g.Expression(sqlparser.ExprGeneratorConfig{CanAggregate: true})
+		expr := g.Expression(sqlparser.ExprGeneratorConfig{AggrRule: sqlparser.IsAggregate})
 		fmt.Println(sqlparser.String(expr))
 	}
 }

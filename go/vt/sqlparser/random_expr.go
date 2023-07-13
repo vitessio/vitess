@@ -23,15 +23,24 @@ import (
 
 // This file is used to generate random expressions to be used for testing
 
+// Constants for Enum Type - AggregateRule
+const (
+	CannotAggregate AggregateRule = iota
+	CanAggregate
+	IsAggregate
+)
+
 type (
 	ExprGenerator interface {
 		Generate(r *rand.Rand, config ExprGeneratorConfig) Expr
 	}
 
+	AggregateRule int8
+
 	ExprGeneratorConfig struct {
-		// IsAggregate determines if the random expression is an aggregation expression
-		CanAggregate bool
-		Type         string
+		// AggrRule determines if the random expression can, cannot, or must be an aggregatable expression
+		AggrRule AggregateRule
+		Type     string
 	}
 )
 
@@ -55,13 +64,18 @@ func (egc ExprGeneratorConfig) anyTypeConfig() ExprGeneratorConfig {
 	return egc
 }
 
-func (egc ExprGeneratorConfig) CanAggregateConfig() ExprGeneratorConfig {
-	egc.CanAggregate = true
+func (egc ExprGeneratorConfig) CannotAggregateConfig() ExprGeneratorConfig {
+	egc.AggrRule = CannotAggregate
 	return egc
 }
 
-func (egc ExprGeneratorConfig) CannotAggregateConfig() ExprGeneratorConfig {
-	egc.CanAggregate = false
+func (egc ExprGeneratorConfig) CanAggregateConfig() ExprGeneratorConfig {
+	egc.AggrRule = CanAggregate
+	return egc
+}
+
+func (egc ExprGeneratorConfig) IsAggregateConfig() ExprGeneratorConfig {
+	egc.AggrRule = IsAggregate
 	return egc
 }
 
@@ -127,34 +141,25 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.booleanExpr(genConfig) },
 	}
 
-	if genConfig.CanAggregate {
-		genConfig = genConfig.CannotAggregateConfig()
-		options = append(options, func() Expr { return RandomAggregate(g.r, g.Expression(genConfig)) })
+	if genConfig.AggrRule != CannotAggregate {
+		options = append(options, func() Expr { return g.randomAggregate(genConfig.CannotAggregateConfig()) })
 	}
 
 	return g.randomOf(options)
 }
 
-var aggregates = []string{"count(*)", "count", "sum", "min", "max"}
+func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
+	isDistinct := g.r.Intn(2) < 1
 
-func RandomAggregate(r *rand.Rand, expr Expr) Expr {
-	isDisinct := r.Intn(2) < 1
-
-	aggr := aggregates[r.Intn(len(aggregates))]
-	switch aggr {
-	case "count(*)":
-		return &CountStar{}
-	case "count":
-		return &Count{Args: Exprs{expr}, Distinct: isDisinct}
-	case "sum":
-		return &Sum{Arg: expr, Distinct: isDisinct}
-	case "min":
-		return &Min{Arg: expr, Distinct: isDisinct}
-	case "max":
-		return &Max{Arg: expr, Distinct: isDisinct}
+	options := []exprF{
+		func() Expr { return &CountStar{} },
+		func() Expr { return &Count{Args: Exprs{g.Expression(genConfig.anyTypeConfig())}, Distinct: isDistinct} },
+		func() Expr { return &Sum{Arg: g.Expression(genConfig), Distinct: isDistinct} },
+		func() Expr { return &Min{Arg: g.Expression(genConfig), Distinct: isDistinct} },
+		func() Expr { return &Max{Arg: g.Expression(genConfig), Distinct: isDistinct} },
 	}
 
-	return expr
+	return g.randomOf(options)
 }
 
 func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
@@ -194,6 +199,11 @@ func (g *Generator) intExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.caseExpr(genConfig) },
 	}
 
+	// if the expression must be aggregatable, then don't generate from the ExprGenerators at this depth
+	if genConfig.AggrRule == IsAggregate {
+		return g.randomOf(options)
+	}
+
 	for i := range g.exprGenerators {
 		generator := g.exprGenerators[i]
 		if generator == nil {
@@ -222,6 +232,11 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 	options := []exprF{
 		func() Expr { return g.stringLiteral() },
 		func() Expr { return g.caseExpr(genConfig) },
+	}
+
+	// if the expression must be aggregatable, then don't generate from the ExprGenerators at this depth
+	if genConfig.AggrRule == IsAggregate {
+		return g.randomOf(options)
 	}
 
 	for i := range g.exprGenerators {
@@ -306,7 +321,7 @@ func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 		if exp == nil {
 			cond = g.Expression(genConfig.boolTypeConfig())
 		} else {
-			cond = g.Expression(genConfig.anyTypeConfig())
+			cond = g.Expression(genConfig)
 		}
 
 		val := g.Expression(genConfig)

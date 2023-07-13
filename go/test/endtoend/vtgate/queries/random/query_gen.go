@@ -244,7 +244,7 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 		if canAggregate {
 			sel.AddGroupBy(randomExpr)
 			if isOrdered {
-				sel.AddOrder(sqlparser.NewOrder(randomExpr, qg.getRandomOrderDirection()))
+				sel.AddOrder(sqlparser.NewOrder(randomExpr, getRandomOrderDirection(qg.r)))
 			}
 		}
 
@@ -326,7 +326,7 @@ func (qg queryGen) createJoin(tables []tableT, sel *sqlparser.Select) {
 	joinPredicate := sqlparser.AndExpressions(qg.createJoinPredicates(tables)...)
 	joinCondition := sqlparser.NewJoinCondition(joinPredicate, nil)
 	newTable := newAliasedTable(tables[n], fmt.Sprintf("tbl%d", n))
-	sel.From[n-1] = sqlparser.NewJoinTableExpr(sel.From[n-1], sqlparser.LeftJoinType, newTable, joinCondition)
+	sel.From[n-1] = sqlparser.NewJoinTableExpr(sel.From[n-1], getRandomJoinType(qg.r), newTable, joinCondition)
 }
 
 // returns 1-3 random expressions based on the last two elements of tables
@@ -366,23 +366,14 @@ func (qg queryGen) createGroupBy(tables []tableT) (groupBy sqlparser.GroupBy, gr
 
 // returns the aggregation columns as three types: sqlparser.SelectExprs, []column
 func (qg queryGen) createAggregations(tables []tableT) (aggrSelectExprs sqlparser.SelectExprs, aggregates []column) {
+	qg.genConfig = qg.genConfig.IsAggregateConfig()
 	aggrExprs := qg.createRandomExprs(0,
 		slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
 			return &t
 		})...)
-	for i := range aggrExprs {
-		expr := sqlparser.RandomAggregate(qg.r, aggrExprs[i])
+
+	for i, expr := range aggrExprs {
 		// TODO: min/max often fails
-		for testFailingQueries {
-			switch expr.(type) {
-			case *sqlparser.Min, *sqlparser.Max:
-				expr = sqlparser.RandomAggregate(qg.r, aggrExprs[i])
-				continue
-			}
-
-			break
-		}
-
 		// randomly alias
 		var alias string
 		if qg.r.Intn(2) < 1 {
@@ -401,13 +392,13 @@ func (qg queryGen) createAggregations(tables []tableT) (aggrSelectExprs sqlparse
 func (qg queryGen) createOrderBy(groupBy sqlparser.GroupBy, aggrExprs sqlparser.SelectExprs) (orderBy sqlparser.OrderBy) {
 	// always order on grouping columns
 	for i := range groupBy {
-		orderBy = append(orderBy, sqlparser.NewOrder(groupBy[i], qg.getRandomOrderDirection()))
+		orderBy = append(orderBy, sqlparser.NewOrder(groupBy[i], getRandomOrderDirection(qg.r)))
 	}
 
 	// randomly order on aggregation columns
 	for i := range aggrExprs {
 		if aliasedExpr, ok := aggrExprs[i].(*sqlparser.AliasedExpr); ok && qg.r.Intn(2) < 1 {
-			orderBy = append(orderBy, sqlparser.NewOrder(aliasedExpr.Expr, qg.getRandomOrderDirection()))
+			orderBy = append(orderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection(qg.r)))
 		}
 	}
 
@@ -465,9 +456,14 @@ func (qg queryGen) createLimit() *sqlparser.Limit {
 	return sqlparser.NewLimitWithoutOffset(limitNum)
 }
 
-func (qg queryGen) getRandomOrderDirection() sqlparser.OrderDirection {
+func getRandomOrderDirection(r *rand.Rand) sqlparser.OrderDirection {
 	// asc, desc
-	return randomEl(qg.r, []sqlparser.OrderDirection{0, 1})
+	return randomEl(r, []sqlparser.OrderDirection{0, 1})
+}
+
+func getRandomJoinType(r *rand.Rand) sqlparser.JoinType {
+	// normal, straight, left, right, natural, natural left, natural right
+	return randomEl(r, []sqlparser.JoinType{0, 1, 2, 3, 4, 5, 6})
 }
 
 func randomEl[K any](r *rand.Rand, in []K) K {
