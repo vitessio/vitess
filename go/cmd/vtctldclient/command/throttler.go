@@ -33,7 +33,7 @@ import (
 var (
 	// UpdateThrottlerConfig makes a UpdateThrottlerConfig gRPC call to a vtctld.
 	UpdateThrottlerConfig = &cobra.Command{
-		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
+		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--[un]throttle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
 		Short:                 "Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -63,7 +63,7 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 		throttledAppRule.ExpiresAt = logutil.TimeToProto(time.Now().Add(throttledAppDuration))
 		updateThrottlerConfigOptions.ThrottledApp = &throttledAppRule
 	} else if unthrottledAppRule.Name != "" {
-		unthrottledAppRule.ExpiresAt = logutil.TimeToProto(time.Now().Add(-time.Second))
+		unthrottledAppRule.ExpiresAt = logutil.TimeToProto(time.Time{})
 		updateThrottlerConfigOptions.ThrottledApp = &unthrottledAppRule
 	}
 
