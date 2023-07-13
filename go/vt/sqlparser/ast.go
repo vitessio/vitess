@@ -2869,6 +2869,7 @@ type (
 
 	DistinctableAggr interface {
 		IsDistinct() bool
+		SetDistinct(bool)
 	}
 
 	Count struct {
@@ -3380,6 +3381,13 @@ func (max *Max) IsDistinct() bool                   { return max.Distinct }
 func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
 func (count *Count) IsDistinct() bool               { return count.Distinct }
 func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
+
+func (sum *Sum) SetDistinct(distinct bool)                   { sum.Distinct = distinct }
+func (min *Min) SetDistinct(distinct bool)                   { min.Distinct = distinct }
+func (max *Max) SetDistinct(distinct bool)                   { max.Distinct = distinct }
+func (avg *Avg) SetDistinct(distinct bool)                   { avg.Distinct = distinct }
+func (count *Count) SetDistinct(distinct bool)               { count.Distinct = distinct }
+func (grpConcat *GroupConcatExpr) SetDistinct(distinct bool) { grpConcat.Distinct = distinct }
 
 func (*Sum) AggrName() string             { return "sum" }
 func (*Min) AggrName() string             { return "min" }

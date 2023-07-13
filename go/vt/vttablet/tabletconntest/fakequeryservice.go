@@ -707,6 +707,11 @@ func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *que
 	panic("not implemented")
 }
 
+// GetServingKeyspaces returns list of serving keyspaces.
+func (f *FakeQueryService) GetServingKeyspaces() []string {
+	panic("not implemented")
+}
+
 // ReserveBeginExecute satisfies the Gateway interface
 func (f *FakeQueryService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
 	panic("implement me")
