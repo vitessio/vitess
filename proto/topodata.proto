@@ -366,6 +366,17 @@ message ShardTabletControl {
   bool query_service_disabled = 3;
 }
 
+// ThrottledAppRule defines an app-specific throttling rule, with expiration.
+message ThrottledAppRule {
+  // Name of the app to be throttled, e.g. "vreplication" or "online-ddl"
+  string name = 1;
+  // Ratio defines how much the app should be throttled, range [0.0...1.0]. 1.0 means fully throttled. 0.0 means not throttled at all.
+  // Negative values are reserved for a future implementation.
+  double ratio = 2;
+  // ExpiresAt is the time at which the rule expires.
+  vttime.Time expires_at = 3;
+}
+
 message ThrottlerConfig {
   // Enabled indicates that the throttler is actually checking state for
   // requests. When disabled, it automatically returns 200 OK for all
@@ -383,6 +394,9 @@ message ThrottlerConfig {
   // CheckAsCheckSelf indicates whether a throttler /check request
   // should behave like a /check-self.
   bool check_as_check_self = 4;
+
+  // ThrottledApps is a map of rules for app-specific throttling
+  map<string, ThrottledAppRule> throttled_apps = 5;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.
