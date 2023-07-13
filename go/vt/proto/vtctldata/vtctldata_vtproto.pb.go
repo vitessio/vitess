@@ -1383,16 +1383,6 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0x1a
 		}
 	}
-	if m.AllowLongUnavailability {
-		i--
-		if m.AllowLongUnavailability {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x10
-	}
 	if len(m.Keyspace) > 0 {
 		i -= len(m.Keyspace)
 		copy(dAtA[i:], m.Keyspace)
@@ -10415,9 +10405,6 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.AllowLongUnavailability {
-		n += 2
-	}
 	if len(m.Sql) > 0 {
 		for _, s := range m.Sql {
 			l = len(s)
@@ -16939,26 +16926,6 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Keyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field AllowLongUnavailability", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.AllowLongUnavailability = bool(v != 0)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Sql", wireType)

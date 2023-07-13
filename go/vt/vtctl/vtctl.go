@@ -587,8 +587,8 @@ var commands = []commandGroup{
 			{
 				name:   "ApplySchema",
 				method: commandApplySchema,
-				params: "[--allow_long_unavailability] [--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
-				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If --allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
+				params: "[--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
+				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
 			},
 			{
 				name:   "CopySchemaShard",
@@ -2863,7 +2863,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
+	subFlags.MarkDeprecated("allow_long_unavailability", "")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
@@ -2910,15 +2910,14 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	log.Info("Calling ApplySchema on VtctldServer")
 
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
-		Keyspace:                keyspace,
-		AllowLongUnavailability: *allowLongUnavailability,
-		DdlStrategy:             *ddlStrategy,
-		Sql:                     parts,
-		SkipPreflight:           true,
-		UuidList:                textutil.SplitDelimitedList(*uuidList),
-		MigrationContext:        *migrationContext,
-		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
-		CallerId:                cID,
+		Keyspace:            keyspace,
+		DdlStrategy:         *ddlStrategy,
+		Sql:                 parts,
+		SkipPreflight:       true,
+		UuidList:            textutil.SplitDelimitedList(*uuidList),
+		MigrationContext:    *migrationContext,
+		WaitReplicasTimeout: protoutil.DurationToProto(*waitReplicasTimeout),
+		CallerId:            cID,
 	})
 
 	if err != nil {

@@ -42629,9 +42629,6 @@ export namespace vtctldata {
         /** ApplySchemaRequest keyspace */
         keyspace?: (string|null);
 
-        /** ApplySchemaRequest allow_long_unavailability */
-        allow_long_unavailability?: (boolean|null);
-
         /** ApplySchemaRequest sql */
         sql?: (string[]|null);
 
@@ -42665,9 +42662,6 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest keyspace. */
         public keyspace: string;
-
-        /** ApplySchemaRequest allow_long_unavailability. */
-        public allow_long_unavailability: boolean;
 
         /** ApplySchemaRequest sql. */
         public sql: string[];
