@@ -578,10 +578,43 @@ func buildDerived(op *Horizon, qb *queryBuilder) error {
 	if err != nil {
 		return err
 	}
-	sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
-	qb.sel = nil
 	sqlparser.RemoveKeyspace(op.Query)
-	opQuery := op.Query.(*sqlparser.Select)
+
+	stmt := qb.sel
+	qb.sel = nil
+	switch sel := stmt.(type) {
+	case *sqlparser.Select:
+		return buildDerivedSelect(op, qb, sel)
+	case *sqlparser.Union:
+		return buildDerivedUnion(op, qb, sel)
+
+	default:
+		panic(fmt.Sprintf("what is this? %v", stmt))
+	}
+}
+
+func buildDerivedUnion(op *Horizon, qb *queryBuilder, union *sqlparser.Union) error {
+	opQuery, ok := op.Query.(*sqlparser.Union)
+	if !ok {
+		return vterrors.VT12001("Horizon contained SELECT but statement was UNION")
+	}
+
+	union.Limit = opQuery.Limit
+	union.OrderBy = opQuery.OrderBy
+	union.Distinct = opQuery.Distinct
+
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		Select: union,
+	}, nil, op.ColumnAliases)
+
+	return nil
+}
+
+func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) error {
+	opQuery, ok := op.Query.(*sqlparser.Select)
+	if !ok {
+		return vterrors.VT12001("Horizon contained UNION but statement was SELECT")
+	}
 	sel.Limit = opQuery.Limit
 	sel.OrderBy = opQuery.OrderBy
 	sel.GroupBy = opQuery.GroupBy
@@ -597,6 +630,7 @@ func buildDerived(op *Horizon, qb *queryBuilder) error {
 		}
 	}
 	return nil
+
 }
 
 func buildHorizon(op *Horizon, qb *queryBuilder) error {

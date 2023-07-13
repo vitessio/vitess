@@ -147,7 +147,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *Filter:
 			return tryPushingDownFilter(ctx, in)
 		case *Distinct:
-			return tryPushingDownDistinct(ctx, in)
+			return tryPushingDownDistinct(in)
 		case *Union:
 			return tryPushDownUnion(ctx, in)
 		default:
@@ -597,7 +597,7 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 
 }
 
-func tryPushingDownDistinct(ctx *plancontext.PlanningContext, in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 	if in.Pushed {
 		return in, rewrite.SameTree, nil
 	}
@@ -648,34 +648,40 @@ func isDistinct(op ops.Operator) bool {
 }
 
 func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
-	if op.distinct {
-		sources, selects, err := mergeUnionInputInAnyOrder(ctx, op)
-		if err != nil {
-			return nil, nil, err
-		}
-		if len(sources) == 1 {
-			result := sources[0]
-			if op.distinct {
-				result = &Distinct{
-					Source:   result,
-					Original: true,
-				}
-			}
+	var sources []ops.Operator
+	var selects []sqlparser.SelectExprs
+	var err error
 
-			return result, rewrite.NewTree("pushed union under route", op), nil
-		}
-		var result *rewrite.ApplyResult
-		if len(sources) != len(op.Sources) {
-			result = rewrite.NewTree("merged union inputs", op)
-		}
-		return &Union{
-			Sources:  sources,
-			Selects:  selects,
-			distinct: true,
-		}, result, nil
+	if op.distinct {
+		sources, selects, err = mergeUnionInputInAnyOrder(ctx, op)
+	} else {
+		sources, selects, err = mergeUnionInputsInOrder(ctx, op)
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return op, rewrite.SameTree, nil
+	if len(sources) == 1 {
+		result := sources[0]
+		if op.distinct {
+			result = &Distinct{
+				Source:   result,
+				Original: true,
+			}
+		}
+
+		return result, rewrite.NewTree("pushed union under route", op), nil
+	}
+
+	if len(sources) == len(op.Sources) {
+		return op, rewrite.SameTree, nil
+	}
+
+	return &Union{
+		Sources:  sources,
+		Selects:  selects,
+		distinct: op.distinct,
+	}, rewrite.NewTree("merged union inputs", op), nil
 }
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for

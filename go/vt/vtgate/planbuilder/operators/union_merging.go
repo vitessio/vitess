@@ -39,7 +39,9 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 			if j <= idx {
 				continue
 			}
-			newPlan, err := mergeUnionInputs(ctx, srcA, srcB, nil, nil, op.distinct)
+			selA := selects[idx]
+			selB := selects[j]
+			newPlan, err := mergeUnionInputs(ctx, srcA, srcB, selA, selB, op.distinct)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -66,6 +68,33 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 		idx++
 		sources = newSources
 		selects = newSelects
+	}
+
+	return sources, selects, nil
+}
+
+func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops.Operator, []sqlparser.SelectExprs, error) {
+	sources := op.Sources
+	selects := op.Selects
+	for {
+		merged := false
+		for i := 0; i < len(sources)-1; i++ {
+			j := i + 1
+			srcA, selA := sources[i], selects[i]
+			srcB, selB := sources[j], selects[j]
+			newPlan, err := mergeUnionInputs(ctx, srcA, srcB, selA, selB, op.distinct)
+			if err != nil {
+				return nil, nil, err
+			}
+			if newPlan != nil {
+				sources[i] = newPlan
+				merged = true
+				sources = append(sources[:i+1], sources[j+1:]...)
+			}
+		}
+		if !merged {
+			break
+		}
 	}
 
 	return sources, selects, nil
