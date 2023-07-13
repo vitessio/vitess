@@ -232,6 +232,6 @@ func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 	return tmc.tm.CreateVReplicationWorkflow(ctx, req)
 }
 
-func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
-	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{}, nil
+func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return tmc.tm.ReadVReplicationWorkflow(ctx, req)
 }

@@ -162,6 +162,9 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 	}
 }
 
+func TestReadVReplicationWorkflow(t *testing.T) {
+}
+
 func TestUpdateVReplicationWorkflow(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"zone1"}
