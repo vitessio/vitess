@@ -434,6 +434,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 }
 
 func (vr *vreplicator) setMessage(message string) error {
+	message = strings.ToValidUTF8(message, "�")
 	message = binlogplayer.MessageTruncate(message)
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
