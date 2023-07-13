@@ -175,6 +175,14 @@ func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, targ
 	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 
+// GetServingKeyspaces returns list of serving keyspaces.
+func (gw *TabletGateway) GetServingKeyspaces() []string {
+	if gw.kev == nil {
+		return nil
+	}
+	return gw.kev.GetServingKeyspaces()
+}
+
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
 func (gw *TabletGateway) RegisterStats() {
