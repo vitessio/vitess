@@ -593,11 +593,26 @@ type selectExpressions interface {
 func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (ops.Operator, bool, int) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
-		return addColumnToInput(ctx, op.Outer, expr, addToGroupBy)
+		src, added, offset := addColumnToInput(ctx, op.Outer, expr, addToGroupBy)
+		if added {
+			op.Outer = src
+		}
+		return op, added, offset
+
 	case *Limit:
-		return addColumnToInput(ctx, op.Source, expr, addToGroupBy)
+		src, added, offset := addColumnToInput(ctx, op.Source, expr, addToGroupBy)
+		if added {
+			op.Source = src
+		}
+		return op, added, offset
+
 	case *Ordering:
-		return addColumnToInput(ctx, op.Source, expr, addToGroupBy)
+		src, added, offset := addColumnToInput(ctx, op.Source, expr, addToGroupBy)
+		if added {
+			op.Source = src
+		}
+		return op, added, offset
+
 	case selectExpressions:
 		if op.isDerived() {
 			// if the only thing we can push to is a derived table,
