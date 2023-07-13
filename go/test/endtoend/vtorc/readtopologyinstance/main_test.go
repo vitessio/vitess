@@ -41,6 +41,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	defer func() {
 		clusterInfo.ClusterInstance.Teardown()
 	}()
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	oldArgs := os.Args
