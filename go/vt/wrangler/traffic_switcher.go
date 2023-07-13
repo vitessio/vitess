@@ -811,7 +811,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
-	tgtInfo, err := workflow.BuildTargets(ctx, wr.ts, wr.tmc, targetKeyspace, workflowName)
+	tgtInfo, err := workflow.LegacyBuildTargets(ctx, wr.ts, wr.tmc, targetKeyspace, workflowName)
 	if err != nil {
 		log.Infof("Error building targets: %s", err)
 		return nil, err
