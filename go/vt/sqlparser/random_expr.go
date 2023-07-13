@@ -135,7 +135,7 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 	return g.randomOf(options)
 }
 
-var aggregates = []string{"count(*)", "count", "sum" /*, "min", "max" */}
+var aggregates = []string{"count(*)", "count", "sum", "min", "max"}
 
 func RandomAggregate(r *rand.Rand, expr Expr) Expr {
 	isDisinct := r.Intn(2) < 1

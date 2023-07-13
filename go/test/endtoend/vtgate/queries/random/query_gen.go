@@ -37,6 +37,7 @@ type (
 	queryGen struct {
 		r         *rand.Rand
 		genConfig sqlparser.ExprGeneratorConfig
+		maxCols   int
 	}
 	column struct {
 		name string
@@ -195,13 +196,6 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 	// where
 	sel.AddWhere(sqlparser.AndExpressions(qg.createWherePredicates(tables)...))
 
-	// only add a limit if the grouping columns are ordered
-	// TODO: limit fails a lot
-	isLimit := qg.r.Intn(2) < 1 && (isOrdered || len(groupBy) == 0) && testFailingQueries
-	if isLimit {
-		sel.Limit = qg.createLimit()
-	}
-
 	var (
 		newTable tableT
 		f        func() sqlparser.Expr
@@ -249,7 +243,7 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 		// make sure to add the random expression to group by and order by for only_full_group_by
 		if canAggregate {
 			sel.AddGroupBy(randomExpr)
-			if isOrdered || isLimit {
+			if isOrdered {
 				sel.AddOrder(sqlparser.NewOrder(randomExpr, qg.getRandomOrderDirection()))
 			}
 		}
@@ -257,10 +251,20 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 		break
 	}
 
-	// alias the grouping columns
-	for i, col := range grouping {
+	// only add a limit if there is an ordering
+	// TODO: limit fails a lot
+	isLimit := qg.r.Intn(2) < 1 && len(sel.OrderBy) > 0 && testFailingQueries
+	if isLimit {
+		sel.Limit = qg.createLimit()
+	}
+
+	// alias the grouping columns randomly
+	for i := range grouping {
+		if qg.r.Intn(2) < 1 {
+			continue
+		}
 		alias := fmt.Sprintf("cgroup%d", i)
-		col.name = alias
+		grouping[i].name = alias
 	}
 
 	// add them to newTable
@@ -301,7 +305,7 @@ func (qg queryGen) createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Sel
 	if isJoin {
 		// TODO: do nested joins
 		newTable := randomEl(qg.r, schemaTables)
-		alias := fmt.Sprintf("tbl%d", numTables)
+		alias := fmt.Sprintf("tbl%d", numTables+1)
 		newTable.setAlias(alias)
 		tables = append(tables, newTable)
 
@@ -368,9 +372,26 @@ func (qg queryGen) createAggregations(tables []tableT) (aggrSelectExprs sqlparse
 		})...)
 	for i := range aggrExprs {
 		expr := sqlparser.RandomAggregate(qg.r, aggrExprs[i])
-		alias := fmt.Sprintf("caggr%d", i)
+		// TODO: min/max often fails
+		for testFailingQueries {
+			switch expr.(type) {
+			case *sqlparser.Min, *sqlparser.Max:
+				expr = sqlparser.RandomAggregate(qg.r, aggrExprs[i])
+				continue
+			}
+
+			break
+		}
+
+		// randomly alias
+		var alias string
+		if qg.r.Intn(2) < 1 {
+			alias = fmt.Sprintf("caggr%d", i)
+			aggregates = append(aggregates, column{name: alias})
+		} else {
+			aggregates = append(aggregates, column{name: sqlparser.String(expr)})
+		}
 		aggrSelectExprs = append(aggrSelectExprs, sqlparser.NewAliasedExpr(expr, alias))
-		aggregates = append(aggregates, column{name: alias})
 	}
 
 	return

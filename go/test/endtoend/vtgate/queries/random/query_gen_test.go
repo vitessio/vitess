@@ -49,7 +49,7 @@ func TestSeed(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	seed := int64(1)
+	seed := int64(1689140137270728000)
 	qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})
 	query1 := sqlparser.String(qg.randomQuery(schemaTables))
 	qg = newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})

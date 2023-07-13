@@ -84,6 +84,9 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
+	// mismatched results (mismatched types)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(2 >> tbl2.mgr), sum(distinct tbl2.empno <=> 15) from emp as tbl0 left join emp as tbl2 on -32")
+
 	// panics instead of normally logging the error
 	// Received unexpected error:
 	// VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct 1) as caggr1
@@ -135,6 +138,9 @@ func TestMustFix(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
 
 	// EOF
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.deptno as cgroup0, tbl1.loc as cgroup1, count(distinct tbl1.loc) as caggr1, tbl1.loc as crandom0 from dept as tbl0, dept as tbl1 group by tbl1.deptno, tbl1.loc")
+
+	// EOF
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl0, (select count(*) from emp as tbl0, emp as tbl1 limit 18) as tbl1")
 }
 
@@ -147,15 +153,19 @@ func TestKnownFailures(t *testing.T) {
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
 
-	// vitess error: unsupported: min/max on types that are not comparable is not supported
-	// mysql error: <nil>
+	// VT13001: [BUG] in scatter query: complex ORDER BY expression: :vtg1 /* VARCHAR */
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.job as cgroup0, sum(distinct 'mudfish'), tbl1.job as crandom0 from emp as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job desc, tbl1.job asc limit 8, 1")
+
+	// VT13001: [BUG] column should not be pushed to projection while doing a column lookup
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ -26 in (tbl2.mgr, -8, tbl0.deptno) as crandom0 from dept as tbl0, emp as tbl1 left join emp as tbl2 on tbl2.ename")
+
+	// unsupported: min/max on types that are not comparable is not supported
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(case true when false then 'gnu' when true then 'meerkat' end) as caggr0 from dept as tbl0")
 
-	// vitess error: vttablet: rpc error: code = InvalidArgument desc = BIGINT UNSIGNED value is out of range in '(-(273) + (-(15) & 124))'
-	// mysql error: <nil>
+	// vttablet: rpc error: code = InvalidArgument desc = BIGINT UNSIGNED value is out of range in '(-(273) + (-(15) & 124))'
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ -273 + (-15 & 124) as crandom0 from emp as tbl0, emp as tbl1 where tbl1.sal >= tbl1.mgr")
 
-	// cannot compare strings, collation is unknown or unsupported (collation ID: 0)
+	// vitess error: cannot compare strings, collation is unknown or unsupported (collation ID: 0)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl1.dname) as caggr1 from dept as tbl0, dept as tbl1 group by tbl1.dname order by tbl1.dname asc")
 
 	// vitess error: <nil>
@@ -169,13 +179,17 @@ func TestKnownFailures(t *testing.T) {
 	// coercion should not try to coerce this value: DATE("1980-12-17")
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename")
 
-	// only_full_group_by enabled (vitess sometimes (?) produces the correct result assuming only_full_group_by is disabled)
-	// vitess error: nil
+	// only_full_group_by enabled
+	// vitess error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.EMPNO'; this is incompatible with sql_mode=only_full_group_by
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct tbl0.empno as cgroup0, count(distinct 56) as caggr0, min('flounder' = 'penguin') as caggr1 from emp as tbl0, (select /*vt+ PLANNER=Gen4 */ 'manatee' as crandom0 from dept as tbl0 where -26 limit 2) as tbl2 where 'anteater' like 'catfish' is null and -11 group by tbl0.empno order by tbl0.empno asc, count(distinct 56) asc, min('flounder' = 'penguin') desc")
+
+	// only_full_group_by enabled
+	// vitess error: <nil>
 	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'; this is incompatible with sql_mode=only_full_group_by
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
 
 	// only_full_group_by enabled
-	// vitess error:  nil
+	// vitess error: <nil>
 	// mysql error: Expression #1 of ORDER BY clause is not in SELECT list, references column 'ks_random.tbl2.DNAME' which is not in SELECT list; this is incompatible with DISTINCT
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr0 from dept as tbl2 group by tbl2.dname order by tbl2.dname asc")
 
@@ -188,28 +202,37 @@ func TestKnownFailures(t *testing.T) {
 	// vttablet: rpc error: code = InvalidArgument desc = Can't group on 'count(*)' (errno 1056) (sqlstate 42000) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.deptno")
 
-	// [BUG] push projection does not yet support: *planbuilder.memorySort (errno 1815) (sqlstate HY000)
+	// unsupported
+	// VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct 1) as caggr1
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(distinct tbl0.comm) as caggr0, sum(distinct 1) as caggr1 from emp as tbl0 having 'redfish' < 'blowfish'")
+
+	// unsupported
+	// VT12001: unsupported: aggregation on top of aggregation not supported
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl1 join (select count(*) from emp as tbl0, dept as tbl1 group by tbl1.loc) as tbl2")
 
 	// unsupported
-	// unsupported: in scatter query: complex aggregate expression (errno 1235) (sqlstate 42000)
+	// VT12001: unsupported: in scatter query: complex aggregate expression
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (select count(*) from emp as tbl0) from emp as tbl0")
 
 	// unsupported
-	// unsupported: using aggregation on top of a *planbuilder.filter plan
+	// VT12001: unsupported: using aggregation on top of a *planbuilder.filter plan
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.dname) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.dname > tbl1.loc where tbl1.loc <=> tbl1.dname group by tbl1.dname order by tbl1.dname asc")
 
 	// unsupported
-	// unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan
+	// VT12001: unsupported: aggregation on top of aggregation not supported
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from (select count(*) from dept as tbl0) as tbl0")
 
 	// unsupported
-	// unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan
+	// VT12001: unsupported: aggregation on top of aggregation not supported
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0) as tbl0, dept as tbl1")
 
 	// unsupported
-	// unsupported: in scatter query: aggregation function 'avg(tbl0.deptno)'
+	// VT12001: unsupported: in scatter query: aggregation function 'avg(tbl0.deptno)'
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ avg(tbl0.deptno) from dept as tbl0")
+
+	// unsupported
+	// VT12001: unsupported: LEFT JOIN with derived tables
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ -1 as crandom0 from emp as tbl2 left join (select count(*) from dept as tbl1) as tbl3 on 6 != tbl2.deptno")
 }
 
 func TestRandom(t *testing.T) {
@@ -244,7 +267,7 @@ func TestRandom(t *testing.T) {
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true
-	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
+	for time.Now().Before(endBy) && (!t.Failed() || testFailingQueries) {
 		seed := time.Now().UnixNano()
 		fmt.Printf("seed: %d\n", seed)
 		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})
