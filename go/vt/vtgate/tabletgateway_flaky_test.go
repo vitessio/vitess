@@ -185,7 +185,14 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 	// set the serving type for the primary tablet false and broadcast it so that the buffering code registers this change
 	hc.SetServing(primaryTablet, false)
+	// We call the broadcast twice to ensure that the change has been processed by the keyspace event watcher.
+	// The second broadcast call is blocking until the first one has been processed.
 	hc.Broadcast(primaryTablet)
+	hc.Broadcast(primaryTablet)
+
+	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+	_, isNotServing := tg.kev.PrimaryIsNotServing(target)
+	require.True(t, isNotServing)
 
 	// add a result to the sandbox connection of the new primary
 	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
@@ -196,8 +203,6 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		res, err = tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
-
-	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
 
 	// set the serving type for the new primary tablet true and broadcast it so that the buffering code registers this change
 	// this should stop the buffering and the query executed in the go routine should work. This should be done with some delay so
