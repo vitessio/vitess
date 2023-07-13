@@ -42,7 +42,9 @@ type (
 		Grouping     []GroupBy
 		Aggregations []Aggr
 
-		// We support a single distinct aggregation per aggregator. It is stored here
+		// We support a single distinct aggregation per aggregator. It is stored here.
+		// When planning the ordering that the OrderedAggregate will require,
+		// this needs to be the last ORDER BY expression
 		DistinctExpr sqlparser.Expr
 
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
