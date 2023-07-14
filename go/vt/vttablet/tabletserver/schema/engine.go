@@ -501,7 +501,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
 		if err != nil {
 			isView := strings.Contains(tableType, tmutils.TableView)
-			var emptyColumnsError mysqlctl.EmptyColumnsErr
+			var emptyColumnsError *mysqlctl.EmptyColumnsErr
 			if errors.As(err, &emptyColumnsError) && isView {
 				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
 				continue
