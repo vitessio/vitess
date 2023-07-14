@@ -458,6 +458,35 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	assert.Contains(t, logOutput, "The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
 }
 
+// TestOpenFailedDueToEmptyColumnInView tests that schema engine load should not fail instead should log the failures for empty columns in view
+func TestOpenFailedDueToEmptyColumnInView(t *testing.T) {
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_view", true, "VIEW"),
+		},
+	})
+
+	// adding column query for table_view
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
+		&sqltypes.Result{})
+
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
+	err := se.Open()
+	require.NoError(t, err)
+
+	logs := tl.GetAllLogs()
+	logOutput := strings.Join(logs, ":::")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_view")
+	assert.Contains(t, logOutput, "unable to get columns for table fakesqldb.test_view")
+}
+
 func TestExportVars(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
