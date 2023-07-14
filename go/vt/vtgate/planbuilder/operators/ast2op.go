@@ -100,14 +100,21 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		return nil, err
 	}
 
-	lexprs := sqlparser.GetFirstSelect(node.Left).SelectExprs
-	rexprs := sqlparser.GetFirstSelect(node.Right).SelectExprs
-	union := &Union{
-		distinct: node.Distinct,
-		Sources:  []ops.Operator{opLHS, opRHS},
-		Selects:  []sqlparser.SelectExprs{lexprs, rexprs},
-	}
+	lexprs := getExpressions(node.Left)
+	rexprs := getExpressions(node.Right)
+
+	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, node.Distinct)
 	return &Horizon{Source: union, Query: node}, nil
+}
+
+func getExpressions(stmt sqlparser.SelectStatement) sqlparser.SelectExprs {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return stmt.SelectExprs
+	case *sqlparser.Union:
+		return unionSelects(sqlparser.GetFirstSelect(stmt).SelectExprs)
+	}
+	return nil
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {

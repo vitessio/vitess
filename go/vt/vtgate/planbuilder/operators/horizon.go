@@ -211,12 +211,37 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
 }
 
 func (h *Horizon) GetColumns(*plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
-	for _, expr := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
-		ae, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, vterrors.VT09015()
+	switch sel := h.Query.(type) {
+	case *sqlparser.Select:
+		for _, expr := range sel.SelectExprs {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				return nil, vterrors.VT09015()
+			}
+			exprs = append(exprs, ae)
 		}
-		exprs = append(exprs, ae)
+	case *sqlparser.Union:
+		selectExprs := unionSelects(sqlparser.GetFirstSelect(h.Query).SelectExprs)
+		for _, expr := range selectExprs {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				return nil, vterrors.VT09015()
+			}
+			exprs = append(exprs, ae)
+		}
+	}
+	return exprs, nil
+}
+
+func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
+	for _, col := range exprs {
+		switch col := col.(type) {
+		case *sqlparser.AliasedExpr:
+			expr := sqlparser.NewColName(col.ColumnName())
+			selectExprs = append(selectExprs, aeWrap(expr))
+		default:
+			selectExprs = append(selectExprs, col)
+		}
 	}
 	return
 }

@@ -2504,3 +2504,16 @@ func (ty KillType) ToString() string {
 		return ConnectionStr
 	}
 }
+
+func GetColumnNames(exprs SelectExprs) (expanded bool, selectExprs SelectExprs) {
+	for _, col := range exprs {
+		switch col := col.(type) {
+		case *AliasedExpr:
+			expr := NewColName(col.ColumnName())
+			selectExprs = append(selectExprs, &AliasedExpr{Expr: expr})
+		default:
+			return false, exprs
+		}
+	}
+	return true, selectExprs
+}

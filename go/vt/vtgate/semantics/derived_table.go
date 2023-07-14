@@ -27,18 +27,25 @@ import (
 
 // DerivedTable contains the information about the projection, tables involved in derived table.
 type DerivedTable struct {
-	tableName       string
-	ASTNode         *sqlparser.AliasedTableExpr
-	columnNames     []string
-	cols            []sqlparser.Expr
-	tables          TableSet
-	isAuthoritative bool
+	tableName        string
+	ASTNode          *sqlparser.AliasedTableExpr
+	columnNames      []string
+	cols             []sqlparser.Expr
+	tables           TableSet
+	isAuthoritative  bool
+	exprsNotExpanded bool
 }
 
 var _ TableInfo = (*DerivedTable)(nil)
 
-func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *DerivedTable {
-	vTbl := &DerivedTable{isAuthoritative: true}
+func createDerivedTableForExpressions(
+	expressions sqlparser.SelectExprs,
+	cols sqlparser.Columns,
+	tables []TableInfo,
+	org originable,
+	exprsNotExpanded bool,
+) *DerivedTable {
+	vTbl := &DerivedTable{isAuthoritative: true, exprsNotExpanded: exprsNotExpanded}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
@@ -135,6 +142,9 @@ func (dt *DerivedTable) getTableSet(_ originable) TableSet {
 
 // GetExprFor implements the TableInfo interface
 func (dt *DerivedTable) getExprFor(s string) (sqlparser.Expr, error) {
+	if dt.exprsNotExpanded {
+		return nil, vterrors.VT09015()
+	}
 	for i, colName := range dt.columnNames {
 		if colName == s {
 			return dt.cols[i], nil

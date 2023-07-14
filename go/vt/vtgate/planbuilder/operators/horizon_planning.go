@@ -77,6 +77,11 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		return nil, err
 	}
 
+	if rewrite.DebugOperatorTree {
+		fmt.Println("After offset planning:")
+		fmt.Println(ops.ToTree(output))
+	}
+
 	output, err = makeSureOutputIsCorrect(ctx, root, output)
 	if err != nil {
 		return nil, err
@@ -604,12 +609,13 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 	in.Pushed = true
 	switch src := in.Source.(type) {
 	case *Route:
+		if isDistinct(src.Source) && src.IsSingleShard() {
+			return src, rewrite.NewTree("distinct not needed", in), nil
+		}
 		if src.IsSingleShard() || !in.Original {
 			return rewrite.Swap(in, src, "push distinct under route")
 		}
-		if isDistinct(src.Source) {
-			return in, rewrite.SameTree, nil
-		}
+
 		src.Source = &Distinct{Source: src.Source}
 
 		return in, rewrite.NewTree("added distinct under route - kept original", src), nil
@@ -642,6 +648,8 @@ func isDistinct(op ops.Operator) bool {
 		return true
 	case *Union:
 		return op.distinct
+	case *Horizon:
+		return op.Query.IsDistinct()
 	default:
 		return false
 	}
@@ -662,26 +670,21 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 	}
 
 	if len(sources) == 1 {
-		result := sources[0]
-		if op.distinct {
-			result = &Distinct{
-				Source:   result,
-				Original: true,
-			}
+		result := sources[0].(*Route)
+		if result.IsSingleShard() || !op.distinct {
+			return result, rewrite.NewTree("pushed union under route", op), nil
 		}
 
-		return result, rewrite.NewTree("pushed union under route", op), nil
+		return &Distinct{
+			Source:   result,
+			Original: true,
+		}, rewrite.NewTree("pushed union under route", op), nil
 	}
 
 	if len(sources) == len(op.Sources) {
 		return op, rewrite.SameTree, nil
 	}
-
-	return &Union{
-		Sources:  sources,
-		Selects:  selects,
-		distinct: op.distinct,
-	}, rewrite.NewTree("merged union inputs", op), nil
+	return newUnion(sources, selects, op.distinct), rewrite.NewTree("merged union inputs", op), nil
 }
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for

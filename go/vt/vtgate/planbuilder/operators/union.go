@@ -38,6 +38,14 @@ type Union struct {
 	offsetPlanned bool
 }
 
+func newUnion(srcs []ops.Operator, stmts []sqlparser.SelectExprs, distinct bool) *Union {
+	return &Union{
+		Sources:  srcs,
+		Selects:  stmts,
+		distinct: distinct,
+	}
+}
+
 // Clone implements the Operator interface
 func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
@@ -92,14 +100,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		if !ok {
 			return nil, vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT")
 		}
-		if !ae.As.IsEmpty() {
-			offsets[ae.As.String()] = i
-			continue
-		}
-		col, ok := ae.Expr.(*sqlparser.ColName)
-		if ok {
-			offsets[col.Name.Lowered()] = i
-		}
+		offsets[ae.ColumnName()] = i
 	}
 
 	for i := range u.Sources {
@@ -126,7 +127,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
-				err = vterrors.VT12001("pushing non-aliased expression predicates on concatenate")
+				err = vterrors.VT09015()
 				cursor.StopTreeWalk()
 				return
 			}
@@ -159,6 +160,17 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 }
 
 func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+	if u.distinct {
+		// first we remove unnecessary DISTINCTs
+		for idx, source := range u.Sources {
+			d, ok := source.(*Distinct)
+			if !ok || !d.Original {
+				continue
+			}
+			u.Sources[idx] = d.Source
+		}
+	}
+
 	var newSources []ops.Operator
 	var newSelects []sqlparser.SelectExprs
 	merged := false
@@ -187,16 +199,17 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 }
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	cols, err := u.GetColumns(ctx)
+	col, err := u.FindCol(ctx, ae.Expr)
 	if err != nil {
 		return nil, 0, err
 	}
+	if col >= 0 {
+		return u, col, nil
+	}
 
-	// First we check if we already have this column
-	for idx, col := range cols {
-		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, col.Expr) {
-			return u, idx, nil
-		}
+	cols, err := u.GetColumns(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	switch e := ae.Expr.(type) {

@@ -139,6 +139,14 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		return p, offset, nil
 	}
 
+	if p.TableID != nil {
+		vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
+		if err != nil {
+			return nil, 0, err
+		}
+		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, vt)
+	}
+
 	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
 	if err != nil {
 		return nil, 0, err

@@ -131,13 +131,14 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 		Lateral: false,
 		Select:  qb.sel,
 	}
-	qb.sel = &sqlparser.Select{
+	sel := &sqlparser.Select{
 		From: []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{
 			Expr: dt,
 			As:   sqlparser.NewIdentifierCS("dt"),
 		}},
-		SelectExprs: sqlparser.CloneSelectExprs(sqlparser.GetFirstSelect(qb.sel).SelectExprs),
 	}
+	sel.SelectExprs = unionSelects(sqlparser.GetFirstSelect(qb.sel).SelectExprs)
+	qb.sel = sel
 }
 
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.SelectStatement) error {

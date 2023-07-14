@@ -60,6 +60,18 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 		}
 	}
 
+	if horizon.TableId != nil {
+		op = &Projection{
+			Source:  op,
+			TableID: horizon.TableId,
+			Alias:   horizon.Alias,
+		}
+	}
+
+	if op == horizon.Source {
+		return op, rewrite.NewTree("removed UNION horizon not used", op), nil
+	}
+
 	return op, rewrite.NewTree("expand UNION horizon into smaller components", op), nil
 }
 

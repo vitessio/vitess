@@ -52,7 +52,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
 			tables := tc.scoper.wScope[sel]
-			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, node.Columns, tables.tables, tc.org)
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, node.Columns, tables.tables, tc.org, false)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -67,7 +67,8 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		case *sqlparser.Union:
 			firstSelect := sqlparser.GetFirstSelect(sel)
 			tables := tc.scoper.wScope[firstSelect]
-			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, node.Columns, tables.tables, tc.org)
+			unableToExpandUnion, selectExprs := sqlparser.GetColumnNames(firstSelect.SelectExprs)
+			tableInfo := createDerivedTableForExpressions(selectExprs, node.Columns, tables.tables, tc.org, unableToExpandUnion)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
