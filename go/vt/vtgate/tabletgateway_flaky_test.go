@@ -191,7 +191,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 
 	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
-	_, isNotServing := tg.kev.PrimaryIsNotServing(target)
+	isNotServing := tg.kev.PrimaryIsNotServing(target)
 	require.True(t, isNotServing)
 
 	// add a result to the sandbox connection of the new primary
