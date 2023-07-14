@@ -36,6 +36,7 @@ import (
 )
 
 func TestWatchConfig(t *testing.T) {
+	t.Skip("flaky test (@ajm188): https://github.com/vitessio/vitess/issues/13498")
 	type config struct {
 		A, B int
 	}
