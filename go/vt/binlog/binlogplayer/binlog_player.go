@@ -547,7 +547,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 
 	maxTPS, err := vrRow.ToInt64("max_tps")
 	if err != nil {
-		return VRSettings{}, fmt.Errorf("failed to parse max_tps column2: %v", err)
+		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
 	maxReplicationLag, err := vrRow.ToInt64("max_replication_lag")
 	if err != nil {

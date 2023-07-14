@@ -41,10 +41,17 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+func init() {
+	tabletconn.RegisterDialer("grpc", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		return &tabletconntest.FakeQueryService{}, nil
+	})
+}
 
 type testEnv struct {
 	mu         sync.Mutex
@@ -54,12 +61,13 @@ type testEnv struct {
 	ts         *topo.Server
 	cells      []string
 	tablets    map[int]*fakeTabletConn
+	mysqld     *mysqlctl.FakeMysqlDaemon
 	tmc        *fakeTMClient
 	dbName     string
 	protoName  string
 }
 
-func newTestEnv(t *testing.T) *testEnv {
+func newTestEnv(t *testing.T, keyspace string, shards []string) *testEnv {
 	tenv := &testEnv{
 		ctx:        context.Background(),
 		vrdbClient: binlogplayer.NewMockDBClient(t),
@@ -72,6 +80,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
 	tenv.ts = memorytopo.NewServer(tenv.cells...)
+	tenv.tmc.keyspace = keyspace
+	tenv.tmc.shards = shards
 
 	tabletconn.RegisterDialer(t.Name(), func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tenv.mu.Lock()
@@ -90,7 +100,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	dbClientFactory := func() binlogplayer.DBClient {
 		return tenv.vrdbClient
 	}
-	tenv.vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t)), dbClientFactory, dbClientFactory, tenv.dbName, nil)
+	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	tenv.vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], tenv.mysqld, dbClientFactory, dbClientFactory, tenv.dbName, nil)
 	tenv.vrdbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", tenv.dbName), &sqltypes.Result{}, nil)
 	tenv.vrengine.Open(tenv.ctx)
 	require.True(t, tenv.vrengine.IsOpen(), "vreplication engine was not open")
@@ -163,11 +174,170 @@ type fakeTabletConn struct {
 	tablet *topodatapb.Tablet
 }
 
+// Begin returns the transaction id to use for further operations
+func (ftc *fakeTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+	return queryservice.TransactionState{
+		TransactionID: 1,
+	}, nil
+}
+
+// Commit commits the current transaction
+func (ftc *fakeTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+	return 0, nil
+}
+
+// Rollback aborts the current transaction
+func (ftc *fakeTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+	return 0, nil
+}
+
+// Prepare prepares the specified transaction.
+func (ftc *fakeTabletConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return nil
+}
+
+// CommitPrepared commits the prepared transaction.
+func (ftc *fakeTabletConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return nil
+}
+
+// RollbackPrepared rolls back the prepared transaction.
+func (ftc *fakeTabletConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return nil
+}
+
+// CreateTransaction creates the metadata for a 2PC transaction.
+func (ftc *fakeTabletConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return nil
+}
+
+// StartCommit atomically commits the transaction along with the
+// decision to commit the associated 2pc transaction.
+func (ftc *fakeTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return nil
+}
+
+// SetRollback transitions the 2pc transaction to the Rollback state.
+// If a transaction id is provided, that transaction is also rolled back.
+func (ftc *fakeTabletConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return nil
+}
+
+// ConcludeTransaction deletes the 2pc transaction metadata
+// essentially resolving it.
+func (ftc *fakeTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return nil
+}
+
+// ReadTransaction returns the metadata for the specified dtid.
+func (ftc *fakeTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	return nil, nil
+}
+
+// Execute for query execution
+func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	return nil, nil
+}
+
+// StreamExecute for query execution with streaming
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+// Combo methods, they also return the transactionID from the
+// Begin part. If err != nil, the transactionID may still be
+// non-zero, and needs to be propagated back (like for a DB
+// Integrity Error)
+func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+	return queryservice.TransactionState{
+		TransactionID: 1,
+	}, nil, nil
+}
+
+func (ftc *fakeTabletConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
+	return queryservice.TransactionState{
+		TransactionID: 1,
+	}, nil
+}
+
+// Messaging methods.
+func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (ftc *fakeTabletConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	return 0, nil
+}
+
+// VStream streams VReplication events based on the specified filter.
+func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	return nil
+}
+
+// VStreamRows streams rows of a table from the specified starting point.
+func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return nil
+}
+
+// VStreamResults streams results along with the gtid of the snapshot.
+func (ftc *fakeTabletConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	return nil
+}
+
+// StreamHealth streams health status.
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	return nil
+}
+
+// HandlePanic will be called if any of the functions panic.
+func (ftc *fakeTabletConn) HandlePanic(err *error) {
+}
+
+func (ftc *fakeTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
+	return queryservice.ReservedTransactionState{
+		ReservedID: 1,
+	}, nil, nil
+}
+
+func (ftc *fakeTabletConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
+	return queryservice.ReservedTransactionState{
+		ReservedID: 1,
+	}, nil
+}
+
+func (ftc *fakeTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
+	return queryservice.ReservedState{
+		ReservedID: 1,
+	}, nil, nil
+}
+
+func (ftc *fakeTabletConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
+	return queryservice.ReservedState{
+		ReservedID: 1,
+	}, nil
+}
+
+func (ftc *fakeTabletConn) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	return nil
+}
+
+// GetSchema returns the table definition for the specified tables.
+func (ftc *fakeTabletConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	return nil
+}
+
+// Close must be called for releasing resources.
+func (ftc *fakeTabletConn) Close(ctx context.Context) error {
+	return nil
+}
+
 //----------------------------------------------
 // fakeTMClient
 
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
+	keyspace   string
+	shards     []string
 	tm         TabletManager
 	schema     *tabletmanagerdatapb.SchemaDefinition
 	vreQueries map[int]map[string]*querypb.QueryResult
@@ -191,14 +361,15 @@ func (tmc *fakeTMClient) SetSchema(schema *tabletmanagerdatapb.SchemaDefinition)
 // ExecuteFetchAsApp is is needed for the materializer's checkTZConversion function.
 func (tmc *fakeTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	return sqltypes.ResultToProto3(
-		&sqltypes.Result{
-			Fields: []*querypb.Field{{
-				Name: "convert_tz",
-			}},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarChar("2023-07-14 09:05:01"),
-			}},
-		}), nil
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("convert_tz", "varchar"),
+			"2023-07-14 09:05:01",
+		)), nil
+}
+
+func (tmc *fakeTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+	// Reuse VReplicationExec
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 
 // setVReplicationExecResults allows you to specify VReplicationExec queries
@@ -233,5 +404,26 @@ func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
-	return tmc.tm.ReadVReplicationWorkflow(ctx, req)
+	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+		Workflow: req.Workflow,
+		Streams:  make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.shards)),
+	}
+	for i, shard := range tmc.shards {
+		resp.Streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+			Id: int32(i + 1),
+			Bls: &binlogdatapb.BinlogSource{
+				Keyspace: tmc.keyspace,
+				Shard:    shard,
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{
+							Match: ".*",
+						},
+					},
+				},
+			},
+		}
+	}
+
+	return resp, nil
 }
