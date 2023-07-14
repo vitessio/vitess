@@ -168,165 +168,166 @@ func (tenv *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 	topo.DeleteTabletReplicationData(tenv.ctx, tenv.ts, tablet)
 }
 
-// fakeTabletConn implements the TabletConn interface.
+// fakeTabletConn implements the TabletConn and QueryService interfaces.
 type fakeTabletConn struct {
 	queryservice.QueryService
 	tablet *topodatapb.Tablet
 }
 
-// Begin returns the transaction id to use for further operations
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	return queryservice.TransactionState{
 		TransactionID: 1,
 	}, nil
 }
 
-// Commit commits the current transaction
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	return 0, nil
 }
 
-// Rollback aborts the current transaction
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	return 0, nil
 }
 
-// Prepare prepares the specified transaction.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	return nil
 }
 
-// CommitPrepared commits the prepared transaction.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return nil
 }
 
-// RollbackPrepared rolls back the prepared transaction.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
 	return nil
 }
 
-// CreateTransaction creates the metadata for a 2PC transaction.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	return nil
 }
 
-// StartCommit atomically commits the transaction along with the
-// decision to commit the associated 2pc transaction.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	return nil
 }
 
-// SetRollback transitions the 2pc transaction to the Rollback state.
-// If a transaction id is provided, that transaction is also rolled back.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
 	return nil
 }
 
-// ConcludeTransaction deletes the 2pc transaction metadata
-// essentially resolving it.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return nil
 }
 
-// ReadTransaction returns the metadata for the specified dtid.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	return nil, nil
 }
 
-// Execute for query execution
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return nil, nil
 }
 
-// StreamExecute for query execution with streaming
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
-// Combo methods, they also return the transactionID from the
-// Begin part. If err != nil, the transactionID may still be
-// non-zero, and needs to be propagated back (like for a DB
-// Integrity Error)
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	return queryservice.TransactionState{
 		TransactionID: 1,
 	}, nil, nil
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
 	return queryservice.TransactionState{
 		TransactionID: 1,
 	}, nil
 }
 
-// Messaging methods.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
 	return 0, nil
 }
 
-// VStream streams VReplication events based on the specified filter.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	return nil
 }
 
-// VStreamRows streams rows of a table from the specified starting point.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	return nil
 }
 
-// VStreamResults streams results along with the gtid of the snapshot.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return nil
 }
 
-// StreamHealth streams health status.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return nil
 }
 
-// HandlePanic will be called if any of the functions panic.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) HandlePanic(err *error) {
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
 	return queryservice.ReservedTransactionState{
 		ReservedID: 1,
 	}, nil, nil
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
 	return queryservice.ReservedTransactionState{
 		ReservedID: 1,
 	}, nil
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
 	return queryservice.ReservedState{
 		ReservedID: 1,
 	}, nil, nil
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
 	return queryservice.ReservedState{
 		ReservedID: 1,
 	}, nil
 }
 
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	return nil
 }
 
-// GetSchema returns the table definition for the specified tables.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	return nil
 }
 
-// Close must be called for releasing resources.
+// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) Close(ctx context.Context) error {
 	return nil
 }

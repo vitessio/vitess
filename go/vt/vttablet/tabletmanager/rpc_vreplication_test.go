@@ -110,9 +110,8 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 	targetTablet := tenv.addTablet(targetTabletUID, targetKs, shard)
 	defer tenv.deleteTablet(targetTablet.tablet)
 
-	insertPrefix := "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
-
 	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+
 	tests := []struct {
 		name   string
 		req    *vtctldatapb.MoveTablesCreateRequest
@@ -129,7 +128,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				AllTables:      true,
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
-				insertPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+				insertVReplicaionPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 		{
 			name: "all values",
@@ -164,7 +163,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				AutoStart:          true,
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
-				insertPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+				insertVReplicaionPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 	}
 
@@ -224,6 +223,7 @@ func TestMoveTables(t *testing.T) {
 	defer tenv.deleteTablet(sourceTablet.tablet)
 	targetTablet := tenv.addTablet(targetTabletUID, targetKs, shard)
 	defer tenv.deleteTablet(targetTablet.tablet)
+
 	ws := workflow.NewServer(tenv.ts, tenv.tmc)
 
 	tenv.mysqld.Schema = defaultSchema
