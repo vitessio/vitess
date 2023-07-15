@@ -67,7 +67,7 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		vindex, _ := vindexes.CreateVindex("binary", "binary", nil)
 		routing.Selected = &VindexOption{
 			Ready:       true,
-			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.TypedCollation{})},
+			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.SystemCollation)},
 			ValueExprs:  nil,
 			Predicates:  nil,
 			OpCode:      engine.EqualUnique,

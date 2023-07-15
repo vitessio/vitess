@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -135,7 +137,7 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 		require.NoError(t, err)
 		v2, err := env.Evaluate(simpler)
 		require.NoError(t, err)
-		assert.Equal(t, v1.Value(), v2.Value())
+		assert.Equal(t, v1.Value(collations.Default()), v2.Value(collations.Default()))
 		if len(env.Row) > i+1 {
 			testValues(t, env, i+1, original, simpler)
 		}

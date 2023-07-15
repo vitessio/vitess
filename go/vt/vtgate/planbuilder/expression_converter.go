@@ -63,8 +63,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		// TODO@collations: proper collation for column name
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.TypedCollation{})
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.SystemCollation)
 	}
 	return nil
 }

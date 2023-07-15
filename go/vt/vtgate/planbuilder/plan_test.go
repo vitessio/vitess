@@ -694,7 +694,7 @@ func (vw *vschemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *vschemaWrapper) ConnCollation() collations.ID {
-	return collations.CollationUtf8ID
+	return collations.Default()
 }
 
 func (vw *vschemaWrapper) PlannerWarning(_ string) {

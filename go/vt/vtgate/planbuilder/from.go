@@ -287,7 +287,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		eroute = engine.NewSimpleRoute(engine.EqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.CreateVindex("binary", "binary", nil)
 		eroute.Vindex = vindex
-		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})
+		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.SystemCollation)
 		eroute.Values = []evalengine.Expr{lit}
 	}
 	eroute.TableName = sqlparser.String(vschemaTable.Name)

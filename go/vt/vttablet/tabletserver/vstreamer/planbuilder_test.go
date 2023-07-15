@@ -178,42 +178,58 @@ func TestPlanBuilder(t *testing.T) {
 	t1 := &Table{
 		Name: "t1",
 		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: sqltypes.Int64,
+			Name:    "id",
+			Type:    sqltypes.Int64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "val",
-			Type: sqltypes.VarBinary,
+			Name:    "val",
+			Type:    sqltypes.VarBinary,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 		}},
 	}
 	// t1alt has no id column
 	t1alt := &Table{
 		Name: "t1",
 		Fields: []*querypb.Field{{
-			Name: "val",
-			Type: sqltypes.VarBinary,
+			Name:    "val",
+			Type:    sqltypes.VarBinary,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 		}},
 	}
 	t2 := &Table{
 		Name: "t2",
 		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: sqltypes.Int64,
+			Name:    "id",
+			Type:    sqltypes.Int64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "val",
-			Type: sqltypes.VarBinary,
+			Name:    "val",
+			Type:    sqltypes.VarBinary,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 		}},
 	}
 	regional := &Table{
 		Name: "regional",
 		Fields: []*querypb.Field{{
-			Name: "region",
-			Type: sqltypes.Int64,
+			Name:    "region",
+			Type:    sqltypes.Int64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "id",
-			Type: sqltypes.Int64,
+			Name:    "id",
+			Type:    sqltypes.Int64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "val",
-			Type: sqltypes.VarBinary,
+			Name:    "val",
+			Type:    sqltypes.VarBinary,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 		}},
 	}
 
@@ -229,14 +245,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}, {
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
 		},
@@ -247,14 +267,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}, {
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
 			Filters: []Filter{{
@@ -273,14 +297,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}, {
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
 		},
@@ -291,14 +319,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}, {
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
 		},
@@ -309,14 +341,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}, {
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
 		},
@@ -327,14 +363,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}, {
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
 			Filters: []Filter{{
@@ -353,14 +393,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}, {
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
 			Filters: []Filter{{
@@ -379,14 +423,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}, {
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
 			Filters: []Filter{{
@@ -408,14 +456,18 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 2,
 				Field: &querypb.Field{
-					Name: "val",
-					Type: sqltypes.VarBinary,
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}, {
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
 			Filters: []Filter{{
@@ -434,13 +486,17 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name: "id",
-					Type: sqltypes.Int64,
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}, {
 				Field: &querypb.Field{
-					Name: "keyspace_id",
-					Type: sqltypes.VarBinary,
+					Name:    "keyspace_id",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 				Vindex:        testLocalVSchema.vschema.Keyspaces["ks"].Vindexes["region_vdx"],
 				VindexColumns: []int{0, 1},
@@ -590,11 +646,15 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 	t1 := &Table{
 		Name: "t1",
 		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: sqltypes.Int64,
+			Name:    "id",
+			Type:    sqltypes.Int64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "val",
-			Type: sqltypes.VarBinary,
+			Name:    "val",
+			Type:    sqltypes.VarBinary,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 		}},
 	}
 	hashVindex, err := vindexes.CreateVindex("hash", "hash", nil)

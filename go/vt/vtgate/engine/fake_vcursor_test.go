@@ -104,7 +104,7 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
+	return collations.Default()
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {

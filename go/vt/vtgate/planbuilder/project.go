@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -161,8 +162,10 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		rc := newResultColumn(expr, node)
 		node.resultColumns = append(node.resultColumns, rc)
 		node.eVindexFunc.Fields = append(node.eVindexFunc.Fields, &querypb.Field{
-			Name: rc.alias.String(),
-			Type: querypb.Type_VARBINARY,
+			Name:    rc.alias.String(),
+			Type:    querypb.Type_VARBINARY,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 		})
 		node.eVindexFunc.Cols = append(node.eVindexFunc.Cols, col.Metadata.(*column).colNumber)
 		return node, rc, len(node.resultColumns) - 1, nil

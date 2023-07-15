@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
@@ -509,7 +511,7 @@ func TestAppendResult(t *testing.T) {
 	}
 	innerqr2 := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "foo", Type: sqltypes.Int8},
+			{Name: "foo", Type: sqltypes.Int8, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		RowsAffected: 1,
 		InsertID:     1,

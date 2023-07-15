@@ -371,25 +371,23 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 				return nil, err
 			}
 		}
+		return expr, nil
 	case *BindVariable:
 		if lit.Type == sqltypes.Tuple {
 			panic("parser allowed introducer before tuple")
 		}
 
-		switch collation {
-		case collations.CollationBinaryID:
-			lit.Type = sqltypes.VarBinary
-			lit.Collation = collationBinary
-			lit.typed = true
-		default:
-			lit.Type = sqltypes.VarChar
-			lit.Collation.Collation = collation
-			lit.typed = true
-		}
+		return &IntroducerExpr{
+			UnaryExpr: UnaryExpr{expr},
+			TypedCollation: collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceExplicit,
+				Repertoire:   collations.RepertoireUnicode,
+			},
+		}, nil
 	default:
 		panic("character set introducers are only supported for literals and arguments")
 	}
-	return expr, nil
 }
 
 func (ast *astCompiler) translateIntegral(lit *sqlparser.Literal) (int, bool, error) {
@@ -417,7 +415,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (Expr, er
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	case sqlparser.NStringOp:
-		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8ID}, nil
+		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8mb3ID}, nil
 	default:
 		return nil, translateExprNotSupported(unary)
 	}

@@ -214,11 +214,7 @@ func NewBindVarTuple(key string) *BindVariable {
 
 // NewColumn returns a column expression
 func NewColumn(offset int) *Column {
-	return NewColumnWithCollation(offset, collations.TypedCollation{
-		Collation:    collations.Unknown,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireUnicode,
-	})
+	return NewColumnWithCollation(offset, collations.SystemCollation)
 }
 
 func NewColumnWithCollation(offset int, coll collations.TypedCollation) *Column {

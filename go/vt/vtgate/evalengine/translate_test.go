@@ -317,7 +317,7 @@ func TestEvaluate(t *testing.T) {
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.Default()), "expected %s", test.expected.String())
 		})
 	}
 }

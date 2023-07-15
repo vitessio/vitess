@@ -3330,6 +3330,7 @@ func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uin
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(t)
 		val.bytes = format.Format(env.time(utc), prec)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3346,6 +3347,7 @@ func (asm *assembler) Fn_Sysdate(prec uint8) {
 			now = now.In(tz)
 		}
 		val.bytes = datetime.NewDateTimeFromStd(now).Format(prec)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3358,6 +3360,7 @@ func (asm *assembler) Fn_Curdate() {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
 		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(false), 0)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3370,6 +3373,7 @@ func (asm *assembler) Fn_UtcDate() {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
 		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(true), 0)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -4721,4 +4725,14 @@ func (asm *assembler) Fn_REGEXP_REPLACE_slow(merged collations.TypedCollation, f
 		env.vm.sp -= offset
 		return 1
 	}, "FN REGEXP_REPLACE_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Introduce(offset int, t sqltypes.Type, col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
+		arg.tt = int16(t)
+		arg.col = col
+		env.vm.stack[env.vm.sp-offset] = arg
+		return 1
+	}, "INTRODUCE (SP-1)")
 }
