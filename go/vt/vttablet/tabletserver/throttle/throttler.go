@@ -709,8 +709,13 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 			resp, gRPCErr := throttler.tmClient.CheckThrottler(ctx, probe.Tablet, req)
 			if gRPCErr == nil {
 				mySQLThrottleMetric.Value = resp.Value
-				if resp.Error != "" {
-					mySQLThrottleMetric.Err = errors.New(resp.Error)
+				if resp.StatusCode == http.StatusInternalServerError {
+					mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
+				}
+				if resp.RecentlyChecked {
+					// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
+					// We therefore renew the heartbeats lease.
+					go throttler.heartbeatWriter.RequestHeartbeats()
 				}
 				return mySQLThrottleMetric
 			} else {
