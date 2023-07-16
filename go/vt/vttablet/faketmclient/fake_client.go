@@ -331,6 +331,12 @@ func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, ta
 	return &eofEventStream{}, nil
 }
 
+// Throttler related methods
+
+func (client *FakeTabletManagerClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
 //
 // Management related methods
 //
