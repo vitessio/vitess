@@ -192,26 +192,25 @@ func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
 }
 
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
-	bvar := NewBindVar(arg.Name)
-	bvar.Collation.Collation = ast.cfg.Collation
+	bvar := NewBindVar(arg.Name, arg.Type, ast.cfg.Collation)
 
-	if arg.Type >= 0 {
-		bvar.Type = arg.Type
-		bvar.typed = true
-	} else {
+	if !bvar.typed {
 		ast.untyped++
 	}
 	return bvar, nil
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) {
-	column := NewColumn(col.V)
+	var typ querypb.Type = -1
+	var coll collations.ID
 	if ast.cfg.ResolveType != nil {
-		column.Type, column.Collation.Collation, column.typed = ast.cfg.ResolveType(col.Original)
+		typ, coll, _ = ast.cfg.ResolveType(col.Original)
 	}
-	if column.Collation.Collation == collations.Unknown {
-		column.Collation.Collation = ast.cfg.Collation
+	if coll == collations.Unknown {
+		coll = ast.cfg.Collation
 	}
+
+	column := NewColumn(col.V, typ, coll)
 	if !column.typed {
 		ast.untyped++
 	}
@@ -226,13 +225,17 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 	if err != nil {
 		return nil, err
 	}
-	column := NewColumn(idx)
+	var typ querypb.Type = -1
+	var coll collations.ID
 	if ast.cfg.ResolveType != nil {
-		column.Type, column.Collation.Collation, column.typed = ast.cfg.ResolveType(colname)
+		typ, coll, _ = ast.cfg.ResolveType(colname)
 	}
-	if column.Collation.Collation == collations.Unknown {
-		column.Collation.Collation = ast.cfg.Collation
+	if coll == collations.Unknown {
+		coll = ast.cfg.Collation
 	}
+
+	column := NewColumn(idx, typ, coll)
+
 	if !column.typed {
 		ast.untyped++
 	}
@@ -509,7 +512,7 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 	case *sqlparser.Argument:
 		return ast.translateBindVar(node)
 	case sqlparser.ListArg:
-		return NewBindVarTuple(string(node)), nil
+		return NewBindVarTuple(string(node), ast.cfg.Collation), nil
 	case *sqlparser.Literal:
 		return translateLiteral(node, ast.cfg.Collation)
 	case *sqlparser.AndExpr:
@@ -637,5 +640,5 @@ func (fields FieldResolver) Type(expr sqlparser.Expr) (sqltypes.Type, collations
 			}
 		}
 	}
-	return 0, 0, false
+	return -1, collations.Unknown, false
 }

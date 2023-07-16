@@ -65,7 +65,7 @@ func TestTypeOf(t *testing.T) {
 	t.Run("Check when offset is out of bounds", func(t *testing.T) {
 		c.Offset = 10
 		typ, flag := c.typeof(env, fields)
-		if typ != sqltypes.Null || flag != flagAmbiguousType {
+		if typ != -1 || flag != flagAmbiguousType {
 			t.Errorf("typeof() failed, expected sqltypes.Null and flagAmbiguousType, got %v and %v", typ, flag)
 		}
 	})

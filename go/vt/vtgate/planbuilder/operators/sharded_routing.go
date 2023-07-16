@@ -652,7 +652,10 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{Collation: ctx.SemTable.Collation})
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.SemTable.TypeForExpr,
+		})
 		if ee != nil {
 			return ee
 		}

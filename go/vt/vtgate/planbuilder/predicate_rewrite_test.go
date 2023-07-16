@@ -103,10 +103,12 @@ func TestFuzzRewriting(t *testing.T) {
 			simplified := sqlparser.RewritePredicate(predicate)
 
 			original, err := evalengine.Translate(predicate, &evalengine.Config{
+				Collation:     collations.Default(),
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
+				Collation:     collations.Default(),
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)

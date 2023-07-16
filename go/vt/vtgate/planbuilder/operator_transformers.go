@@ -177,12 +177,11 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		case operators.Eval:
 			return e.EExpr
 		case operators.Offset:
-			t := ctx.SemTable.ExprTypes[e.Expr]
-			return &evalengine.Column{
-				Offset:    e.Offset,
-				Type:      t.Type,
-				Collation: collations.TypedCollation{},
+			t, found := ctx.SemTable.ExprTypes[e.Expr]
+			if !found {
+				return evalengine.NewColumn(e.Offset, -1, collations.CollationBinaryID)
 			}
+			return evalengine.NewColumn(e.Offset, t.Type, t.Collation)
 		default:
 			failed = true
 			return nil
@@ -251,6 +250,7 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 	// this might already have been done on the operators
 	if predicate == nil {
 		predicate, err = evalengine.Translate(ast, &evalengine.Config{
+			ResolveType:   ctx.SemTable.TypeForExpr,
 			ResolveColumn: resolveFromPlan(ctx, plan, true),
 			Collation:     ctx.SemTable.Collation,
 		})

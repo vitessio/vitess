@@ -192,33 +192,45 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 }
 
 // NewBindVar returns a bind variable
-func NewBindVar(key string) *BindVariable {
+func NewBindVar(key string, typ sqltypes.Type, col collations.ID) *BindVariable {
 	return &BindVariable{
-		Key: key,
+		Key:  key,
+		Type: typ,
 		Collation: collations.TypedCollation{
-			Collation:    collations.Unknown,
+			Collation:    col,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireUnicode,
 		},
+		typed: typ >= 0,
 	}
 }
 
 // NewBindVarTuple returns a bind variable containing a tuple
-func NewBindVarTuple(key string) *BindVariable {
+func NewBindVarTuple(key string, col collations.ID) *BindVariable {
 	return &BindVariable{
-		Key:   key,
-		Type:  sqltypes.Tuple,
+		Key:  key,
+		Type: sqltypes.Tuple,
+		Collation: collations.TypedCollation{
+			Collation:    col,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireUnicode,
+		},
 		typed: true,
 	}
 }
 
 // NewColumn returns a column expression
-func NewColumn(offset int) *Column {
-	return NewColumnWithCollation(offset, collations.SystemCollation)
-}
-
-func NewColumnWithCollation(offset int, coll collations.TypedCollation) *Column {
-	return &Column{Offset: offset, Type: -1, Collation: coll}
+func NewColumn(offset int, typ sqltypes.Type, col collations.ID) *Column {
+	return &Column{
+		Offset: offset,
+		Type:   typ,
+		Collation: collations.TypedCollation{
+			Collation:    col,
+			Coercibility: collations.CoerceImplicit,
+			Repertoire:   collations.RepertoireUnicode,
+		},
+		typed: typ >= 0,
+	}
 }
 
 // NewTupleExpr returns a tuple expression

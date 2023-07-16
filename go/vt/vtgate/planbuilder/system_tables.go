@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -106,7 +107,10 @@ func extractInfoSchemaRoutingPredicate(
 		return
 	}
 
-	evalExpr, err = evalengine.Translate(other, &evalengine.Config{ResolveColumn: operators.NotImplementedSchemaInfoResolver})
+	evalExpr, err = evalengine.Translate(other, &evalengine.Config{
+		Collation:     collations.SystemCollation.Collation,
+		ResolveColumn: operators.NotImplementedSchemaInfoResolver,
+	})
 	if err != nil {
 		if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			// This just means we can't rewrite this particular expression,

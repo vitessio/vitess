@@ -86,7 +86,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
 		}
-		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions))
+		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions), -1, collations.Default())
 		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)
 	}
 	return evalExpr, nil
