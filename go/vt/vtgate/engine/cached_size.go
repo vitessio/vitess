@@ -1097,6 +1097,20 @@ func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field ThrottledAppRule *vitess.io/vitess/go/vt/proto/topodata.ThrottledAppRule
+	size += cached.ThrottledAppRule.CachedSize(true)
+	return size
+}
 
 //go:nocheckptr
 func (cached *Update) CachedSize(alloc bool) int64 {
