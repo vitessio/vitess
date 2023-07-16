@@ -63,7 +63,7 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 		throttledAppRule.ExpiresAt = logutil.TimeToProto(time.Now().Add(throttledAppDuration))
 		updateThrottlerConfigOptions.ThrottledApp = &throttledAppRule
 	} else if unthrottledAppRule.Name != "" {
-		unthrottledAppRule.ExpiresAt = logutil.TimeToProto(time.Time{})
+		unthrottledAppRule.ExpiresAt = logutil.TimeToProto(time.Now())
 		updateThrottlerConfigOptions.ThrottledApp = &unthrottledAppRule
 	}
 
