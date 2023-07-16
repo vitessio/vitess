@@ -106,6 +106,8 @@ type TabletManagerClient interface {
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (TabletManager_RestoreFromBackupClient, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(ctx context.Context, in *tabletmanagerdata.CheckThrottlerRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CheckThrottlerResponse, error)
 }
 
 type tabletManagerClient struct {
@@ -594,6 +596,15 @@ func (x *tabletManagerRestoreFromBackupClient) Recv() (*tabletmanagerdata.Restor
 	return m, nil
 }
 
+func (c *tabletManagerClient) CheckThrottler(ctx context.Context, in *tabletmanagerdata.CheckThrottlerRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CheckThrottlerResponse, error) {
+	out := new(tabletmanagerdata.CheckThrottlerResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/CheckThrottler", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TabletManagerServer is the server API for TabletManager service.
 // All implementations must embed UnimplementedTabletManagerServer
 // for forward compatibility
@@ -681,6 +692,8 @@ type TabletManagerServer interface {
 	Backup(*tabletmanagerdata.BackupRequest, TabletManager_BackupServer) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error)
 	mustEmbedUnimplementedTabletManagerServer()
 }
 
@@ -831,6 +844,9 @@ func (UnimplementedTabletManagerServer) Backup(*tabletmanagerdata.BackupRequest,
 }
 func (UnimplementedTabletManagerServer) RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error {
 	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
+}
+func (UnimplementedTabletManagerServer) CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckThrottler not implemented")
 }
 func (UnimplementedTabletManagerServer) mustEmbedUnimplementedTabletManagerServer() {}
 
@@ -1715,6 +1731,24 @@ func (x *tabletManagerRestoreFromBackupServer) Send(m *tabletmanagerdata.Restore
 	return x.ServerStream.SendMsg(m)
 }
 
+func _TabletManager_CheckThrottler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.CheckThrottlerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).CheckThrottler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/CheckThrottler",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).CheckThrottler(ctx, req.(*tabletmanagerdata.CheckThrottlerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TabletManager_ServiceDesc is the grpc.ServiceDesc for TabletManager service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1905,6 +1939,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PromoteReplica",
 			Handler:    _TabletManager_PromoteReplica_Handler,
+		},
+		{
+			MethodName: "CheckThrottler",
+			Handler:    _TabletManager_CheckThrottler_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

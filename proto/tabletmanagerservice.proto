@@ -175,4 +175,6 @@ service TabletManager {
   // RestoreFromBackup deletes all local data and restores it from the latest backup.
   rpc RestoreFromBackup(tabletmanagerdata.RestoreFromBackupRequest) returns (stream tabletmanagerdata.RestoreFromBackupResponse) {};
 
+  // CheckThrottler issues a 'check' on a tablet's throttler
+  rpc CheckThrottler(tabletmanagerdata.CheckThrottlerRequest) returns (tabletmanagerdata.CheckThrottlerResponse) {};
 }
