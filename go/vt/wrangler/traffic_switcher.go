@@ -252,10 +252,13 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 			rules := shardRoutingRules.Rules
 			for _, rule := range rules {
-				if rule.ToKeyspace == ts.SourceKeyspaceName() {
+				switch rule.ToKeyspace {
+				case ts.SourceKeyspaceName():
 					state.ShardsNotYetSwitched = append(state.ShardsNotYetSwitched, rule.Shard)
-				} else {
+				case ts.TargetKeyspaceName():
 					state.ShardsAlreadySwitched = append(state.ShardsAlreadySwitched, rule.Shard)
+				default:
+					// Not a relevant rule.
 				}
 			}
 		} else {
