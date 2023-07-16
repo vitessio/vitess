@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
@@ -49,7 +50,7 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 		Cells:                           cells,
 		TabletTypes:                     tabletTypes,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
-		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)],
+		OnDDL:                           binlogdatapb.OnDDLAction_EXEC.String(),
 	}
 	mtwf := &VReplicationWorkflow{
 		workflowType: MoveTablesWorkflow,
@@ -280,7 +281,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
 		Timeout:                         DefaultActionTimeout,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
-		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_STOP)],
+		OnDDL:                           binlogdatapb.OnDDLAction_STOP.String(),
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -298,6 +299,63 @@ func TestMoveTablesV2(t *testing.T) {
 	tme.expectNoPreviousReverseJournals()
 	require.NoError(t, testReverse(t, wf))
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+}
+
+// TestMoveTablesShardByShard ensures that shard by shard
+// migrations work as expected.
+func TestMoveTablesShardByShard(t *testing.T) {
+	ctx := context.Background()
+	shards := []string{"-80", "80-"}
+	shardsToMove := shards[0:1]
+	p := &VReplicationWorkflowParams{
+		Workflow:                        "test",
+		WorkflowType:                    MoveTablesWorkflow,
+		SourceKeyspace:                  "ks1",
+		SourceShards:                    shardsToMove, // shard by shard
+		TargetShards:                    shardsToMove, // shard by shard
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
+		OnDDL:                           binlogdatapb.OnDDLAction_STOP.String(),
+	}
+	tme := newTestTablePartialMigrater(ctx, t, shards, shards[0:1], "select * %s")
+	defer tme.stopTablets(t)
+
+	// Save some unrelated shard routing rules to be sure that
+	// they don't interfere in any way.
+	srr, err := tme.ts.GetShardRoutingRules(ctx)
+	require.NoError(t, err)
+	srr.Rules = append(srr.Rules, &vschema.ShardRoutingRule{
+		FromKeyspace: "wut",
+		Shard:        "40-80",
+		ToKeyspace:   "bloop",
+	})
+	err = tme.ts.SaveShardRoutingRules(ctx, srr)
+	require.NoError(t, err)
+
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	require.True(t, wf.ts.isPartialMigration, "expected partial shard migration")
+
+	trafficSwitchResults := fmt.Sprintf("Reads partially switched, for shards: %s. Writes partially switched, for shards: %s",
+		strings.Join(shardsToMove, ","), strings.Join(shardsToMove, ","))
+	tme.expectNoPreviousJournals()
+	expectMoveTablesQueries(t, tme, p)
+	tme.expectNoPreviousJournals()
+	require.NoError(t, testSwitchForward(t, wf))
+	require.Equal(t, trafficSwitchResults, wf.CurrentState())
+
+	/* TODO: Figure out why this isn't working...
+	tme.expectNoPreviousJournals()
+	tme.expectNoPreviousReverseJournals()
+	require.NoError(t, testReverse(t, wf))
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	*/
 }
 
 func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server, cnt int) {
@@ -485,7 +543,7 @@ func TestReshardV2(t *testing.T) {
 		TabletTypes:                     "replica,rdonly,primary",
 		Timeout:                         DefaultActionTimeout,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
-		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)],
+		OnDDL:                           binlogdatapb.OnDDLAction_EXEC_IGNORE.String(),
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
 	defer tme.stopTablets(t)
