@@ -520,6 +520,13 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 	return s.tm.RestoreFromBackup(ctx, logger, request)
 }
 
+func (s *server) CheckThrottler(ctx context.Context, request *tabletmanagerdatapb.CheckThrottlerRequest) (response *tabletmanagerdatapb.CheckThrottlerResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "CheckThrottler", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response, err = s.tm.CheckThrottler(ctx, request)
+	return response, err
+}
+
 // registration glue
 
 func init() {
