@@ -1271,6 +1271,11 @@ func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logg
 	return nil
 }
 
+func (fra *fakeRPCTM) CheckThrottler(ctx context.Context, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func tmRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.RestoreFromBackupRequest) {
 	stream, err := client.RestoreFromBackup(ctx, tablet, req)
 	if err != nil {
