@@ -303,6 +303,8 @@ func TestMoveTablesV2(t *testing.T) {
 
 // TestMoveTablesShardByShard ensures that shard by shard
 // migrations work as expected.
+// This test moves tables from one sharded keyspace (ks1) to
+// another sharded keyspace (ks2), but only for the -80 shard.
 func TestMoveTablesShardByShard(t *testing.T) {
 	ctx := context.Background()
 	shards := []string{"-80", "80-"}
@@ -328,11 +330,18 @@ func TestMoveTablesShardByShard(t *testing.T) {
 	// they don't interfere in any way.
 	srr, err := tme.ts.GetShardRoutingRules(ctx)
 	require.NoError(t, err)
-	srr.Rules = append(srr.Rules, &vschema.ShardRoutingRule{
-		FromKeyspace: "wut",
-		Shard:        "40-80",
-		ToKeyspace:   "bloop",
-	})
+	srr.Rules = append(srr.Rules, []*vschema.ShardRoutingRule{
+		{
+			FromKeyspace: "wut",
+			Shard:        "40-80",
+			ToKeyspace:   "bloop",
+		},
+		{
+			FromKeyspace: "haylo",
+			Shard:        "-80",
+			ToKeyspace:   "blarg",
+		},
+	}...)
 	err = tme.ts.SaveShardRoutingRules(ctx, srr)
 	require.NoError(t, err)
 
@@ -342,20 +351,17 @@ func TestMoveTablesShardByShard(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	require.True(t, wf.ts.isPartialMigration, "expected partial shard migration")
 
-	trafficSwitchResults := fmt.Sprintf("Reads partially switched, for shards: %s. Writes partially switched, for shards: %s",
-		strings.Join(shardsToMove, ","), strings.Join(shardsToMove, ","))
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme, p)
 	tme.expectNoPreviousJournals()
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, trafficSwitchResults, wf.CurrentState())
+	require.Equal(t, "All Reads Switched. All Writes Switched", wf.CurrentState())
+	require.NoError(t, err)
 
-	/* TODO: Figure out why this isn't working...
 	tme.expectNoPreviousJournals()
 	tme.expectNoPreviousReverseJournals()
 	require.NoError(t, testReverse(t, wf))
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
-	*/
 }
 
 func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server, cnt int) {

@@ -346,9 +346,9 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	now := time.Now().Unix()
 
 	for i, shard := range shards {
-		var streamInfoRows []string
-		var streamExtInfoRows []string
 		for _, shardToMove := range shardsToMove {
+			var streamInfoRows []string
+			var streamExtInfoRows []string
 			if shardToMove == shard {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: "ks1",
@@ -366,25 +366,25 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", i+1, bls))
 				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||||0", i+1, now, now))
 			}
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
+			tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|message|cell|tablet_types",
+				"int64|varchar|varchar|varchar|varchar"),
+				streamInfoRows...))
+			tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
+				streamExtInfoRows...))
+			tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
+				streamExtInfoRows...))
 		}
-		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
-		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types",
-			"int64|varchar|varchar|varchar|varchar"),
-			streamInfoRows...))
-		tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
-			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
-			streamExtInfoRows...))
-		tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
-			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
-			streamExtInfoRows...))
 	}
 
 	for i, shard := range shards {
-		var streamInfoRows []string
 		for _, shardToMove := range shardsToMove {
+			var streamInfoRows []string
 			if shardToMove == shard {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: "ks2",
@@ -400,22 +400,15 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 					},
 				}
 				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", i+1, bls))
+				tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
 			}
+			tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|message|cell|tablet_types",
+				"int64|varchar|varchar|varchar|varchar"),
+				streamInfoRows...),
+			)
 		}
-		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
-		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types",
-			"int64|varchar|varchar|varchar|varchar"),
-			streamInfoRows...),
-		)
 	}
-
-	srr := make(map[string]string, len(shards))
-	for _, shard := range shards {
-		srr[fmt.Sprintf("ks2.%s", shard)] = "ks1"
-	}
-	err = topotools.SaveShardRoutingRules(ctx, tme.ts, srr)
-	require.NoError(t, err)
 
 	tme.targetKeyspace = "ks2"
 	return tme
