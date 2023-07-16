@@ -141,4 +141,7 @@ type RPCTM interface {
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.
 	HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error)
+
+	// Throttler
+	CheckThrottler(ctx context.Context, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error)
 }

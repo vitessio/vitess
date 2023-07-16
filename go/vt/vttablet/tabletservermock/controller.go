@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -216,6 +217,11 @@ func (tqsc *Controller) BroadcastHealth() {
 // TopoServer is part of the tabletserver.Controller interface.
 func (tqsc *Controller) TopoServer() *topo.Server {
 	return tqsc.TS
+}
+
+// CheckThrottler is part of the tabletserver.Controller interface
+func (tqsc *Controller) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+	return nil
 }
 
 // EnterLameduck implements tabletserver.Controller.
