@@ -37,7 +37,15 @@ type (
 	queryGen struct {
 		r         *rand.Rand
 		genConfig sqlparser.ExprGeneratorConfig
-		maxCols   int
+		maxTables int
+		maxAggrs  int
+		maxGBs    int
+		// maxCols = 0 indicates no limit
+		maxCols int
+		// maxRows = 0 indicates no limit
+		maxRows      int
+		schemaTables []tableT
+		sel          *sqlparser.Select
 	}
 	column struct {
 		name string
@@ -58,11 +66,22 @@ type (
 
 var _ sqlparser.ExprGenerator = (*tableT)(nil)
 var _ sqlparser.ExprGenerator = (*column)(nil)
+var _ sqlparser.ExprGenerator = (*queryGen)(nil)
 
-func newQueryGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) queryGen {
-	return queryGen{
-		r:         r,
-		genConfig: genConfig,
+func newQueryGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGen {
+	if maxTables <= 0 {
+		log.Fatalf("maxTables must be at least 1, currently %d\n", maxTables)
+	}
+
+	return &queryGen{
+		r:            r,
+		genConfig:    genConfig,
+		maxTables:    maxTables,
+		maxAggrs:     maxAggrs,
+		maxGBs:       maxGBs,
+		maxCols:      1,
+		maxRows:      1,
+		schemaTables: schemaTables,
 	}
 }
 
@@ -112,6 +131,14 @@ func (t *tableT) addColumns(col ...column) {
 	}
 }
 
+func (t *tableT) clone() *tableT {
+	return &tableT{
+		tableExpr: sqlparser.CloneSimpleTableExpr(t.tableExpr),
+		alias:     t.alias,
+		cols:      slices.Clone(t.cols),
+	}
+}
+
 func (c *column) Generate(_ *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
 	if c.typ == genConfig.Type {
 		return c.getASTExpr()
@@ -138,51 +165,60 @@ func (t *tableT) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig)
 	return nil
 }
 
-func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
+// Generate generates a scalar subquery based on qg
+func (qg *queryGen) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+	var newSchemaTables []tableT
+	for _, tbl := range qg.schemaTables {
+		newSchemaTables = append(newSchemaTables, *tbl.clone())
+	}
+
+	newQG := newQueryGenerator(r, genConfig, qg.maxTables, qg.maxAggrs, qg.maxGBs, newSchemaTables)
+	newQG.maxRows = 1
+	newQG.maxCols = 1
+	newQG.randomQuery()
+
+	return &sqlparser.Subquery{Select: newQG.sel}
+}
+
+func (qg *queryGen) randomQuery() {
 	// make sure the random expressions can generally not contain aggregates; change appropriately
 	qg.genConfig = qg.genConfig.CannotAggregateConfig()
 
-	sel := &sqlparser.Select{}
-	sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
+	qg.sel = &sqlparser.Select{}
+	qg.sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
 
 	// select distinct (fails with group by bigint)
 	isDistinct := qg.r.Intn(2) < 1
 	if isDistinct {
-		sel.MakeDistinct()
+		qg.sel.MakeDistinct()
 	}
 
 	// create both tables and join at the same time since both occupy the from clause
-	tables, isJoin := qg.createTablesAndJoin(schemaTables, sel)
+	tables, isJoin := qg.createTablesAndJoin()
 
 	// canAggregate determines if the query will have
 	// aggregate columns, group by, and having
 	canAggregate := qg.r.Intn(4) > 0
 
 	var (
-		groupBy          sqlparser.GroupBy
-		groupSelectExprs sqlparser.SelectExprs
-		grouping         []column
-		aggrSelectExprs  sqlparser.SelectExprs
-		aggregates       []column
+		grouping, aggregates []column
 	)
 	// TODO: distinct makes vitess think there is grouping on aggregation columns
 	if canAggregate {
 		if testFailingQueries || !isDistinct {
 			// group by
-			groupBy, groupSelectExprs, grouping = qg.createGroupBy(tables)
-			sel.AddSelectExprs(groupSelectExprs)
-			sel.GroupBy = groupBy
+			if qg.maxRows == 0 {
+				grouping = qg.createGroupBy(tables)
+			}
 		}
 
 		// aggregate columns
-		aggrSelectExprs, aggregates = qg.createAggregations(tables)
-		sel.AddSelectExprs(aggrSelectExprs)
-		// sel.GroupBy = append(sel.GroupBy, aggrExprs...)
+		aggregates = qg.createAggregations(tables)
 
 		// having
 		isHaving := qg.r.Intn(2) < 1
 		if isHaving {
-			sel.AddHaving(sqlparser.AndExpressions(qg.createHavingPredicates(grouping)...))
+			qg.createHavingPredicates(grouping)
 		}
 	}
 
@@ -190,11 +226,11 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 	// TODO: order fails with distinct and outer joins
 	isOrdered := qg.r.Intn(2) < 1 && (!isDistinct || testFailingQueries) && (!isJoin || testFailingQueries)
 	if isOrdered {
-		sel.OrderBy = qg.createOrderBy(groupBy, aggrSelectExprs)
+		qg.createOrderBy()
 	}
 
 	// where
-	sel.AddWhere(sqlparser.AndExpressions(qg.createWherePredicates(tables)...))
+	qg.createWherePredicates(tables)
 
 	var (
 		newTable tableT
@@ -217,7 +253,7 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 	}
 
 	// make sure we have at least one select expression
-	for isRandomExpr || len(sel.SelectExprs) == 0 {
+	for isRandomExpr || len(qg.sel.SelectExprs) == 0 {
 		// TODO: if the random expression is an int literal,
 		// TODO: and if the query is (potentially) an aggregate query,
 		// TODO: then we must group by the random expression,
@@ -232,9 +268,9 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 		}
 
 		// TODO: select distinct [literal] fails
-		sel.Distinct = false
+		qg.sel.Distinct = false
 
-		sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(randomExpr, "crandom0"))
+		qg.sel.SelectExprs = append(qg.sel.SelectExprs, sqlparser.NewAliasedExpr(randomExpr, "crandom0"))
 		newTable.addColumns(column{
 			name: "crandom0",
 			typ:  typ,
@@ -242,20 +278,30 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 
 		// make sure to add the random expression to group by and order by for only_full_group_by
 		if canAggregate {
-			sel.AddGroupBy(randomExpr)
+			qg.sel.AddGroupBy(randomExpr)
 			if isOrdered {
-				sel.AddOrder(sqlparser.NewOrder(randomExpr, getRandomOrderDirection(qg.r)))
+				qg.sel.AddOrder(sqlparser.NewOrder(randomExpr, getRandomOrderDirection(qg.r)))
 			}
 		}
 
 		break
 	}
 
+	if qg.maxCols > 0 {
+		// remove SelectExprs randomly until there are qg.maxCols amount
+		for len(qg.sel.SelectExprs) > qg.maxCols {
+			// select a random index and remove it from SelectExprs
+			idx := qg.r.Intn(len(qg.sel.SelectExprs))
+			qg.sel.SelectExprs[idx] = qg.sel.SelectExprs[len(qg.sel.SelectExprs)-1]
+			qg.sel.SelectExprs = qg.sel.SelectExprs[:len(qg.sel.SelectExprs)-1]
+		}
+	}
+
 	// only add a limit if there is an ordering
 	// TODO: limit fails a lot
-	isLimit := qg.r.Intn(2) < 1 && len(sel.OrderBy) > 0 && testFailingQueries
+	isLimit := qg.r.Intn(2) < 1 && len(qg.sel.OrderBy) > 0 && testFailingQueries
 	if isLimit {
-		sel.Limit = qg.createLimit()
+		qg.createLimit()
 	}
 
 	// alias the grouping columns randomly
@@ -272,31 +318,29 @@ func (qg queryGen) randomQuery(schemaTables []tableT) *sqlparser.Select {
 	newTable.addColumns(aggregates...)
 
 	// add new table to schemaTables
-	newTable.tableExpr = sqlparser.NewDerivedTable(false, sel)
-	schemaTables = append(schemaTables, newTable)
+	newTable.tableExpr = sqlparser.NewDerivedTable(false, qg.sel)
+	qg.schemaTables = append(qg.schemaTables, newTable)
 
 	// derived tables (partially unsupported)
 	// TODO: derived tables fails a lot
 	if qg.r.Intn(10) < 1 && testFailingQueries {
-		sel = qg.randomQuery(schemaTables)
+		qg.randomQuery()
 	}
-
-	return sel
 }
 
-func (qg queryGen) createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Select) ([]tableT, bool) {
+func (qg *queryGen) createTablesAndJoin() ([]tableT, bool) {
 	var tables []tableT
 	// add at least one of original emp/dept tables for now because derived tables have nil columns
-	tables = append(tables, schemaTables[qg.r.Intn(2)])
+	tables = append(tables, qg.schemaTables[qg.r.Intn(2)])
 
 	tables[0].setAlias("tbl0")
-	sel.From = append(sel.From, newAliasedTable(tables[0], "tbl0"))
+	qg.sel.From = append(qg.sel.From, newAliasedTable(tables[0], "tbl0"))
 
-	numTables := qg.r.Intn(len(schemaTables))
+	numTables := qg.r.Intn(qg.maxTables)
 	for i := 0; i < numTables; i++ {
-		tables = append(tables, randomEl(qg.r, schemaTables))
+		tables = append(tables, randomEl(qg.r, qg.schemaTables))
 		alias := fmt.Sprintf("tbl%d", i+1)
-		sel.From = append(sel.From, newAliasedTable(tables[i+1], alias))
+		qg.sel.From = append(qg.sel.From, newAliasedTable(tables[i+1], alias))
 		tables[i+1].setAlias(alias)
 	}
 
@@ -304,12 +348,12 @@ func (qg queryGen) createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Sel
 	isJoin := qg.r.Intn(2) < 1 && testFailingQueries
 	if isJoin {
 		// TODO: do nested joins
-		newTable := randomEl(qg.r, schemaTables)
+		newTable := randomEl(qg.r, qg.schemaTables)
 		alias := fmt.Sprintf("tbl%d", numTables+1)
 		newTable.setAlias(alias)
 		tables = append(tables, newTable)
 
-		qg.createJoin(tables, sel)
+		qg.createJoin(tables)
 	}
 
 	return tables, isJoin
@@ -317,31 +361,34 @@ func (qg queryGen) createTablesAndJoin(schemaTables []tableT, sel *sqlparser.Sel
 
 // creates a left join (without the condition) between the last table in sel and newTable
 // tables should have one more table than sel
-func (qg queryGen) createJoin(tables []tableT, sel *sqlparser.Select) {
-	n := len(sel.From)
+func (qg *queryGen) createJoin(tables []tableT) {
+	n := len(qg.sel.From)
 	if len(tables) != n+1 {
-		log.Fatalf("sel has %d tables and tables has %d tables", len(sel.From), n)
+		log.Fatalf("sel has %d tables and tables has %d tables", len(qg.sel.From), n)
 	}
 
 	joinPredicate := sqlparser.AndExpressions(qg.createJoinPredicates(tables)...)
 	joinCondition := sqlparser.NewJoinCondition(joinPredicate, nil)
 	newTable := newAliasedTable(tables[n], fmt.Sprintf("tbl%d", n))
-	sel.From[n-1] = sqlparser.NewJoinTableExpr(sel.From[n-1], getRandomJoinType(qg.r), newTable, joinCondition)
+	qg.sel.From[n-1] = sqlparser.NewJoinTableExpr(qg.sel.From[n-1], getRandomJoinType(qg.r), newTable, joinCondition)
 }
 
 // returns 1-3 random expressions based on the last two elements of tables
 // tables should have at least two elements
-func (qg queryGen) createJoinPredicates(tables []tableT) sqlparser.Exprs {
+func (qg *queryGen) createJoinPredicates(tables []tableT) sqlparser.Exprs {
 	if len(tables) < 2 {
 		log.Fatalf("tables has %d elements, needs at least 2", len(tables))
 	}
 
-	return qg.createRandomExprs(1, &tables[len(tables)-2], &tables[len(tables)-1])
+	return qg.createRandomExprs(1, 3, &tables[len(tables)-2], &tables[len(tables)-1])
 }
 
 // returns the grouping columns as three types: sqlparser.GroupBy, sqlparser.SelectExprs, []column
-func (qg queryGen) createGroupBy(tables []tableT) (groupBy sqlparser.GroupBy, groupSelectExprs sqlparser.SelectExprs, grouping []column) {
-	numGBs := qg.r.Intn(3)
+func (qg *queryGen) createGroupBy(tables []tableT) (grouping []column) {
+	if qg.maxGBs <= 0 {
+		return
+	}
+	numGBs := qg.r.Intn(qg.maxGBs + 1)
 	for i := 0; i < numGBs; i++ {
 		tblIdx := qg.r.Intn(len(tables))
 		col := randomEl(qg.r, tables[tblIdx].cols)
@@ -349,12 +396,12 @@ func (qg queryGen) createGroupBy(tables []tableT) (groupBy sqlparser.GroupBy, gr
 		if col.typ == "date" && !testFailingQueries {
 			continue
 		}
-		groupBy = append(groupBy, col.getASTExpr())
+		qg.sel.GroupBy = append(qg.sel.GroupBy, col.getASTExpr())
 
 		// add to select
 		if qg.r.Intn(2) < 1 {
 			alias := fmt.Sprintf("cgroup%d", len(grouping))
-			groupSelectExprs = append(groupSelectExprs, newAliasedColumn(col, alias))
+			qg.sel.SelectExprs = append(qg.sel.SelectExprs, newAliasedColumn(col, alias))
 			// TODO: alias in a separate function to properly generate the having clause
 			//col.name = sqlparser.NewColName(alias)
 			grouping = append(grouping, col)
@@ -365,12 +412,13 @@ func (qg queryGen) createGroupBy(tables []tableT) (groupBy sqlparser.GroupBy, gr
 }
 
 // returns the aggregation columns as three types: sqlparser.SelectExprs, []column
-func (qg queryGen) createAggregations(tables []tableT) (aggrSelectExprs sqlparser.SelectExprs, aggregates []column) {
+func (qg *queryGen) createAggregations(tables []tableT) (aggregates []column) {
 	qg.genConfig = qg.genConfig.IsAggregateConfig()
-	aggrExprs := qg.createRandomExprs(0,
+	aggrExprs := qg.createRandomExprs(0, qg.maxAggrs,
 		slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
 			return &t
 		})...)
+	qg.genConfig = qg.genConfig.CannotAggregateConfig()
 
 	for i, expr := range aggrExprs {
 		// TODO: min/max often fails
@@ -382,56 +430,69 @@ func (qg queryGen) createAggregations(tables []tableT) (aggrSelectExprs sqlparse
 		} else {
 			aggregates = append(aggregates, column{name: sqlparser.String(expr)})
 		}
-		aggrSelectExprs = append(aggrSelectExprs, sqlparser.NewAliasedExpr(expr, alias))
+		qg.sel.SelectExprs = append(qg.sel.SelectExprs, sqlparser.NewAliasedExpr(expr, alias))
 	}
 
 	return
 }
 
-// orders on all non-aggregate SelectExprs and independently at random on all aggregate SelectExprs of sel
-func (qg queryGen) createOrderBy(groupBy sqlparser.GroupBy, aggrExprs sqlparser.SelectExprs) (orderBy sqlparser.OrderBy) {
-	// always order on grouping columns
-	for i := range groupBy {
-		orderBy = append(orderBy, sqlparser.NewOrder(groupBy[i], getRandomOrderDirection(qg.r)))
+// orders on all grouping expressions and on random SelectExprs
+func (qg *queryGen) createOrderBy() {
+	// always order on grouping expressions
+	for _, expr := range qg.sel.GroupBy {
+		qg.sel.OrderBy = append(qg.sel.OrderBy, sqlparser.NewOrder(expr, getRandomOrderDirection(qg.r)))
 	}
 
-	// randomly order on aggregation columns
-	for i := range aggrExprs {
-		if aliasedExpr, ok := aggrExprs[i].(*sqlparser.AliasedExpr); ok && qg.r.Intn(2) < 1 {
-			orderBy = append(orderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection(qg.r)))
+	// randomly order on SelectExprs
+	for _, selExpr := range qg.sel.SelectExprs {
+		if aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr); ok && qg.r.Intn(2) < 1 {
+			literal, ok := aliasedExpr.Expr.(*sqlparser.Literal)
+			isIntLiteral := ok && literal.Type == sqlparser.IntVal
+			if isIntLiteral {
+				continue
+			}
+			qg.sel.OrderBy = append(qg.sel.OrderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection(qg.r)))
 		}
 	}
-
-	return
 }
 
 // returns 0-2 random expressions based on tables
-func (qg queryGen) createWherePredicates(tables []tableT) sqlparser.Exprs {
-	// TODO: create gen config outside
-	return qg.createRandomExprs(0,
-		slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+func (qg *queryGen) createWherePredicates(tables []tableT) {
+	exprGenerators := slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
+	// TODO: when qg is added as an expression generator
+	if qg.r.Intn(5) < 1 {
+		exprGenerators = append(exprGenerators, qg)
+	}
+	predicates := qg.createRandomExprs(0, 2, exprGenerators...)
+	qg.sel.AddWhere(sqlparser.AndExpressions(predicates...))
 }
 
 // creates predicates for the having clause comparing a column to a random expression
-func (qg queryGen) createHavingPredicates(grouping []column) sqlparser.Exprs {
+func (qg *queryGen) createHavingPredicates(grouping []column) {
 	predicates := sqlparser.Exprs{}
 	if qg.r.Intn(2) < 1 && testFailingQueries {
 		// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
 		// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
-		predicates = append(predicates, qg.createRandomExprs(0,
+		predicates = append(predicates, qg.createRandomExprs(0, 2,
 			slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })...)...)
 	}
 
 	qg.genConfig = qg.genConfig.CanAggregateConfig()
-	predicates = append(predicates, qg.createRandomExprs(0,
+	predicates = append(predicates, qg.createRandomExprs(0, 2,
 		slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })...)...)
+	qg.genConfig = qg.genConfig.CannotAggregateConfig()
 
-	return predicates
+	qg.sel.AddHaving(sqlparser.AndExpressions(predicates...))
 }
 
-// returns between minExprs and minExprs + 2 random expressions using generators
-func (qg queryGen) createRandomExprs(minExprs int, generators ...sqlparser.ExprGenerator) (predicates sqlparser.Exprs) {
-	numPredicates := qg.r.Intn(3) + minExprs
+// returns between minExprs and maxExprs random expressions using generators
+func (qg *queryGen) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates sqlparser.Exprs) {
+	if minExprs > maxExprs {
+		log.Fatalf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs)
+	} else if maxExprs <= 0 {
+		return
+	}
+	numPredicates := qg.r.Intn(maxExprs-minExprs+1) + minExprs
 	for i := 0; i < numPredicates; i++ {
 		predicates = append(predicates, qg.getRandomExpr(generators...))
 	}
@@ -440,20 +501,20 @@ func (qg queryGen) createRandomExprs(minExprs int, generators ...sqlparser.ExprG
 }
 
 // getRandomExpr returns a random expression
-func (qg queryGen) getRandomExpr(generators ...sqlparser.ExprGenerator) sqlparser.Expr {
+func (qg *queryGen) getRandomExpr(generators ...sqlparser.ExprGenerator) sqlparser.Expr {
 	g := sqlparser.NewGenerator(qg.r, 2, generators...)
 	return g.Expression(qg.genConfig)
 }
 
 // creates sel.Limit
-func (qg queryGen) createLimit() *sqlparser.Limit {
+func (qg *queryGen) createLimit() {
 	limitNum := qg.r.Intn(10)
 	if qg.r.Intn(2) < 1 {
 		offset := qg.r.Intn(10)
-		return sqlparser.NewLimit(offset, limitNum)
+		qg.sel.Limit = sqlparser.NewLimit(offset, limitNum)
+	} else {
+		qg.sel.Limit = sqlparser.NewLimitWithoutOffset(limitNum)
 	}
-
-	return sqlparser.NewLimitWithoutOffset(limitNum)
 }
 
 func getRandomOrderDirection(r *rand.Rand) sqlparser.OrderDirection {

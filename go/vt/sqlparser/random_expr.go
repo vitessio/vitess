@@ -92,6 +92,7 @@ type Generator struct {
 	r              *rand.Rand
 	depth          int
 	maxDepth       int
+	isAggregate    bool
 	exprGenerators []ExprGenerator
 }
 
@@ -142,10 +143,24 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 	}
 
 	if genConfig.AggrRule != CannotAggregate {
-		options = append(options, func() Expr { return g.randomAggregate(genConfig.CannotAggregateConfig()) })
+		options = append(options, func() Expr {
+			g.isAggregate = true
+			return g.randomAggregate(genConfig.CannotAggregateConfig())
+		})
 	}
 
-	return g.randomOf(options)
+	expr := g.randomOf(options)
+	// if the generated expression must be an aggregate, and it is not,
+	// tack on an extra "+ count(*)" to make it aggregate
+	if genConfig.AggrRule == IsAggregate && !g.isAggregate && g.depth == 0 {
+		expr = &BinaryExpr{
+			Operator: BitAndOp,
+			Left:     expr,
+			Right:    &CountStar{},
+		}
+	}
+
+	return expr
 }
 
 func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
@@ -173,8 +188,7 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.andExpr(genConfig) },
 		func() Expr { return g.xorExpr(genConfig) },
 		func() Expr { return g.orExpr(genConfig) },
-		func() Expr { return g.comparison(genConfig.intTypeConfig()) },
-		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
+		func() Expr { return g.comparison(genConfig) },
 		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
 		func() Expr { return g.inExpr(genConfig.intTypeConfig()) },
 		func() Expr { return g.between(genConfig.intTypeConfig()) },

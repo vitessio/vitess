@@ -267,11 +267,12 @@ func TestRandom(t *testing.T) {
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true
-	for time.Now().Before(endBy) && (!t.Failed() || testFailingQueries) {
+	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
 		seed := time.Now().UnixNano()
 		fmt.Printf("seed: %d\n", seed)
-		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{})
-		query := sqlparser.String(qg.randomQuery(schemaTables))
+		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, 3, 3, 3, schemaTables)
+		qg.randomQuery()
+		query := sqlparser.String(qg.sel)
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
 		fmt.Println(query)
 		// this assumes all queries are valid mysql queries
