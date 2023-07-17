@@ -77,6 +77,6 @@ func HandlerFunc(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		http.Error(w, fmt.Sprintf("unsupported config format %s", format), http.StatusBadRequest)
+		http.Error(w, "unsupported config format", http.StatusBadRequest)
 	}
 }
