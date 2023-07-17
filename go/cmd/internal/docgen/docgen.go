@@ -52,8 +52,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // GenerateMarkdownTree generates a markdown doctree for the root cobra.Command
@@ -148,10 +146,6 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 			if out, err := sed.CombinedOutput(); err != nil {
 				return fmt.Errorf("failed to rewrite links to parent command in child %s: %w (extra: %s)", newName, err, out)
 			}
-
-			if err := os.Remove(newName + ".bak"); err != nil {
-				log.Warningf("failed to remove backup file for %s, use caution when staging files for commit: %w", newName+".bak", err)
-			}
 		default:
 			// Top-level command without children. Nothing to restructure.
 			continue
@@ -162,7 +156,7 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 }
 
 func newParentLinkSedCommand(parent string, file string) *exec.Cmd {
-	return exec.Command("sed", "-i.bak", "-e", fmt.Sprintf("s:(./%s/):(../):", parent), file)
+	return exec.Command("sed", "-i ''", "-e", fmt.Sprintf("s:(./%s/):(../):", parent), file)
 }
 
 func recursivelyDisableAutoGenTags(root *cobra.Command) {
