@@ -5763,19 +5763,6 @@ join_table:
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
-//| table_reference inner_join LATERAL subquery_or_values as_opt table_alias column_list_opt join_condition_opt
-//  {
-//    switch n := $4.(type) {
-//    case *Subquery:
-//      n.Columns = $7
-//    case *ValuesStatement:
-//      n.Columns = $7
-//    }
-//
-//    tblFac := &AliasedTableExpr{Expr:$4, As: $6}
-//
-//    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: tblFac, Condition: $8}
-//  }
 
 join_condition:
   ON expression
