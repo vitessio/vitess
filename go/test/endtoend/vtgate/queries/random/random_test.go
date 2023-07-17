@@ -84,6 +84,9 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
+	// mismatched number of columns
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) + 1 from emp as tbl0 order by count(*) desc")
+
 	// mismatched results (mismatched types)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(2 >> tbl2.mgr), sum(distinct tbl2.empno <=> 15) from emp as tbl0 left join emp as tbl2 on -32")
 
@@ -263,14 +266,14 @@ func TestRandom(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	endBy := time.Now().Add(1 * time.Second)
+	endBy := time.Now().Add(5 * time.Second)
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true
 	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
 		seed := time.Now().UnixNano()
 		fmt.Printf("seed: %d\n", seed)
-		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, 3, 3, 3, schemaTables)
+		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, 2, 2, 2, schemaTables)
 		qg.randomQuery()
 		query := sqlparser.String(qg.sel)
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)

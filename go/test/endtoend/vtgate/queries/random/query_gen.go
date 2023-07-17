@@ -82,6 +82,7 @@ func newQueryGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, ma
 		maxCols:      1,
 		maxRows:      1,
 		schemaTables: schemaTables,
+		sel:          &sqlparser.Select{},
 	}
 }
 
@@ -198,7 +199,7 @@ func (qg *queryGen) randomQuery() {
 
 	// canAggregate determines if the query will have
 	// aggregate columns, group by, and having
-	canAggregate := qg.r.Intn(4) > 0
+	canAggregate := qg.r.Intn(4) < 3
 
 	var (
 		grouping, aggregates []column
@@ -244,10 +245,13 @@ func (qg *queryGen) randomQuery() {
 	// TODO: selecting a random expression potentially with columns creates
 	// TODO: only_full_group_by related errors in Vitess
 	if testFailingQueries {
-		// TODO: ugly
-		f = func() sqlparser.Expr {
-			return qg.getRandomExpr(slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+		exprGenerators := slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
+		// add scalar subqueries
+		if qg.r.Intn(10) < 1 {
+			exprGenerators = append(exprGenerators, qg)
 		}
+
+		f = func() sqlparser.Expr { return qg.getRandomExpr(exprGenerators...) }
 	} else {
 		f = func() sqlparser.Expr { return qg.getRandomExpr() }
 	}
@@ -305,6 +309,7 @@ func (qg *queryGen) randomQuery() {
 	}
 
 	// alias the grouping columns randomly
+	// TODO: alias is done after HAVING because vitess does not properly recognize aliases in it
 	for i := range grouping {
 		if qg.r.Intn(2) < 1 {
 			continue
@@ -380,7 +385,13 @@ func (qg *queryGen) createJoinPredicates(tables []tableT) sqlparser.Exprs {
 		log.Fatalf("tables has %d elements, needs at least 2", len(tables))
 	}
 
-	return qg.createRandomExprs(1, 3, &tables[len(tables)-2], &tables[len(tables)-1])
+	exprGenerators := []sqlparser.ExprGenerator{&tables[len(tables)-2], &tables[len(tables)-1]}
+	// add scalar subqueries
+	if qg.r.Intn(10) < 1 {
+		exprGenerators = append(exprGenerators, qg)
+	}
+
+	return qg.createRandomExprs(1, 3, exprGenerators...)
 }
 
 // returns the grouping columns as three types: sqlparser.GroupBy, sqlparser.SelectExprs, []column
@@ -402,8 +413,6 @@ func (qg *queryGen) createGroupBy(tables []tableT) (grouping []column) {
 		if qg.r.Intn(2) < 1 {
 			alias := fmt.Sprintf("cgroup%d", len(grouping))
 			qg.sel.SelectExprs = append(qg.sel.SelectExprs, newAliasedColumn(col, alias))
-			// TODO: alias in a separate function to properly generate the having clause
-			//col.name = sqlparser.NewColName(alias)
 			grouping = append(grouping, col)
 		}
 	}
@@ -413,11 +422,14 @@ func (qg *queryGen) createGroupBy(tables []tableT) (grouping []column) {
 
 // returns the aggregation columns as three types: sqlparser.SelectExprs, []column
 func (qg *queryGen) createAggregations(tables []tableT) (aggregates []column) {
+	exprGenerators := slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
+	// add scalar subqueries
+	if qg.r.Intn(10) < 1 {
+		exprGenerators = append(exprGenerators, qg)
+	}
+
 	qg.genConfig = qg.genConfig.IsAggregateConfig()
-	aggrExprs := qg.createRandomExprs(0, qg.maxAggrs,
-		slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator {
-			return &t
-		})...)
+	aggrExprs := qg.createRandomExprs(0, qg.maxAggrs, exprGenerators...)
 	qg.genConfig = qg.genConfig.CannotAggregateConfig()
 
 	for i, expr := range aggrExprs {
@@ -459,27 +471,25 @@ func (qg *queryGen) createOrderBy() {
 // returns 0-2 random expressions based on tables
 func (qg *queryGen) createWherePredicates(tables []tableT) {
 	exprGenerators := slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
-	// TODO: when qg is added as an expression generator
-	if qg.r.Intn(5) < 1 {
+	// add scalar subqueries
+	if qg.r.Intn(10) < 1 {
 		exprGenerators = append(exprGenerators, qg)
 	}
+
 	predicates := qg.createRandomExprs(0, 2, exprGenerators...)
 	qg.sel.AddWhere(sqlparser.AndExpressions(predicates...))
 }
 
 // creates predicates for the having clause comparing a column to a random expression
 func (qg *queryGen) createHavingPredicates(grouping []column) {
-	predicates := sqlparser.Exprs{}
-	if qg.r.Intn(2) < 1 && testFailingQueries {
-		// TODO: having can only contain aggregate or grouping columns in mysql, works fine in vitess
-		// TODO: Can fix this by putting only the table with the grouping and aggregates column (newTable)
-		predicates = append(predicates, qg.createRandomExprs(0, 2,
-			slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })...)...)
+	exprGenerators := slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })
+	// add scalar subqueries
+	if qg.r.Intn(10) < 1 {
+		exprGenerators = append(exprGenerators, qg)
 	}
 
 	qg.genConfig = qg.genConfig.CanAggregateConfig()
-	predicates = append(predicates, qg.createRandomExprs(0, 2,
-		slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })...)...)
+	predicates := qg.createRandomExprs(0, 2, exprGenerators...)
 	qg.genConfig = qg.genConfig.CannotAggregateConfig()
 
 	qg.sel.AddHaving(sqlparser.AndExpressions(predicates...))

@@ -153,10 +153,9 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 	// if the generated expression must be an aggregate, and it is not,
 	// tack on an extra "+ count(*)" to make it aggregate
 	if genConfig.AggrRule == IsAggregate && !g.isAggregate && g.depth == 0 {
-		expr = &BinaryExpr{
-			Operator: BitAndOp,
-			Left:     expr,
-			Right:    &CountStar{},
+		expr = &AndExpr{
+			Left:  expr,
+			Right: &CountStar{},
 		}
 	}
 
@@ -188,7 +187,8 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.andExpr(genConfig) },
 		func() Expr { return g.xorExpr(genConfig) },
 		func() Expr { return g.orExpr(genConfig) },
-		func() Expr { return g.comparison(genConfig) },
+		func() Expr { return g.comparison(genConfig.intTypeConfig()) },
+		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
 		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
 		func() Expr { return g.inExpr(genConfig.intTypeConfig()) },
 		func() Expr { return g.between(genConfig.intTypeConfig()) },
