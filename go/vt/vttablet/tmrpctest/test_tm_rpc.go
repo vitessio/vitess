@@ -1272,6 +1272,10 @@ func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logg
 }
 
 func (fra *fakeRPCTM) CheckThrottler(ctx context.Context, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+
 	//TODO implement me
 	panic("implement me")
 }
@@ -1297,6 +1301,11 @@ func tmRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client t
 	expectHandleRPCPanic(t, "RestoreFromBackup", true /*verbose*/, err)
 }
 
+func tmRPCTestCheckThrottler(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) {
+	_, err := client.CheckThrottler(ctx, tablet, req)
+	expectHandleRPCPanic(t, "CheckThrottler", true /*verbose*/, err)
+}
+
 //
 // RPC helpers
 //
@@ -1320,6 +1329,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	restoreFromBackupRequest := &tabletmanagerdatapb.RestoreFromBackupRequest{
 		BackupTime: protoutil.TimeToProto(time.Time{}),
+	}
+	checkThrottlerRequest := &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName: "test",
 	}
 
 	// Test RPC specific methods of the interface.
@@ -1377,6 +1389,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Backup / restore related methods
 	tmRPCTestBackup(ctx, t, client, tablet)
 	tmRPCTestRestoreFromBackup(ctx, t, client, tablet, restoreFromBackupRequest)
+
+	// Throttler related methods
+	tmRPCTestCheckThrottler(ctx, t, client, tablet, checkThrottlerRequest)
 
 	//
 	// Tests panic handling everywhere now
