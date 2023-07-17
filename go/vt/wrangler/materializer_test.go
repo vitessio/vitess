@@ -45,7 +45,7 @@ const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targe
 const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 const mzCheckJournal = "/select val from _vt.resharding_journal where id="
 
-var defaultOnDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
 func TestMigrateTables(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
@@ -2825,7 +2825,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-			if onDDLAction == binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)] {
+			if onDDLAction == binlogdatapb.OnDDLAction_IGNORE.String() {
 				// This is the default and go does not marshal defaults
 				// for prototext fields so we use the default insert stmt.
 				env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
