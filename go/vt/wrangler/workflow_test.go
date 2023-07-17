@@ -301,11 +301,10 @@ func TestMoveTablesV2(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
-// TestMoveTablesShardByShard ensures that shard by shard
-// migrations work as expected.
-// This test moves tables from one sharded keyspace (ks1) to
-// another sharded keyspace (ks2), but only for the -80 shard.
-func TestMoveTablesShardByShard(t *testing.T) {
+// TestPartialMoveTables ensures that shard by shard migrations work
+// as expected. This test moves tables from one sharded keyspace (ks1)
+// to another sharded keyspace (ks2), but only for the -80 shard.
+func TestPartialMoveTables(t *testing.T) {
 	ctx := context.Background()
 	shards := []string{"-80", "80-"}
 	shardsToMove := shards[0:1]
@@ -429,7 +428,7 @@ func testReverse(t *testing.T, wf *VReplicationWorkflow) error {
 	return err
 }
 
-func TestMoveTablesV2Partial(t *testing.T) {
+func TestMoveTablesV2SwitchTraffic(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
