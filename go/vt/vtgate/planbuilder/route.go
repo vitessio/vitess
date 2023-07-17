@@ -250,7 +250,7 @@ func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr
 		return evalengine.NewTupleExpr(exprs...), nil
 	case *sqlparser.ColName:
 		joinVar := jt.Procure(plan, typedVal, rb.Order())
-		return evalengine.NewBindVar(joinVar, -1, collations.CollationBinaryID), nil
+		return evalengine.NewBindVar(joinVar, -1, collations.Unknown), nil
 	default:
 		return evalengine.Translate(typedVal, nil)
 	}

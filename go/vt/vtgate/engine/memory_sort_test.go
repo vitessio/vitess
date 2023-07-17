@@ -231,6 +231,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 	ms := &MemorySort{
 		OrderBy: []OrderByParams{{
 			Col:         0,
+			Type:        sqltypes.VarChar,
 			CollationID: collationID,
 		}},
 		Input: fp,
@@ -319,6 +320,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	ms := &MemorySort{
 		OrderBy: []OrderByParams{{
 			Col:         0,
+			Type:        sqltypes.VarChar,
 			CollationID: collationID,
 		}},
 		Input: fp,

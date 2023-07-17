@@ -146,7 +146,7 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 			return nil, err
 		}
 		var cs collations.ID = collations.CollationBinaryID
-		if sqltypes.IsQuoted(q) && !sqltypes.IsBinary(q) {
+		if sqltypes.IsText(q) {
 			cs = vcursor.ConnCollation()
 		}
 

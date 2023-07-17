@@ -1081,6 +1081,7 @@ func TestRouteSortCollation(t *testing.T) {
 
 	sel.OrderBy = []OrderByParams{{
 		Col:         0,
+		Type:        sqltypes.VarChar,
 		CollationID: collationID,
 	}}
 
@@ -1147,6 +1148,7 @@ func TestRouteSortCollation(t *testing.T) {
 	t.Run("Error when Unknown Collation", func(t *testing.T) {
 		sel.OrderBy = []OrderByParams{{
 			Col:         0,
+			Type:        -1,
 			CollationID: collations.Unknown,
 		}}
 

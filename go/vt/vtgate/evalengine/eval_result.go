@@ -35,21 +35,19 @@ type EvalResult struct {
 // collation and what the client expects the result to be in.
 func (er EvalResult) Value(id collations.ID) sqltypes.Value {
 	str, ok := er.v.(*evalBytes)
-	if ok && !str.isBinary() {
-		if str.col.Collation == id {
-			return sqltypes.MakeTrusted(str.SQLType(), str.bytes)
-		}
-		dst, err := charset.Convert(nil, id.Get().Charset(), str.bytes, str.col.Collation.Get().Charset())
-		if err != nil {
-			// If we can't convert, we just return what we have, but it's going
-			// to be invalidly encoded. Should normally never happen as only utf8mb4
-			// is really supported for the connection character set anyway and all
-			// other charsets can be converted to utf8mb4.
-			return sqltypes.MakeTrusted(str.SQLType(), str.bytes)
-		}
-		return sqltypes.MakeTrusted(str.SQLType(), dst)
+	if !ok || str.isBinary() || str.col.Collation == collations.Unknown || str.col.Collation == id {
+		return evalToSQLValue(er.v)
 	}
-	return evalToSQLValue(er.v)
+
+	dst, err := charset.Convert(nil, id.Get().Charset(), str.bytes, str.col.Collation.Get().Charset())
+	if err != nil {
+		// If we can't convert, we just return what we have, but it's going
+		// to be invalidly encoded. Should normally never happen as only utf8mb4
+		// is really supported for the connection character set anyway and all
+		// other charsets can be converted to utf8mb4.
+		return sqltypes.MakeTrusted(str.SQLType(), str.bytes)
+	}
+	return sqltypes.MakeTrusted(str.SQLType(), dst)
 }
 
 func (er EvalResult) Collation() collations.ID {

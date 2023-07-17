@@ -92,15 +92,17 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
-		aggrParam.CollationID = aggr.GetCollation(ctx)
+		aggrParam.Type, aggrParam.CollationID = aggr.GetTypeCollation(ctx)
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
+		typ, col, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
-			CollationID:     ctx.SemTable.CollationForExpr(groupBy.SimplifiedExpr),
+			Type:            typ,
+			CollationID:     col,
 		})
 	}
 
@@ -142,12 +144,13 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
-		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
+		typ, collationID, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               ordering.Offset[idx],
 			WeightStringCol:   ordering.WOffset[idx],
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: ordering.Offset[idx],
+			Type:              typ,
 			CollationID:       collationID,
 		})
 	}
@@ -179,7 +182,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		case operators.Offset:
 			t, found := ctx.SemTable.ExprTypes[e.Expr]
 			if !found {
-				return evalengine.NewColumn(e.Offset, -1, collations.CollationBinaryID)
+				return evalengine.NewColumn(e.Offset, -1, collations.Unknown)
 			}
 			return evalengine.NewColumn(e.Offset, t.Type, t.Collation)
 		default:
@@ -383,11 +386,12 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	replaceSubQuery(ctx, sel)
 	eroute, err := routeToEngineRoute(ctx, op)
 	for _, order := range op.Ordering {
-		collation := ctx.SemTable.CollationForExpr(order.AST)
+		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
+			Type:            typ,
 			CollationID:     collation,
 		})
 	}
@@ -697,11 +701,11 @@ func getWeightStringForSelectExpr(selectExpr sqlparser.SelectExpr) (*sqlparser.A
 	return &sqlparser.AliasedExpr{Expr: weightStringFor(expr.Expr)}, nil
 }
 
-func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, colls []collations.ID) ([]engine.CheckCol, error) {
+func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, colls []collationInfo) ([]engine.CheckCol, error) {
 	checkCols := make([]engine.CheckCol, 0, len(colls))
 	for i, coll := range colls {
-		checkCol := engine.CheckCol{Col: i, Collation: coll}
-		if coll != collations.Unknown {
+		checkCol := engine.CheckCol{Col: i, Type: coll.typ, Collation: coll.col}
+		if coll.typ >= 0 {
 			checkCols = append(checkCols, checkCol)
 			continue
 		}
@@ -839,9 +843,14 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Un
 	return sources, nil
 }
 
-func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collations.ID {
+type collationInfo struct {
+	typ sqltypes.Type
+	col collations.ID
+}
+
+func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collationInfo {
 	// TODO: coerce selects' select expressions' collations
-	var colls []collations.ID
+	var colls []collationInfo
 
 	sel, err := n.GetSelectFor(0)
 	if err != nil {
@@ -852,13 +861,8 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []co
 		if !ok {
 			return nil
 		}
-		typ := ctx.SemTable.CollationForExpr(aliasedE.Expr)
-		if typ == collations.Unknown {
-			if t, hasT := ctx.SemTable.ExprTypes[aliasedE.Expr]; hasT && sqltypes.IsNumber(t.Type) {
-				typ = collations.CollationBinaryID
-			}
-		}
-		colls = append(colls, typ)
+		typ, col, _ := ctx.SemTable.TypeForExpr(aliasedE.Expr)
+		colls = append(colls, collationInfo{typ: typ, col: col})
 	}
 	return colls
 }
