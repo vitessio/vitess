@@ -350,11 +350,26 @@ func TestPartialMoveTables(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	require.True(t, wf.ts.isPartialMigration, "expected partial shard migration")
 
+	// The default shard routing rule for the keyspace's other shard would
+	// normally be put in place, but the unit test does not execute the
+	// wrangler.MoveTables function which adds all of the default shard
+	// routing rules in the topo for the keyspace when the first workflow
+	// is run against it. So we simulate it here.
+	srr, err = tme.ts.GetShardRoutingRules(ctx)
+	require.NoError(t, err)
+	srr.Rules = append(srr.Rules, &vschema.ShardRoutingRule{
+		FromKeyspace: "ks2",
+		Shard:        "80-",
+		ToKeyspace:   "ks1",
+	})
+	err = tme.ts.SaveShardRoutingRules(ctx, srr)
+	require.NoError(t, err)
+
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme, p)
 	tme.expectNoPreviousJournals()
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, "All Reads Switched. All Writes Switched", wf.CurrentState())
+	require.Equal(t, "Reads partially switched, for shards: -80. Writes partially switched, for shards: -80", wf.CurrentState())
 	require.NoError(t, err)
 
 	tme.expectNoPreviousJournals()
