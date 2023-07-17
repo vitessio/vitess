@@ -501,7 +501,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(34))
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -528,7 +528,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(34))
 	}
 	return size
 }
@@ -743,7 +743,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(34))
 	}
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters
 	size += cached.RoutingParameters.CachedSize(true)
