@@ -447,7 +447,7 @@
   },
   {
     "comment": "count with distinct unique vindex",
-    "query": "select col, count(distinct id) from user group by col",
+    "query": "select col, count(distinct id), sum(distinct id) from user group by col",
     "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(distinct id), sum(distinct id) from user group by col",
@@ -5797,8 +5797,7 @@
   {
     "comment": "count distinct and sum distinct on join query pushed down - unique vindex",
     "query": "select u.col1, count(distinct m.user_id), sum(distinct m.user_id) from user u join music m group by u.col1",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.col1, count(distinct m.user_id), sum(distinct m.user_id) from user u join music m group by u.col1",
       "Instructions": {
@@ -5850,8 +5849,7 @@
   {
     "comment": "count and sum distinct with min distinct on different expressions",
     "query": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz), max(distinct toto) from user group by foo",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct baz)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz), max(distinct toto) from user group by foo",
       "Instructions": {
