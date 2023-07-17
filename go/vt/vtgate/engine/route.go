@@ -143,9 +143,6 @@ func (obp OrderByParams) String() string {
 		val += " ASC"
 	}
 
-	if obp.Type != -1 && obp.CollationID == collations.Unknown {
-		panic("OrderByParams: collationID is unknown but type is not unknown")
-	}
 	if sqltypes.IsText(obp.Type) && obp.CollationID != collations.Unknown {
 		collation := obp.CollationID.Get()
 		val += " COLLATE " + collation.Name()

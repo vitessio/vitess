@@ -122,9 +122,6 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Ty
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
 		typ, col, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
-		if typ != -1 && col == collations.Unknown {
-			panic("unexpected: aggregate function without collation")
-		}
 		return typ, col
 
 	}

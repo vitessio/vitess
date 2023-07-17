@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -482,9 +481,6 @@ func addColumnsToOA(
 			aggr.WCol = o.wsCol
 			aggr.Original = a.Original
 			aggr.Type, aggr.CollationID, _ = ctx.SemTable.TypeForExpr(a.Func.GetArg())
-			if aggr.Type != -1 && aggr.CollationID == collations.Unknown {
-				panic("unexpected: aggregate function without collation")
-			}
 			oa.aggregates = append(oa.aggregates, aggr)
 		}
 		lastOffset := distinctOffsets[len(distinctOffsets)-1]
