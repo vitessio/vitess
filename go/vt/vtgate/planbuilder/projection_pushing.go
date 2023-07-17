@@ -54,7 +54,7 @@ func pushProjection(
 		return pushProjectionIntoVindexFunc(node, expr, reuseCol)
 	case *semiJoin:
 		return pushProjectionIntoSemiJoin(ctx, expr, reuseCol, node, inner, hasAggregation)
-	case *concatenateGen4:
+	case *concatenate:
 		return pushProjectionIntoConcatenate(ctx, expr, hasAggregation, node, inner, reuseCol)
 	default:
 		return 0, false, vterrors.VT13001(fmt.Sprintf("push projection does not yet support: %T", node))
@@ -70,7 +70,7 @@ func pushProjectionIntoVindexFunc(node *vindexFunc, expr *sqlparser.AliasedExpr,
 	return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
 }
 
-func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenateGen4, inner bool, reuseCol bool) (int, bool, error) {
+func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenate, inner bool, reuseCol bool) (int, bool, error) {
 	if hasAggregation {
 		return 0, false, vterrors.VT12001("aggregation on UNIONs")
 	}

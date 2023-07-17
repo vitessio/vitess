@@ -987,7 +987,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 	_, err := executorExec(executor, "select * from (select last_insert_id()) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select * from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		Sql:           "select t.`last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -1090,9 +1090,7 @@ func TestSelectBindvars(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	sbc1.Queries = nil
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where `name` in (:name1, :name2)", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where `name` in (:name1, :name2)", 3)
 
 	// Test with BytesBindVariable
 	sql = "select id from `user` where `name` in (:name1, :name2)"
@@ -1104,14 +1102,13 @@ func TestSelectBindvars(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1": sqltypes.BytesBindVariable([]byte("foo1")),
-			"name2": sqltypes.BytesBindVariable([]byte("foo2")),
+			"__vals": sqltypes.TestBindVariable([]any{[]byte("foo1"), []byte("foo2")}),
+			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
+			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 3)
 
 	// Test no match in the lookup vindex
 	sbc1.Queries = nil
@@ -1150,10 +1147,7 @@ func TestSelectBindvars(t *testing.T) {
 	}}
 
 	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
-
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where `name` = :name", 1)
-
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where `name` = :name", 2)
 }
 
 func TestSelectEqual(t *testing.T) {
@@ -1371,10 +1365,8 @@ func TestSelectIN(t *testing.T) {
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from `user` where id in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": sqltypes.TestBindVariable([]any{int64(1)}),
-		},
+		Sql:           "select id from `user` where id in (1)",
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
@@ -2667,25 +2659,18 @@ func TestCrossShardSubquery(t *testing.T) {
 	result, err := executorExec(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id as id1, u1.col from `user` as u1 where u1.id = 1",
+		Sql:           "select id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	// We have to use string representation because bindvars type is too complex.
-	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
-	if got != want {
-		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
-	}
 
-	wantResult := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-		}},
-	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "select 1 from (select u2.id from `user` as u2 where u2.id = :u1_col) as t",
+		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
+	}}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int32"), "1")
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -2750,28 +2735,18 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	result, err := executorStream(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id as id1, u1.col from `user` as u1 where u1.id = 1",
+		Sql:           "select id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	// We have to use string representation because bindvars type is too complex.
-	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
-	if got != want {
-		t.Errorf("sbc2.Queries:\n%s, want\n%s\n", got, want)
-	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "select 1 from (select u2.id from `user` as u2 where u2.id = :u1_col) as t",
+		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
+	}}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
-	wantResult := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-		}},
-	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int32"), "1")
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestCrossShardSubqueryGetFields(t *testing.T) {
@@ -2791,10 +2766,10 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 	result, err := executorExec(executor, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id as id1, u1.col from `user` as u1 where 1 != 1",
+		Sql:           "select t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where 1 != 1) as t where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select u2.id from `user` as u2 where 1 != 1",
+		Sql: "select 1 from (select u2.id from `user` as u2 where 1 != 1) as t where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.NullBindVariable,
 		},
@@ -2995,14 +2970,16 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	session.TargetString = "TestExecutor"
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()")
 	require.NoError(t, err)
-	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"})
+	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"},
+		sbc1.StringQueries())
 
 	// `USE TestXBadSharding` and then query info_schema about TestExecutor - should target TestExecutor and not use the default keyspace
 	sbc1.Queries = nil
 	session.TargetString = "TestXBadSharding"
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'TestExecutor'")
 	require.NoError(t, err)
-	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"})
+	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"},
+		sbc1.StringQueries())
 }
 
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
@@ -3911,7 +3888,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view",
+		Sql:           "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -3920,7 +3897,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view where id = 2", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view where id = :id /* INT64 */",
+		Sql: "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"id": sqltypes.Int64BindVariable(2),
 		},
@@ -3933,7 +3910,7 @@ func TestSelectView(t *testing.T) {
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3, 4, 5})
 	bvals, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view where id in ::__vals",
+		Sql: "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":   bvtg1,
 			"__vals": bvals,

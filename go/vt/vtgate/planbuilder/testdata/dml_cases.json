@@ -4471,7 +4471,7 @@
     }
   },
   {
-    "comment": "Here V3 populates the TablesUsed incorrectly\n# delete with join from multi table join subquery.",
+    "comment": "delete with join from multi table join subquery",
     "query": "delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
     "plan": {
       "QueryType": "DELETE",
@@ -4824,16 +4824,16 @@
     }
   },
   {
-    "comment": "insert into a vindex not allowed - gen4 produces different error - forcing a v3 plan here will have same output",
-    "query": "insert /*vt+ planner=v3insert */ into user_index(id) values(1)",
+    "comment": "insert into a vindex not allowed",
+    "query": "insert into user_index(id) values(1)",
     "plan": "VT09014: vindex cannot be modified"
   },
   {
-    "comment": "insert with select takes shared lock in gen4 and for update in v3, as forcing v3 plan the output will remain same",
-    "query": "insert /*vt+ planner=v3insert */ into user(id) select id from user",
+    "comment": "insert with select takes shared lock",
+    "query": "insert into user(id) select id from user",
     "plan": {
       "QueryType": "INSERT",
-      "Original": "insert /*vt+ planner=v3insert */ into user(id) select id from user",
+      "Original": "insert into user(id) select id from user",
       "Instructions": {
         "OperatorType": "Insert",
         "Variant": "Select",

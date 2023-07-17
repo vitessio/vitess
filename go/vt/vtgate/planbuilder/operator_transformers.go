@@ -669,7 +669,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if len(op.Ordering) > 0 {
 			return nil, vterrors.VT12001("ORDER BY on top of UNION")
 		}
-		result = &concatenateGen4{sources: sources}
+		result = &concatenate{sources: sources}
 	}
 	if op.Distinct {
 		colls := getCollationsFor(ctx, op)
@@ -730,7 +730,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		// we leave the responsibility of truncating to distinct
 		node.eroute.TruncateColumnCount = 0
-	case *concatenateGen4:
+	case *concatenate:
 		for _, source := range node.sources {
 			newOffset, err = pushWeightStringForDistinct(ctx, source, offset)
 			if err != nil {
@@ -937,7 +937,7 @@ func pushDistinct(plan logicalPlan) {
 	switch n := plan.(type) {
 	case *routeGen4:
 		n.Select.MakeDistinct()
-	case *concatenateGen4:
+	case *concatenate:
 		for _, source := range n.sources {
 			pushDistinct(source)
 		}

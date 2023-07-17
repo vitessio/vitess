@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -39,7 +38,7 @@ const (
 	Gen4 = querypb.ExecuteOptions_Gen4
 	// Gen4GreedyOnly uses only the faster greedy planner
 	Gen4GreedyOnly = querypb.ExecuteOptions_Gen4Greedy
-	// Gen4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
+	// Gen4Left2Right joins table in the order they are listed in the FROM-clause
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 )
 
@@ -66,24 +65,6 @@ func newPlanResult(prim engine.Primitive, tablesUsed ...string) *planResult {
 
 func singleTable(ks, tbl string) string {
 	return fmt.Sprintf("%s.%s", ks, tbl)
-}
-
-func tablesFromSemantics(semTable *semantics.SemTable) []string {
-	tables := make(map[string]any, len(semTable.Tables))
-	for _, info := range semTable.Tables {
-		vindexTable := info.GetVindexTable()
-		if vindexTable == nil {
-			continue
-		}
-		tables[vindexTable.String()] = nil
-	}
-
-	names := make([]string, 0, len(tables))
-	for tbl := range tables {
-		names = append(names, tbl)
-	}
-	sort.Strings(names)
-	return names
 }
 
 // TestBuilder builds a plan for a query based on the specified vschema.

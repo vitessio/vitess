@@ -3337,7 +3337,7 @@
     }
   },
   {
-    "comment": "v3 takes cola_map, gen4 takes colb_colc_map, may be based on map key ordering",
+    "comment": "colb_colc_map vindex for routing",
     "query": "select * from multicolvin where column_a = 3 and column_b = 1",
     "plan": {
       "QueryType": "SELECT",
@@ -3363,7 +3363,7 @@
     }
   },
   {
-    "comment": "multi column vindex produces Equal plan in gen4 and Scatter in v3",
+    "comment": "multi column vindex produces Equal plan",
     "query": "select * from multicol_tbl where cola = 1 and colb = 2",
     "plan": {
       "QueryType": "SELECT",
@@ -3417,7 +3417,7 @@
     }
   },
   {
-    "comment": "multi column vindex produces IN plan in gen4 and Scatter in v3",
+    "comment": "multi column vindex produces IN plan",
     "query": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
     "plan": {
       "QueryType": "SELECT",
@@ -3444,7 +3444,7 @@
     }
   },
   {
-    "comment": "multi column vindex with different order places the vindex keys in correct order in IN plan in gen4",
+    "comment": "multi column vindex with different order places the vindex keys in correct order in IN plan",
     "query": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
     "plan": {
       "QueryType": "SELECT",
@@ -3712,7 +3712,7 @@
     }
   },
   {
-    "comment": "left join with where clause - should be handled by gen4 but still isn't",
+    "comment": "left join with where clause",
     "query": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
     "plan": {
       "QueryType": "SELECT",

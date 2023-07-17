@@ -162,7 +162,7 @@
     }
   },
   {
-    "comment": "insert into qualified ambiguous reference table routes v3 to requested keyspace gen4 to source",
+    "comment": "insert into qualified ambiguous reference table routes to source",
     "query": "insert into user.ambiguous_ref_with_source(col) values(1)",
     "plan": {
       "QueryType": "INSERT",
@@ -206,7 +206,7 @@
     }
   },
   {
-    "comment": "update qualified ambiguous reference table v3 error no primary vindex v4 route to source",
+    "comment": "update qualified ambiguous reference table route to source",
     "query": "update user.ambiguous_ref_with_source set col = 1",
     "plan": {
       "QueryType": "UPDATE",
@@ -250,7 +250,7 @@
     }
   },
   {
-    "comment": "delete from qualified ambiguous reference table v3 error no primary vindex v4 route to source",
+    "comment": "delete from qualified ambiguous reference table route to source",
     "query": "delete from user.ambiguous_ref_with_source where col = 1",
     "plan": {
       "QueryType": "DELETE",
@@ -364,7 +364,7 @@
     }
   },
   {
-    "comment": "insert into qualified reference with unqualified source routes v3 to requested keyspace gen4 to source",
+    "comment": "insert into qualified reference with unqualified source routes to source",
     "query": "insert into user.global_ref(col) values(1)",
     "plan": {
       "QueryType": "INSERT",

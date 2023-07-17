@@ -699,7 +699,7 @@
     }
   },
   {
-    "comment": "Straight-join (Gen4 ignores the straight_join hint)",
+    "comment": "Straight-join (ignores the straight_join hint)",
     "query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
     "plan": {
       "QueryType": "SELECT",
@@ -2742,7 +2742,7 @@
     }
   },
   {
-    "comment": "gen4 - optimise plan by merging user_extra and music first, and then querying for user info",
+    "comment": "optimise plan by merging user_extra and music first, and then querying for user info",
     "query": "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id",
     "plan": {
       "QueryType": "SELECT",

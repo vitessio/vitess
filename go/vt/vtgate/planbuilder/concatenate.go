@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type concatenateGen4 struct {
+type concatenate struct {
 	sources []logicalPlan
 
 	// These column offsets do not need to be typed checked - they usually contain weight_string()
@@ -32,10 +32,10 @@ type concatenateGen4 struct {
 	noNeedToTypeCheck []int
 }
 
-var _ logicalPlan = (*concatenateGen4)(nil)
+var _ logicalPlan = (*concatenate)(nil)
 
 // WireupGen4 implements the logicalPlan interface
-func (c *concatenateGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
+func (c *concatenate) WireupGen4(ctx *plancontext.PlanningContext) error {
 	for _, source := range c.sources {
 		err := source.WireupGen4(ctx)
 		if err != nil {
@@ -46,7 +46,7 @@ func (c *concatenateGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 }
 
 // Primitive implements the logicalPlan interface
-func (c *concatenateGen4) Primitive() engine.Primitive {
+func (c *concatenate) Primitive() engine.Primitive {
 	var sources []engine.Primitive
 	for _, source := range c.sources {
 		sources = append(sources, source.Primitive())
@@ -56,16 +56,16 @@ func (c *concatenateGen4) Primitive() engine.Primitive {
 }
 
 // Rewrite implements the logicalPlan interface
-func (c *concatenateGen4) Rewrite(inputs ...logicalPlan) error {
+func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != len(c.sources) {
-		return vterrors.VT13001("concatenateGen4: wrong number of inputs")
+		return vterrors.VT13001("concatenate: wrong number of inputs")
 	}
 	c.sources = inputs
 	return nil
 }
 
 // ContainsTables implements the logicalPlan interface
-func (c *concatenateGen4) ContainsTables() semantics.TableSet {
+func (c *concatenate) ContainsTables() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.sources {
 		tableSet = tableSet.Merge(source.ContainsTables())
@@ -74,11 +74,11 @@ func (c *concatenateGen4) ContainsTables() semantics.TableSet {
 }
 
 // Inputs implements the logicalPlan interface
-func (c *concatenateGen4) Inputs() []logicalPlan {
+func (c *concatenate) Inputs() []logicalPlan {
 	return c.sources
 }
 
 // OutputColumns implements the logicalPlan interface
-func (c *concatenateGen4) OutputColumns() []sqlparser.SelectExpr {
+func (c *concatenate) OutputColumns() []sqlparser.SelectExpr {
 	return c.sources[0].OutputColumns()
 }

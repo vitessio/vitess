@@ -864,11 +864,11 @@
     }
   },
   {
-    "comment": "derived table with column aliases not supported by v3, but planner is overridden with hint",
-    "query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
+    "comment": "derived table with column aliases",
+    "query": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
+      "Original": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
       "Instructions": {
         "OperatorType": "VindexLookup",
         "Variant": "Equal",
@@ -904,7 +904,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-            "Query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+            "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
             "Table": "`user`"
           }
         ]

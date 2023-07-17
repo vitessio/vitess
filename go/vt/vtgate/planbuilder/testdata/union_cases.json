@@ -893,7 +893,7 @@
     }
   },
   {
-    "comment": "gen4 optimises away ORDER BY when it's safe to do",
+    "comment": "optimises away ORDER BY when it's safe to do",
     "query": "(select id from user union select id from music order by id) union select 1 from unsharded",
     "plan": {
       "QueryType": "SELECT",
@@ -1018,7 +1018,7 @@
     }
   },
   {
-    "comment": "UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes",
+    "comment": "UNION that needs to be reordered to be merged more aggressively - able to get it down to 2 routes",
     "query": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
     "plan": {
       "QueryType": "SELECT",

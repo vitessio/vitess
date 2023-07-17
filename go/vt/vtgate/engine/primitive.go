@@ -54,7 +54,6 @@ type (
 		// if the max memory rows override directive is set to true
 		ExceedsMaxMemoryRows(numRows int) bool
 
-		// V3 functions.
 		Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
 
