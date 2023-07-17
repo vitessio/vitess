@@ -185,7 +185,14 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 	// set the serving type for the primary tablet false and broadcast it so that the buffering code registers this change
 	hc.SetServing(primaryTablet, false)
+	// We call the broadcast twice to ensure that the change has been processed by the keyspace event watcher.
+	// The second broadcast call is blocking until the first one has been processed.
 	hc.Broadcast(primaryTablet)
+	hc.Broadcast(primaryTablet)
+
+	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+	isNotServing := tg.kev.PrimaryIsNotServing(target)
+	require.True(t, isNotServing)
 
 	// add a result to the sandbox connection of the new primary
 	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
