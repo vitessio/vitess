@@ -705,9 +705,8 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		mySQLThrottleMetric.Key = probe.Key
 
 		{
-			req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.VitessName.String()}
-			resp, gRPCErr := throttler.tmClient.CheckThrottler(ctx, probe.Tablet, req)
-			if gRPCErr == nil {
+			req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+			if resp, gRPCErr := throttler.tmClient.CheckThrottler(ctx, probe.Tablet, req); gRPCErr == nil {
 				mySQLThrottleMetric.Value = resp.Value
 				if resp.StatusCode == http.StatusInternalServerError {
 					mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
@@ -718,8 +717,14 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 					go throttler.heartbeatWriter.RequestHeartbeats()
 				}
 				return mySQLThrottleMetric
-			} else {
-				log.Errorf("error in GRPC call to tablet %v: %v", probe.Tablet.GetAlias(), gRPCErr)
+
+				// } else {
+				// In v18 we need to be backwards compatible. If we have a gRPC error it might be because the replica is v17 and
+				// does not support CheckThrottler() RPC. This is why:
+				// 1. We fall back to HTTP
+				// 2. We don't log an error (it would just spam the logs)
+				// In v19 we will remove all HTTP code, and will *potentially* log an error.
+				// log.Errorf("error in GRPC call to tablet %v: %v", probe.Tablet.GetAlias(), gRPCErr)
 			}
 		}
 		// Backwards compatibility to v18: if the underlying tablets do not support CheckThrottler gRPC, attempt a HTTP cehck:
