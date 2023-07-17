@@ -84,7 +84,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 
 	setLockOnAllSelect(plan)
 
-	if err := plan.WireupGen4(ctx); err != nil {
+	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}
 
@@ -107,11 +107,11 @@ type insert struct {
 
 var _ logicalPlan = (*insert)(nil)
 
-func (i *insert) WireupGen4(ctx *plancontext.PlanningContext) error {
+func (i *insert) Wireup(ctx *plancontext.PlanningContext) error {
 	if i.source == nil {
 		return nil
 	}
-	return i.source.WireupGen4(ctx)
+	return i.source.Wireup(ctx)
 }
 
 func (i *insert) Primitive() engine.Primitive {

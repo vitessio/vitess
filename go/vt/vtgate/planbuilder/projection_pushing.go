@@ -40,11 +40,11 @@ func pushProjection(
 		// All of these either push to the single source, or push to the LHS
 		src := node.Inputs()[0]
 		return pushProjection(ctx, expr, src, inner, reuseCol, hasAggregation)
-	case *routeGen4:
+	case *route:
 		return addExpressionToRoute(ctx, node, expr, reuseCol)
 	case *hashJoin:
 		return pushProjectionIntoHashJoin(ctx, expr, node, reuseCol, inner, hasAggregation)
-	case *joinGen4:
+	case *join:
 		return pushProjectionIntoJoin(ctx, expr, node, reuseCol, inner, hasAggregation)
 	case *simpleProjection:
 		return pushProjectionIntoSimpleProj(ctx, expr, node, inner, hasAggregation, reuseCol)
@@ -169,7 +169,7 @@ func pushProjectionIntoSimpleProj(
 func pushProjectionIntoJoin(
 	ctx *plancontext.PlanningContext,
 	expr *sqlparser.AliasedExpr,
-	node *joinGen4,
+	node *join,
 	reuseCol, inner, hasAggregation bool,
 ) (int, bool, error) {
 	lhsSolves := node.Left.ContainsTables()
@@ -292,7 +292,7 @@ func pushProjectionIntoHashJoin(
 	return len(node.Cols) - 1, true, nil
 }
 
-func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
+func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *route, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
 	if reuseCol {
 		if i := checkIfAlreadyExists(expr, rb.Select, ctx.SemTable); i != -1 {
 			return i, false, nil

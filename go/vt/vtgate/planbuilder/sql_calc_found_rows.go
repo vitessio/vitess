@@ -33,12 +33,12 @@ type sqlCalcFoundRows struct {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (s *sqlCalcFoundRows) WireupGen4(ctx *plancontext.PlanningContext) error {
-	err := s.LimitQuery.WireupGen4(ctx)
+func (s *sqlCalcFoundRows) Wireup(ctx *plancontext.PlanningContext) error {
+	err := s.LimitQuery.Wireup(ctx)
 	if err != nil {
 		return err
 	}
-	return s.CountQuery.WireupGen4(ctx)
+	return s.CountQuery.Wireup(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface

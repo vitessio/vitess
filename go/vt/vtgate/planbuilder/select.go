@@ -261,7 +261,7 @@ func newBuildSelectPlan(
 		}
 	}
 
-	if err = plan.WireupGen4(ctx); err != nil {
+	if err = plan.Wireup(ctx); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -296,7 +296,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	if limit == nil {
 		return plan, nil
 	}
-	rb, ok := plan.(*routeGen4)
+	rb, ok := plan.(*route)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return plan, nil
@@ -334,7 +334,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 		}
 	case *sqlparser.Union:
 		var err error
-		rb, isRoute := plan.(*routeGen4)
+		rb, isRoute := plan.(*route)
 		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 			return nil, ctx.SemTable.NotSingleRouteErr
 		}
@@ -398,7 +398,7 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	var sysTableTableSchema []evalengine.Expr
 
 	switch routePlan := plan.(type) {
-	case *routeGen4:
+	case *route:
 		opcode = routePlan.eroute.Opcode
 		sysTableTableName = routePlan.eroute.SysTableTableName
 		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
@@ -414,7 +414,7 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
-		case *routeGen4:
+		case *route:
 			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
 			if err != nil {
 				return false, nil, err

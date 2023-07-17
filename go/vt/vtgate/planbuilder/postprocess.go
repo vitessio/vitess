@@ -33,7 +33,7 @@ var _ planVisitor = setUpperLimit
 // A primitive that cannot perform this can ignore the request.
 func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 	switch node := plan.(type) {
-	case *joinGen4, *hashJoin:
+	case *join, *hashJoin:
 		return false, node, nil
 	case *memorySort:
 		pv := evalengine.NewBindVar("__upper_limit")
@@ -50,7 +50,7 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 
 		node.underlying = newUnderlying
 		return false, node, nil
-	case *routeGen4:
+	case *route:
 		// The route pushes the limit regardless of the plan.
 		// If it's a scatter query, the rows returned will be
 		// more than the upper limit, but enough for the limit

@@ -30,8 +30,8 @@ import (
 // satisfy.
 type logicalPlan interface {
 
-	// WireupGen4 does the wire up work for the Gen4 planner
-	WireupGen4(*plancontext.PlanningContext) error
+	// Wireup does the wire up of primitive with the source.
+	Wireup(*plancontext.PlanningContext) error
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
@@ -103,8 +103,8 @@ func (bc *logicalPlanCommon) Order() int {
 	return bc.order
 }
 
-func (bc *logicalPlanCommon) WireupGen4(ctx *plancontext.PlanningContext) error {
-	return bc.input.WireupGen4(ctx)
+func (bc *logicalPlanCommon) Wireup(ctx *plancontext.PlanningContext) error {
+	return bc.input.Wireup(ctx)
 }
 
 // Rewrite implements the logicalPlan interface

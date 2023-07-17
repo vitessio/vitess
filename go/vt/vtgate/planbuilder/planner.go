@@ -56,7 +56,7 @@ func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) log
 		if scatterAsWarns || timeout > 0 || multiShardAutoCommit {
 			_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 				switch plan := logicalPlan.(type) {
-				case *routeGen4:
+				case *route:
 					plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
 					plan.eroute.QueryTimeout = timeout
 				case *primitiveWrapper:

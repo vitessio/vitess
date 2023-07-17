@@ -48,6 +48,6 @@ func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return vterrors.VT13001("memorySort.Limit: unreachable")
 }
 
-func (ms *memorySort) WireupGen4(ctx *plancontext.PlanningContext) error {
-	return ms.input.WireupGen4(ctx)
+func (ms *memorySort) Wireup(ctx *plancontext.PlanningContext) error {
+	return ms.input.Wireup(ctx)
 }

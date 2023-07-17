@@ -91,7 +91,7 @@ func gen4DeleteStmtPlanner(
 
 	setLockOnAllSelect(plan)
 
-	if err := plan.WireupGen4(ctx); err != nil {
+	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}
 

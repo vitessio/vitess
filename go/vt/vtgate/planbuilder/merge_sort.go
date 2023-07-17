@@ -48,8 +48,8 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-func (ms *mergeSort) WireupGen4(ctx *plancontext.PlanningContext) error {
-	return ms.input.WireupGen4(ctx)
+func (ms *mergeSort) Wireup(ctx *plancontext.PlanningContext) error {
+	return ms.input.Wireup(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface

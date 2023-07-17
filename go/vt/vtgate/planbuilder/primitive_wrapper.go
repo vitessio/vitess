@@ -29,7 +29,7 @@ type primitiveWrapper struct {
 	prim engine.Primitive
 }
 
-func (p *primitiveWrapper) WireupGen4(*plancontext.PlanningContext) error {
+func (p *primitiveWrapper) Wireup(*plancontext.PlanningContext) error {
 	return nil
 }
 

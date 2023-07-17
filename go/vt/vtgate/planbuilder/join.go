@@ -26,11 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ logicalPlan = (*joinGen4)(nil)
+var _ logicalPlan = (*join)(nil)
 
-// joinGen4 is used to build a Join primitive.
+// join is used to build a Join primitive.
 // It's used to build an inner join and only used by the Gen4 planner
-type joinGen4 struct {
+type join struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
 
@@ -51,16 +51,16 @@ type joinGen4 struct {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (j *joinGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
-	err := j.Left.WireupGen4(ctx)
+func (j *join) Wireup(ctx *plancontext.PlanningContext) error {
+	err := j.Left.Wireup(ctx)
 	if err != nil {
 		return err
 	}
-	return j.Right.WireupGen4(ctx)
+	return j.Right.Wireup(ctx)
 }
 
 // Primitive implements the logicalPlan interface
-func (j *joinGen4) Primitive() engine.Primitive {
+func (j *join) Primitive() engine.Primitive {
 	return &engine.Join{
 		Left:   j.Left.Primitive(),
 		Right:  j.Right.Primitive(),
@@ -71,14 +71,14 @@ func (j *joinGen4) Primitive() engine.Primitive {
 }
 
 // Inputs implements the logicalPlan interface
-func (j *joinGen4) Inputs() []logicalPlan {
+func (j *join) Inputs() []logicalPlan {
 	return []logicalPlan{j.Left, j.Right}
 }
 
 // Rewrite implements the logicalPlan interface
-func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
+func (j *join) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of children in joinGen4 rewrite, got: %d, expect: 2", len(inputs)))
+		return vterrors.VT13001(fmt.Sprintf("wrong number of children in join rewrite, got: %d, expect: 2", len(inputs)))
 	}
 	j.Left = inputs[0]
 	j.Right = inputs[1]
@@ -86,11 +86,11 @@ func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 }
 
 // ContainsTables implements the logicalPlan interface
-func (j *joinGen4) ContainsTables() semantics.TableSet {
+func (j *join) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
 }
 
 // OutputColumns implements the logicalPlan interface
-func (j *joinGen4) OutputColumns() []sqlparser.SelectExpr {
+func (j *join) OutputColumns() []sqlparser.SelectExpr {
 	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

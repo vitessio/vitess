@@ -50,12 +50,12 @@ type hashJoin struct {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (hj *hashJoin) WireupGen4(ctx *plancontext.PlanningContext) error {
-	err := hj.Left.WireupGen4(ctx)
+func (hj *hashJoin) Wireup(ctx *plancontext.PlanningContext) error {
+	err := hj.Left.Wireup(ctx)
 	if err != nil {
 		return err
 	}
-	return hj.Right.WireupGen4(ctx)
+	return hj.Right.Wireup(ctx)
 }
 
 // Primitive implements the logicalPlan interface

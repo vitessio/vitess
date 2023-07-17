@@ -57,11 +57,11 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (ps *pulloutSubquery) WireupGen4(ctx *plancontext.PlanningContext) error {
-	if err := ps.underlying.WireupGen4(ctx); err != nil {
+func (ps *pulloutSubquery) Wireup(ctx *plancontext.PlanningContext) error {
+	if err := ps.underlying.Wireup(ctx); err != nil {
 		return err
 	}
-	return ps.subquery.WireupGen4(ctx)
+	return ps.subquery.Wireup(ctx)
 }
 
 // Rewrite implements the logicalPlan interface

@@ -107,46 +107,19 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 }
 
 func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
-	planner, ok := getPlannerFromQuery(stmt)
-	if !ok {
+	planner, found := getPlannerFromQueryHint(stmt)
+	if !found {
 		// if the query doesn't specify the planner, we check what the configuration is
 		planner = vschema.Planner()
 	}
 	switch planner {
-	case Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner(query, planner), nil
+	case Gen4Left2Right, Gen4GreedyOnly, Gen4:
 	default:
-		if planner != Gen4 {
-			log.Infof("Using Gen4 planner instead of %s", planner.String())
-		}
 		// default is gen4 plan
-		return gen4Planner(query, Gen4), nil
+		log.Infof("Using Gen4 planner instead of %s", planner.String())
+		planner = Gen4
 	}
-}
-
-// getPlannerFromQuery chooses the planner to use based on the query
-// The default planner can be overridden using /*vt+ PLANNER=gen4 */
-// We will also fall back on the gen4 planner if we encounter outer join,
-// since there are known problems with the v3 planner and outer joins
-func getPlannerFromQuery(stmt sqlparser.Statement) (version plancontext.PlannerVersion, found bool) {
-	version, found = getPlannerFromQueryHint(stmt)
-	if found {
-		return
-	}
-
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		join, ok := node.(*sqlparser.JoinTableExpr)
-		if ok {
-			if join.Join == sqlparser.LeftJoinType || join.Join == sqlparser.RightJoinType {
-				version = querypb.ExecuteOptions_Gen4
-				found = true
-				return false, nil
-			}
-		}
-		return true, nil
-	}, stmt)
-
-	return
+	return gen4Planner(query, planner), nil
 }
 
 func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersion, bool) {

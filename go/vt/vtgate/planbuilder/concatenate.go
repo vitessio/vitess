@@ -35,9 +35,9 @@ type concatenate struct {
 var _ logicalPlan = (*concatenate)(nil)
 
 // WireupGen4 implements the logicalPlan interface
-func (c *concatenate) WireupGen4(ctx *plancontext.PlanningContext) error {
+func (c *concatenate) Wireup(ctx *plancontext.PlanningContext) error {
 	for _, source := range c.sources {
-		err := source.WireupGen4(ctx)
+		err := source.Wireup(ctx)
 		if err != nil {
 			return err
 		}

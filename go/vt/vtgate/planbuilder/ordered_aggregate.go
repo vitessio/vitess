@@ -84,8 +84,8 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	}
 }
 
-func (oa *orderedAggregate) WireupGen4(ctx *plancontext.PlanningContext) error {
-	return oa.input.WireupGen4(ctx)
+func (oa *orderedAggregate) Wireup(ctx *plancontext.PlanningContext) error {
+	return oa.input.Wireup(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface

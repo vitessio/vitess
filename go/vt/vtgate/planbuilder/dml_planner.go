@@ -59,7 +59,7 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 func setLockOnAllSelect(plan logicalPlan) {
 	_, _ = visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
-		case *routeGen4:
+		case *route:
 			node.Select.SetLock(sqlparser.ShareModeLock)
 			return true, node, nil
 		}

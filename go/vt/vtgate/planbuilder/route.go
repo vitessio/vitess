@@ -26,14 +26,14 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ logicalPlan = (*routeGen4)(nil)
+var _ logicalPlan = (*route)(nil)
 
-// routeGen4 is used to build a Route primitive.
+// route is used to build a Route primitive.
 // It's used to build one of the Select routes like
 // SelectScatter, etc. Portions of the original Select AST
 // are moved into this node, which will be used to build
 // the final SQL for this route.
-type routeGen4 struct {
+type route struct {
 
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
@@ -54,17 +54,17 @@ type routeGen4 struct {
 }
 
 // Primitive implements the logicalPlan interface
-func (rb *routeGen4) Primitive() engine.Primitive {
+func (rb *route) Primitive() engine.Primitive {
 	return rb.enginePrimitive
 }
 
 // SetLimit adds a LIMIT clause to the route.
-func (rb *routeGen4) SetLimit(limit *sqlparser.Limit) {
+func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
+func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
 
 	// prepare the queries we will pass down
@@ -111,17 +111,17 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 }
 
 // ContainsTables implements the logicalPlan interface
-func (rb *routeGen4) ContainsTables() semantics.TableSet {
+func (rb *route) ContainsTables() semantics.TableSet {
 	return rb.tables
 }
 
 // OutputColumns implements the logicalPlan interface
-func (rb *routeGen4) OutputColumns() []sqlparser.SelectExpr {
+func (rb *route) OutputColumns() []sqlparser.SelectExpr {
 	return sqlparser.GetFirstSelect(rb.Select).SelectExprs
 }
 
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
-func (rb *routeGen4) prepareTheAST() {
+func (rb *route) prepareTheAST() {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Select:
@@ -148,7 +148,7 @@ func (rb *routeGen4) prepareTheAST() {
 }
 
 // Rewrite implements the logicalPlan interface
-func (rb *routeGen4) Rewrite(inputs ...logicalPlan) error {
+func (rb *route) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 0 {
 		return vterrors.VT13001("route: wrong number of inputs")
 	}
@@ -156,10 +156,10 @@ func (rb *routeGen4) Rewrite(inputs ...logicalPlan) error {
 }
 
 // Inputs implements the logicalPlan interface
-func (rb *routeGen4) Inputs() []logicalPlan {
+func (rb *route) Inputs() []logicalPlan {
 	return []logicalPlan{}
 }
 
-func (rb *routeGen4) isSingleShard() bool {
+func (rb *route) isSingleShard() bool {
 	return rb.eroute.Opcode.IsSingleShard()
 }
