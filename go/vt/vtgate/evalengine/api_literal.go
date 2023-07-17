@@ -201,7 +201,6 @@ func NewBindVar(key string, typ sqltypes.Type, col collations.ID) *BindVariable 
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireUnicode,
 		},
-		typed: typ >= 0,
 	}
 }
 
@@ -215,7 +214,6 @@ func NewBindVarTuple(key string, col collations.ID) *BindVariable {
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireUnicode,
 		},
-		typed: true,
 	}
 }
 
@@ -229,7 +227,6 @@ func NewColumn(offset int, typ sqltypes.Type, col collations.ID) *Column {
 			Coercibility: collations.CoerceImplicit,
 			Repertoire:   collations.RepertoireUnicode,
 		},
-		typed: typ >= 0,
 	}
 }
 

@@ -42,7 +42,9 @@ func TestTypeOf(t *testing.T) {
 	}
 	fields := []*querypb.Field{field1, field2}
 
-	c := &Column{}
+	c := &Column{
+		Type: -1,
+	}
 	env.Row = sqltypes.Row{sqltypes.NewInt64(10)}
 
 	t.Run("Check when row value is not null", func(t *testing.T) {
@@ -66,11 +68,10 @@ func TestTypeOf(t *testing.T) {
 		c.Offset = 10
 		typ, flag := c.typeof(env, fields)
 		if typ != -1 || flag != flagAmbiguousType {
-			t.Errorf("typeof() failed, expected sqltypes.Null and flagAmbiguousType, got %v and %v", typ, flag)
+			t.Errorf("typeof() failed, expected -1 and flagAmbiguousType, got %v and %v", typ, flag)
 		}
 	})
 	t.Run("Check when typed is true", func(t *testing.T) {
-		c.typed = true
 		c.Type = querypb.Type_FLOAT32
 		typ, flag := c.typeof(env, fields)
 		if typ != querypb.Type_FLOAT32 || flag != flagNullable {

@@ -29,7 +29,6 @@ type (
 		Key       string
 		Type      sqltypes.Type
 		Collation collations.TypedCollation
-		typed     bool
 	}
 )
 
@@ -75,7 +74,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type)
 		}
 		typ := bvar.Type
-		if bv.typed {
+		if bv.typed() {
 			typ = bv.Type
 		}
 		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), collations.TypedCollation{
@@ -89,7 +88,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 // typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var tt sqltypes.Type
-	if bv.typed {
+	if bv.typed() {
 		tt = bv.Type
 	} else {
 		if bvar, err := env.lookupBindVar(bv.Key); err == nil {
@@ -107,7 +106,7 @@ func (bv *BindVariable) typeof(env *ExpressionEnv, _ []*querypb.Field) (sqltypes
 }
 
 func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
-	if !bvar.typed {
+	if !bvar.typed() {
 		return ctype{}, c.unsupported(bvar)
 	}
 
@@ -142,4 +141,8 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		Type: bvar.Type,
 		Col:  bvar.Collation,
 	}, nil
+}
+
+func (bvar *BindVariable) typed() bool {
+	return bvar.Type >= 0
 }

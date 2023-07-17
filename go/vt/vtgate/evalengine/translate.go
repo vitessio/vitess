@@ -194,7 +194,7 @@ func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
 	bvar := NewBindVar(arg.Name, arg.Type, ast.cfg.Collation)
 
-	if !bvar.typed {
+	if !bvar.typed() {
 		ast.untyped++
 	}
 	return bvar, nil
@@ -211,7 +211,7 @@ func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) 
 	}
 
 	column := NewColumn(col.V, typ, coll)
-	if !column.typed {
+	if !column.typed() {
 		ast.untyped++
 	}
 	return column, nil
@@ -236,7 +236,7 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 
 	column := NewColumn(idx, typ, coll)
 
-	if !column.typed {
+	if !column.typed() {
 		ast.untyped++
 	}
 	return column, nil
