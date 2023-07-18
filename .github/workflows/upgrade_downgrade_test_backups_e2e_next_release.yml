@@ -185,8 +185,8 @@ jobs:
         source build.env
 
         rm -f $PWD/bin/vtbackup $PWD/bin/vttablet
-        cp /tmp/vitess-build-current/bin/vtbackup $PWD/bin/vtbackup
-        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/vtbackup $PWD/bin/vtbackup
+        cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
         vtbackup --version
         vttablet --version
 
