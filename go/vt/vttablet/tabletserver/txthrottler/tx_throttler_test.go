@@ -49,7 +49,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
-	assert.False(t, throttler.Throttle(0))
+	assert.False(t, throttler.Throttle(0, "some_workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
@@ -125,9 +125,9 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Nil(t, throttlerImpl.Open())
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 
-	assert.False(t, throttlerImpl.Throttle(100))
-	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Get())
-	assert.Zero(t, throttlerImpl.requestsThrottled.Get())
+	assert.False(t, throttlerImpl.Throttle(100, "some_workload"))
+	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some_workload"])
+	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some_workload"])
 
 	throttlerImpl.state.StatsUpdate(tabletStats) // This calls replication lag thing
 	rdonlyTabletStats := &discovery.TabletHealth{
@@ -138,14 +138,14 @@ func TestEnabledThrottler(t *testing.T) {
 	// This call should not be forwarded to the go/vt/throttlerImpl.Throttler object.
 	throttlerImpl.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
-	assert.True(t, throttlerImpl.Throttle(100))
-	assert.Equal(t, int64(2), throttlerImpl.requestsTotal.Get())
-	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Get())
+	assert.True(t, throttlerImpl.Throttle(100, "some_workload"))
+	assert.Equal(t, int64(2), throttlerImpl.requestsTotal.Counts()["some_workload"])
+	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some_workload"])
 
 	// This call should not throttle due to priority. Check that's the case and counters agree.
-	assert.False(t, throttlerImpl.Throttle(0))
-	assert.Equal(t, int64(3), throttlerImpl.requestsTotal.Get())
-	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Get())
+	assert.False(t, throttlerImpl.Throttle(0, "some_workload"))
+	assert.Equal(t, int64(3), throttlerImpl.requestsTotal.Counts()["some_workload"])
+	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some_workload"])
 	throttlerImpl.Close()
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
