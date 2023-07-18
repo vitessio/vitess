@@ -134,7 +134,7 @@ func TestWeightStringFallBack(t *testing.T) {
 	checkCols := []CheckCol{{
 		Col:       0,
 		WsCol:     &offsetOne,
-		Type:      -1,
+		Type:      sqltypes.Unknown,
 		Collation: collations.Unknown,
 	}}
 	input := r("myid|weightstring(myid)",
@@ -160,7 +160,7 @@ func TestWeightStringFallBack(t *testing.T) {
 	utils.MustMatch(t, []CheckCol{{
 		Col:       0,
 		WsCol:     &offsetOne,
-		Type:      -1,
+		Type:      sqltypes.Unknown,
 		Collation: collations.Unknown,
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }

@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -342,7 +343,7 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 			Desc:              order.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: starColFixedIndex,
 			FromGroupBy:       order.fromGroupBy,
-			Type:              -1,
+			Type:              sqltypes.Unknown,
 			CollationID:       collations.Unknown,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)

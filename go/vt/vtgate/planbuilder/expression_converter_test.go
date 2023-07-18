@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -42,7 +44,7 @@ func TestConversion(t *testing.T) {
 		expressionsOut: e(evalengine.NewLiteralInt(1)),
 	}, {
 		expressionsIn:  "@@foo",
-		expressionsOut: e(evalengine.NewColumn(0, -1, collations.Default())),
+		expressionsOut: e(evalengine.NewColumn(0, sqltypes.Unknown, collations.Unknown)),
 	}}
 
 	for _, tc := range queries {

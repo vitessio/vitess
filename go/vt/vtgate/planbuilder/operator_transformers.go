@@ -182,7 +182,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		case operators.Offset:
 			t, found := ctx.SemTable.ExprTypes[e.Expr]
 			if !found {
-				return evalengine.NewColumn(e.Offset, -1, collations.Unknown)
+				return evalengine.NewColumn(e.Offset, sqltypes.Unknown, collations.Unknown)
 			}
 			return evalengine.NewColumn(e.Offset, t.Type, t.Collation)
 		default:

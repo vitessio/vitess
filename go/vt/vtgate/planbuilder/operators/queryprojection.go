@@ -117,7 +117,7 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 
 func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Type, collations.ID) {
 	if aggr.Func == nil {
-		return -1, collations.Unknown
+		return sqltypes.Unknown, collations.Unknown
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
@@ -125,7 +125,7 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Ty
 		return typ, col
 
 	}
-	return -1, collations.Unknown
+	return sqltypes.Unknown, collations.Unknown
 }
 
 // NewGroupBy creates a new group by from the given fields.

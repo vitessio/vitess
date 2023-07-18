@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -250,7 +251,7 @@ func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr
 		return evalengine.NewTupleExpr(exprs...), nil
 	case *sqlparser.ColName:
 		joinVar := jt.Procure(plan, typedVal, rb.Order())
-		return evalengine.NewBindVar(joinVar, -1, collations.Unknown), nil
+		return evalengine.NewBindVar(joinVar, sqltypes.Unknown, collations.Unknown), nil
 	default:
 		return evalengine.Translate(typedVal, nil)
 	}

@@ -61,7 +61,7 @@ func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *Aggregate
 		Col:    col,
 		Alias:  alias,
 		WCol:   -1,
-		Type:   -1,
+		Type:   sqltypes.Unknown,
 	}
 	if opcode.NeedsComparableValues() {
 		out.KeyCol = col

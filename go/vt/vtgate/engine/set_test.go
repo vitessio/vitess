@@ -108,7 +108,7 @@ func TestSetTable(t *testing.T) {
 		setOps: []SetOp{
 			&UserDefinedVariable{
 				Name: "x",
-				Expr: evalengine.NewColumn(0, -1, collations.CollationBinaryID),
+				Expr: evalengine.NewColumn(0, sqltypes.Unknown, collations.Unknown),
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(

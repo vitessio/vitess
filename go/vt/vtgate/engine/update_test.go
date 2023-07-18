@@ -94,7 +94,7 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", -1, collations.CollationBinaryID)}
+	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)}
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `query arguments missing for aa`)
 }

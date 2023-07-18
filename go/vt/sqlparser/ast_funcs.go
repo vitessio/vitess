@@ -533,7 +533,7 @@ func NewTimestampLiteral(in string) *Literal {
 
 // NewArgument builds a new ValArg.
 func NewArgument(in string) *Argument {
-	return &Argument{Name: in, Type: -1}
+	return &Argument{Name: in, Type: sqltypes.Unknown}
 }
 
 func parseBindVariable(yylex yyLexer, bvar string) *Argument {

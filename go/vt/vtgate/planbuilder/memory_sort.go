@@ -95,7 +95,7 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 			Desc:              order.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: colNumber,
 			FromGroupBy:       order.fromGroupBy,
-			Type:              -1,
+			Type:              sqltypes.Unknown,
 			CollationID:       collations.Unknown,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)

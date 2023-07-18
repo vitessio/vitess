@@ -43,7 +43,7 @@ func TestTypeOf(t *testing.T) {
 	fields := []*querypb.Field{field1, field2}
 
 	c := &Column{
-		Type: -1,
+		Type: sqltypes.Unknown,
 	}
 	env.Row = sqltypes.Row{sqltypes.NewInt64(10)}
 
@@ -67,7 +67,7 @@ func TestTypeOf(t *testing.T) {
 	t.Run("Check when offset is out of bounds", func(t *testing.T) {
 		c.Offset = 10
 		typ, flag := c.typeof(env, fields)
-		if typ != -1 || flag != flagAmbiguousType {
+		if typ != sqltypes.Unknown || flag != flagAmbiguousType {
 			t.Errorf("typeof() failed, expected -1 and flagAmbiguousType, got %v and %v", typ, flag)
 		}
 	})

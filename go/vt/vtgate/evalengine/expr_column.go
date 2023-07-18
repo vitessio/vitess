@@ -55,7 +55,7 @@ func (c *Column) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.T
 	if c.typed() {
 		return c.Type, flagNullable
 	}
-	return -1, flagAmbiguousType
+	return sqltypes.Unknown, flagAmbiguousType
 }
 
 func (column *Column) compile(c *compiler) (ctype, error) {

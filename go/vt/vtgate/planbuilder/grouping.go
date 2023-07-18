@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -78,7 +79,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			default:
 				return nil, vterrors.VT12001("in scatter query: only simple references are allowed")
 			}
-			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1, Type: -1, FromGroupBy: true})
+			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1, Type: sqltypes.Unknown, FromGroupBy: true})
 		}
 		// Append the distinct aggregate if any.
 		if node.extraDistinct != nil {
@@ -111,7 +112,7 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 			if rc.column.Origin() == node {
 				return newDistinctV3(node), nil
 			}
-			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: i, WeightStringCol: -1, Type: -1, FromGroupBy: false})
+			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: i, WeightStringCol: -1, Type: sqltypes.Unknown, FromGroupBy: false})
 		}
 		newInput, err := planDistinct(node.input)
 		if err != nil {
