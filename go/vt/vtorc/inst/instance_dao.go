@@ -102,6 +102,9 @@ func initializeInstanceDao() {
 	forgetAliases = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
 	cacheInitializationCompleted.Store(true)
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
+=======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 =======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
