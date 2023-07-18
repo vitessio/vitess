@@ -125,7 +125,6 @@ type Throttler struct {
 	ts              *topo.Server
 	srvTopoServer   srvtopo.Server
 	heartbeatWriter heartbeat.HeartbeatWriter
-	tmClient        tmclient.TabletManagerClient
 
 	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
 	recentCheckTickerValue int64
@@ -437,7 +436,6 @@ func (throttler *Throttler) Open() error {
 	// Throttler.
 	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
 	throttler.initConfig()
-	throttler.tmClient = tmclient.NewTabletManagerClient()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
@@ -503,10 +501,6 @@ func (throttler *Throttler) Close() {
 	throttler.pool.Close()
 	atomic.StoreInt64(&throttler.isOpen, 0)
 	log.Infof("Throttler: finished execution of Close")
-
-	if throttler.tmClient != nil {
-		throttler.tmClient.Close()
-	}
 }
 
 func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
@@ -697,7 +691,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	}()
 }
 
-func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
+func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, tmClient tmclient.TabletManagerClient, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
 	return func() *mysql.MySQLThrottleMetric {
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
@@ -706,7 +700,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 
 		{
 			req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
-			if resp, gRPCErr := throttler.tmClient.CheckThrottler(ctx, probe.Tablet, req); gRPCErr == nil {
+			if resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req); gRPCErr == nil {
 				mySQLThrottleMetric.Value = resp.Value
 				if resp.StatusCode == http.StatusInternalServerError {
 					mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
@@ -760,6 +754,9 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 }
 
 func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
+	tmClient := tmclient.NewTabletManagerClient()
+	defer tmClient.Close()
+
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		clusterName := clusterName
@@ -781,7 +778,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					if clusterName == selfStoreName {
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
-						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
+						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
