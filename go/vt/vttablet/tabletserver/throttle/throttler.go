@@ -590,6 +590,9 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 	recentCheckTicker := addTicker(time.Second)
 
+	tmClient := tmclient.NewTabletManagerClient()
+	defer tmClient.Close()
+
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
 		for _, t := range tickers {
@@ -639,7 +642,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if throttler.IsOpen() {
 						// frequent
 						if !throttler.isDormant() {
-							throttler.collectMySQLMetrics(ctx)
+							throttler.collectMySQLMetrics(ctx, tmClient)
 						}
 					}
 				}
@@ -648,7 +651,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if throttler.IsOpen() {
 						// infrequent
 						if throttler.isDormant() {
-							throttler.collectMySQLMetrics(ctx)
+							throttler.collectMySQLMetrics(ctx, tmClient)
 						}
 					}
 				}
@@ -753,10 +756,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 	}
 }
 
-func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
-	tmClient := tmclient.NewTabletManagerClient()
-	defer tmClient.Close()
-
+func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		clusterName := clusterName
