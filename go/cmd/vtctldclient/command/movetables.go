@@ -60,7 +60,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesCancel makes a MoveTablesCancel gRPC call to a vtctld.
 	MoveTablesCancel = &cobra.Command{
 		Use:                   "cancel",
-		Short:                 "Cancel a MoveTables VReplication workflow",
+		Short:                 "Cancel a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer cancel`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Cancel"},
@@ -71,7 +71,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesComplete makes a MoveTablesComplete gRPC call to a vtctld.
 	MoveTablesComplete = &cobra.Command{
 		Use:                   "complete",
-		Short:                 "Complete a MoveTables VReplication workflow",
+		Short:                 "Complete a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer complete`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Complete"},
@@ -82,7 +82,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesCreate makes a MoveTablesCreate gRPC call to a vtctld.
 	MoveTablesCreate = &cobra.Command{
 		Use:                   "create",
-		Short:                 "Create and optionally run a MoveTables VReplication workflow",
+		Short:                 "Create and optionally run a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer create --source-keyspace commerce --cells zone1 --cells zone2 --tablet-types replica`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -112,7 +112,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesShow makes a GetWorkflows gRPC call to a vtctld.
 	MoveTablesShow = &cobra.Command{
 		Use:                   "show",
-		Short:                 "Show the details for a MoveTables VReplication workflow",
+		Short:                 "Show the details for a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer show`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
@@ -123,7 +123,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesStart makes a WorfklowUpdate gRPC call to a vtctld.
 	MoveTablesStart = &cobra.Command{
 		Use:                   "start",
-		Short:                 "Start the MoveTables workflow",
+		Short:                 "Start the MoveTables workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer start`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Start"},
@@ -135,7 +135,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesStatus makes a GetWorkflows gRPC call to a vtctld.
 	MoveTablesStatus = &cobra.Command{
 		Use:                   "status",
-		Short:                 "Show the current status for a MoveTables VReplication workflow",
+		Short:                 "Show the current status for a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 MoveTables --workflow commerce2customer --target-keyspace customer status`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Status", "progress", "Progress"},
@@ -146,7 +146,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesStop makes a WorfklowUpdate gRPC call to a vtctld.
 	MoveTablesStop = &cobra.Command{
 		Use:                   "stop",
-		Short:                 "Stop a MoveTables workflow",
+		Short:                 "Stop a MoveTables workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer stop`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Stop"},
@@ -158,7 +158,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesReverseTraffic makes a WorkflowSwitchTraffic gRPC call to a vtctld.
 	MoveTablesReverseTraffic = &cobra.Command{
 		Use:                   "reversetraffic",
-		Short:                 "Reverse traffic for a MoveTables VReplication workflow",
+		Short:                 "Reverse traffic for a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer reversetraffic`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"ReverseTraffic"},
@@ -181,7 +181,7 @@ See the --help output for each command for more details.`,
 	// MoveTablesSwitchTraffic makes a MoveTablesSwitchTraffic gRPC call to a vtctld.
 	MoveTablesSwitchTraffic = &cobra.Command{
 		Use:                   "switchtraffic",
-		Short:                 "Switch traffic for a MoveTables VReplication workflow",
+		Short:                 "Switch traffic for a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer switchtraffic --tablet-types "replica,rdonly"`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"SwitchTraffic"},

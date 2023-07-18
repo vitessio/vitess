@@ -46,7 +46,7 @@ var (
 	// Workflow is a parent command for Workflow* sub commands.
 	Workflow = &cobra.Command{
 		Use:   "Workflow --keyspace <keyspace> [command] [command-flags]",
-		Short: "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace",
+		Short: "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
 		Long: `Workflow commands: List, Show, Start, Stop, Update, and Delete.
 See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
@@ -58,7 +58,7 @@ See the --help output for each command for more details.`,
 	// WorkflowDelete makes a WorkflowDelete gRPC call to a vtctld.
 	WorkflowDelete = &cobra.Command{
 		Use:                   "delete",
-		Short:                 "Delete a VReplication workflow",
+		Short:                 "Delete a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer delete --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Delete"},
@@ -69,7 +69,7 @@ See the --help output for each command for more details.`,
 	// WorkflowList makes a GetWorkflows gRPC call to a vtctld.
 	WorkflowList = &cobra.Command{
 		Use:                   "list",
-		Short:                 "List the VReplication workflows in the given keyspace",
+		Short:                 "List the VReplication workflows in the given keyspace.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer list`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"List"},
@@ -80,7 +80,7 @@ See the --help output for each command for more details.`,
 	// WorkflowShow makes a GetWorkflows gRPC call to a vtctld.
 	WorkflowShow = &cobra.Command{
 		Use:                   "show",
-		Short:                 "Show the details for a VReplication workflow",
+		Short:                 "Show the details for a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer show --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
@@ -91,7 +91,7 @@ See the --help output for each command for more details.`,
 	// WorkflowStart makes a WorfklowUpdate gRPC call to a vtctld.
 	WorkflowStart = &cobra.Command{
 		Use:                   "start",
-		Short:                 "Start a VReplication workflow",
+		Short:                 "Start a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer start --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Start"},
@@ -102,7 +102,7 @@ See the --help output for each command for more details.`,
 	// WorkflowStop makes a WorfklowUpdate gRPC call to a vtctld.
 	WorkflowStop = &cobra.Command{
 		Use:                   "stop",
-		Short:                 "Stop a VReplication workflow",
+		Short:                 "Stop a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer stop --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Stop"},
@@ -113,7 +113,7 @@ See the --help output for each command for more details.`,
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
-		Short:                 "Update the configuration parameters for a VReplication workflow",
+		Short:                 "Update the configuration parameters for a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer update --workflow commerce2customer --cells zone1 --cells zone2 -c "zone3,zone4" -c zone5`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Update"},
