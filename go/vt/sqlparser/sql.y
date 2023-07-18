@@ -5598,9 +5598,25 @@ table_factor:
     case *ValuesStatement:
         n.Columns = $4
     }
-    $$ = &AliasedTableExpr{Expr:$1, As: $3}
+    $$ = &AliasedTableExpr{Lateral: false, Expr:$1, As: $3}
+  }
+| LATERAL subquery_or_values as_opt table_alias column_list_opt
+  {
+    switch n := $2.(type) {
+    case *Subquery:
+        n.Columns = $5
+    case *ValuesStatement:
+        n.Columns = $5
+    }
+    $$ = &AliasedTableExpr{Lateral: true, Expr:$2, As: $4}
   }
 | subquery_or_values
+  {
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
+  }
+| LATERAL subquery_or_values
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
@@ -5612,6 +5628,7 @@ table_factor:
   }
 | table_function
 | json_table
+
 
 values_statement:
   VALUES row_list
@@ -5824,7 +5841,7 @@ outer_join:
   }
 
 natural_join:
- NATURAL JOIN
+  NATURAL JOIN
   {
     $$ = NaturalJoinStr
   }
