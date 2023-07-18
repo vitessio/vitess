@@ -84,5 +84,8 @@ FLUSH PRIVILEGES;
 RESET SLAVE ALL;
 RESET MASTER;
 
+# custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
+# {{custom_sql}}
+
 # We need to set super_read_only back to what it was before
 SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'ON');

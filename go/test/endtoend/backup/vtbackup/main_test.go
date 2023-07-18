@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -89,8 +90,12 @@ func TestMain(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
+		if err != nil {
+			return 1, err
+		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
