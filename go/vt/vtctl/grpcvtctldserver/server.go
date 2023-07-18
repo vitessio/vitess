@@ -410,6 +410,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("shard", req.Shard)
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	if err != nil {
@@ -452,7 +453,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe}
+	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe, IncrementalFromPos: req.IncrementalFromPos}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
 }
