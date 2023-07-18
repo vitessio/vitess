@@ -43,7 +43,7 @@ var (
 	}
 	// BackupShard makes a BackupShard gRPC call to a vtctld.
 	BackupShard = &cobra.Command{
-		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] <keyspace/shard>",
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|auto] <keyspace/shard>",
 		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
 		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
 
@@ -114,8 +114,9 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 }
 
 var backupShardOptions = struct {
-	AllowPrimary bool
-	Concurrency  uint64
+	AllowPrimary       bool
+	Concurrency        uint64
+	IncrementalFromPos string
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -127,10 +128,11 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	stream, err := client.BackupShard(commandCtx, &vtctldatapb.BackupShardRequest{
-		Keyspace:     keyspace,
-		Shard:        shard,
-		AllowPrimary: backupOptions.AllowPrimary,
-		Concurrency:  backupOptions.Concurrency,
+		Keyspace:           keyspace,
+		Shard:              shard,
+		AllowPrimary:       backupShardOptions.AllowPrimary,
+		Concurrency:        backupShardOptions.Concurrency,
+		IncrementalFromPos: backupShardOptions.IncrementalFromPos,
 	})
 	if err != nil {
 		return err
@@ -259,6 +261,7 @@ func init() {
 
 	BackupShard.Flags().BoolVar(&backupShardOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	BackupShard.Flags().Uint64Var(&backupShardOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
+	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
 	Root.AddCommand(BackupShard)
 
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups.")
