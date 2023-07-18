@@ -49,25 +49,6 @@ func newPulloutSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, 
 	}
 }
 
-// setUnderlying sets the underlying primitive.
-func (ps *pulloutSubquery) setUnderlying(underlying logicalPlan) {
-	ps.underlying = underlying
-	ps.underlying.Reorder(ps.subquery.Order())
-	ps.order = ps.underlying.Order() + 1
-}
-
-// Order implements the logicalPlan interface
-func (ps *pulloutSubquery) Order() int {
-	return ps.order
-}
-
-// Reorder implements the logicalPlan interface
-func (ps *pulloutSubquery) Reorder(order int) {
-	ps.subquery.Reorder(order)
-	ps.underlying.Reorder(ps.subquery.Order())
-	ps.order = ps.underlying.Order() + 1
-}
-
 // Primitive implements the logicalPlan interface
 func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
@@ -75,44 +56,12 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	return ps.eSubquery
 }
 
-// ResultColumns implements the logicalPlan interface
-func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
-	return ps.underlying.ResultColumns()
-}
-
-// Wireup implements the logicalPlan interface
-func (ps *pulloutSubquery) Wireup(plan logicalPlan, jt *jointab) error {
-	if err := ps.underlying.Wireup(plan, jt); err != nil {
+// WireupGen4 implements the logicalPlan interface
+func (ps *pulloutSubquery) Wireup(ctx *plancontext.PlanningContext) error {
+	if err := ps.underlying.Wireup(ctx); err != nil {
 		return err
 	}
-	return ps.subquery.Wireup(plan, jt)
-}
-
-// Wireup2 implements the logicalPlan interface
-func (ps *pulloutSubquery) WireupGen4(ctx *plancontext.PlanningContext) error {
-	if err := ps.underlying.WireupGen4(ctx); err != nil {
-		return err
-	}
-	return ps.subquery.WireupGen4(ctx)
-}
-
-// SupplyVar implements the logicalPlan interface
-func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	if from <= ps.subquery.Order() {
-		ps.subquery.SupplyVar(from, to, col, varname)
-		return
-	}
-	ps.underlying.SupplyVar(from, to, col, varname)
-}
-
-// SupplyCol implements the logicalPlan interface
-func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	return ps.underlying.SupplyCol(col)
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (ps *pulloutSubquery) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	return ps.underlying.SupplyWeightString(colNumber, alsoAddToGroupBy)
+	return ps.subquery.Wireup(ctx)
 }
 
 // Rewrite implements the logicalPlan interface

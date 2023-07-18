@@ -39,9 +39,8 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		return nil, err
 	}
 	plan := &vindexFunc{
-		order:         1,
-		tableID:       op.Solved,
-		resultColumns: nil,
+		order:   1,
+		tableID: op.Solved,
 		eVindexFunc: &engine.VindexFunc{
 			Opcode: op.OpCode,
 			Vindex: single,

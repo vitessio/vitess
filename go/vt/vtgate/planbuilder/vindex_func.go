@@ -25,11 +25,9 @@ import (
 
 	"vitess.io/vitess/go/vt/vterrors"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var _ logicalPlan = (*vindexFunc)(nil)
@@ -40,9 +38,6 @@ type vindexFunc struct {
 
 	// the tableID field is only used by the gen4 planner
 	tableID semantics.TableSet
-
-	// resultColumns represent the columns returned by this route.
-	resultColumns []*resultColumn
 
 	// eVindexFunc is the primitive being built.
 	eVindexFunc *engine.VindexFunc
@@ -57,87 +52,14 @@ var colnames = []string{
 	"shard",
 }
 
-func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vindexFunc, *symtab) {
-	vf := &vindexFunc{
-		order: 1,
-		eVindexFunc: &engine.VindexFunc{
-			Vindex: vindex,
-		},
-	}
-
-	// Create a 'table' that represents the vindex.
-	t := &table{
-		alias:  alias,
-		origin: vf,
-	}
-
-	for _, colName := range colnames {
-		t.addColumn(sqlparser.NewIdentifierCI(colName), &column{origin: vf})
-	}
-	t.isAuthoritative = true
-
-	st := newSymtab()
-	// AddTable will not fail because symtab is empty.
-	_ = st.AddTable(t)
-	return vf, st
-}
-
-// Order implements the logicalPlan interface
-func (vf *vindexFunc) Order() int {
-	return vf.order
-}
-
-// Reorder implements the logicalPlan interface
-func (vf *vindexFunc) Reorder(order int) {
-	vf.order = order + 1
-}
-
 // Primitive implements the logicalPlan interface
 func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
 }
 
-// ResultColumns implements the logicalPlan interface
-func (vf *vindexFunc) ResultColumns() []*resultColumn {
-	return vf.resultColumns
-}
-
-// Wireup implements the logicalPlan interface
-func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
-	return nil
-}
-
 // WireupGen4 implements the logicalPlan interface
-func (vf *vindexFunc) WireupGen4(*plancontext.PlanningContext) error {
+func (vf *vindexFunc) Wireup(*plancontext.PlanningContext) error {
 	return nil
-}
-
-// SupplyVar implements the logicalPlan interface
-func (vf *vindexFunc) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	// vindexFunc is an atomic primitive. So, SupplyVar cannot be
-	// called on it.
-	panic("BUG: vindexFunc is an atomic node.")
-}
-
-// SupplyCol implements the logicalPlan interface
-func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range vf.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-
-	vf.resultColumns = append(vf.resultColumns, &resultColumn{column: c})
-	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-		Name: col.Name.String(),
-		Type: querypb.Type_VARBINARY,
-	})
-
-	// columns that reference vindexFunc will have their colNumber set.
-	// Let's use it here.
-	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, c.colNumber)
-	return rc, len(vf.resultColumns) - 1
 }
 
 // SupplyProjection pushes the given aliased expression into the fields and cols slices of the
@@ -178,11 +100,6 @@ type UnsupportedSupplyWeightString struct {
 // Error function implements the error interface
 func (err UnsupportedSupplyWeightString) Error() string {
 	return fmt.Sprintf("cannot do collation on %s", err.Type)
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (vf *vindexFunc) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	return 0, UnsupportedSupplyWeightString{Type: "vindex function"}
 }
 
 // Rewrite implements the logicalPlan interface

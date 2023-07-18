@@ -27,8 +27,7 @@
   {
     "comment": "scatter order by with * expression",
     "query": "select * from user order by id",
-    "v3-plan": "VT12001: unsupported: in scatter query: ORDER BY must reference a column in the SELECT list: id asc",
-    "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
     "comment": "natural join",
@@ -38,14 +37,12 @@
   {
     "comment": "join with USING construct",
     "query": "select * from user join user_extra using(id)",
-    "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
-    "gen4-plan": "can't handle JOIN USING without authoritative tables"
+    "plan": "can't handle JOIN USING without authoritative tables"
   },
   {
     "comment": "join with USING construct with 3 tables",
     "query": "select user.id from user join user_extra using(id) join music using(id2)",
-    "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
-    "gen4-plan": "can't handle JOIN USING without authoritative tables"
+    "plan": "can't handle JOIN USING without authoritative tables"
   },
   {
     "comment": "natural left join",
@@ -65,56 +62,47 @@
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
     "query": "select * from user group by 1",
-    "v3-plan": "VT12001: unsupported: '*' expression in cross-shard query",
-    "gen4-plan": "cannot use column offsets in group statement when using `*`"
+    "plan": "cannot use column offsets in group statement when using `*`"
   },
   {
     "comment": "Multi-value aggregates not supported",
     "query": "select count(a,b) from user",
-    "v3-plan": "VT12001: unsupported: only one expression is allowed inside aggregates: count(a, b)",
-    "gen4-plan": "VT03001: aggregate functions take a single argument 'count(a, b)'"
+    "plan": "VT03001: aggregate functions take a single argument 'count(a, b)'"
   },
   {
     "comment": "subqueries not supported in group by",
     "query": "select id from user group by id, (select id from user_extra)",
-    "v3-plan": "VT12001: unsupported: subqueries disallowed in sqlparser.GroupBy",
-    "gen4-plan": "VT12001: unsupported: subqueries in GROUP BY"
+    "plan": "VT12001: unsupported: subqueries in GROUP BY"
   },
   {
     "comment": "subqueries in delete",
     "query": "delete from user where col = (select id from unsharded)",
-    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
-    "gen4-plan": "VT12001: unsupported: subqueries in DML"
+    "plan": "VT12001: unsupported: subqueries in DML"
   },
   {
     "comment": "sharded subqueries in unsharded delete",
     "query": "delete from unsharded where col = (select id from user)",
-    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
-    "gen4-plan": "VT12001: unsupported: subqueries in DML"
+    "plan": "VT12001: unsupported: subqueries in DML"
   },
   {
     "comment": "sharded delete with limit clasue",
     "query": "delete from user_extra limit 10",
-    "v3-plan": "VT12001: unsupported: multi-shard delete with LIMIT",
-    "gen4-plan": "VT12001: unsupported: multi shard DELETE with LIMIT"
+    "plan": "VT12001: unsupported: multi shard DELETE with LIMIT"
   },
   {
     "comment": "sharded subquery in unsharded subquery in unsharded delete",
     "query": "delete from unsharded where col = (select id from unsharded where id = (select id from user))",
-    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
-    "gen4-plan": "VT12001: unsupported: subqueries in DML"
+    "plan": "VT12001: unsupported: subqueries in DML"
   },
   {
     "comment": "sharded join unsharded subqueries in unsharded delete",
     "query": "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)",
-    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
-    "gen4-plan": "VT12001: unsupported: subqueries in DML"
+    "plan": "VT12001: unsupported: subqueries in DML"
   },
   {
     "comment": "scatter update with limit clause",
     "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
-    "v3-plan": "VT12001: unsupported: multi-shard update with LIMIT",
-    "gen4-plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
+    "plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
   },
   {
     "comment": "multi delete multi table",
@@ -124,68 +112,57 @@
   {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
-    "v3-plan": "VT12001: unsupported: you cannot update primary vindex columns; invalid update on vindex: user_index",
-    "gen4-plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
+    "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
   },
   {
     "comment": "update change in multicol vindex column",
     "query": "update multicol_tbl set colc = 5, colb = 4 where cola = 1 and colb = 2",
-    "v3-plan": "VT12001: unsupported: you cannot update primary vindex columns; invalid update on vindex: multicolIdx",
-    "gen4-plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: multicolIdx"
+    "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: multicolIdx"
   },
   {
     "comment": "update changes non lookup vindex column",
     "query": "update user_metadata set md5 = 1 where user_id = 1",
-    "v3-plan": "VT12001: unsupported: you can only update lookup vindexes; invalid update on vindex: user_md5_index",
-    "gen4-plan": "VT12001: unsupported: you can only UPDATE lookup vindexes; invalid update on vindex: user_md5_index"
+    "plan": "VT12001: unsupported: you can only UPDATE lookup vindexes; invalid update on vindex: user_md5_index"
   },
   {
     "comment": "update with complex set clause",
     "query": "update music set id = id + 1 where id = 1",
-    "v3-plan": "VT12001: unsupported: only values are supported: invalid update on column: `id` with expr: [id + 1]",
-    "gen4-plan": "VT12001: unsupported: only values are supported; invalid update on column: `id` with expr: [id + 1]"
+    "plan": "VT12001: unsupported: only values are supported; invalid update on column: `id` with expr: [id + 1]"
   },
   {
     "comment": "update by primary keyspace id, changing one vindex column, limit without order clause",
     "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10",
-    "v3-plan": "VT12001: unsupported: need to provide ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map",
-    "gen4-plan": "VT12001: unsupported: you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map"
+    "plan": "VT12001: unsupported: you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map"
   },
   {
     "comment": "update with derived table",
     "query": "update (select id from user) as u set id = 4",
-    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
-    "gen4-plan": "The target table u of the UPDATE is not updatable"
+    "plan": "The target table u of the UPDATE is not updatable"
   },
   {
     "comment": "join in update tables",
     "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
-    "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
-    "gen4-plan": "VT12001: unsupported: unaliased multiple tables in update"
+    "plan": "VT12001: unsupported: unaliased multiple tables in update"
   },
   {
     "comment": "multiple tables in update",
     "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
-    "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
-    "gen4-plan": "VT12001: unsupported: multiple (2) tables in update"
+    "plan": "VT12001: unsupported: multiple (2) tables in update"
   },
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",
     "query": "insert into unsharded_auto select col from unsharded",
-    "v3-plan": "VT12001: unsupported: auto-increment and SELECT in INSERT",
-    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
+    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, no col list with auto-inc",
     "query": "insert into unsharded_auto values(1,1)",
-    "v3-plan": "VT13001: [BUG] column list required for tables with auto-inc columns",
-    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
+    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
-    "v3-plan": "VT13001: [BUG] column list does not match values",
-    "gen4-plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "sharded upsert can't change vindex",
@@ -295,20 +272,17 @@
   {
     "comment": "select get_lock with non-dual table",
     "query": "select get_lock('xyz', 10) from user",
-    "v3-plan": "VT12001: unsupported: get_lock('xyz', 10) is allowed only with dual",
-    "gen4-plan": "get_lock('xyz', 10) allowed only with dual"
+    "plan": "get_lock('xyz', 10) allowed only with dual"
   },
   {
     "comment": "select is_free_lock with non-dual table",
     "query": "select is_free_lock('xyz') from user",
-    "v3-plan": "VT12001: unsupported: is_free_lock('xyz') is allowed only with dual",
-    "gen4-plan": "is_free_lock('xyz') allowed only with dual"
+    "plan": "is_free_lock('xyz') allowed only with dual"
   },
   {
     "comment": "union with SQL_CALC_FOUND_ROWS",
     "query": "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1",
-    "v3-plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with UNION",
-    "gen4-plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union"
+    "plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union"
   },
   {
     "comment": "set with DEFAULT - vitess aware",
@@ -328,8 +302,7 @@
   {
     "comment": "create view with Cannot auto-resolve for cross-shard joins",
     "query": "create view user.view_a as select col from user join user_extra",
-    "v3-plan": "VT03019: column col not found",
-    "gen4-plan": "Column 'col' in field list is ambiguous"
+    "plan": "Column 'col' in field list is ambiguous"
   },
   {
     "comment": "create view with join that cannot be served in each shard separately",
@@ -364,8 +337,7 @@
   {
     "comment": "avg function on scatter query",
     "query": "select avg(id) from user",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
-    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(id)'"
+    "plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(id)'"
   },
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
@@ -378,10 +350,9 @@
     "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
-    "comment": "Gen4 does a rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.",
+    "comment": "rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.",
     "query": "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
-    "v3-plan": "VT12001: unsupported: ORDER BY on top of UNION",
-    "gen4-plan": "Column 'id' in field list is ambiguous"
+    "plan": "Column 'id' in field list is ambiguous"
   },
   {
     "comment": "unsupported with clause in delete statement",
@@ -406,8 +377,7 @@
   {
     "comment": "aggregation on union",
     "query": "select sum(col) from (select col from user union all select col from unsharded) t",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.concatenateGen4 plan"
+    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.concatenate plan"
   },
   {
     "comment": "insert having subquery in row values",
@@ -422,8 +392,7 @@
   {
     "comment": "json_table expressions",
     "query": "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt",
-    "v3-plan": "VT12001: unsupported: JSON_TABLE expressions",
-    "gen4-plan": "VT12001: unsupported: json_table expressions"
+    "plan": "VT12001: unsupported: json_table expressions"
   },
   {
     "comment": "mix lock with other expr",
@@ -463,7 +432,6 @@
   {
     "comment": "aggregation on top of aggregation not supported",
     "query": "select distinct count(*) from user, (select distinct count(*) from user) X",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: aggregation on top of aggregation not supported"
+    "plan": "VT12001: unsupported: aggregation on top of aggregation not supported"
   }
 ]

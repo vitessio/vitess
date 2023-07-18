@@ -701,11 +701,9 @@ func (vw *vschemaWrapper) IsViewsEnabled() bool {
 
 type (
 	planTest struct {
-		Comment  string          `json:"comment,omitempty"`
-		Query    string          `json:"query,omitempty"`
-		Plan     json.RawMessage `json:"plan,omitempty"`
-		V3Plan   json.RawMessage `json:"v3-plan,omitempty"`
-		Gen4Plan json.RawMessage `json:"gen4-plan,omitempty"`
+		Comment string          `json:"comment,omitempty"`
+		Query   string          `json:"query,omitempty"`
+		Plan    json.RawMessage `json:"plan,omitempty"`
 	}
 )
 
@@ -714,13 +712,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 
 	t.Run(filename, func(t *testing.T) {
 		var expected []planTest
-		var outFirstPlanner string
 		for _, tcase := range readJSONTests(filename) {
-			if tcase.V3Plan == nil {
-				tcase.V3Plan = tcase.Plan
-				tcase.Gen4Plan = tcase.Plan
-			}
-			current := planTest{}
 			testName := tcase.Comment
 			if testName == "" {
 				testName = tcase.Query
@@ -728,52 +720,23 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 			if tcase.Query == "" {
 				continue
 			}
-			t.Run(fmt.Sprintf("V3: %s", testName), func(t *testing.T) {
-				vschema.version = V3
-				plan, err := TestBuilder(tcase.Query, vschema, vschema.currentDb())
-				if render && plan != nil {
-					viz, err := engine.GraphViz(plan.Instructions)
-					if err == nil {
-						_ = viz.Render()
-					}
-				}
-				out := getPlanOrErrorOutput(err, plan)
-
-				compare, s := jsondiff.Compare(tcase.V3Plan, []byte(out), &opts)
-				if compare != jsondiff.FullMatch {
-					t.Errorf("V3 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.V3Plan, out)
-				}
-
-				outFirstPlanner = out
-				current.Comment = testName
-				current.Query = tcase.Query
-			})
-
-			vschema.version = Gen4
-			out, err := getPlanOutput(tcase, vschema, render)
-			if err != nil && len(tcase.Gen4Plan) == 0 && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
-				continue
+			current := planTest{
+				Comment: testName,
+				Query:   tcase.Query,
 			}
+			vschema.version = Gen4
+			out := getPlanOutput(tcase, vschema, render)
 
-			// our expectation for the new planner on this query is one of three
-			//  - it produces the same plan as V3 - this is shown using empty brackets: {\n}
-			//  - it produces a different but accepted plan - this is shown using the accepted plan
-			//  - or it produces a different plan that has not yet been accepted, or it fails to produce a plan
-			//       this is shown by not having any info at all after the result for the V3 planner
-			//       with this last expectation, it is an error if the Gen4 planner
-			//       produces the same plan as the V3 planner does
-			t.Run(fmt.Sprintf("Gen4: %s", testName), func(t *testing.T) {
-				compare, s := jsondiff.Compare(tcase.Gen4Plan, []byte(out), &opts)
+			// our expectation for the planner on the query is one of three
+			// - produces same plan as expected
+			// - produces a different plan than expected
+			// - fails to produce a plan
+			t.Run(testName, func(t *testing.T) {
+				compare, s := jsondiff.Compare(tcase.Plan, []byte(out), &opts)
 				if compare != jsondiff.FullMatch {
-					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Gen4Plan, out)
+					t.Errorf("%s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Plan, out)
 				}
-
-				if outFirstPlanner == out {
-					current.Plan = []byte(out)
-				} else {
-					current.V3Plan = []byte(outFirstPlanner)
-					current.Gen4Plan = []byte(out)
-				}
+				current.Plan = []byte(out)
 			})
 			expected = append(expected, current)
 		}
@@ -807,7 +770,7 @@ func readJSONTests(filename string) []planTest {
 	return output
 }
 
-func getPlanOutput(tcase planTest, vschema *vschemaWrapper, render bool) (out string, err error) {
+func getPlanOutput(tcase planTest, vschema *vschemaWrapper, render bool) (out string) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
@@ -820,8 +783,7 @@ func getPlanOutput(tcase planTest, vschema *vschemaWrapper, render bool) (out st
 			_ = viz.Render()
 		}
 	}
-	out = getPlanOrErrorOutput(err, plan)
-	return out, err
+	return getPlanOrErrorOutput(err, plan)
 }
 
 func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
@@ -852,9 +814,6 @@ func BenchmarkPlanner(b *testing.B) {
 	}
 	for _, filename := range benchMarkFiles {
 		testCases := readJSONTests(filename)
-		b.Run(filename+"-v3", func(b *testing.B) {
-			benchmarkPlanner(b, V3, testCases, vschema)
-		})
 		b.Run(filename+"-gen4", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
@@ -901,7 +860,7 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "vschemas/schema.json", true),
 		sysVarEnabled: true,
-		version:       V3,
+		version:       Gen4,
 	}
 
 	dmlCases := readJSONTests("dml_cases.json")
@@ -916,11 +875,11 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	})
 
 	b.Run("DML (random sample, N=32)", func(b *testing.B) {
-		benchmarkPlanner(b, V3, dmlCases[:32], vschema)
+		benchmarkPlanner(b, Gen4, dmlCases[:32], vschema)
 	})
 
 	b.Run("Select (random sample, N=32)", func(b *testing.B) {
-		benchmarkPlanner(b, V3, selectCases[:32], vschema)
+		benchmarkPlanner(b, Gen4, selectCases[:32], vschema)
 	})
 }
 
@@ -928,7 +887,7 @@ func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCase
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {
-			if len(tcase.Gen4Plan) > 0 {
+			if len(tcase.Plan) > 0 {
 				vschema.version = version
 				_, _ = TestBuilder(tcase.Query, vschema, vschema.currentDb())
 			}

@@ -40,11 +40,11 @@ func pushProjection(
 		// All of these either push to the single source, or push to the LHS
 		src := node.Inputs()[0]
 		return pushProjection(ctx, expr, src, inner, reuseCol, hasAggregation)
-	case *routeGen4:
+	case *route:
 		return addExpressionToRoute(ctx, node, expr, reuseCol)
 	case *hashJoin:
 		return pushProjectionIntoHashJoin(ctx, expr, node, reuseCol, inner, hasAggregation)
-	case *joinGen4:
+	case *join:
 		return pushProjectionIntoJoin(ctx, expr, node, reuseCol, inner, hasAggregation)
 	case *simpleProjection:
 		return pushProjectionIntoSimpleProj(ctx, expr, node, inner, hasAggregation, reuseCol)
@@ -54,7 +54,7 @@ func pushProjection(
 		return pushProjectionIntoVindexFunc(node, expr, reuseCol)
 	case *semiJoin:
 		return pushProjectionIntoSemiJoin(ctx, expr, reuseCol, node, inner, hasAggregation)
-	case *concatenateGen4:
+	case *concatenate:
 		return pushProjectionIntoConcatenate(ctx, expr, hasAggregation, node, inner, reuseCol)
 	default:
 		return 0, false, vterrors.VT13001(fmt.Sprintf("push projection does not yet support: %T", node))
@@ -70,7 +70,7 @@ func pushProjectionIntoVindexFunc(node *vindexFunc, expr *sqlparser.AliasedExpr,
 	return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
 }
 
-func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenateGen4, inner bool, reuseCol bool) (int, bool, error) {
+func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenate, inner bool, reuseCol bool) (int, bool, error) {
 	if hasAggregation {
 		return 0, false, vterrors.VT12001("aggregation on UNIONs")
 	}
@@ -169,7 +169,7 @@ func pushProjectionIntoSimpleProj(
 func pushProjectionIntoJoin(
 	ctx *plancontext.PlanningContext,
 	expr *sqlparser.AliasedExpr,
-	node *joinGen4,
+	node *join,
 	reuseCol, inner, hasAggregation bool,
 ) (int, bool, error) {
 	lhsSolves := node.Left.ContainsTables()
@@ -292,7 +292,7 @@ func pushProjectionIntoHashJoin(
 	return len(node.Cols) - 1, true, nil
 }
 
-func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
+func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *route, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
 	if reuseCol {
 		if i := checkIfAlreadyExists(expr, rb.Select, ctx.SemTable); i != -1 {
 			return i, false, nil
