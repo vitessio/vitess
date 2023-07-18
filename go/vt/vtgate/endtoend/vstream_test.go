@@ -666,6 +666,107 @@ func TestVStreamSharded(t *testing.T) {
 
 }
 
+// TestVStreamCopyTransaction tests that we are properly wrapping
+// row events in the stream with BEGIN and COMMIT events.
+func TestVStreamCopyTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	keyspace := "ks"
+	shards := []string{"-80", "80-"}
+	table := "t1_copy_basic"
+	beginEventSeen, commitEventSeen := false, false
+	numResultInTrx := 0
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{
+			{
+				Keyspace: keyspace,
+				Shard:    shards[0],
+				Gtid:     "", // Start a vstream copy
+			},
+			{
+				Keyspace: keyspace,
+				Shard:    shards[1],
+				Gtid:     "", // Start a vstream copy
+			},
+		},
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  table,
+			Filter: fmt.Sprintf("select * from %s", table),
+		}},
+	}
+
+	gconn, conn, _, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	// Generate some test data.
+	for i := 1; i <= 100000; i++ {
+		values := fmt.Sprintf("(%d, %d)", i, i)
+		q := fmt.Sprintf("insert into %s (id1, id2) values %s", table, values)
+		_, err := conn.ExecuteFetch(q, 1, false)
+		require.NoError(t, err, "error inserting data: %v", err)
+	}
+
+	// Start a vstream.
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, nil)
+	require.NoError(t, err, "error starting vstream")
+
+recvLoop:
+	for {
+		e, err := reader.Recv()
+		numResultInTrx++
+		eventCount := len(e)
+		t.Logf("----------------------------Received %d events in response #%d for the transaction --------------------------------------\n", eventCount, numResultInTrx)
+		switch err {
+		case nil:
+			for _, event := range e {
+				switch event.Type {
+				case binlogdatapb.VEventType_BEGIN:
+					beginEventSeen = true
+					t.Logf("Found BEGIN event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx)
+					require.False(t, commitEventSeen, "Received COMMIT event before receiving BEGIN event: numResultInTrx=%v\n", numResultInTrx)
+				case binlogdatapb.VEventType_VGTID:
+					t.Logf("Found VGTID event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+				case binlogdatapb.VEventType_FIELD:
+					t.Logf("Found FIELD event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+				case binlogdatapb.VEventType_ROW:
+					// Uncomment if you need to do more debugging.
+					//t.Logf("Found ROW event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+				case binlogdatapb.VEventType_COMMIT:
+					commitEventSeen = true
+					t.Logf("Found COMMIT event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+					require.True(t, beginEventSeen, "Received COMMIT event before receiving BEGIN event: numResultInTrx=%v\n", numResultInTrx)
+				case binlogdatapb.VEventType_COPY_COMPLETED:
+					t.Logf("Finished vstream copy\n")
+					t.Logf("-------------------------------------------------------------------\n\n")
+					cancel()
+					break recvLoop
+				default:
+					t.Logf("Found extraneous event: %+v\n", event)
+				}
+				if beginEventSeen && commitEventSeen {
+					t.Logf("Received both BEGIN and COMMIT, so resetting transactional state\n")
+					beginEventSeen = false
+					commitEventSeen = false
+					numResultInTrx = 0
+				}
+			}
+		case io.EOF:
+			t.Logf("vstream ended\n")
+			t.Logf("-------------------------------------------------------------------\n\n")
+			cancel()
+			return
+		default:
+			require.FailNowf(t, "unexpected error", "encountered error in vstream: %v", err)
+			return
+		}
+	}
+	if beginEventSeen || commitEventSeen {
+		require.True(t, (beginEventSeen && commitEventSeen), "Did not receive both BEGIN and COMMIT in last transaction")
+	}
+}
+
 func removeAnyDeprecatedDisplayWidths(orig string) string {
 	var adjusted string
 	baseIntType := "int"
