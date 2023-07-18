@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -80,6 +81,7 @@ var backendWrites = collection.CreateOrReturnCollection("BACKEND_WRITES")
 var writeBufferLatency = stopwatch.NewNamedStopwatch()
 
 var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
+var cacheInitializationCompleted atomic.Bool
 
 func init() {
 	_ = metrics.Register("instance.access_denied", accessDeniedCounter)
@@ -94,7 +96,12 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
+<<<<<<< HEAD
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+=======
+	forgetAliases = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+	cacheInitializationCompleted.Store(true)
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
