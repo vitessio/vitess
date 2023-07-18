@@ -19,4 +19,4 @@
 
 source ../common/env.sh
 
-vtctldclient MoveTables --workflow "commerce2customer" --target-keyspace "customer" Complete
+vtctldclient MoveTables --workflow commerce2customer --target-keyspace customer complete

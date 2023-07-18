@@ -45,10 +45,12 @@ var (
 
 	// Workflow is a parent command for Workflow* sub commands.
 	Workflow = &cobra.Command{
-		Use:                   "workflow",
-		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace",
+		Use:   "Workflow --keyspace <keyspace> [command] [command-flags]",
+		Short: "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace",
+		Long: `Workflow commands: List, Show, Start, Stop, Update, and Delete.
+See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Workflow"},
+		Aliases:               []string{"workflow"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetWorkflows,
 	}
@@ -57,7 +59,7 @@ var (
 	WorkflowDelete = &cobra.Command{
 		Use:                   "delete",
 		Short:                 "Delete a VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer delete --workflow=commerce2customer"`,
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer delete --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Delete"},
 		Args:                  cobra.NoArgs,
@@ -68,7 +70,7 @@ var (
 	WorkflowList = &cobra.Command{
 		Use:                   "list",
 		Short:                 "List the VReplication workflows in the given keyspace",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer list"`,
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer list`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"List"},
 		Args:                  cobra.NoArgs,
@@ -79,7 +81,7 @@ var (
 	WorkflowShow = &cobra.Command{
 		Use:                   "show",
 		Short:                 "Show the details for a VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer show --workflow=commerce2customer"`,
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer show --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.NoArgs,
@@ -90,7 +92,7 @@ var (
 	WorkflowStart = &cobra.Command{
 		Use:                   "start",
 		Short:                 "Start a VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer start --workflow=commerce2customer"`,
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer start --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Start"},
 		Args:                  cobra.NoArgs,
@@ -101,7 +103,7 @@ var (
 	WorkflowStop = &cobra.Command{
 		Use:                   "stop",
 		Short:                 "Stop a VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer stop --workflow=commerce2customer"`,
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer stop --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Stop"},
 		Args:                  cobra.NoArgs,
@@ -112,7 +114,7 @@ var (
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
 		Short:                 "Update the configuration parameters for a VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer update --workflow=commerce2customer --cells "zone1" --cells "zone2" -c "zone3,zone4" -c "zone5"`,
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer update --workflow commerce2customer --cells zone1 --cells zone2 -c "zone3,zone4" -c zone5`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Update"},
 		Args:                  cobra.NoArgs,

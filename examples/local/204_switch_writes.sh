@@ -19,4 +19,4 @@
 
 source ../common/env.sh
 
-vtctldclient MoveTables --workflow "commerce2customer" --target-keyspace "customer" SwitchTraffic --tablet-types primary
+vtctldclient MoveTables --workflow commerce2customer --target-keyspace customer switchtraffic --tablet-types primary
