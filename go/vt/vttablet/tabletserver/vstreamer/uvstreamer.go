@@ -52,14 +52,18 @@ type uvstreamer struct {
 	cancel func()
 
 	// input parameters
-	vse          *Engine
-	send         func([]*binlogdatapb.VEvent) error
-	cp           dbconfigs.Connector
-	se           *schema.Engine
-	startPos     string
-	filter       *binlogdatapb.Filter
-	inTablePKs   []*binlogdatapb.TableLastPK
-	throttlerApp throttlerapp.Name
+	vse      *Engine
+	send     func([]*binlogdatapb.VEvent) error
+	cp       dbconfigs.Connector
+	se       *schema.Engine
+	startPos string
+	// Are we currently in an explicit transaction?
+	// If we are not, and we're about to send ROW
+	// events, then we need to send a BEGIN event first.
+	inTransaction bool
+	filter        *binlogdatapb.Filter
+	inTablePKs    []*binlogdatapb.TableLastPK
+	throttlerApp  throttlerapp.Name
 
 	vschema *localVSchema
 

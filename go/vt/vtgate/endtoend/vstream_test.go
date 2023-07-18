@@ -700,7 +700,13 @@ func TestVStreamCopyTransactions(t *testing.T) {
 	gconn, conn, _, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
-	// Generate some test data.
+	// Clear any existing data.
+	q := fmt.Sprintf("delete from %s", table)
+	_, err := conn.ExecuteFetch(q, -1, false)
+	require.NoError(t, err, "error clearing data: %v", err)
+
+	// Generate some test data. Enough to cross the vstream_packet_size
+	// threshold.
 	for i := 1; i <= 100000; i++ {
 		values := fmt.Sprintf("(%d, %d)", i, i)
 		q := fmt.Sprintf("insert into %s (id1, id2) values %s", table, values)
