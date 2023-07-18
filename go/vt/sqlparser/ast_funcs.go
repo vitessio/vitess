@@ -675,6 +675,10 @@ func NewAliasedExpr(expr Expr, alias string) *AliasedExpr {
 	}
 }
 
+func (ae *AliasedExpr) SetAlias(alias string) {
+	ae.As = NewIdentifierCI(alias)
+}
+
 // NewOrder makes a new Order
 func NewOrder(expr Expr, direction OrderDirection) *Order {
 	return &Order{

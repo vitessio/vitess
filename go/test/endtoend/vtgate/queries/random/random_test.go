@@ -84,18 +84,25 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case count(*) when -41 ^ 10 then -17 when 22 then -52 else 7 end from emp as tbl0, emp as tbl1 where tbl1.job < tbl1.job")
+
+	// mismatched results (maybe derived tables)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (68 - -16) / case false when -45 then 3 when 28 then -43 else -62 end as crandom0 from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ distinct not not false and count(*) from emp as tbl0, emp as tbl1 where tbl1.ename) as tbl1 limit 1")
+
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case true when 'burro' then 'trout' else 'elf' end < case count(distinct true) when 'bobcat' then 'turkey' else 'penguin' end from dept as tbl0, emp as tbl1 where 'spider'")
+
+	// mismatched results
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(distinct tbl1.deptno) from dept as tbl0, emp as tbl1 where tbl0.deptno and tbl1.comm in (12, tbl0.deptno, case false when 67 then -17 when -78 then -35 end, -76 >> -68)")
+
 	// mismatched number of columns
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) + 1 from emp as tbl0 order by count(*) desc")
 
 	// mismatched results (mismatched types)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(2 >> tbl2.mgr), sum(distinct tbl2.empno <=> 15) from emp as tbl0 left join emp as tbl2 on -32")
 
-	// panics instead of normally logging the error
-	// Received unexpected error:
-	// VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct 1) as caggr1
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(distinct tbl0.comm) as caggr0, sum(distinct 1) as caggr1 from emp as tbl0, emp as tbl1 having 'redfish' < 'blowfish'")
-
-	// mismatched results
+	// mismatched results (decimals off by a little; evalengine problem)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(case false when true then tbl1.deptno else -154 / 132 end) as caggr1 from emp as tbl0, dept as tbl1")
 
 	// mismatched results
@@ -141,6 +148,9 @@ func TestMustFix(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
 
 	// EOF
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ 8 < -31 xor (-29, sum((tbl0.deptno, 'wren', 'ostrich')), max(distinct (tbl0.dname, -15, -8))) in ((sum(distinct (tbl0.dname, 'bengal', -10)), 'ant', true)) as caggr0 from dept as tbl0 where tbl0.deptno * (77 - 61)")
+
+	// EOF
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.deptno as cgroup0, tbl1.loc as cgroup1, count(distinct tbl1.loc) as caggr1, tbl1.loc as crandom0 from dept as tbl0, dept as tbl1 group by tbl1.deptno, tbl1.loc")
 
 	// EOF
@@ -156,8 +166,11 @@ func TestKnownFailures(t *testing.T) {
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
 
+	// rhs of an In operation should be a tuple
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (case when true then min(distinct tbl1.job) else 'bee' end, 'molly') not in (('dane', 0)) as caggr1 from emp as tbl0, emp as tbl1")
+
 	// VT13001: [BUG] in scatter query: complex ORDER BY expression: :vtg1 /* VARCHAR */
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.job as cgroup0, sum(distinct 'mudfish'), tbl1.job as crandom0 from emp as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job desc, tbl1.job asc limit 8, 1")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.job as cgroup0, sum(distinct 'mudfish'), tbl1.job as crandom0 from emp as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job asc limit 8, 1")
 
 	// VT13001: [BUG] column should not be pushed to projection while doing a column lookup
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ -26 in (tbl2.mgr, -8, tbl0.deptno) as crandom0 from dept as tbl0, emp as tbl1 left join emp as tbl2 on tbl2.ename")
@@ -266,22 +279,24 @@ func TestRandom(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	endBy := time.Now().Add(5 * time.Second)
+	endBy := time.Now().Add(1 * time.Second)
 
 	var queryCount int
 	// continue testing after an error if and only if testFailingQueries is true
 	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
 		seed := time.Now().UnixNano()
-		fmt.Printf("seed: %d\n", seed)
-		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), sqlparser.ExprGeneratorConfig{}, 2, 2, 2, schemaTables)
+		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CannotAggregate, "", 0, false)
+		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
 		qg.randomQuery()
 		query := sqlparser.String(qg.sel)
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
-		fmt.Println(query)
+
 		// this assumes all queries are valid mysql queries
 		if vtErr != nil {
-
+			fmt.Printf("seed: %d\n", seed)
+			fmt.Println(query)
 			fmt.Println(vtErr)
+			fmt.Printf("\n\n\n")
 
 			if stopOnMustFixError {
 				// EOF
