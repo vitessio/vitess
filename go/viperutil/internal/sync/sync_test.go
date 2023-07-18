@@ -77,9 +77,8 @@ func TestWatchConfig(t *testing.T) {
 		return writeConfig(tmp, a, b)
 	}
 
-	tmp, err := os.CreateTemp(".", "TestWatchConfig_*.json")
+	tmp, err := os.CreateTemp(t.TempDir(), "TestWatchConfig_*.json")
 	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
 
 	require.NoError(t, writeRandomConfig(tmp))
 
