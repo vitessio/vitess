@@ -36,8 +36,11 @@ func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 =======
+=======
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 =======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
@@ -45,6 +48,9 @@ func TestDownPrimary(t *testing.T) {
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
+=======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 =======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
