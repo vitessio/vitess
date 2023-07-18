@@ -141,7 +141,7 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
 
-	fs.StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right.")
+	fs.StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
 	fs.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
