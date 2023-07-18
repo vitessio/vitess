@@ -93,13 +93,21 @@ func ChooseBinlogsForIncrementalBackup(
 			// know this when we look into the _next_ binlog file's Previous-GTIDs.
 			continue
 		}
+		// Got here? This means backupFromGTIDSet does not full contain the current binlog's Previous-GTIDs.
+		// In other words, Previoud-GTIDs have entries on top of backupFromGTIDSet. Which suggests that these
+		// entries were added by the previous binary log.
 		if i == 0 {
+			// Ummm... there _is no_ previous binary log.
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Required entries have been purged. Oldest binary log %v expects entries not found in backup pos. Expected pos=%v", binlog, previousGTIDsPos)
 		}
-		if !prevGTIDsUnion.Union(purgedGTIDSet).Contains(backupFromGTIDSet) {
+		// The other thing to validate, is that we can't allow a situation where the backup-GTIDs have entries not covered
+		// by our binary log's Previous-GTIDs (padded with purged GTIDs). Because that means we can't possibly restore to
+		// such position.
+		prevGTIDsUnionPurged := prevGTIDsUnion.Union(purgedGTIDSet)
+		if !prevGTIDsUnionPurged.Contains(backupFromGTIDSet) {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Neither fully contains the other. Requested pos=%v, binlog pos=%v",
-				backupFromGTIDSet, previousGTIDsPos.GTIDSet)
+				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Neither fully contains the other.\n- Requested pos=%v\n- binlog pos=%v\n- purgedGTIDSet=%v\n- union=%v\n- union purged=%v",
+				backupFromGTIDSet, previousGTIDsPos.GTIDSet, purgedGTIDSet, prevGTIDsUnion, prevGTIDsUnionPurged)
 		}
 		// We begin with the previous binary log, and we ignore the last binary log, because it's still open and being written to.
 		binaryLogsToBackup = binaryLogs[i-1 : len(binaryLogs)-1]

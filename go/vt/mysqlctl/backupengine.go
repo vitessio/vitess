@@ -391,6 +391,31 @@ func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 	return nil, nil, ErrNoCompleteBackup
 }
 
+// FindLatestSuccessfulBackupPosition returns the position of the last known successful backup
+func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams) (pos mysql.Position, err error) {
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return pos, err
+	}
+	defer bs.Close()
+
+	// Backups are stored in a directory structure that starts with
+	// <keyspace>/<shard>
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	bhs, err := bs.ListBackups(ctx, backupDir)
+	if err != nil {
+		return pos, vterrors.Wrap(err, "ListBackups failed")
+	}
+	_, manifest, err := FindLatestSuccessfulBackup(ctx, params.Logger, bhs)
+	if err != nil {
+		return pos, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
+	}
+	pos = manifest.Position
+	// For restore purposes, and for all we care, the backup position should also include the gtid_purged
+	pos.GTIDSet = pos.GTIDSet.Union(manifest.PurgedPosition.GTIDSet)
+	return pos, nil
+}
+
 // FindBackupToRestore returns a path, a sequence of backup handles, to be restored.
 // The returned handles stand for valid backups with complete manifests.
 func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (*RestorePath, error) {
