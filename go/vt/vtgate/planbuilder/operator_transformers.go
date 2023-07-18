@@ -180,11 +180,8 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		case operators.Eval:
 			return e.EExpr
 		case operators.Offset:
-			t, found := ctx.SemTable.ExprTypes[e.Expr]
-			if !found {
-				return evalengine.NewColumn(e.Offset, sqltypes.Unknown, collations.Unknown)
-			}
-			return evalengine.NewColumn(e.Offset, t.Type, t.Collation)
+			typ, col, _ := ctx.SemTable.TypeForExpr(e.Expr)
+			return evalengine.NewColumn(e.Offset, typ, col)
 		default:
 			failed = true
 			return nil
