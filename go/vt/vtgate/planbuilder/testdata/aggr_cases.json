@@ -2,8 +2,7 @@
   {
     "comment": "count(*) spread across join",
     "query": "select count(*) from user join user_extra on user.foo = user_extra.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user join user_extra on user.foo = user_extra.bar",
       "Instructions": {
@@ -63,8 +62,7 @@
   {
     "comment": "sum spread across join",
     "query": "select sum(user.col) from user join user_extra on user.foo = user_extra.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sum(user.col) from user join user_extra on user.foo = user_extra.bar",
       "Instructions": {
@@ -124,8 +122,7 @@
   {
     "comment": "count spread across join",
     "query": "select count(user.col) from user join user_extra on user.foo = user_extra.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(user.col) from user join user_extra on user.foo = user_extra.bar",
       "Instructions": {
@@ -185,8 +182,7 @@
   {
     "comment": "max spread across join",
     "query": "select max(user.col) from user join user_extra on user.foo = user_extra.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select max(user.col) from user join user_extra on user.foo = user_extra.bar",
       "Instructions": {
@@ -238,8 +234,7 @@
   {
     "comment": "min spread across join RHS",
     "query": "select min(user_extra.col) from user join user_extra on user.foo = user_extra.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select min(user_extra.col) from user join user_extra on user.foo = user_extra.bar",
       "Instructions": {
@@ -291,22 +286,7 @@
   {
     "comment": "group by a unique vindex should revert to simple route, and having clause should find the correct symbols.",
     "query": "select id, count(*) c from user group by id having max(col) > 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, count(*) c from user group by id having max(col) > 10",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
-        "Query": "select id, count(*) as c from `user` group by id having max(col) > 10",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, count(*) c from user group by id having max(col) > 10",
       "Instructions": {
@@ -328,37 +308,7 @@
   {
     "comment": "scatter aggregate in a subquery",
     "query": "select a from (select count(*) as a from user) t",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a from (select count(*) as a from user) t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count(0) AS count",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a from (select count(*) as a from user) t",
       "Instructions": {
@@ -387,29 +337,7 @@
   {
     "comment": "scatter aggregate with non-aggregate expressions.",
     "query": "select id, count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, count(*) from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(1) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-            "Query": "select id, count(*) from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, count(*) from user",
       "Instructions": {
@@ -438,30 +366,7 @@
   {
     "comment": "scatter aggregate using distinctdistinct",
     "query": "select distinct col from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct col from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
-            "Query": "select distinct col from `user` order by col asc",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct col from user",
       "Instructions": {
@@ -491,30 +396,7 @@
   {
     "comment": "scatter aggregate group by select col",
     "query": "select col from user group by col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col from user group by col",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1 group by col",
-            "OrderBy": "0 ASC",
-            "Query": "select col from `user` group by col order by col asc",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col from user group by col",
       "Instructions": {
@@ -544,22 +426,7 @@
   {
     "comment": "count with distinct group by unique vindex",
     "query": "select id, count(distinct col) from user group by id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, count(distinct col) from user group by id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id, count(distinct col) from `user` where 1 != 1 group by id",
-        "Query": "select id, count(distinct col) from `user` group by id",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, count(distinct col) from user group by id",
       "Instructions": {
@@ -579,33 +446,9 @@
     }
   },
   {
-    "comment": "count and sum with distinct unique vindex",
+    "comment": "count with distinct unique vindex",
     "query": "select col, count(distinct id), sum(distinct id) from user group by col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col, count(distinct id), sum(distinct id) from user group by col",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count, sum(2)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col, count(distinct id), sum(distinct id) from `user` where 1 != 1 group by col",
-            "OrderBy": "0 ASC",
-            "Query": "select col, count(distinct id), sum(distinct id) from `user` group by col order by col asc",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(distinct id), sum(distinct id) from user group by col",
       "Instructions": {
@@ -636,32 +479,7 @@
   {
     "comment": "count with distinct no unique vindex",
     "query": "select col1, count(distinct col2) from user group by col1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1, count(distinct col2) from user group by col1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "count_distinct_count(1) AS count(distinct col2)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, count(distinct col2) from user group by col1",
       "Instructions": {
@@ -693,31 +511,7 @@
   {
     "comment": "count with distinct no unique vindex and no group by",
     "query": "select count(distinct col2) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select count(distinct col2) from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "count_distinct_count(0) AS count(distinct col2)",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
-            "ResultColumns": 1,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(distinct col2) from user",
       "Instructions": {
@@ -748,32 +542,7 @@
   {
     "comment": "count with distinct no unique vindex, count expression aliased",
     "query": "select col1, count(distinct col2) c2 from user group by col1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1, count(distinct col2) c2 from user group by col1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "count_distinct_count(1) AS c2",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, count(distinct col2) c2 from user group by col1",
       "Instructions": {
@@ -805,32 +574,7 @@
   {
     "comment": "sum with distinct no unique vindex",
     "query": "select col1, sum(distinct col2) from user group by col1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1, sum(distinct col2) from user group by col1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_distinct_sum(1) AS sum(distinct col2)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, sum(distinct col2) from user group by col1",
       "Instructions": {
@@ -862,32 +606,7 @@
   {
     "comment": "min with distinct no unique vindex. distinct is ignored.",
     "query": "select col1, min(distinct col2) from user group by col1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1, min(distinct col2) from user group by col1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "min(1)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, min(distinct col2) from user group by col1",
       "Instructions": {
@@ -919,39 +638,7 @@
   {
     "comment": "order by count distinct",
     "query": "select col1, count(distinct col2) k from user group by col1 order by k",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
-      "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "1 ASC",
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count_distinct_count(1) AS k",
-            "GroupBy": "0",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-                "OrderBy": "(0|2) ASC, (1|3) ASC",
-                "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-                "ResultColumns": 2,
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
       "Instructions": {
@@ -990,38 +677,12 @@
   {
     "comment": "scatter aggregate group by aggregate function",
     "query": "select count(*) b from user group by b",
-    "v3-plan": "VT03005: cannot group on 'b'",
-    "gen4-plan": "VT03005: cannot group on 'count(*)'"
+    "plan": "VT03005: cannot group on 'count(*)'"
   },
   {
     "comment": "scatter aggregate multiple group by (columns)",
     "query": "select a, b, count(*) from user group by a, b",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, count(*) from user group by a, b",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
-        "GroupBy": "0, 1",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b, weight_string(a), weight_string(b)",
-            "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b) order by a asc, b asc",
-            "ResultColumns": 3,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, count(*) from user group by a, b",
       "Instructions": {
@@ -1053,32 +714,7 @@
   {
     "comment": "scatter aggregate multiple group by (numbers)",
     "query": "select a, b, count(*) from user group by 2, 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, count(*) from user group by 2, 1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
-        "GroupBy": "1, 0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by 2, 1, weight_string(b), weight_string(a)",
-            "OrderBy": "(1|3) ASC, (0|4) ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by 2, 1, weight_string(b), weight_string(a) order by b asc, a asc",
-            "ResultColumns": 3,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, count(*) from user group by 2, 1",
       "Instructions": {
@@ -1110,32 +746,7 @@
   {
     "comment": "scatter aggregate multiple group by columns inverse order",
     "query": "select a, b, count(*) from user group by b, a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, count(*) from user group by b, a",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
-        "GroupBy": "1, 0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
-            "OrderBy": "(1|3) ASC, (0|4) ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
-            "ResultColumns": 3,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, count(*) from user group by b, a",
       "Instructions": {
@@ -1167,30 +778,7 @@
   {
     "comment": "scatter aggregate group by column number",
     "query": "select col from user group by 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col from user group by 1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1 group by 1",
-            "OrderBy": "0 ASC",
-            "Query": "select col from `user` group by 1 order by col asc",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col from user group by 1",
       "Instructions": {
@@ -1220,35 +808,12 @@
   {
     "comment": "scatter aggregate group by invalid column number",
     "query": "select col from user group by 2",
-    "v3-plan": "VT03014: unknown column '2' in 'group statement'",
-    "gen4-plan": "Unknown column '2' in 'group statement'"
+    "plan": "Unknown column '2' in 'group statement'"
   },
   {
     "comment": "scatter aggregate order by null",
     "query": "select count(*) from user order by null",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select count(*) from user order by null",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user order by null",
       "Instructions": {
@@ -1277,32 +842,7 @@
   {
     "comment": "scatter aggregate with numbered order by columns",
     "query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(4) AS count",
-        "GroupBy": "0, 1, 2",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c)",
-            "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c) order by 1 asc, 2 asc, 3 asc",
-            "ResultColumns": 5,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
       "Instructions": {
@@ -1334,32 +874,7 @@
   {
     "comment": "scatter aggregate with named order by columns",
     "query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(4) AS count",
-        "GroupBy": "0, 1, 2",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c)",
-            "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c) order by a asc, b asc, c asc",
-            "ResultColumns": 5,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
       "Instructions": {
@@ -1391,32 +906,7 @@
   {
     "comment": "scatter aggregate with jumbled order by columns",
     "query": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(4) AS count",
-        "GroupBy": "0, 1, 2, 3",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
-            "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 1, 2, 3, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
-            "ResultColumns": 5,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c",
       "Instructions": {
@@ -1448,32 +938,7 @@
   {
     "comment": "scatter aggregate with jumbled group by and order by columns",
     "query": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(4) AS count",
-        "GroupBy": "2, 1, 0, 3",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 3, 2, 1, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
-            "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 3, 2, 1, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
-            "ResultColumns": 5,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c",
       "Instructions": {
@@ -1505,32 +970,7 @@
   {
     "comment": "scatter aggregate with some descending order by cols",
     "query": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(3) AS count",
-        "GroupBy": "2, 1, 0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by 3, 2, 1, weight_string(a), weight_string(c), weight_string(b)",
-            "OrderBy": "(0|4) DESC, (2|5) DESC, (1|6) ASC",
-            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by 3, 2, 1, weight_string(a), weight_string(c), weight_string(b) order by 1 desc, 3 desc, b asc",
-            "ResultColumns": 4,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b",
       "Instructions": {
@@ -1562,43 +1002,12 @@
   {
     "comment": "invalid order by column numner for scatter",
     "query": "select col, count(*) from user group by col order by 5 limit 10",
-    "v3-plan": "VT03014: unknown column '5' in 'order clause'",
-    "gen4-plan": "Unknown column '5' in 'order clause'"
+    "plan": "Unknown column '5' in 'order clause'"
   },
   {
     "comment": "aggregate with limit",
     "query": "select col, count(*) from user group by col limit 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col, count(*) from user group by col limit 10",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(10)",
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum_count(1) AS count",
-            "GroupBy": "0",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
-                "OrderBy": "0 ASC",
-                "Query": "select col, count(*) from `user` group by col order by col asc limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col limit 10",
       "Instructions": {
@@ -1635,26 +1044,7 @@
   {
     "comment": "Group by with collate operator",
     "query": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by a collate utf8_general_ci",
-        "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
-        "Table": "`user`",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
       "Instructions": {
@@ -1680,22 +1070,7 @@
   {
     "comment": "routing rules for aggregates",
     "query": "select id, count(*) from route2 group by id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, count(*) from route2 group by id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select id, count(*) from unsharded as route2 where 1 != 1 group by id",
-        "Query": "select id, count(*) from unsharded as route2 group by id",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, count(*) from route2 group by id",
       "Instructions": {
@@ -1717,22 +1092,7 @@
   {
     "comment": "order by on a reference table",
     "query": "select col from ref order by col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col from ref order by col",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from ref where 1 != 1",
-        "Query": "select col from ref order by col asc",
-        "Table": "ref"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col from ref order by col",
       "Instructions": {
@@ -1754,37 +1114,7 @@
   {
     "comment": "distinct and aggregate functions missing group by",
     "query": "select distinct a, count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct a, count(*) from user",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum_count(1) AS count",
-            "GroupBy": "0",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select a, count(*), weight_string(a) from `user` order by a asc",
-                "ResultColumns": 2,
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct a, count(*) from user",
       "Instructions": {
@@ -1813,37 +1143,7 @@
   {
     "comment": "distinct and aggregate functions",
     "query": "select distinct a, count(*) from user group by a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct a, count(*) from user group by a",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum_count(1) AS count",
-            "GroupBy": "0, 0",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|2) ASC, (0|2) ASC",
-                "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc, a asc",
-                "ResultColumns": 2,
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct a, count(*) from user group by a",
       "Instructions": {
@@ -1875,8 +1175,7 @@
   {
     "comment": "Group by invalid column number (code is duplicated from symab).",
     "query": "select id from user group by 1.1",
-    "v3-plan": "VT13001: [BUG] column number is not an INT",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id from user group by 1.1",
       "Instructions": {
@@ -1908,14 +1207,12 @@
   {
     "comment": "Group by out of range column number (code is duplicated from symab).",
     "query": "select id from user group by 2",
-    "v3-plan": "VT03014: unknown column '2' in 'group statement'",
-    "gen4-plan": "Unknown column '2' in 'group statement'"
+    "plan": "Unknown column '2' in 'group statement'"
   },
   {
     "comment": "here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)",
     "query": "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
       "Instructions": {
@@ -1945,32 +1242,7 @@
   {
     "comment": "order by inside derived tables can be ignored",
     "query": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
-            "OrderBy": "(1|2) ASC",
-            "Query": "select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user` join user_extra on `user`.id = user_extra.user_id order by user_extra.extra asc",
-            "ResultColumns": 2,
-            "Table": "`user`, user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
       "Instructions": {
@@ -1993,8 +1265,7 @@
   {
     "comment": "here we keep the order since the column is visible on the outside, and used by the orderedAggregate",
     "query": "select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col",
       "Instructions": {
@@ -2026,31 +1297,7 @@
   {
     "comment": "optimize group by when using distinct with no aggregation",
     "query": "select distinct col1, col2 from user group by col1, col2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct col1, col2 from user group by col1, col2",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0, 1, 0, 1",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
-            "OrderBy": "(0|2) ASC, (1|3) ASC, (0|2) ASC, (1|3) ASC",
-            "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc, col1 asc, col2 asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct col1, col2 from user group by col1, col2",
       "Instructions": {
@@ -2081,34 +1328,7 @@
   {
     "comment": "do not use distinct when using only aggregates and no group by",
     "query": "select distinct count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct count(*) from user",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count(0) AS count",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) from `user` where 1 != 1",
-                "Query": "select count(*) from `user`",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct count(*) from user",
       "Instructions": {
@@ -2137,8 +1357,7 @@
   {
     "comment": "Grouping on join",
     "query": "select user.a from user join user_extra group by user.a",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.a from user join user_extra group by user.a",
       "Instructions": {
@@ -2189,14 +1408,12 @@
   {
     "comment": "Cannot have more than one aggr(distinct...",
     "query": "select count(distinct a), count(distinct b) from user",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: count(distinct b)",
-    "gen4-plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
+    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
   },
   {
     "comment": "multiple distinct functions with grouping.",
     "query": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct col2)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
       "Instructions": {
@@ -2228,8 +1445,7 @@
   {
     "comment": "aggregate query with order by aggregate column along with NULL",
     "query": "select col, count(*) k from user group by col order by null, k",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: null",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) k from user group by col order by null, k",
       "Instructions": {
@@ -2267,31 +1483,7 @@
   {
     "comment": "aggregate query with order by NULL",
     "query": "select col, count(*) k from user group by col order by null",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col, count(*) k from user group by col order by null",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
-            "OrderBy": "0 ASC",
-            "Query": "select col, count(*) as k from `user` group by col order by col asc",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) k from user group by col order by null",
       "Instructions": {
@@ -2322,8 +1514,7 @@
   {
     "comment": "join query on sharding key with group by a unique vindex with having clause.",
     "query": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10",
       "Instructions": {
@@ -2346,29 +1537,7 @@
   {
     "comment": "correlated subquery on sharding key with group by a unique vindex with having clause.",
     "query": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) > 10 limit 1)",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)",
       "Instructions": {
@@ -2398,22 +1567,7 @@
   {
     "comment": "aggregation filtering by having on a route",
     "query": "select id from user group by id having count(id) = 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id from user group by id having count(id) = 10",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1 group by id",
-        "Query": "select id from `user` group by id having count(id) = 10",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id from user group by id having count(id) = 10",
       "Instructions": {
@@ -2435,32 +1589,7 @@
   {
     "comment": "weight_string addition to group by",
     "query": "select lower(textcol1) as v, count(*) from user group by v",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select lower(textcol1) as v, count(*) from user group by v",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by v, weight_string(lower(textcol1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by v, weight_string(lower(textcol1)) order by v asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select lower(textcol1) as v, count(*) from user group by v",
       "Instructions": {
@@ -2492,32 +1621,7 @@
   {
     "comment": "weight_string addition to group by when also there in order by",
     "query": "select char_length(texcol1) as a, count(*) from user group by a order by a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select char_length(texcol1) as a, count(*) from user group by a order by a",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by a, weight_string(char_length(texcol1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by a, weight_string(char_length(texcol1)) order by a asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select char_length(texcol1) as a, count(*) from user group by a order by a",
       "Instructions": {
@@ -2549,30 +1653,7 @@
   {
     "comment": "order by inside and outside parenthesis select",
     "query": "(select id from user order by 1 desc) order by 1 asc limit 2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(2)",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select id, weight_string(id) from `user` order by 1 asc limit :__upper_limit",
-            "ResultColumns": 1,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
       "Instructions": {
@@ -2602,8 +1683,7 @@
   {
     "comment": "correlated subquery in exists clause with an ordering",
     "query": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
       "Instructions": {
@@ -2652,8 +1732,7 @@
   {
     "comment": "Column and Literal equality filter on scatter aggregates",
     "query": "select count(*) a from user having a = 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a = 10",
       "Instructions": {
@@ -2688,8 +1767,7 @@
   {
     "comment": "Equality filtering with column and string literal on scatter aggregates",
     "query": "select count(*) a from user having a = '1'",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a = '1'",
       "Instructions": {
@@ -2724,8 +1802,7 @@
   {
     "comment": "Column and Literal not equal filter on scatter aggregates",
     "query": "select count(*) a from user having a != 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a != 10",
       "Instructions": {
@@ -2760,8 +1837,7 @@
   {
     "comment": "Not equal filter with column and string literal on scatter aggregates",
     "query": "select count(*) a from user having a != '1'",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a != '1'",
       "Instructions": {
@@ -2796,8 +1872,7 @@
   {
     "comment": "Greater than filter on scatter aggregates",
     "query": "select count(*) a from user having a > 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a > 10",
       "Instructions": {
@@ -2832,8 +1907,7 @@
   {
     "comment": "Greater Equal filter on scatter aggregates",
     "query": "select count(*) a from user having a >= 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a >= 10",
       "Instructions": {
@@ -2868,8 +1942,7 @@
   {
     "comment": "Less than filter on scatter aggregates",
     "query": "select count(*) a from user having a < 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a < 10",
       "Instructions": {
@@ -2904,8 +1977,7 @@
   {
     "comment": "Less Equal filter on scatter aggregates",
     "query": "select count(*) a from user having a <= 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a <= 10",
       "Instructions": {
@@ -2940,8 +2012,7 @@
   {
     "comment": "Less Equal filter on scatter with grouping",
     "query": "select col, count(*) a from user group by col having a <= 10",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) a from user group by col having a <= 10",
       "Instructions": {
@@ -2978,8 +2049,7 @@
   {
     "comment": "We should be able to find grouping keys on ordered aggregates",
     "query": "select count(*) as a, val1 from user group by val1 having a = 1.00",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) as a, val1 from user group by val1 having a = 1.00",
       "Instructions": {
@@ -3025,32 +2095,7 @@
   {
     "comment": "distinct on text column with collation",
     "query": "select col, count(distinct textcol1) from user group by col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col, count(distinct textcol1) from user group by col",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "count_distinct_count(1) AS count(distinct textcol1)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by col, textcol1, weight_string(textcol1)",
-            "OrderBy": "0 ASC, (1|2) ASC",
-            "Query": "select col, textcol1, weight_string(textcol1) from `user` group by col, textcol1, weight_string(textcol1) order by col asc, textcol1 asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(distinct textcol1) from user group by col",
       "Instructions": {
@@ -3081,26 +2126,7 @@
   {
     "comment": "aggregation filtering by having on a route with no group by with non-unique vindex filter",
     "query": "select 1 from user having count(id) = 10 and name = 'a'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from user having count(id) = 10 and name = 'a'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Equal",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
-        "Table": "`user`",
-        "Values": [
-          "VARCHAR(\"a\")"
-        ],
-        "Vindex": "name_user_map"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user having count(id) = 10 and name = 'a'",
       "Instructions": {
@@ -3172,8 +2198,7 @@
   {
     "comment": "Aggregates and joins",
     "query": "select count(*) from user join user_extra",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user join user_extra",
       "Instructions": {
@@ -3230,22 +2255,7 @@
   {
     "comment": "aggregation filtering by having on a route with no group by",
     "query": "select 1 from user having count(id) = 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from user having count(id) = 10",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user` having count(id) = 10",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user having count(id) = 10",
       "Instructions": {
@@ -3288,8 +2298,7 @@
   {
     "comment": "Aggregate on join",
     "query": "select user.a, count(*) from user join user_extra group by user.a",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.a, count(*) from user join user_extra group by user.a",
       "Instructions": {
@@ -3351,8 +2360,7 @@
   {
     "comment": "Aggregate on other table in join",
     "query": "select user.a, count(user_extra.a) from user join user_extra group by user.a",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.a, count(user_extra.a) from user join user_extra group by user.a",
       "Instructions": {
@@ -3414,8 +2422,7 @@
   {
     "comment": "aggregation spread out across three routes",
     "query": "select count(u.textcol1), count(ue.foo), us.bar from user u join user_extra ue on u.foo = ue.bar join unsharded us on ue.bar = us.baz group by us.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(u.textcol1), count(ue.foo), us.bar from user u join user_extra ue on u.foo = ue.bar join unsharded us on ue.bar = us.baz group by us.bar",
       "Instructions": {
@@ -3521,32 +2528,7 @@
   {
     "comment": "using two distinct columns - min with distinct vindex, sum with distinct without vindex",
     "query": "select col1, min(distinct id), sum(distinct col3) from user group by col1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col1, min(distinct id), sum(distinct col3) from user group by col1",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "min(1), sum_distinct_sum(2) AS sum(distinct col3)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(col3)",
-            "OrderBy": "(0|3) ASC, (2|4) ASC",
-            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(col3) order by col1 asc, col3 asc",
-            "ResultColumns": 3,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col1, min(distinct id), sum(distinct col3) from user group by col1",
       "Instructions": {
@@ -3578,8 +2560,7 @@
   {
     "comment": "aggregation on top of semijoin",
     "query": "select count(*) from user where exists (select 0 from user_extra where user.apa = user_extra.bar)",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user where exists (select 0 from user_extra where user.apa = user_extra.bar)",
       "Instructions": {
@@ -3637,32 +2618,7 @@
   {
     "comment": "we have to track the order of distinct aggregation expressions",
     "query": "select val2, count(distinct val1), count(*) from user group by val2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select val2, count(distinct val1), count(*) from user group by val2",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "count_distinct_count(1) AS count(distinct val1), sum_count(2) AS count",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` where 1 != 1 group by val2, val1, weight_string(val2), weight_string(val1)",
-            "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, val1, weight_string(val2), weight_string(val1) order by val2 asc, val1 asc",
-            "ResultColumns": 3,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select val2, count(distinct val1), count(*) from user group by val2",
       "Instructions": {
@@ -3694,32 +2650,7 @@
   {
     "comment": "group by column alias",
     "query": "select ascii(val1) as a, count(*) from user group by a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select ascii(val1) as a, count(*) from user group by a",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` where 1 != 1 group by a, weight_string(ascii(val1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by a, weight_string(ascii(val1)) order by a asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select ascii(val1) as a, count(*) from user group by a",
       "Instructions": {
@@ -3751,8 +2682,7 @@
   {
     "comment": "multiple distinct aggregations on the same column is allowed",
     "query": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct tcol2)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
       "Instructions": {
@@ -3784,8 +2714,7 @@
   {
     "comment": "multiple distinct aggregations on the same column in different positions",
     "query": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct tcol2)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
       "Instructions": {
@@ -3817,8 +2746,7 @@
   {
     "comment": "distinct aggregation will 3 table join query",
     "query": "select u.textcol1, count(distinct u.val2) from user u join user u2 on u.val2 = u2.id join music m on u2.val2 = m.id group by u.textcol1",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.textcol1, count(distinct u.val2) from user u join user u2 on u.val2 = u2.id join music m on u2.val2 = m.id group by u.textcol1",
       "Instructions": {
@@ -3903,22 +2831,7 @@
   {
     "comment": "group_concat on single shards",
     "query": "select group_concat(user_id order by name), id from user group by id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select group_concat(user_id order by name), id from user group by id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select group_concat(user_id order by `name` asc), id from `user` where 1 != 1 group by id",
-        "Query": "select group_concat(user_id order by `name` asc), id from `user` group by id",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select group_concat(user_id order by name), id from user group by id",
       "Instructions": {
@@ -3940,22 +2853,7 @@
   {
     "comment": "select count(distinct user_id, name) from unsharded",
     "query": "select count(distinct user_id, name) from unsharded",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select count(distinct user_id, name) from unsharded",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select count(distinct user_id, `name`) from unsharded where 1 != 1",
-        "Query": "select count(distinct user_id, `name`) from unsharded",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(distinct user_id, name) from unsharded",
       "Instructions": {
@@ -3977,14 +2875,12 @@
   {
     "comment": "select count(distinct user_id, name) from user",
     "query": "select count(distinct user_id, name) from user",
-    "v3-plan": "VT12001: unsupported: only one expression is allowed inside aggregates: count(distinct user_id, `name`)",
-    "gen4-plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
+    "plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
   },
   {
     "comment": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "query": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
       "Instructions": {
@@ -4041,8 +2937,7 @@
   {
     "comment": "find aggregation expression and use column offset in filter",
     "query": "select foo, count(*) from user group by foo having count(*) = 3",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select foo, count(*) from user group by foo having count(*) = 3",
       "Instructions": {
@@ -4088,8 +2983,7 @@
   {
     "comment": "find aggregation expression and use column offset in filter times two",
     "query": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
       "Instructions": {
@@ -4136,8 +3030,7 @@
   {
     "comment": "find aggregation expression and use column offset in filter times three",
     "query": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
       "Instructions": {
@@ -4184,8 +3077,7 @@
   {
     "comment": "having should be able to add new aggregation expressions in having",
     "query": "select foo from user group by foo having count(*) = 3",
-    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select foo from user group by foo having count(*) = 3",
       "Instructions": {
@@ -4230,8 +3122,7 @@
   {
     "comment": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
     "query": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
       "Instructions": {
@@ -4319,22 +3210,7 @@
   {
     "comment": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
     "query": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.id from `user` as u join user_extra as ue on ue.user_id = u.id where 1 != 1 group by u.id",
-        "Query": "select u.id from `user` as u join user_extra as ue on ue.user_id = u.id group by u.id having count(u.`name`) = 3",
-        "Table": "`user`, user_extra"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
       "Instructions": {
@@ -4357,8 +3233,7 @@
   {
     "comment": "only extract the aggregation once, even if used twice",
     "query": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) < 3 and count(*) > 5",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) < 3 and count(*) > 5",
       "Instructions": {
@@ -4446,8 +3321,7 @@
   {
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "v3-plan": "VT03020: column ue.col not found in subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
       "Instructions": {
@@ -4511,8 +3385,7 @@
   {
     "comment": "group by and ',' joins with condition",
     "query": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
       "Instructions": {
@@ -4567,8 +3440,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "v3-plan": "VT03021: ambiguous column reference: id",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, b as id, count(*) from user order by id",
       "Instructions": {
@@ -4605,29 +3477,7 @@
   {
     "comment": "aggr and non-aggr without group by (with query does not give useful result out)",
     "query": "select id, count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, count(*) from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(1) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-            "Query": "select id, count(*) from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, count(*) from user",
       "Instructions": {
@@ -4656,8 +3506,7 @@
   {
     "comment": "group by and ',' joins",
     "query": "select user.id from user, user_extra group by id",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id from user, user_extra group by id",
       "Instructions": {
@@ -4708,8 +3557,7 @@
   {
     "comment": "count on column from LIMIT",
     "query": "select count(city) from (select phone, id, city from user where id > 12 limit 10) as x",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(city) from (select phone, id, city from user where id > 12 limit 10) as x",
       "Instructions": {
@@ -4744,8 +3592,7 @@
   {
     "comment": "count(*) on column from LIMIT",
     "query": "select count(*) from (select phone, id, city from user where id > 12 limit 10) as x",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from (select phone, id, city from user where id > 12 limit 10) as x",
       "Instructions": {
@@ -4838,8 +3685,7 @@
   {
     "comment": "grouping on data from derived table",
     "query": "select val1, count(*)  from (select id, val1 from user where val2 < 4 order by val1 limit 2) as x group by val1",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select val1, count(*)  from (select id, val1 from user where val2 < 4 order by val1 limit 2) as x group by val1",
       "Instructions": {
@@ -4884,22 +3730,7 @@
   {
     "comment": "Can't inline derived table when it has HAVING with aggregation function",
     "query": "select * from (select id from user having count(*) = 1) s",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select id from user having count(*) = 1) s",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from (select id from `user` where 1 != 1) as s where 1 != 1",
-        "Query": "select * from (select id from `user` having count(*) = 1) as s",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from (select id from user having count(*) = 1) s",
       "Instructions": {
@@ -4942,8 +3773,7 @@
   {
     "comment": "Group By X Order By X",
     "query": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: count(`user`.intcol)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
       "Instructions": {
@@ -4982,8 +3812,7 @@
   {
     "comment": "AggregateAnyValue in non full group by query",
     "query": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",
       "Instructions": {
@@ -5179,8 +4008,7 @@
   {
     "comment": "Aggregations from derived table used in arithmetic outside derived table",
     "query": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
-    "v3-plan": "VT12001: unsupported: expression on results of a cross-shard subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
       "Instructions": {
@@ -5219,22 +4047,7 @@
   {
     "comment": "when pushing predicates into derived tables, make sure to put them in HAVING when they contain aggregations",
     "query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where `count` >= :v2",
-        "Table": "user_extra"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
       "Instructions": {
@@ -5256,8 +4069,7 @@
   {
     "comment": "aggregation, where and derived tables - we can push extremums",
     "query": "SELECT foo FROM (SELECT foo, max(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
-    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT foo FROM (SELECT foo, max(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
       "Instructions": {
@@ -5302,8 +4114,7 @@
   {
     "comment": "aggregation, where and derived tables - we can't push aggregations that might need a second layer of aggregation",
     "query": "SELECT foo FROM (SELECT foo, count(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
-    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT foo FROM (SELECT foo, count(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
       "Instructions": {
@@ -5348,8 +4159,7 @@
   {
     "comment": "Scatter order by is complex with aggregates in select",
     "query": "select col, count(*) from user group by col order by col+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: col + 1",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col order by col+1",
       "Instructions": {
@@ -5388,8 +4198,7 @@
   {
     "comment": "scatter aggregate complex order by",
     "query": "select id from user group by id order by id+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: id + 1",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id from user group by id order by id+1",
       "Instructions": {
@@ -5413,8 +4222,7 @@
   {
     "comment": "select expression does not directly depend on grouping expression",
     "query": "select a from user group by a+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: only simple references are allowed",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a from user group by a+1",
       "Instructions": {
@@ -5446,8 +4254,7 @@
   {
     "comment": "inner join with scalar aggregation",
     "query": "select count(*) from user join music on user.foo = music.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user join music on user.foo = music.bar",
       "Instructions": {
@@ -5837,8 +4644,7 @@
   {
     "comment": "3 table inner join with scalar aggregation",
     "query": "select count(*) from user join music on user.foo = music.bar join user_extra on user.foo = user_extra.baz",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user join music on user.foo = music.bar join user_extra on user.foo = user_extra.baz",
       "Instructions": {
@@ -6021,8 +4827,7 @@
   {
     "comment": "ordering have less column than grouping columns, grouping gets rearranged as order by and missing columns gets added to ordering",
     "query": "select u.col, u.intcol, count(*) from user u join music group by 1,2 order by 2",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.col, u.intcol, count(*) from user u join music group by 1,2 order by 2",
       "Instructions": {
@@ -6083,22 +4888,7 @@
   {
     "comment": "redundant group by columns are not added",
     "query": "select col, val, id from user group by col, val, id, id, val, col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col, val, id from user group by col, val, id, id, val, col",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col, val, id from `user` where 1 != 1 group by col, val, id, id, val, col",
-        "Query": "select col, val, id from `user` group by col, val, id, id, val, col",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, val, id from user group by col, val, id, id, val, col",
       "Instructions": {
@@ -6120,8 +4910,7 @@
   {
     "comment": "scatter aggregate with ambiguous aliases",
     "query": "select distinct a, b as a from user",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct a, b as a from user",
       "Instructions": {
@@ -6152,8 +4941,7 @@
   {
     "comment": "scatter aggregate with complex select list (can't build order by)",
     "query": "select distinct a+1 from user",
-    "v3-plan": "generating ORDER BY clause: VT12001: unsupported: reference a complex expression",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct a+1 from user",
       "Instructions": {
@@ -6184,8 +4972,7 @@
   {
     "comment": "distinct on top of aggregation",
     "query": "select distinct count(*) from user group by col",
-    "v3-plan": "VT12001: unsupported: in scatter query: GROUP BY column must reference column in SELECT list",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select distinct count(*) from user group by col",
       "Instructions": {
@@ -6225,8 +5012,7 @@
   {
     "comment": "scalar aggregates with min, max, sum distinct and count distinct using collations",
     "query": "select min(textcol1), max(textcol2), sum(distinct textcol1), count(distinct textcol1) from user",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: count(distinct textcol1)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select min(textcol1), max(textcol2), sum(distinct textcol1), count(distinct textcol1) from user",
       "Instructions": {
@@ -6256,8 +5042,7 @@
   {
     "comment": "grouping aggregates with mi, max, sum distinct and count distinct using collations",
     "query": "select col, min(textcol1), max(textcol2), sum(distinct textcol1), count(distinct textcol1) from user group by col",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: count(distinct textcol1)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, min(textcol1), max(textcol2), sum(distinct textcol1), count(distinct textcol1) from user group by col",
       "Instructions": {
@@ -6288,8 +5073,7 @@
   {
     "comment": "using a grouping column multiple times should be OK",
     "query": "select col, col, count(*) from user group by col",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: col",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col, col, count(*) from user group by col",
       "Instructions": {
@@ -6320,8 +5104,7 @@
   {
     "comment": "multiple count star and a count with 3 table join",
     "query": "select count(*), count(*), count(u.col) from user u, user u2, user_extra ue",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*), count(*), count(u.col) from user u, user u2, user_extra ue",
       "Instructions": {
@@ -6408,8 +5191,7 @@
   {
     "comment": "interleaving grouping, aggregation and join with min, max columns",
     "query": "select user.col, min(user_extra.foo), user.bar, max(user_extra.bar) from user join user_extra on user.col = user_extra.bar group by user.col, user.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col, min(user_extra.foo), user.bar, max(user_extra.bar) from user join user_extra on user.col = user_extra.bar group by user.col, user.bar",
       "Instructions": {
@@ -6464,8 +5246,7 @@
   {
     "comment": "extremum on input from both sides",
     "query": "select max(u.foo*ue.bar) from user u join user_extra ue",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select max(u.foo*ue.bar) from user u join user_extra ue",
       "Instructions": {
@@ -6518,8 +5299,7 @@
   {
     "comment": "aggregate on input from both sides - TODO optimize more",
     "query": "select sum(user.foo+user_extra.bar) from user, user_extra",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sum(user.foo+user_extra.bar) from user, user_extra",
       "Instructions": {
@@ -6571,8 +5351,7 @@
   {
     "comment": "grouping column could be coming from multiple sides",
     "query": "select count(*) from user, user_extra group by user.id+user_extra.id",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user, user_extra group by user.id+user_extra.id",
       "Instructions": {
@@ -6643,8 +5422,7 @@
   {
     "comment": "Complex aggregate expression on scatter",
     "query": "select 1+count(*) from user",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1+count(*) from user",
       "Instructions": {
@@ -6681,8 +5459,7 @@
   {
     "comment": "combine the output of two aggregations in the final result",
     "query": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
       "Instructions": {
@@ -6751,8 +5528,7 @@
   {
     "comment": "Aggregate detection (group_concat)",
     "query": "select group_concat(user.a) from user join user_extra",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select group_concat(user.a) from user join user_extra",
       "Instructions": {
@@ -6801,8 +5577,7 @@
   {
     "comment": "plan a query with any_value()",
     "query": "select count(*), any_value(u.name), any_value(ue.title) from user u join user_extra ue on u.bar = ue.foo ",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select count(*), any_value(u.name), any_value(ue.title) from user u join user_extra ue on u.bar = ue.foo ",
       "Instructions": {
@@ -6864,8 +5639,7 @@
   {
     "comment": "group_concat with group by without in select list",
     "query": "select group_concat(user.id) from user, music where user.id = music.foo group by user.bar",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select group_concat(user.id) from user, music where user.id = music.foo group by user.bar",
       "Instructions": {
@@ -6930,31 +5704,7 @@
   {
     "comment": "group_concat aggregation on top of route",
     "query": "select intcol, group_concat(foo) from user group by intcol",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select intcol, group_concat(foo) from user group by intcol",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "group_concat(1)",
-        "GroupBy": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select intcol, group_concat(foo) from `user` where 1 != 1 group by intcol",
-            "OrderBy": "0 ASC",
-            "Query": "select intcol, group_concat(foo) from `user` group by intcol order by intcol asc",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select intcol, group_concat(foo) from user group by intcol",
       "Instructions": {
@@ -6985,8 +5735,7 @@
   {
     "comment": "ordering on top of aggregator without pushing the column down during the horizon phase",
     "query": "select u.foo, group_concat(u.bar) from user u, music m where u.col = m.col group by u.foo order by u.baz",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.foo, group_concat(u.bar) from user u, music m where u.col = m.col group by u.foo order by u.baz",
       "Instructions": {
@@ -7048,8 +5797,7 @@
   {
     "comment": "count distinct and sum distinct on join query pushed down - unique vindex",
     "query": "select u.col1, count(distinct m.user_id), sum(distinct m.user_id) from user u join music m group by u.col1",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.col1, count(distinct m.user_id), sum(distinct m.user_id) from user u join music m group by u.col1",
       "Instructions": {
@@ -7101,8 +5849,7 @@
   {
     "comment": "count and sum distinct with min distinct on different expressions",
     "query": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz), max(distinct toto) from user group by foo",
-    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct baz)",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select foo, min(distinct bar), count(distinct baz), sum(distinct baz), max(distinct toto) from user group by foo",
       "Instructions": {

@@ -124,15 +124,6 @@ func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query stri
 	}
 }
 
-// NewSimpleInsert creates an Insert for a Table.
-func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vindexes.Keyspace) *Insert {
-	return &Insert{
-		Opcode:   opcode,
-		Table:    table,
-		Keyspace: keyspace,
-	}
-}
-
 // NewInsert creates a new Insert.
 func NewInsert(
 	opcode InsertOpcode,

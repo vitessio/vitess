@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
@@ -77,10 +78,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(plan),
-			weightStrings:     make(map[*resultColumn]int),
-		},
+		resultsBuilder: newResultsBuilder(plan, nil),
 	}
 
 	for _, aggr := range op.Aggregations {
@@ -135,12 +133,8 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 		TruncateColumnCount: ordering.ResultColumns,
 	}
 	ms := &memorySort{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(src),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         primitive,
-		},
-		eMemorySort: primitive,
+		resultsBuilder: newResultsBuilder(src, primitive),
+		eMemorySort:    primitive,
 	}
 
 	for idx, order := range ordering.Order {
@@ -290,7 +284,7 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 		return planLimit(node.Limit, plan)
 	case *sqlparser.Union:
 		var err error
-		rb, isRoute := source.(*routeGen4)
+		rb, isRoute := source.(*route)
 		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 			return nil, ctx.SemTable.NotSingleRouteErr
 		}
@@ -324,7 +318,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 		opCode = engine.LeftJoin
 	}
 
-	return &joinGen4{
+	return &join{
 		Left:       lhs,
 		Right:      rhs,
 		Cols:       n.Columns,
@@ -395,7 +389,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	if err != nil {
 		return nil, err
 	}
-	return &routeGen4{
+	return &route{
 		eroute:    eroute,
 		Select:    sel,
 		tables:    operators.TableID(op),
@@ -664,7 +658,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 	var result logicalPlan
 	if len(sources) == 1 {
 		src := sources[0]
-		if rb, isRoute := src.(*routeGen4); isRoute && rb.isSingleShard() {
+		if rb, isRoute := src.(*route); isRoute && rb.isSingleShard() {
 			// if we have a single shard route, we don't need to do anything to make it distinct
 			// TODO
 			// rb.Select.SetLimit(op.limit)
@@ -676,7 +670,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if len(op.Ordering) > 0 {
 			return nil, vterrors.VT12001("ORDER BY on top of UNION")
 		}
-		result = &concatenateGen4{sources: sources}
+		result = &concatenate{sources: sources}
 	}
 	if op.Distinct {
 		colls := getCollationsFor(ctx, op)
@@ -722,7 +716,7 @@ func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, 
 // pushWeightStringForDistinct adds a weight_string projection
 func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalPlan, offset int) (newOffset int, err error) {
 	switch node := plan.(type) {
-	case *routeGen4:
+	case *route:
 		allSelects := sqlparser.GetAllSelects(node.Select)
 		for _, sel := range allSelects {
 			expr, err := getWeightStringForSelectExpr(sel.SelectExprs[offset])
@@ -737,7 +731,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		// we leave the responsibility of truncating to distinct
 		node.eroute.TruncateColumnCount = 0
-	case *concatenateGen4:
+	case *concatenate:
 		for _, source := range node.sources {
 			newOffset, err = pushWeightStringForDistinct(ctx, source, offset)
 			if err != nil {
@@ -745,7 +739,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 			}
 		}
 		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
-	case *joinGen4:
+	case *join:
 		joinOffset := node.Cols[offset]
 		switch {
 		case joinOffset < 0:
@@ -881,7 +875,7 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizo
 		return nil, err
 	}
 
-	rb, isRoute := plan.(*routeGen4)
+	rb, isRoute := plan.(*route)
 	if !isRoute {
 		return &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
@@ -942,9 +936,9 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 
 func pushDistinct(plan logicalPlan) {
 	switch n := plan.(type) {
-	case *routeGen4:
+	case *route:
 		n.Select.MakeDistinct()
-	case *concatenateGen4:
+	case *concatenate:
 		for _, source := range n.sources {
 			pushDistinct(source)
 		}
@@ -952,11 +946,11 @@ func pushDistinct(plan logicalPlan) {
 }
 
 func mergeUnionLogicalPlans(ctx *plancontext.PlanningContext, left logicalPlan, right logicalPlan) logicalPlan {
-	lroute, ok := left.(*routeGen4)
+	lroute, ok := left.(*route)
 	if !ok {
 		return nil
 	}
-	rroute, ok := right.(*routeGen4)
+	rroute, ok := right.(*route)
 	if !ok {
 		return nil
 	}
@@ -968,7 +962,7 @@ func mergeUnionLogicalPlans(ctx *plancontext.PlanningContext, left logicalPlan, 
 	return nil
 }
 
-func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool {
+func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -995,7 +989,7 @@ func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool 
 	return false
 }
 
-func canSelectDBAMerge(a, b *routeGen4) bool {
+func canSelectDBAMerge(a, b *route) bool {
 	if a.eroute.Opcode != engine.DBA {
 		return false
 	}
@@ -1078,6 +1072,24 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 				return a.Val == b.Val
 			}
 		}
+	}
+	return false
+}
+
+func hexEqual(a, b *sqlparser.Literal) bool {
+	v, err := a.HexDecode()
+	if err != nil {
+		return false
+	}
+	switch b.Type {
+	case sqlparser.StrVal:
+		return bytes.Equal(v, b.Bytes())
+	case sqlparser.HexVal:
+		v2, err := b.HexDecode()
+		if err != nil {
+			return false
+		}
+		return bytes.Equal(v, v2)
 	}
 	return false
 }

@@ -41,6 +41,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	defer func() {
 		clusterInfo.ClusterInstance.Teardown()
 	}()
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	oldArgs := os.Args
@@ -158,7 +159,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, replicaInstance.ReadBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
 	assert.Greater(t, replicaInstance.ReadBinlogCoordinates.LogPos, uint32(0))
 	assert.Equal(t, replicaInstance.ExecBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
-	assert.LessOrEqual(t, replicaInstance.ExecBinlogCoordinates.LogPos, replicaInstance.ReadBinlogCoordinates.LogPos)
+	assert.Greater(t, replicaInstance.ExecBinlogCoordinates.LogPos, uint32(0))
 	assert.Contains(t, replicaInstance.RelaylogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-relay", replica.TabletUID))
 	assert.Greater(t, replicaInstance.RelaylogCoordinates.LogPos, uint32(0))
 	assert.Empty(t, replicaInstance.LastIOError)

@@ -79,6 +79,10 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 
 	}
 	for _, columnVindex := range vtable.ColumnVindexes {
+		// ignore any backfilling vindexes from vindex selection.
+		if columnVindex.IsBackfilling() {
+			continue
+		}
 		routing.VindexPreds = append(routing.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: id})
 	}
 	return routing

@@ -150,7 +150,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)], vreplID),
+				keyspace, shard, binlogdatapb.OnDDLAction_EXEC.String(), vreplID),
 		},
 		{
 			name: "update cell,tablet_types,on_ddl",
@@ -161,7 +161,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)], "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
+				keyspace, shard, binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
 		},
 	}
 

@@ -49,16 +49,7 @@ func newDistinctGen4Legacy(source logicalPlan, checkCols []engine.CheckCol, need
 	}
 }
 
-func newDistinctV3(source logicalPlan) logicalPlan {
-	return &distinct{logicalPlanCommon: newBuilderCommon(source)}
-}
-
 func (d *distinct) Primitive() engine.Primitive {
-	if d.checkCols == nil {
-		// If we are missing the checkCols information, we are on the V3 planner and should produce a V3 Distinct
-		return &engine.DistinctV3{Source: d.input.Primitive()}
-	}
-
 	truncate := d.truncateColumn
 	if d.needToTruncate {
 		wsColFound := false

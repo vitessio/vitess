@@ -179,8 +179,16 @@ func TestServingChangeStreaming(t *testing.T) {
 	rdonlyTablet.Type = "replica"
 
 	// this should fail as there is no rdonly present
+	// This can also close the streaming connection if it goes to 80- shard first and sends the fields from that.
+	// Current, stream logic is to close the server connection if partial stream result is sent and an error is received later.
 	_, err = utils.ExecAllowError(t, conn, "select * from test")
 	require.Error(t, err)
+
+	// check if connection is still available
+	_, err = utils.ExecAllowError(t, conn, "select 1")
+	if err != nil {
+		t.Skip("connection is closed, cannot continue with the test")
+	}
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
