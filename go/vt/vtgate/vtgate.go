@@ -447,7 +447,7 @@ func (vtg *VTGate) Gateway() *TabletGateway {
 	return vtg.gw
 }
 
-// Execute executes a non-streaming query. This is a V3 function.
+// Execute executes a non-streaming query.
 func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
@@ -476,7 +476,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	return session, nil, err
 }
 
-// ExecuteBatch executes a batch of queries. This is a V3 function.
+// ExecuteBatch executes a batch of queries.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
@@ -504,9 +504,8 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 	return session, qrl, nil
 }
 
-// StreamExecute executes a streaming query. This is a V3 function.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines.
+// StreamExecute executes a streaming query.
+// Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)

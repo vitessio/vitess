@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -91,25 +90,13 @@ type VSchema interface {
 
 // PlannerNameToVersion returns the numerical representation of the planner
 func PlannerNameToVersion(s string) (PlannerVersion, bool) {
-	deprecationMessage := "The V3 planner is deprecated and will be removed in future release of Vitess"
 	switch strings.ToLower(s) {
-	case "v3":
-		log.Warning(deprecationMessage)
-		return querypb.ExecuteOptions_V3, true
 	case "gen4":
 		return querypb.ExecuteOptions_Gen4, true
 	case "gen4greedy", "greedy":
 		return querypb.ExecuteOptions_Gen4Greedy, true
 	case "left2right":
 		return querypb.ExecuteOptions_Gen4Left2Right, true
-	case "gen4fallback":
-		return querypb.ExecuteOptions_Gen4WithFallback, true
-	case "gen4comparev3":
-		log.Warning(deprecationMessage)
-		return querypb.ExecuteOptions_Gen4CompareV3, true
-	case "v3insert":
-		log.Warning(deprecationMessage)
-		return querypb.ExecuteOptions_V3Insert, true
 	}
 	return 0, false
 }

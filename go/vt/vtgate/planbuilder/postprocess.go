@@ -25,74 +25,6 @@ import (
 // This file has functions to analyze postprocessing
 // clauses like ORDER BY, etc.
 
-// pushGroupBy processes the group by clause. It resolves all symbols
-// and ensures that there are no subqueries.
-func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
-	if sel.Distinct {
-		newBuilder, err := planDistinct(pb.plan)
-		if err != nil {
-			return err
-		}
-		pb.plan = newBuilder
-	}
-
-	if err := pb.st.ResolveSymbols(sel.GroupBy); err != nil {
-		return err
-	}
-
-	newInput, err := planGroupBy(pb, pb.plan, sel.GroupBy)
-	if err != nil {
-		return err
-	}
-	pb.plan = newInput
-
-	return nil
-}
-
-// pushOrderBy pushes the order by clause into the primitives.
-// It resolves all symbols and ensures that there are no subqueries.
-func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
-	if err := pb.st.ResolveSymbols(orderBy); err != nil {
-		return err
-	}
-	var v3OrderBylist v3OrderBy
-	for _, order := range orderBy {
-		v3OrderBylist = append(v3OrderBylist, &v3Order{Order: order})
-	}
-	plan, err := planOrdering(pb, pb.plan, v3OrderBylist)
-	if err != nil {
-		return err
-	}
-	pb.plan = plan
-	pb.plan.Reorder(0)
-	return nil
-}
-
-func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
-	if limit == nil {
-		return nil
-	}
-	rb, ok := pb.plan.(*route)
-	if ok && rb.isSingleShard() {
-		rb.SetLimit(limit)
-		return nil
-	}
-
-	lb, err := createLimit(pb.plan, limit)
-	if err != nil {
-		return err
-	}
-
-	plan, err := visit(lb, setUpperLimit)
-	if err != nil {
-		return err
-	}
-
-	pb.plan = plan
-	pb.plan.Reorder(0)
-	return nil
-}
-
 // make sure we have the right signature for this function
 var _ planVisitor = setUpperLimit
 
@@ -101,7 +33,7 @@ var _ planVisitor = setUpperLimit
 // A primitive that cannot perform this can ignore the request.
 func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 	switch node := plan.(type) {
-	case *join, *joinGen4, *hashJoin:
+	case *join, *hashJoin:
 		return false, node, nil
 	case *memorySort:
 		pv := evalengine.NewBindVar("__upper_limit")
@@ -123,13 +55,6 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 		// If it's a scatter query, the rows returned will be
 		// more than the upper limit, but enough for the limit
 		node.Select.SetLimit(&sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")})
-	case *routeGen4:
-		// The route pushes the limit regardless of the plan.
-		// If it's a scatter query, the rows returned will be
-		// more than the upper limit, but enough for the limit
-		node.Select.SetLimit(&sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")})
-	case *concatenate:
-		return false, node, nil
 	}
 	return true, plan, nil
 }
