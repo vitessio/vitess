@@ -37,8 +37,11 @@ func TestDownPrimary(t *testing.T) {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 =======
+=======
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 =======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 =======
@@ -49,6 +52,9 @@ func TestDownPrimary(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
+=======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
 =======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
