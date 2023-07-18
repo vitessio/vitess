@@ -651,4 +651,7 @@ func waitForCacheInitialization() {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+<<<<<<< HEAD
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
+=======
 >>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
