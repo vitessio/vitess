@@ -944,3 +944,60 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	successCount := successfulRecoveriesMap[recoveryName]
 	assert.EqualValues(t, countExpected, successCount)
 }
+<<<<<<< HEAD
+=======
+
+// WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
+// It expects to find minimum occurrence or exact count of `keyName` provided.
+func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
+	t.Helper()
+	var sinceInSeconds = 30
+	duration := time.Duration(sinceInSeconds)
+	time.Sleep(duration * time.Second)
+
+	statusCode, res, err := vtorcInstance.MakeAPICall("api/aggregated-discovery-metrics?seconds=" + strconv.Itoa(sinceInSeconds))
+	if err != nil {
+		assert.Fail(t, "Not able to call api/aggregated-discovery-metrics")
+	}
+	if statusCode == 200 {
+		resultMap := make(map[string]any)
+		err := json.Unmarshal([]byte(res), &resultMap)
+		if err != nil {
+			assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+		}
+		successCount := resultMap[keyName]
+		if iSuccessCount, ok := successCount.(float64); ok {
+			if enforceEquality {
+				assert.Equal(t, iSuccessCount, minCountExpected)
+			} else {
+				assert.GreaterOrEqual(t, iSuccessCount, minCountExpected)
+			}
+			return
+		}
+	}
+	assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+}
+
+// PrintVTOrcLogsOnFailure prints the VTOrc logs on failure of the test.
+// This function is supposed to be called as the first defer command from the vtorc tests.
+func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+	// If the test has not failed, then we don't need to print anything.
+	if !t.Failed() {
+		return
+	}
+
+	log.Errorf("Printing VTOrc logs")
+	for _, vtorc := range clusterInstance.VTOrcProcesses {
+		if vtorc == nil || vtorc.LogFileName == "" {
+			continue
+		}
+		filePath := path.Join(vtorc.LogDir, vtorc.LogFileName)
+		log.Errorf("Printing file - %s", filePath)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Errorf("Error while reading the file - %v", err)
+		}
+		log.Errorf("%s", string(content))
+	}
+}
+>>>>>>> 888df9228e (Fix flakiness in VTOrc tests (#13489))
