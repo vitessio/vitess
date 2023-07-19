@@ -100,6 +100,7 @@ func TestVSchemaUpdate(t *testing.T) {
 	var vs *vindexes.VSchema
 	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
 		vs = vschema
+		vs.ResetCreated()
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -199,6 +200,7 @@ func TestRebuildVSchema(t *testing.T) {
 	var vs *vindexes.VSchema
 	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
 		vs = vschema
+		vs.ResetCreated()
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -229,6 +231,7 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 	}
 	vs := makeTestEmptyVSchema()
 	vs.Keyspaces[ks] = keyspaceSchema
+	vs.ResetCreated()
 	return vs
 }
 

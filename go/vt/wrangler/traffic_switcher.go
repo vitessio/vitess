@@ -1159,7 +1159,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
-	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
@@ -1174,6 +1174,14 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}
 		return err
 	})
+	if err != nil {
+		log.Warningf("Error in changeTableSourceWrites: %s", err)
+		return err
+	}
+	// Note that the denied tables, which are being updated in this method, are not part of the SrvVSchema in the topo.
+	// However, we are using the notification of a SrvVSchema change in VTGate to recompute the state of a
+	// MoveTables workflow (which also looks up denied tables from the topo). So we need to trigger a SrvVSchema change here.
+	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 
 // executeLockTablesOnSource executes a LOCK TABLES tb1 READ, tbl2 READ,... statement on each
@@ -1509,7 +1517,6 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 			return err
 		}
 	}
-
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 

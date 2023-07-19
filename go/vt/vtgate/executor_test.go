@@ -35,6 +35,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/vtgate/buffer"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/cache"
@@ -2074,6 +2076,9 @@ func TestExecutorClearsWarnings(t *testing.T) {
 
 // TestServingKeyspaces tests that the dual queries are routed to the correct keyspaces from the list of serving keyspaces.
 func TestServingKeyspaces(t *testing.T) {
+	buffer.EnableBuffering()
+	defer buffer.DisableBuffering()
+
 	executor, sbc1, _, sbclookup := createExecutorEnv()
 	executor.pv = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)

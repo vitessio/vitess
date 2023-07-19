@@ -18,10 +18,12 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -33,6 +35,25 @@ import (
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
+
+func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time) bool {
+	timeout := 5 * time.Second
+	pollingInterval := 10 * time.Millisecond
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	ticker := time.NewTicker(pollingInterval)
+	defer ticker.Stop()
+	defer cancel()
+	for {
+		select {
+		case <-waitCtx.Done():
+			return false
+		case <-ticker.C:
+			if e.VSchema().GetCreated().After(lastVSchemaCreated) {
+				return true
+			}
+		}
+	}
+}
 
 func (e *Executor) newExecute(
 	ctx context.Context,
@@ -57,10 +78,6 @@ func (e *Executor) newExecute(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
-	if err != nil {
-		return err
-	}
 
 	// 2: Parse and Validate query
 	stmt, reservedVars, err := parseAndValidateQuery(query)
@@ -68,47 +85,90 @@ func (e *Executor) newExecute(
 		return err
 	}
 
-	// 3: Create a plan for the query
-	plan, err := e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
-	execStart := e.logPlanningFinished(logStats, plan)
+	// During MoveTables we need to replan since the routing rules change and hence the target keyspace will be different.
+	retrying := false
+	var lastVSchemaCreated time.Time
+	vs := e.VSchema()
+	lastVSchemaCreated = vs.GetCreated()
+	for try := 0; try < MaxBufferingRetries; try++ {
+		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) {
+			// There is a race due to which the executor's vschema may not have been updated yet.
+			// Without a wait we fail non-deterministically since the previous vschema will not have the updated routing rules
+			if waitForNewerVSchema(ctx, e, lastVSchemaCreated) {
+				vs = e.VSchema()
+			}
+		}
 
-	if err != nil {
-		safeSession.ClearWarnings()
+		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+		if err != nil {
+			return err
+		}
+
+		// 3: Create a plan for the query
+		var plan *engine.Plan
+		// If we are retrying, it is likely that the routing rules have changed and hence we need to replan the query since the target
+		// keyspace of the resolved shards may have changed.
+		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
+		execStart := e.logPlanningFinished(logStats, plan)
+
+		if err != nil {
+			safeSession.ClearWarnings()
+			return err
+		}
+
+		if plan.Type != sqlparser.StmtShow {
+			safeSession.ClearWarnings()
+		}
+
+		// add any warnings that the planner wants to add
+		for _, warning := range plan.Warnings {
+			safeSession.RecordWarning(warning)
+		}
+
+		result, err := e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
+		if err != nil {
+			return err
+		}
+		if result != nil {
+			return recResult(plan.Type, result)
+		}
+
+		// 4: Prepare for execution
+		err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
+		if err != nil {
+			logStats.Error = err
+			return err
+		}
+
+		// 5: Execute the plan and retry if needed
+		if plan.Instructions.NeedsTransaction() {
+			err = e.insideTransaction(ctx, safeSession, logStats,
+				func() error {
+					return execPlan(ctx, plan, vcursor, bindVars, execStart)
+				})
+		} else {
+			err = execPlan(ctx, plan, vcursor, bindVars, execStart)
+		}
+
+		if !safeSession.InTransaction() && err != nil {
+			rootCause := vterrors.RootCause(err)
+			if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
+				log.Infof("%d:%t will retry query %s due to %v", try, retrying, query, err)
+				retrying = true
+				lastVSchemaCreated = vs.GetCreated()
+				continue
+			} else {
+				retrying = false
+			}
+		} else {
+			retrying = false
+		}
+		if err == nil && try > 0 {
+			log.Infof("query %d:%t succeeded on retry: %s", try, retrying, query)
+		}
 		return err
 	}
-
-	if plan.Type != sqlparser.StmtShow {
-		safeSession.ClearWarnings()
-	}
-
-	// add any warnings that the planner wants to add
-	for _, warning := range plan.Warnings {
-		safeSession.RecordWarning(warning)
-	}
-
-	result, err := e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
-	if err != nil {
-		return err
-	}
-	if result != nil {
-		return recResult(plan.Type, result)
-	}
-
-	// 3: Prepare for execution
-	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
-	if err != nil {
-		logStats.Error = err
-		return err
-	}
-
-	if plan.Instructions.NeedsTransaction() {
-		return e.insideTransaction(ctx, safeSession, logStats,
-			func() error {
-				return execPlan(ctx, plan, vcursor, bindVars, execStart)
-			})
-	}
-
-	return execPlan(ctx, plan, vcursor, bindVars, execStart)
+	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("query %s failed after retries: %v ", query, err))
 }
 
 // handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management

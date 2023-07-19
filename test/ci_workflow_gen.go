@@ -121,6 +121,7 @@ var (
 		"vreplication_v2",
 		"vreplication_partial_movetables_basic",
 		"vreplication_partial_movetables_sequences",
+		"vreplication_movetables_buffering",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",

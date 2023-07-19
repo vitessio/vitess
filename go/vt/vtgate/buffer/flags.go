@@ -165,6 +165,14 @@ func NewDefaultConfig() *Config {
 	}
 }
 
+func EnableBuffering() {
+	bufferEnabled = true
+}
+
+func DisableBuffering() {
+	bufferEnabled = false
+}
+
 func NewConfigFromFlags() *Config {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)

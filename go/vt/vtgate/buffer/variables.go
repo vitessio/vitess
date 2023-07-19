@@ -112,6 +112,7 @@ const (
 	stopFailoverEndDetected         stopReason = "NewPrimarySeen"
 	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
 	stopShutdown                    stopReason = "Shutdown"
+	stopMoveTablesSwitchingTraffic  stopReason = "MoveTablesSwitchedTraffic"
 )
 
 // evictedReason is used in "requestsEvicted" as "Reason" label.

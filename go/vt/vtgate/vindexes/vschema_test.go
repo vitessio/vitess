@@ -234,6 +234,14 @@ func init() {
 	Register("mcfu", newMCFU)
 }
 
+func buildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
+	vs := BuildVSchema(source)
+	if vs != nil {
+		vs.ResetCreated()
+	}
+	return vs
+}
+
 func TestUnshardedVSchemaValid(t *testing.T) {
 	_, err := BuildKeyspace(&vschemapb.Keyspace{
 		Sharded:  false,
@@ -1037,7 +1045,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 							Columns: []string{"c1", "c2"},
 							Name:    "stfu1"}}}}}}}
 
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -1106,7 +1114,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 							Name:   "stlu1"}, {
 							Column: "c2",
 							Name:   "stfu1"}}}}}}}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -1236,7 +1244,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Name: "ksa"}
 	ksb := &Keyspace{
 		Name: "ksb"}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	t1a := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
@@ -1291,7 +1299,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	ksa := &Keyspace{
 		Name: "ksa",
 	}
@@ -1383,7 +1391,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["ksa"].Error
 	err1 := got.Keyspaces["ksb"].Error
 	require.NoError(t, err)
@@ -1959,7 +1967,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	err1 := got.Keyspaces["unsharded"].Error
