@@ -596,7 +596,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
 	defer func() {
-		if closeErr := wc.Close(); finalErr == nil {
+		closeErr := wc.Close()
+		if finalErr == nil {
 			finalErr = closeErr
 		}
 	}()
