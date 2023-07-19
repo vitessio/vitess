@@ -254,7 +254,7 @@ func (vr *VindexLookup) generateIds(ctx context.Context, vcursor VCursor, bindVa
 	}
 	switch vr.Opcode {
 	case Equal, EqualUnique:
-		return []sqltypes.Value{value.Value()}, nil
+		return []sqltypes.Value{value.Value(vcursor.ConnCollation())}, nil
 	case IN:
 		return value.TupleValues(), nil
 	}

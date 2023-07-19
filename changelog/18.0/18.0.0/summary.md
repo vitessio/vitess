@@ -10,6 +10,7 @@
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
+    - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
   - **[New stats](#new-stats)**
@@ -53,6 +54,10 @@ Throttler related `vttablet` flags:
 - `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
 - `--throttler-config-via-topo` is deprecated after asummed `true` in `v17.0`. It will be removed in a future version.
+
+#### <a id="deleted-v3"/>Deleted `v3` planner
+
+The `Gen4` planner has been the default planner since Vitess 14. The `v3` planner was deprecated in Vitess 15 and has now been removed in this release.
 
 #### <a id="deleted-k8stopo"/>Deleted `k8stopo`
 

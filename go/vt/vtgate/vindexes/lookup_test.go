@@ -19,11 +19,10 @@ package vindexes
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"strings"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

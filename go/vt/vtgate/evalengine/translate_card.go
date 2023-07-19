@@ -131,6 +131,8 @@ func (ast *astCompiler) cardExpr(expr Expr) error {
 		return ast.cardUnary(expr.Inner)
 	case *CollateExpr:
 		return ast.cardUnary(expr.Inner)
+	case *IntroducerExpr:
+		return ast.cardUnary(expr.Inner)
 	case *IsExpr:
 		return ast.cardUnary(expr.Inner)
 	case *BitwiseNotExpr:
