@@ -30,18 +30,28 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
+const (
+	postWriteSleepDuration = 2*time.Second + 100*time.Millisecond
+)
+
+const (
+	operationFullBackup = iota
+	operationIncrementalBackup
+	operationRestore
+)
+
 type PITRTestCase struct {
 	Name           string
 	SetupType      int
 	ComprssDetails *CompressionDetails
 }
 
-func waitForReplica(t *testing.T) {
+func waitForReplica(t *testing.T, replicaIndex int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	pMsgs := ReadRowsFromPrimary(t)
 	for {
-		rMsgs := ReadRowsFromReplica(t)
+		rMsgs := ReadRowsFromReplica(t, replicaIndex)
 		if len(pMsgs) == len(rMsgs) {
 			// success
 			return
@@ -56,7 +66,9 @@ func waitForReplica(t *testing.T) {
 	}
 }
 
-// ExecTestIncrementalBackupAndRestoreToPos
+// ExecTestIncrementalBackupAndRestoreToPos runs a series of backups: a full backup and multiple incremental backups.
+// in between, it makes writes to the database, and takes notes: what data was available in what backup.
+// It then restores each and every one of those backups, in random order, and expects to find the specific data associated with the backup.
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
 	defer cluster.PanicHandler(t)
 
@@ -72,8 +84,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		backupPositions := []string{}
 
 		recordRowsPerPosition := func(t *testing.T) {
-			pos := GetReplicaPosition(t)
-			msgs := ReadRowsFromReplica(t)
+			pos := GetReplicaPosition(t, 0)
+			msgs := ReadRowsFromReplica(t, 0)
 			if _, ok := rowsPerPosition[pos]; !ok {
 				backupPositions = append(backupPositions, pos)
 				rowsPerPosition[pos] = len(msgs)
@@ -83,13 +95,13 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		var fullBackupPos mysql.Position
 		t.Run("full backup", func(t *testing.T) {
 			InsertRowOnPrimary(t, "before-full-backup")
-			waitForReplica(t)
+			waitForReplica(t, 0)
 
-			manifest, _ := TestReplicaFullBackup(t)
+			manifest := TestReplicaFullBackup(t, 0)
 			fullBackupPos = manifest.Position
 			require.False(t, fullBackupPos.IsZero())
 			//
-			msgs := ReadRowsFromReplica(t)
+			msgs := ReadRowsFromReplica(t, 0)
 			pos := mysql.EncodePosition(fullBackupPos)
 			backupPositions = append(backupPositions, pos)
 			rowsPerPosition[pos] = len(msgs)
@@ -150,8 +162,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// in 1 second resolution. We want to avoid two backups that have the same pathname. Realistically this
 				// is only ever a problem in this end-to-end test, not in production.
 				// Also, we gie the replica a chance to catch up.
-				time.Sleep(1100 * time.Millisecond)
-				waitForReplica(t)
+				time.Sleep(postWriteSleepDuration)
+				waitForReplica(t, 0)
 				recordRowsPerPosition(t)
 				// configure --incremental-from-pos to either:
 				// - auto
@@ -164,7 +176,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 						incrementalFromPos = fullBackupPos
 					}
 				}
-				manifest, backupName := TestReplicaIncrementalBackup(t, incrementalFromPos, tc.expectError)
+				// always use same 1st replica
+				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectError)
 				if tc.expectError != "" {
 					return
 				}
@@ -178,11 +191,11 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				require.NotEqual(t, manifest.Position, manifest.FromPosition)
 				require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
 
-				gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, GetReplicaGtidPurged(t))
+				gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
 				require.NoError(t, err)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
-				expectFromPosition := lastBackupPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+				expectFromPosition := lastBackupPos.GTIDSet
 				if !incrementalFromPos.IsZero() {
 					expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
@@ -197,8 +210,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				t.Run(testName, func(t *testing.T) {
 					restoreToPos, err := mysql.DecodePosition(pos)
 					require.NoError(t, err)
-					TestReplicaRestoreToPos(t, restoreToPos, "")
-					msgs := ReadRowsFromReplica(t)
+					TestReplicaRestoreToPos(t, 0, restoreToPos, "")
+					msgs := ReadRowsFromReplica(t, 0)
 					count, ok := rowsPerPosition[pos]
 					require.True(t, ok)
 					assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
@@ -217,5 +230,145 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
 		})
+	})
+}
+
+// ExecTestIncrementalBackupAndRestoreToPos runs a series of interleaved backups on two different replicas: full and incremental.
+// Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
+// one another.
+func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
+	defer cluster.PanicHandler(t)
+
+	t.Run(tcase.Name, func(t *testing.T) {
+		// setup cluster for the testing
+		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
+		require.NoError(t, err, "setup failed with status code %d", code)
+		defer TearDownCluster()
+
+		InitTestTable(t)
+
+		rowsPerPosition := map[string]int{}
+
+		recordRowsPerPosition := func(t *testing.T, replicaIndex int) {
+			pos := GetReplicaPosition(t, replicaIndex)
+			msgs := ReadRowsFromReplica(t, replicaIndex)
+			if _, ok := rowsPerPosition[pos]; !ok {
+				rowsPerPosition[pos] = len(msgs)
+			}
+		}
+
+		var lastBackupPos mysql.Position
+		InsertRowOnPrimary(t, "before-incremental-backups")
+		waitForReplica(t, 0)
+		waitForReplica(t, 1)
+
+		tt := []struct {
+			name          string
+			operationType int
+			replicaIndex  int
+			expectError   string
+		}{
+			{
+				name:          "full1",
+				operationType: operationFullBackup,
+			},
+			{
+				name:          "incremental1",
+				operationType: operationIncrementalBackup,
+			},
+			{
+				name:          "restore1",
+				operationType: operationRestore,
+			},
+			{
+				name:          "incremental2",
+				operationType: operationIncrementalBackup,
+				replicaIndex:  1,
+			},
+			{
+				name:          "full2",
+				operationType: operationFullBackup,
+				replicaIndex:  1,
+			},
+			{
+				name:          "incremental2-after-full2",
+				operationType: operationIncrementalBackup,
+				replicaIndex:  1,
+			},
+			{
+				name:          "restore2",
+				operationType: operationRestore,
+				replicaIndex:  1,
+			},
+			{
+				name:          "incremental-replica1",
+				operationType: operationIncrementalBackup,
+			},
+			{
+				name:          "incremental-replica2",
+				operationType: operationIncrementalBackup,
+				replicaIndex:  1,
+			},
+			{
+				name:          "incremental-replica1",
+				operationType: operationIncrementalBackup,
+			},
+			{
+				name:          "incremental-replica2",
+				operationType: operationIncrementalBackup,
+				replicaIndex:  1,
+			},
+		}
+		insertRowAndWait := func(t *testing.T, replicaIndex int, data string) {
+			t.Run("insert row and wait", func(t *testing.T) {
+				InsertRowOnPrimary(t, data)
+				time.Sleep(postWriteSleepDuration)
+				waitForReplica(t, replicaIndex)
+				recordRowsPerPosition(t, replicaIndex)
+			})
+		}
+		for _, tc := range tt {
+			t.Run(tc.name, func(t *testing.T) {
+				insertRowAndWait(t, tc.replicaIndex, tc.name)
+				t.Run("running operation", func(t *testing.T) {
+					switch tc.operationType {
+					case operationFullBackup:
+						manifest := TestReplicaFullBackup(t, tc.replicaIndex)
+						fullBackupPos := manifest.Position
+						require.False(t, fullBackupPos.IsZero())
+						//
+						msgs := ReadRowsFromReplica(t, tc.replicaIndex)
+						pos := mysql.EncodePosition(fullBackupPos)
+						rowsPerPosition[pos] = len(msgs)
+
+						lastBackupPos = fullBackupPos
+					case operationIncrementalBackup:
+						var incrementalFromPos mysql.Position // keep zero, we will use "auto"
+						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, incrementalFromPos, tc.expectError)
+						if tc.expectError != "" {
+							return
+						}
+						defer func() {
+							lastBackupPos = manifest.Position
+						}()
+						require.False(t, manifest.FromPosition.IsZero())
+						require.NotEqual(t, manifest.Position, manifest.FromPosition)
+						require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
+
+						gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, GetReplicaGtidPurged(t, tc.replicaIndex))
+						require.NoError(t, err)
+						fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+
+						require.True(t, lastBackupPos.GTIDSet.Contains(fromPositionIncludingPurged), "expected: %v to contain %v", lastBackupPos.GTIDSet, fromPositionIncludingPurged)
+					case operationRestore:
+						TestReplicaFullRestore(t, tc.replicaIndex, "")
+						// should return into replication stream
+						insertRowAndWait(t, tc.replicaIndex, "post-restore-check")
+					default:
+						require.FailNowf(t, "unknown operation type", "operation: %d", tc.operationType)
+					}
+				})
+			})
+		}
 	})
 }

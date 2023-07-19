@@ -31,3 +31,13 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 	}
 	backup.ExecTestIncrementalBackupAndRestoreToPos(t, tcase)
 }
+
+// TestIncrementalBackupOnTwoTablets
+func TestIncrementalBackupOnTwoTablets(t *testing.T) {
+	tcase := &backup.PITRTestCase{
+		Name:           "BuiltinBackup",
+		SetupType:      backup.BuiltinBackup,
+		ComprssDetails: nil,
+	}
+	backup.ExecTestIncrementalBackupOnTwoTablets(t, tcase)
+}
