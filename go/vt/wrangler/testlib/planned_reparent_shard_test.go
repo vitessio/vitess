@@ -801,6 +801,9 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
+		// We call a SetReplicationSource explicitly
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// extra SetReplicationSource call due to retry
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -857,6 +860,13 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	assert.True(t, newPrimary.FakeMysqlDaemon.ReadOnly, "newPrimary.FakeMysqlDaemon.ReadOnly")
 	assert.True(t, oldPrimary.FakeMysqlDaemon.ReadOnly, "oldPrimary.FakeMysqlDaemon.ReadOnly")
 
+	// After the first call to PRS has failed, we don't know whether `SetReplicationSource` RPC has succeeded on the oldPrimary or not.
+	// This causes the test to become non-deterministic. To prevent this, we call `SetReplicationSource` on the oldPrimary again, and make sure it has succeeded.
+	// We also wait until the oldPrimary has demoted itself to a replica type.
+	err = wr.TabletManagerClient().SetReplicationSource(context.Background(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false)
+	require.NoError(t, err)
+	waitForTabletType(t, wr, oldPrimary.Tablet.Alias, topodatapb.TabletType_REPLICA)
+
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
 	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
@@ -868,6 +878,26 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// check that primary changed correctly
 	assert.False(t, newPrimary.FakeMysqlDaemon.ReadOnly, "newPrimary.FakeMysqlDaemon.ReadOnly")
 	assert.True(t, oldPrimary.FakeMysqlDaemon.ReadOnly, "oldPrimary.FakeMysqlDaemon.ReadOnly")
+}
+
+// waitForTabletType waits for the given tablet type to be reached.
+func waitForTabletType(t *testing.T, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType) {
+	timeout := time.After(15 * time.Second)
+	for {
+		tablet, err := wr.TopoServer().GetTablet(context.Background(), tabletAlias)
+		require.NoError(t, err)
+		if tablet.Type == tabletType {
+			return
+		}
+
+		select {
+		case <-timeout:
+			t.Fatalf("%s didn't reach the tablet type %v", topoproto.TabletAliasString(tabletAlias), tabletType.String())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }
 
 // TestPlannedReparentShardSamePrimary tests PRS with oldPrimary works correctly
