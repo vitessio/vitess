@@ -666,7 +666,7 @@ func TestVStreamSharded(t *testing.T) {
 
 }
 
-// TestVStreamCopyTransaction tests that we are properly wrapping
+// TestVStreamCopyTransactions tests that we are properly wrapping
 // row events in the stream with BEGIN and COMMIT events.
 func TestVStreamCopyTransactions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -705,8 +705,8 @@ func TestVStreamCopyTransactions(t *testing.T) {
 	_, err := conn.ExecuteFetch(q, -1, false)
 	require.NoError(t, err, "error clearing data: %v", err)
 
-	// Generate some test data. Enough to cross the vstream_packet_size
-	// threshold.
+	// Generate some test data. Enough to cross the default
+	// vstream_packet_size threshold.
 	for i := 1; i <= 100000; i++ {
 		values := fmt.Sprintf("(%d, %d)", i, i)
 		q := fmt.Sprintf("insert into %s (id1, id2) values %s", table, values)
@@ -723,26 +723,36 @@ recvLoop:
 		e, err := reader.Recv()
 		numResultInTrx++
 		eventCount := len(e)
-		t.Logf("----------------------------Received %d events in response #%d for the transaction --------------------------------------\n", eventCount, numResultInTrx)
+		t.Logf("------------------ Received %d events in response #%d for the transaction ------------------\n",
+			eventCount, numResultInTrx)
 		switch err {
 		case nil:
 			for _, event := range e {
 				switch event.Type {
 				case binlogdatapb.VEventType_BEGIN:
+					require.False(t, beginEventSeen, "Received a second BEGIN event within the transaction: numResultInTrx=%v\n",
+						numResultInTrx)
 					beginEventSeen = true
-					t.Logf("Found BEGIN event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx)
-					require.False(t, commitEventSeen, "Received COMMIT event before receiving BEGIN event: numResultInTrx=%v\n", numResultInTrx)
+					t.Logf("Found BEGIN event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx)
+					require.False(t, commitEventSeen, "Received a BEGIN event when expecting a COMMIT event: numResultInTrx=%v\n",
+						numResultInTrx)
 				case binlogdatapb.VEventType_VGTID:
-					t.Logf("Found VGTID event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+					t.Logf("Found VGTID event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
 				case binlogdatapb.VEventType_FIELD:
-					t.Logf("Found FIELD event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+					t.Logf("Found FIELD event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
 				case binlogdatapb.VEventType_ROW:
 					// Uncomment if you need to do more debugging.
-					//t.Logf("Found ROW event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+					// t.Logf("Found ROW event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n",
+					//	beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
 				case binlogdatapb.VEventType_COMMIT:
 					commitEventSeen = true
-					t.Logf("Found COMMIT event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n", beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
-					require.True(t, beginEventSeen, "Received COMMIT event before receiving BEGIN event: numResultInTrx=%v\n", numResultInTrx)
+					t.Logf("Found COMMIT event, beginEventSeen=%v, commitEventSeen=%v, eventType=%v, numResultInTrx=%v, event=%+v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+					require.True(t, beginEventSeen, "Received COMMIT event before receiving BEGIN event: numResultInTrx=%v\n",
+						numResultInTrx)
 				case binlogdatapb.VEventType_COPY_COMPLETED:
 					t.Logf("Finished vstream copy\n")
 					t.Logf("-------------------------------------------------------------------\n\n")
@@ -768,6 +778,8 @@ recvLoop:
 			return
 		}
 	}
+	// The last response, when the vstream copy completes, does not
+	// typically contain ROW events.
 	if beginEventSeen || commitEventSeen {
 		require.True(t, (beginEventSeen && commitEventSeen), "Did not receive both BEGIN and COMMIT in last transaction")
 	}

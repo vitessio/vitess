@@ -255,7 +255,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 				log.Infof("sendFieldEvent returned error %v", err)
 				return err
 			}
-			// sendFieldEvent sends a BEGIN event first.
+			// sendFieldEvent() sends a BEGIN event first.
 			uvs.inTransaction = true
 		}
 
@@ -285,7 +285,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			log.Infof("sendEventsForRows returned error %v", err)
 			return err
 		}
-		// sendEventsForRows sends a COMMIT event last.
+		// sendEventsForRows() sends a COMMIT event last.
 		uvs.inTransaction = false
 
 		uvs.setCopyState(tableName, qrLastPK)
