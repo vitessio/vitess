@@ -32,7 +32,7 @@ type tableCollector struct {
 	si        SchemaInformation
 	currentDb string
 	org       originable
-	columns   map[*sqlparser.Union]sqlparser.SelectExprs
+	unionInfo map[*sqlparser.Union]unionInfo
 }
 
 func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *tableCollector {
@@ -40,15 +40,52 @@ func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *
 		scoper:    scoper,
 		si:        si,
 		currentDb: currentDb,
-		columns:   map[*sqlparser.Union]sqlparser.SelectExprs{},
+		unionInfo: map[*sqlparser.Union]unionInfo{},
 	}
 }
 
 func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
-	node, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AliasedTableExpr:
+		return tc.visitAliasedTableExpr(node)
+	case *sqlparser.Union:
+		firstSelect := sqlparser.GetFirstSelect(node)
+		expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
+		info := unionInfo{
+			isAuthoritative: expanded,
+			exprs:           selectExprs,
+		}
+		tc.unionInfo[node] = info
+		if !expanded {
+			return nil
+		}
+
+		size := len(firstSelect.SelectExprs)
+		info.recursive = make([]TableSet, size)
+		info.types = make([]*Type, size)
+
+		_ = sqlparser.VisitAllSelects(node, func(s *sqlparser.Select, idx int) error {
+			for i, expr := range s.SelectExprs {
+				ae, ok := expr.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
+				info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
+				if idx == 0 {
+					// TODO: we probably should coerce these types together somehow, but I'm not sure how
+					info.types[i] = qt
+				}
+			}
+			return nil
+		})
+		tc.unionInfo[node] = info
 	}
+
+	return nil
+}
+
+func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
@@ -115,34 +152,13 @@ func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sql
 
 func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr) error {
 	firstSelect := sqlparser.GetFirstSelect(union)
-	expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
 	tables := tc.scoper.wScope[firstSelect]
-	var deps []TableSet
-	var types []*Type
-	if expanded {
-		tc.columns[union] = selectExprs
-		size := len(firstSelect.SelectExprs)
-		deps = make([]TableSet, size)
-		types = make([]*Type, size)
-
-		_ = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
-			for i, expr := range s.SelectExprs {
-				ae, ok := expr.(*sqlparser.AliasedExpr)
-				if !ok {
-					continue
-				}
-				_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
-				deps[i] = deps[i].Merge(recursiveDeps)
-				if idx == 0 {
-					// we probably should coerce these types together somehow, but I'm not sure how
-					types = append(types, qt)
-				}
-			}
-			return nil
-		})
+	info, found := tc.unionInfo[union]
+	if !found {
+		panic("what the what")
 	}
 
-	tableInfo := createDerivedTableForExpressions(selectExprs, node.Columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(info.exprs, node.Columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}

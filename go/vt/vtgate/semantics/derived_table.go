@@ -38,6 +38,13 @@ type DerivedTable struct {
 	types     []*Type
 }
 
+type unionInfo struct {
+	isAuthoritative bool
+	recursive       []TableSet
+	types           []*Type
+	exprs           sqlparser.SelectExprs
+}
+
 var _ TableInfo = (*DerivedTable)(nil)
 
 func createDerivedTableForExpressions(

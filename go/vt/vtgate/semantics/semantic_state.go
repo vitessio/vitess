@@ -148,11 +148,7 @@ func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectE
 		if found {
 			return exprs
 		}
-
-		firstSelect := sqlparser.GetFirstSelect(sel)
-		_, selectExprs := getColumnNames(firstSelect.SelectExprs)
-		st.columns[sel] = selectExprs
-		return selectExprs
+		panic("what the what")
 	}
 
 	return nil
