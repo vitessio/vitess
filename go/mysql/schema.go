@@ -53,24 +53,6 @@ GROUP BY table_name, column_name, ordinal_position, character_set_name, collatio
 HAVING COUNT(*) = 1
 `
 
-	// DetectSchemaChangeOnlyBaseTable query detects if there is any schema change from previous copy excluding view tables.
-	DetectSchemaChangeOnlyBaseTable = `
-SELECT DISTINCT table_name
-FROM (
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM information_schema.columns
-	WHERE table_schema = database() and table_name in (select table_name from information_schema.tables where table_schema = database() and table_type = 'BASE TABLE')
-
-	UNION ALL
-
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM %s.schemacopy
-	WHERE table_schema = database()
-) _inner
-GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-HAVING COUNT(*) = 1
-`
-
 	// ClearSchemaCopy query clears the schemacopy table.
 	ClearSchemaCopy = `delete from %s.schemacopy where table_schema = database()`
 
@@ -79,22 +61,6 @@ HAVING COUNT(*) = 1
 select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
 from information_schema.columns
 where table_schema = database()`
-
-	// fetchColumns are the columns we fetch
-	fetchColumns = "table_name, column_name, data_type, collation_name"
-
-	// FetchUpdatedTables queries fetches all information about updated tables
-	FetchUpdatedTables = `select  ` + fetchColumns + `
-from %s.schemacopy
-where table_schema = database() and
-	table_name in ::tableNames
-order by table_name, ordinal_position`
-
-	// FetchTables queries fetches all information about tables
-	FetchTables = `select ` + fetchColumns + `
-from %s.schemacopy
-where table_schema = database()
-order by table_name, ordinal_position`
 
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`

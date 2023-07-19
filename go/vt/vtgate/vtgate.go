@@ -288,7 +288,7 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser, enableViews)
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews)
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
