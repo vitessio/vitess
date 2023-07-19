@@ -164,7 +164,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		}()
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
-			tt, err = env.TypeOf(local, fields)
+			tt, _, err = env.TypeOf(local, fields)
 			if errors.Is(err, evalengine.ErrAmbiguousType) {
 				tt = -1
 				err = nil
@@ -218,7 +218,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value()
+			res.localVal = eval.Value(collations.Default())
 		}
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0]

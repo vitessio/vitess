@@ -111,7 +111,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_NAME",
 	ColumnLength: 192,
-	Charset:      collations.CollationUtf8ID,
+	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "t.table_type",
@@ -121,7 +121,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_TYPE",
 	ColumnLength: 192,
-	Charset:      collations.CollationUtf8ID,
+	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "unix_timestamp(t.create_time)",
@@ -137,7 +137,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_COMMENT",
 	ColumnLength: 6144,
-	Charset:      collations.CollationUtf8ID,
+	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "i.file_size",

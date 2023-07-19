@@ -122,6 +122,13 @@ func (c *CollateExpr) format(w *formatter, depth int) {
 	w.WriteString(coll.Name())
 }
 
+func (i *IntroducerExpr) format(w *formatter, depth int) {
+	w.WriteString("_")
+	coll := i.TypedCollation.Collation.Get()
+	w.WriteString(coll.Name())
+	i.Inner.format(w, depth)
+}
+
 func (n *NotExpr) format(w *formatter, depth int) {
 	w.WriteString("NOT ")
 	n.Inner.format(w, depth)
