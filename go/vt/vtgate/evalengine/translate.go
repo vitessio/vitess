@@ -192,27 +192,26 @@ func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
 }
 
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
-	bvar := NewBindVar(arg.Name)
-	bvar.Collation.Collation = ast.cfg.Collation
+	bvar := NewBindVar(arg.Name, arg.Type, ast.cfg.Collation)
 
-	if arg.Type >= 0 {
-		bvar.Type = arg.Type
-		bvar.typed = true
-	} else {
+	if !bvar.typed() {
 		ast.untyped++
 	}
 	return bvar, nil
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) {
-	column := NewColumn(col.V)
+	var typ sqltypes.Type = sqltypes.Unknown
+	var coll collations.ID
 	if ast.cfg.ResolveType != nil {
-		column.Type, column.Collation.Collation, column.typed = ast.cfg.ResolveType(col.Original)
+		typ, coll, _ = ast.cfg.ResolveType(col.Original)
 	}
-	if column.Collation.Collation == collations.Unknown {
-		column.Collation.Collation = ast.cfg.Collation
+	if coll == collations.Unknown {
+		coll = ast.cfg.Collation
 	}
-	if !column.typed {
+
+	column := NewColumn(col.V, typ, coll)
+	if !column.typed() {
 		ast.untyped++
 	}
 	return column, nil
@@ -226,14 +225,18 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 	if err != nil {
 		return nil, err
 	}
-	column := NewColumn(idx)
+	var typ sqltypes.Type = sqltypes.Unknown
+	var coll collations.ID
 	if ast.cfg.ResolveType != nil {
-		column.Type, column.Collation.Collation, column.typed = ast.cfg.ResolveType(colname)
+		typ, coll, _ = ast.cfg.ResolveType(colname)
 	}
-	if column.Collation.Collation == collations.Unknown {
-		column.Collation.Collation = ast.cfg.Collation
+	if coll == collations.Unknown {
+		coll = ast.cfg.Collation
 	}
-	if !column.typed {
+
+	column := NewColumn(idx, typ, coll)
+
+	if !column.typed() {
 		ast.untyped++
 	}
 	return column, nil
@@ -371,25 +374,23 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 				return nil, err
 			}
 		}
+		return expr, nil
 	case *BindVariable:
 		if lit.Type == sqltypes.Tuple {
 			panic("parser allowed introducer before tuple")
 		}
 
-		switch collation {
-		case collations.CollationBinaryID:
-			lit.Type = sqltypes.VarBinary
-			lit.Collation = collationBinary
-			lit.typed = true
-		default:
-			lit.Type = sqltypes.VarChar
-			lit.Collation.Collation = collation
-			lit.typed = true
-		}
+		return &IntroducerExpr{
+			UnaryExpr: UnaryExpr{expr},
+			TypedCollation: collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceExplicit,
+				Repertoire:   collations.RepertoireUnicode,
+			},
+		}, nil
 	default:
 		panic("character set introducers are only supported for literals and arguments")
 	}
-	return expr, nil
 }
 
 func (ast *astCompiler) translateIntegral(lit *sqlparser.Literal) (int, bool, error) {
@@ -417,7 +418,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (Expr, er
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	case sqlparser.NStringOp:
-		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8ID}, nil
+		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8mb3ID}, nil
 	default:
 		return nil, translateExprNotSupported(unary)
 	}
@@ -511,7 +512,7 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 	case *sqlparser.Argument:
 		return ast.translateBindVar(node)
 	case sqlparser.ListArg:
-		return NewBindVarTuple(string(node)), nil
+		return NewBindVarTuple(string(node), ast.cfg.Collation), nil
 	case *sqlparser.Literal:
 		return translateLiteral(node, ast.cfg.Collation)
 	case *sqlparser.AndExpr:
@@ -639,5 +640,5 @@ func (fields FieldResolver) Type(expr sqlparser.Expr) (sqltypes.Type, collations
 			}
 		}
 	}
-	return 0, 0, false
+	return sqltypes.Unknown, collations.Unknown, false
 }

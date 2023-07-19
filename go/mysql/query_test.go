@@ -24,6 +24,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -48,8 +50,10 @@ func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 	result := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Name: "id",
-				Type: querypb.Type_INT32,
+				Name:    "id",
+				Type:    querypb.Type_INT32,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -399,12 +403,15 @@ func TestQueries(t *testing.T) {
 	checkQuery(t, "type and name", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Name: "id",
-				Type: querypb.Type_INT32,
+				Name:    "id",
+				Type:    querypb.Type_INT32,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 			},
 			{
-				Name: "name",
-				Type: querypb.Type_VARCHAR,
+				Name:    "name",
+				Type:    querypb.Type_VARCHAR,
+				Charset: uint32(collations.Default()),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -424,36 +431,36 @@ func TestQueries(t *testing.T) {
 	// One row has all NULL values.
 	checkQuery(t, "all types", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "Type_INT8     ", Type: querypb.Type_INT8},
-			{Name: "Type_UINT8    ", Type: querypb.Type_UINT8},
-			{Name: "Type_INT16    ", Type: querypb.Type_INT16},
-			{Name: "Type_UINT16   ", Type: querypb.Type_UINT16},
-			{Name: "Type_INT24    ", Type: querypb.Type_INT24},
-			{Name: "Type_UINT24   ", Type: querypb.Type_UINT24},
-			{Name: "Type_INT32    ", Type: querypb.Type_INT32},
-			{Name: "Type_UINT32   ", Type: querypb.Type_UINT32},
-			{Name: "Type_INT64    ", Type: querypb.Type_INT64},
-			{Name: "Type_UINT64   ", Type: querypb.Type_UINT64},
-			{Name: "Type_FLOAT32  ", Type: querypb.Type_FLOAT32},
-			{Name: "Type_FLOAT64  ", Type: querypb.Type_FLOAT64},
-			{Name: "Type_TIMESTAMP", Type: querypb.Type_TIMESTAMP},
-			{Name: "Type_DATE     ", Type: querypb.Type_DATE},
-			{Name: "Type_TIME     ", Type: querypb.Type_TIME},
-			{Name: "Type_DATETIME ", Type: querypb.Type_DATETIME},
-			{Name: "Type_YEAR     ", Type: querypb.Type_YEAR},
-			{Name: "Type_DECIMAL  ", Type: querypb.Type_DECIMAL},
-			{Name: "Type_TEXT     ", Type: querypb.Type_TEXT},
-			{Name: "Type_BLOB     ", Type: querypb.Type_BLOB},
-			{Name: "Type_VARCHAR  ", Type: querypb.Type_VARCHAR},
-			{Name: "Type_VARBINARY", Type: querypb.Type_VARBINARY},
-			{Name: "Type_CHAR     ", Type: querypb.Type_CHAR},
-			{Name: "Type_BINARY   ", Type: querypb.Type_BINARY},
-			{Name: "Type_BIT      ", Type: querypb.Type_BIT},
-			{Name: "Type_ENUM     ", Type: querypb.Type_ENUM},
-			{Name: "Type_SET      ", Type: querypb.Type_SET},
+			{Name: "Type_INT8     ", Type: querypb.Type_INT8, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_UINT8    ", Type: querypb.Type_UINT8, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Type_INT16    ", Type: querypb.Type_INT16, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_UINT16   ", Type: querypb.Type_UINT16, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Type_INT24    ", Type: querypb.Type_INT24, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_UINT24   ", Type: querypb.Type_UINT24, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Type_INT32    ", Type: querypb.Type_INT32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_UINT32   ", Type: querypb.Type_UINT32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Type_INT64    ", Type: querypb.Type_INT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_UINT64   ", Type: querypb.Type_UINT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Type_FLOAT32  ", Type: querypb.Type_FLOAT32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_FLOAT64  ", Type: querypb.Type_FLOAT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_TIMESTAMP", Type: querypb.Type_TIMESTAMP, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_TIMESTAMP_FLAG)},
+			{Name: "Type_DATE     ", Type: querypb.Type_DATE, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_TIME     ", Type: querypb.Type_TIME, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_DATETIME ", Type: querypb.Type_DATETIME, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_YEAR     ", Type: querypb.Type_YEAR, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_DECIMAL  ", Type: querypb.Type_DECIMAL, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "Type_TEXT     ", Type: querypb.Type_TEXT, Charset: uint32(collations.Default())},
+			{Name: "Type_BLOB     ", Type: querypb.Type_BLOB, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_VARCHAR  ", Type: querypb.Type_VARCHAR, Charset: uint32(collations.Default())},
+			{Name: "Type_VARBINARY", Type: querypb.Type_VARBINARY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_CHAR     ", Type: querypb.Type_CHAR, Charset: uint32(collations.Default())},
+			{Name: "Type_BINARY   ", Type: querypb.Type_BINARY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_BIT      ", Type: querypb.Type_BIT, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			{Name: "Type_ENUM     ", Type: querypb.Type_ENUM, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_ENUM_FLAG)},
+			{Name: "Type_SET      ", Type: querypb.Type_SET, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_SET_FLAG)},
 			// Skip TUPLE, not possible in Result.
-			{Name: "Type_GEOMETRY ", Type: querypb.Type_GEOMETRY},
-			{Name: "Type_JSON     ", Type: querypb.Type_JSON},
+			{Name: "Type_GEOMETRY ", Type: querypb.Type_GEOMETRY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_BLOB_FLAG)},
+			{Name: "Type_JSON     ", Type: querypb.Type_JSON, Charset: collations.CollationUtf8mb4ID},
 		},
 		Rows: [][]sqltypes.Value{
 			{
@@ -526,8 +533,9 @@ func TestQueries(t *testing.T) {
 	checkQuery(t, "first empty string", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Name: "name",
-				Type: querypb.Type_VARCHAR,
+				Name:    "name",
+				Type:    querypb.Type_VARCHAR,
+				Charset: uint32(collations.Default()),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -544,7 +552,9 @@ func TestQueries(t *testing.T) {
 	checkQuery(t, "type only", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Type: querypb.Type_INT64,
+				Type:    querypb.Type_INT64,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -667,6 +677,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if !got.Equal(&expected) {
 			for i, f := range got.Fields {
 				if i < len(expected.Fields) && !proto.Equal(f, expected.Fields[i]) {
+					t.Logf("Query = %v", query)
 					t.Logf("Got      field(%v) = %v", i, f)
 					t.Logf("Expected field(%v) = %v", i, expected.Fields[i])
 				}

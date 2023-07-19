@@ -450,12 +450,12 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		{
 			name:     `opaque string [2 202 254]`,
 			data:     []byte{15, 15, 2, 202, 254},
-			expected: `CAST(x'02cafe' as JSON)`,
+			expected: `CAST(x'02CAFE' as JSON)`,
 		},
 		{
 			name:     `opaque blob [2 202 254]`,
 			data:     []byte{15, 252, 2, 202, 254},
-			expected: `CAST(x'02cafe' as JSON)`,
+			expected: `CAST(x'02CAFE' as JSON)`,
 		},
 	}
 	for _, tc := range testcases {

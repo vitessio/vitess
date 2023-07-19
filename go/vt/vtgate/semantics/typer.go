@@ -45,10 +45,10 @@ func newTyper() *typer {
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		t.exprTypes[node] = Type{Type: node.SQLType()}
+		t.exprTypes[node] = Type{Type: node.SQLType(), Collation: collations.DefaultCollationForType(node.SQLType())}
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
-			t.exprTypes[node] = Type{Type: node.Type}
+			t.exprTypes[node] = Type{Type: node.Type, Collation: collations.DefaultCollationForType(node.Type)}
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[node.AggrName()]
@@ -63,7 +63,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			}
 		}
 		typ, _ := code.Type(inputType)
-		t.exprTypes[node] = Type{Type: typ}
+		t.exprTypes[node] = Type{Type: typ, Collation: collations.DefaultCollationForType(typ)}
 	}
 	return nil
 }

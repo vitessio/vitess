@@ -330,9 +330,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0: utf8mb4_0900_ai_ci"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -344,8 +343,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS where 1 != 1",
-                "Query": "select distinct CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS",
+                "FieldQuery": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS where 1 != 1",
+                "Query": "select distinct CHARACTER_SET_NAME from information_schema.CHARACTER_SETS",
                 "Table": "information_schema.CHARACTER_SETS"
               },
               {
@@ -355,8 +354,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select user_name, weight_string(user_name) from unsharded where 1 != 1",
-                "Query": "select distinct user_name, weight_string(user_name) from unsharded",
+                "FieldQuery": "select user_name from unsharded where 1 != 1",
+                "Query": "select distinct user_name from unsharded",
                 "Table": "unsharded"
               }
             ]
@@ -531,7 +530,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: binary"
+          "0"
         ],
         "Inputs": [
           {
@@ -618,7 +617,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: binary"
+          "0"
         ],
         "Inputs": [
           {
@@ -733,10 +732,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:2)",
-          "(1:3)"
+          "0: utf8mb4_0900_ai_ci",
+          "1: utf8mb4_0900_ai_ci"
         ],
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -748,14 +746,14 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 'b', 'c', weight_string('b'), weight_string('c') from `user` where 1 != 1",
-                "Query": "select distinct 'b', 'c', weight_string('b'), weight_string('c') from `user`",
+                "FieldQuery": "select 'b', 'c' from `user` where 1 != 1",
+                "Query": "select distinct 'b', 'c' from `user`",
                 "Table": "`user`"
               },
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
+                "JoinColumnIndexes": "L:0,L:1",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -765,8 +763,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
+                    "FieldQuery": "select `user`.id, `user`.`name` from `user` where 1 != 1",
+                    "Query": "select `user`.id, `user`.`name` from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -801,7 +799,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: binary"
+          "0"
         ],
         "Inputs": [
           {
