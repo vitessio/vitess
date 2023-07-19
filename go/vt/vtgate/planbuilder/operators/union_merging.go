@@ -137,7 +137,7 @@ func createMergedUnion(
 	lhsExprs, rhsExprs sqlparser.SelectExprs,
 	distinct bool,
 	routing Routing) (ops.Operator, sqlparser.SelectExprs, error) {
-	union := newUnion([]ops.Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, distinct)
+	union := newUnion([]ops.Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, lhsExprs, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
 		Source:     union,

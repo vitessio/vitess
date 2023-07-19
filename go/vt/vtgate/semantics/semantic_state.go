@@ -111,6 +111,8 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
+		columns map[*sqlparser.Union]sqlparser.SelectExprs
+
 		comparator *sqlparser.Comparator
 	}
 
@@ -135,6 +137,40 @@ var (
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Recursive[to] = st.RecursiveDeps(from)
 	st.Direct[to] = st.DirectDeps(from)
+}
+
+func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectExprs {
+	switch sel := sel.(type) {
+	case *sqlparser.Select:
+		return sel.SelectExprs
+	case *sqlparser.Union:
+		exprs, found := st.columns[sel]
+		if found {
+			return exprs
+		}
+
+		firstSelect := sqlparser.GetFirstSelect(sel)
+		_, selectExprs := getColumnNames(firstSelect.SelectExprs)
+		st.columns[sel] = selectExprs
+		return selectExprs
+	}
+
+	return nil
+}
+
+func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sqlparser.SelectExprs) {
+	expanded = true
+	for _, col := range exprs {
+		switch col := col.(type) {
+		case *sqlparser.AliasedExpr:
+			expr := sqlparser.NewColName(col.ColumnName())
+			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		default:
+			selectExprs = append(selectExprs, col)
+			expanded = false
+		}
+	}
+	return
 }
 
 // CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
@@ -166,6 +202,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+		columns:          map[*sqlparser.Union]sqlparser.SelectExprs{},
 	}
 }
 

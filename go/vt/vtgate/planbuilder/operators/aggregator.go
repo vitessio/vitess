@@ -349,7 +349,8 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 			continue
 		}
 
-		newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(aggr.getPushDownColumn()), false, false)
+		wrap := aeWrap(aggr.getPushDownColumn())
+		newSrc, offset, err := a.Source.AddColumn(ctx, wrap, false, false)
 		if err != nil {
 			return 0, err
 		}

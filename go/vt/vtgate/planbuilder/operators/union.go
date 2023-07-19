@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/slice"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -26,23 +28,29 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Union struct {
-	Sources  []ops.Operator
+	Sources []ops.Operator
+
+	// These are the select expressions coming from each source
 	Selects  []sqlparser.SelectExprs
 	distinct bool
 
-	columns       []*sqlparser.AliasedExpr
-	offsetPlanned bool
+	unionColumns              sqlparser.SelectExprs
+	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
+	offsetPlanned             bool
 }
 
-func newUnion(srcs []ops.Operator, stmts []sqlparser.SelectExprs, distinct bool) *Union {
+func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
+	if columns == nil {
+		panic("rt")
+	}
 	return &Union{
-		Sources:  srcs,
-		Selects:  stmts,
-		distinct: distinct,
+		Sources:      srcs,
+		Selects:      sourceSelects,
+		distinct:     distinct,
+		unionColumns: columns,
 	}
 }
 
@@ -287,40 +295,23 @@ func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (
 }
 
 func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr, err error) {
-	if u.columns != nil {
-		return u.columns, nil
-	}
-
-	var columns [][]*sqlparser.AliasedExpr
-	for _, source := range u.Sources {
-		getColumns, err := source.GetColumns(ctx)
-		if err != nil {
-			return nil, err
+	if u.unionColumnsAsAlisedExprs == nil {
+		allOk := true
+		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
+			expr, ok := from.(*sqlparser.AliasedExpr)
+			allOk = allOk && ok
+			return expr
+		})
+		if !allOk {
+			return nil, vterrors.VT09015()
 		}
-		columns = append(columns, getColumns)
 	}
 
-	for idx, column := range columns[0] {
-		col := sqlparser.NewColName(column.ColumnName())
-		result = append(result, aeWrap(col))
-
-		dd := semantics.EmptyTableSet()
-		rd := semantics.EmptyTableSet()
-		for _, cols := range columns {
-			e := cols[idx].Expr
-			dd = dd.Merge(ctx.SemTable.DirectDeps(e))
-			rd = rd.Merge(ctx.SemTable.RecursiveDeps(e))
-		}
-
-		ctx.SemTable.Direct[col] = dd
-		ctx.SemTable.Recursive[col] = rd
-	}
-	u.columns = result
-	return
+	return u.unionColumnsAsAlisedExprs, nil
 }
 
 func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return u.Sources[0].GetSelectExprs(ctx)
+	return u.unionColumns, nil
 }
 
 func (u *Union) NoLHSTableSet() {}

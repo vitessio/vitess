@@ -170,6 +170,7 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 	h.Columns = append(h.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
+		// TODO: this does not look correct
 		newSrc, _, err := h.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true, addToGroupBy)
 		if err != nil {
 			return nil, 0, err
@@ -210,40 +211,16 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
 	return -1, nil
 }
 
-func (h *Horizon) GetColumns(*plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
-	switch sel := h.Query.(type) {
-	case *sqlparser.Select:
-		for _, expr := range sel.SelectExprs {
-			ae, ok := expr.(*sqlparser.AliasedExpr)
-			if !ok {
-				return nil, vterrors.VT09015()
-			}
-			exprs = append(exprs, ae)
+func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
+	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, vterrors.VT09015()
 		}
-	case *sqlparser.Union:
-		selectExprs := unionSelects(sqlparser.GetFirstSelect(h.Query).SelectExprs)
-		for _, expr := range selectExprs {
-			ae, ok := expr.(*sqlparser.AliasedExpr)
-			if !ok {
-				return nil, vterrors.VT09015()
-			}
-			exprs = append(exprs, ae)
-		}
+		exprs = append(exprs, ae)
 	}
-	return exprs, nil
-}
 
-func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
-	for _, col := range exprs {
-		switch col := col.(type) {
-		case *sqlparser.AliasedExpr:
-			expr := sqlparser.NewColName(col.ColumnName())
-			selectExprs = append(selectExprs, aeWrap(expr))
-		default:
-			selectExprs = append(selectExprs, col)
-		}
-	}
-	return
+	return exprs, nil
 }
 
 func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {

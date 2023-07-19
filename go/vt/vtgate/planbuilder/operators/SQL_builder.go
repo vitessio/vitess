@@ -141,6 +141,19 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 	qb.sel = sel
 }
 
+func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
+	for _, col := range exprs {
+		switch col := col.(type) {
+		case *sqlparser.AliasedExpr:
+			expr := sqlparser.NewColName(col.ColumnName())
+			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		default:
+			selectExprs = append(selectExprs, col)
+		}
+	}
+	return
+}
+
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.SelectStatement) error {
 	colName := column.Name.String()
 	exprs := sqlparser.GetFirstSelect(sel).SelectExprs

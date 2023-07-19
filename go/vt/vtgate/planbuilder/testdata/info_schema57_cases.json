@@ -105,7 +105,6 @@
         "Collations": [
           "(0:1)"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -169,7 +168,6 @@
           "(19:40)",
           "(20:41)"
         ],
-        "ResultColumns": 21,
         "Inputs": [
           {
             "OperatorType": "Concatenate",

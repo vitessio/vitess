@@ -27,13 +27,15 @@ import (
 
 // DerivedTable contains the information about the projection, tables involved in derived table.
 type DerivedTable struct {
-	tableName        string
-	ASTNode          *sqlparser.AliasedTableExpr
-	columnNames      []string
-	cols             []sqlparser.Expr
-	tables           TableSet
-	isAuthoritative  bool
-	exprsNotExpanded bool
+	tableName       string
+	ASTNode         *sqlparser.AliasedTableExpr
+	columnNames     []string
+	cols            []sqlparser.Expr
+	tables          TableSet
+	isAuthoritative bool
+
+	recursive []TableSet
+	types     []*Type
 }
 
 var _ TableInfo = (*DerivedTable)(nil)
@@ -43,36 +45,51 @@ func createDerivedTableForExpressions(
 	cols sqlparser.Columns,
 	tables []TableInfo,
 	org originable,
-	exprsNotExpanded bool,
+	expanded bool,
+	recursiveDeps []TableSet,
+	types []*Type,
 ) *DerivedTable {
-	vTbl := &DerivedTable{isAuthoritative: true, exprsNotExpanded: exprsNotExpanded}
+	vTbl := &DerivedTable{isAuthoritative: expanded, recursive: recursiveDeps, types: types}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
-			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if len(cols) > 0 {
-				vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
-			} else if expr.As.IsEmpty() {
-				switch expr := expr.Expr.(type) {
-				case *sqlparser.ColName:
-					// for projections, we strip out the qualifier and keep only the column name
-					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
-				default:
-					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-				}
-			} else {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-			}
+			handleAliasedExpr(vTbl, expr, cols, i)
 		case *sqlparser.StarExpr:
-			for _, table := range tables {
-				vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
-				if !table.authoritative() {
-					vTbl.isAuthoritative = false
-				}
-			}
+			handleUnexpandedStarExpression(tables, vTbl, org)
 		}
 	}
 	return vTbl
+}
+
+func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sqlparser.Columns, i int) {
+	vTbl.cols = append(vTbl.cols, expr.Expr)
+
+	if len(cols) > 0 {
+		vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
+		return
+	}
+
+	if !expr.As.IsEmpty() {
+		vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+		return
+	}
+
+	switch expr := expr.Expr.(type) {
+	case *sqlparser.ColName:
+		// for projections, we strip out the qualifier and keep only the column name
+		vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+	default:
+		vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+	}
+}
+
+func handleUnexpandedStarExpression(tables []TableInfo, vTbl *DerivedTable, org originable) {
+	for _, table := range tables {
+		vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
+		if !table.authoritative() {
+			vTbl.isAuthoritative = false
+		}
+	}
 }
 
 // dependencies implements the TableInfo interface
@@ -82,7 +99,7 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		if !strings.EqualFold(name, colName) {
 			continue
 		}
-		_, recursiveDeps, qt := org.depsForExpr(dt.cols[i])
+		recursiveDeps, qt := dt.recursive[i], dt.types[i]
 
 		return createCertain(directDeps, recursiveDeps, qt), nil
 	}
@@ -142,11 +159,14 @@ func (dt *DerivedTable) getTableSet(_ originable) TableSet {
 
 // GetExprFor implements the TableInfo interface
 func (dt *DerivedTable) getExprFor(s string) (sqlparser.Expr, error) {
-	if dt.exprsNotExpanded {
+	if !dt.isAuthoritative {
 		return nil, vterrors.VT09015()
 	}
 	for i, colName := range dt.columnNames {
 		if colName == s {
+			if i >= len(dt.cols) {
+				panic("oops")
+			}
 			return dt.cols[i], nil
 		}
 	}

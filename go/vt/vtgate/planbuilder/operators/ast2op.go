@@ -100,21 +100,12 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		return nil, err
 	}
 
-	lexprs := getExpressions(node.Left)
-	rexprs := getExpressions(node.Right)
+	lexprs := ctx.SemTable.SelectExprs(node.Left)
+	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
-	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, node.Distinct)
+	unionCols := ctx.SemTable.SelectExprs(node)
+	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
 	return &Horizon{Source: union, Query: node}, nil
-}
-
-func getExpressions(stmt sqlparser.SelectStatement) sqlparser.SelectExprs {
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		return stmt.SelectExprs
-	case *sqlparser.Union:
-		return unionSelects(sqlparser.GetFirstSelect(stmt).SelectExprs)
-	}
-	return nil
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
@@ -607,11 +598,10 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			inner = horizon.Source
 		}
 
-		stmt := sqlparser.CloneSelectStatement(tbl.Select)
-		if onlyTable && stmt.GetLimit() == nil {
-			stmt.SetOrderBy(nil)
+		if onlyTable && tbl.Select.GetLimit() == nil {
+			tbl.Select.SetOrderBy(nil)
 		}
-		qp, err := CreateQPFromSelectStatement(ctx, stmt)
+		qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
@@ -620,7 +610,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			TableId:       &tableID,
 			Alias:         tableExpr.As.String(),
 			Source:        inner,
-			Query:         stmt,
+			Query:         tbl.Select,
 			ColumnAliases: tableExpr.Columns,
 			QP:            qp,
 		}, nil

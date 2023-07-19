@@ -623,13 +623,17 @@ func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, e
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
 		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
+		unionColumns, err := op.GetColumns(ctx)
+		if err != nil {
+			return nil, false, 0
+		}
 		return &Projection{
 			Source:      op,
-			Columns:     append(op.columns, expr),
+			Columns:     unionColumns,
 			Projections: nil,
 			TableID:     &tableID,
 			Alias:       "dt",
-		}, true, len(op.columns)
+		}, true, len(op.unionColumns)
 	default:
 		return op, false, 0
 	}

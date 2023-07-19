@@ -684,7 +684,11 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 	if len(sources) == len(op.Sources) {
 		return op, rewrite.SameTree, nil
 	}
-	return newUnion(sources, selects, op.distinct), rewrite.NewTree("merged union inputs", op), nil
+
+	// TODO: this is a hack
+	columns := op.unionColumns
+
+	return newUnion(sources, selects, columns, op.distinct), rewrite.NewTree("merged union inputs", op), nil
 }
 
 // makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
