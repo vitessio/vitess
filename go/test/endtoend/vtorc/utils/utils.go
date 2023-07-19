@@ -944,3 +944,26 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	successCount := successfulRecoveriesMap[recoveryName]
 	assert.EqualValues(t, countExpected, successCount)
 }
+
+// PrintVTOrcLogsOnFailure prints the VTOrc logs on failure of the test.
+// This function is supposed to be called as the first defer command from the vtorc tests.
+func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+	// If the test has not failed, then we don't need to print anything.
+	if !t.Failed() {
+		return
+	}
+
+	log.Errorf("Printing VTOrc logs")
+	for _, vtorc := range clusterInstance.VTOrcProcesses {
+		if vtorc == nil || vtorc.LogFileName == "" {
+			continue
+		}
+		filePath := path.Join(vtorc.LogDir, vtorc.LogFileName)
+		log.Errorf("Printing file - %s", filePath)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Errorf("Error while reading the file - %v", err)
+		}
+		log.Errorf("%s", string(content))
+	}
+}
