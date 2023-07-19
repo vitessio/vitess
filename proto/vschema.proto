@@ -45,6 +45,14 @@ message Keyspace {
   map<string, Table> tables = 3;
   // If require_explicit_routing is true, vindexes and tables are not added to global routing
   bool require_explicit_routing = 4;
+  // foreign_key_mode dictates how Vitess should handle foreign keys for this keyspace.
+  ForeignKeyMode foreign_key_mode = 5;
+
+  enum ForeignKeyMode {
+    Fk_unmanaged = 0;
+    Fk_disallow = 1;
+    Fk_managed = 2;
+  }
 }
 
 // Vindex is the vindex info for a Keyspace.
