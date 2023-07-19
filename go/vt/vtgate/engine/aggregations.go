@@ -43,6 +43,7 @@ type AggregateParams struct {
 	// These are used only for distinct opcodes.
 	KeyCol      int
 	WCol        int
+	Type        sqltypes.Type
 	CollationID collations.ID
 
 	Alias    string `json:",omitempty"`
@@ -60,6 +61,7 @@ func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *Aggregate
 		Col:    col,
 		Alias:  alias,
 		WCol:   -1,
+		Type:   sqltypes.Unknown,
 	}
 	if opcode.NeedsComparableValues() {
 		out.KeyCol = col
@@ -76,7 +78,7 @@ func (ap *AggregateParams) String() string {
 	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-	if ap.CollationID != collations.Unknown {
+	if sqltypes.IsText(ap.Type) && ap.CollationID != collations.Unknown {
 		keyCol += " COLLATE " + ap.CollationID.Get().Name()
 	}
 	dispOrigOp := ""

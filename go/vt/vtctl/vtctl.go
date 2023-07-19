@@ -97,6 +97,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"
@@ -4027,8 +4029,10 @@ func PrintAllCommands(logger logutil.Logger) {
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
-		Name: "Tablet",
-		Type: sqltypes.VarBinary,
+		Name:    "Tablet",
+		Type:    sqltypes.VarBinary,
+		Charset: collations.CollationBinaryID,
+		Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 	}}
 	var row2 []sqltypes.Value
 	for tabletAlias, result := range results {

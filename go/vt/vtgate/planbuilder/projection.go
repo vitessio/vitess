@@ -52,6 +52,7 @@ func (p *projection) Wireup(ctx *plancontext.PlanningContext) error {
 	for _, expr := range p.columns {
 		convert, err := evalengine.Translate(expr, &evalengine.Config{
 			ResolveColumn: resolveFromPlan(ctx, p.source, false),
+			ResolveType:   ctx.SemTable.TypeForExpr,
 			Collation:     ctx.SemTable.Collation,
 		})
 		if err != nil {

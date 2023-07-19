@@ -279,10 +279,12 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	// here we are building up the grouping keys for the OA,
 	// but they are lacking the input offsets because we have yet to push the columns down
 	for _, expr := range grouping {
+		typ, col, _ := ctx.SemTable.TypeForExpr(expr.Inner)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			Expr:        expr.Inner,
 			FromGroupBy: true,
-			CollationID: ctx.SemTable.CollationForExpr(expr.Inner),
+			Type:        typ,
+			CollationID: col,
 		})
 	}
 
@@ -471,12 +473,11 @@ func addColumnsToOA(
 			o := groupings[count]
 			count++
 			a := aggregationExprs[offset]
-			collID := ctx.SemTable.CollationForExpr(a.Func.GetArg())
 			aggr := engine.NewAggregateParam(a.OpCode, o.col, a.Alias)
 			aggr.KeyCol = o.col
 			aggr.WCol = o.wsCol
 			aggr.Original = a.Original
-			aggr.CollationID = collID
+			aggr.Type, aggr.CollationID, _ = ctx.SemTable.TypeForExpr(a.Func.GetArg())
 			oa.aggregates = append(oa.aggregates, aggr)
 		}
 		lastOffset := distinctOffsets[len(distinctOffsets)-1]
@@ -675,11 +676,13 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []ops.Orde
 		if err != nil {
 			return nil, err
 		}
+		typ, col, _ := ctx.SemTable.TypeForExpr(order.Inner.Expr)
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderByParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
-			CollationID:     ctx.SemTable.CollationForExpr(order.Inner.Expr),
+			Type:            typ,
+			CollationID:     col,
 		})
 	}
 	return plan, nil
@@ -816,12 +819,13 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 			return nil, vterrors.VT13001(fmt.Sprintf("expected to find ORDER BY expression (%s) in orderedAggregate", sqlparser.String(order.Inner)))
 		}
 
-		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
+		typ, collationID, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
+			Type:              typ,
 			CollationID:       collationID,
 		})
 	}
@@ -860,12 +864,14 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext
 		if err != nil {
 			return nil, err
 		}
+		typ, col, _ := ctx.SemTable.TypeForExpr(order.Inner.Expr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
-			CollationID:       ctx.SemTable.CollationForExpr(order.Inner.Expr),
+			Type:              typ,
+			CollationID:       col,
 		})
 	}
 	return ms, nil
@@ -927,7 +933,8 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 		for _, aggrParam := range currPlan.aggregates {
 			if semTable.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
-				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
+				typ, col, _ := semTable.TypeForExpr(expr)
+				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, Type: typ, CollationID: col})
 				break
 			}
 		}
@@ -959,7 +966,8 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			inner = sqlparser.NewColName(aliasExpr.As.String())
 			ctx.SemTable.CopyDependencies(aliasExpr.Expr, inner)
 		}
-		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner), Expr: inner}
+		typ, col, _ := ctx.SemTable.TypeForExpr(inner)
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, Type: typ, CollationID: col, Expr: inner}
 		_, wOffset, err := wrapAndPushExpr(ctx, aliasExpr.Expr, aliasExpr.Expr, plan)
 		if err != nil {
 			return nil, err

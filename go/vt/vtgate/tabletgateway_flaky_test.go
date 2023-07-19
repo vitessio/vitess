@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -63,8 +65,9 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "col1",
-			Type: sqltypes.VarChar,
+			Name:    "col1",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -150,8 +153,9 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "col1",
-			Type: sqltypes.VarChar,
+			Name:    "col1",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -277,8 +281,9 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "col1",
-			Type: sqltypes.VarChar,
+			Name:    "col1",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{

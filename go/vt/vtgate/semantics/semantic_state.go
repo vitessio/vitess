@@ -260,16 +260,7 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID,
 	if typ, found := st.ExprTypes[e]; found {
 		return typ.Type, typ.Collation, true
 	}
-	return -1, collations.Unknown, false
-}
-
-// CollationForExpr returns the collation name of expressions in the query
-func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
-	typ, found := st.ExprTypes[e]
-	if found {
-		return typ.Collation
-	}
-	return collations.Unknown
+	return sqltypes.Unknown, collations.Unknown, false
 }
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons

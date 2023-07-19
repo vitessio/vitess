@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -85,8 +86,10 @@ func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr, reuse bool) 
 	}
 
 	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-		Name: expr.ColumnName(),
-		Type: querypb.Type_VARBINARY,
+		Name:    expr.ColumnName(),
+		Type:    querypb.Type_VARBINARY,
+		Charset: collations.CollationBinaryID,
+		Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 	})
 	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, enum)
 	return len(vf.eVindexFunc.Cols) - 1, nil

@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -36,7 +38,7 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 	case *join, *hashJoin:
 		return false, node, nil
 	case *memorySort:
-		pv := evalengine.NewBindVar("__upper_limit")
+		pv := evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
 		node.eMemorySort.UpperLimit = pv
 		// we don't want to go down to the rest of the tree
 		return false, node, nil
