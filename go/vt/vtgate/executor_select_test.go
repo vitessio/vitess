@@ -1822,7 +1822,6 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
-				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -1941,7 +1940,6 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
-				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
 			}},
 		}})
 		conns = append(conns, sbc)
