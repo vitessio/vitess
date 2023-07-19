@@ -62,7 +62,7 @@ type (
 
 var _ sqlparser.ExprGenerator = (*tableT)(nil)
 var _ sqlparser.ExprGenerator = (*column)(nil)
-var _ sqlparser.ExprGenerator = (*queryGen)(nil)
+var _ sqlparser.QueryGenerator = (*queryGen)(nil)
 
 func newQueryGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGen {
 	if maxTables <= 0 {
@@ -173,7 +173,7 @@ func (qg *queryGen) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConf
 	return &sqlparser.Subquery{Select: newQG.sel}
 }
 
-func (qg *queryGen) IQueryGenerator() {}
+func (qg *queryGen) IsQueryGenerator() {}
 
 func (qg *queryGen) randomQuery() {
 	// make sure the random expressions can generally not contain aggregates; change appropriately
@@ -495,7 +495,7 @@ func (qg *queryGen) createRandomExprs(minExprs, maxExprs int, generators ...sqlp
 // getRandomExpr returns a random expression
 func (qg *queryGen) getRandomExpr(generators ...sqlparser.ExprGenerator) sqlparser.Expr {
 	g := sqlparser.NewGenerator(qg.r, 2, generators...)
-	return g.Expression(qg.genConfig)
+	return g.Expression(qg.genConfig.SingleRowConfig().SetNumCols(1))
 }
 
 // creates sel.Limit

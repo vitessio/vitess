@@ -36,17 +36,17 @@ type (
 	}
 
 	QueryGenerator interface {
-		IQueryGenerator()
+		IsQueryGenerator()
 		ExprGenerator
 	}
 
-	AggregateRule int8
+	AggregateRule  int8
+	AggregateState int8
 
 	ExprGeneratorConfig struct {
 		// AggrRule determines if the random expression can, cannot, or must be an aggregation expression
 		AggrRule AggregateRule
-		// TODO: get rid of ExprGeneratorConfig Type
-		Type string
+		Type     string
 		// MaxCols = 0 indicates no limit
 		NumCols int
 		// SingleRow indicates that the query must have at most one row
@@ -71,17 +71,17 @@ func NewExprGeneratorConfig(aggrRule AggregateRule, typ string, numCols int, sin
 	}
 }
 
-func (egc ExprGeneratorConfig) singleRowConfig() ExprGeneratorConfig {
+func (egc ExprGeneratorConfig) SingleRowConfig() ExprGeneratorConfig {
 	egc.SingleRow = true
 	return egc
 }
 
-func (egc ExprGeneratorConfig) multiRowConfig() ExprGeneratorConfig {
+func (egc ExprGeneratorConfig) MultiRowConfig() ExprGeneratorConfig {
 	egc.SingleRow = false
 	return egc
 }
 
-func (egc ExprGeneratorConfig) setNumCols(numCols int) ExprGeneratorConfig {
+func (egc ExprGeneratorConfig) SetNumCols(numCols int) ExprGeneratorConfig {
 	egc.NumCols = numCols
 	return egc
 }
@@ -151,6 +151,7 @@ func (g *Generator) atMaxDepth() bool {
 	    - AND/OR/NOT
 	    - string literals, numeric literals (-/+ 1000)
 		- columns of types bigint and varchar
+		- scalar and tuple subqueries
 	    - =, >, <, >=, <=, <=>, !=
 		- &, |, ^, +, -, *, /, div, %, <<, >>
 	    - IN, BETWEEN and CASE
@@ -161,20 +162,20 @@ Note: It's important to update this method so that it produces all expressions t
 It's currently missing function calls and string operators
 */
 func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
-	var exprOptions, tupleOptions []exprF
+	var options []exprF
 	// this will only be used for tuple expressions, everything else will need genConfig.NumCols = 1
 	numCols := genConfig.NumCols
-	genConfig = genConfig.setNumCols(1)
+	genConfig = genConfig.SetNumCols(1)
 
 	switch genConfig.Type {
 	case "bigint":
-		exprOptions = append(exprOptions, func() Expr { return g.intExpr(genConfig) })
+		options = append(options, func() Expr { return g.intExpr(genConfig) })
 	case "varchar":
-		exprOptions = append(exprOptions, func() Expr { return g.stringExpr(genConfig) })
+		options = append(options, func() Expr { return g.stringExpr(genConfig) })
 	case "tinyint":
-		exprOptions = append(exprOptions, func() Expr { return g.booleanExpr(genConfig) })
+		options = append(options, func() Expr { return g.booleanExpr(genConfig) })
 	case "":
-		exprOptions = append(exprOptions, []exprF{
+		options = append(options, []exprF{
 			func() Expr { return g.intExpr(genConfig) },
 			func() Expr { return g.stringExpr(genConfig) },
 			func() Expr { return g.booleanExpr(genConfig) },
@@ -187,18 +188,9 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 			continue
 		}
 
-		// Only generate subqueries with multiple rows when we require more than 1 column
-		if qg, ok := generator.(QueryGenerator); ok && genConfig.NumCols >= 2 {
-			tupleOptions = append(tupleOptions, func() Expr {
-				expr := qg.Generate(g.r, genConfig.setNumCols(numCols))
-				if expr == nil {
-					return g.randomTupleLiteral(numCols)
-				}
-				return expr
-			})
-			// don't create expressions from the expression exprGenerators if we haven't created an aggregation yet
-		} else if genConfig.AggrRule != IsAggregate {
-			exprOptions = append(exprOptions, func() Expr {
+		// don't create expressions from the expression exprGenerators if we haven't created an aggregation yet
+		if _, ok := generator.(QueryGenerator); ok || genConfig.AggrRule != IsAggregate {
+			options = append(options, func() Expr {
 				expr := generator.Generate(g.r, genConfig)
 				if expr == nil {
 					return g.randomLiteral()
@@ -209,25 +201,29 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 	}
 
 	if genConfig.AggrRule != CannotAggregate {
-		exprOptions = append(exprOptions, func() Expr {
+		options = append(options, func() Expr {
 			g.isAggregate = true
 			return g.randomAggregate(genConfig.CannotAggregateConfig())
 		})
 	}
 
-	// tupleOptions will be nil in this case
-	if numCols <= 1 {
-		return g.makeAggregateIfNecessary(genConfig, g.randomOf(exprOptions))
+	if numCols == 1 {
+		return g.makeAggregateIfNecessary(genConfig, g.randomOf(options))
 	}
 
 	// with 1/5 probability choose a tuple subquery
-	if g.randomBool(0.2) && len(tupleOptions) > 0 {
-		return g.randomOf(tupleOptions)
+	if g.randomBool(0.2) {
+		return g.subqueryExpr(genConfig.SetNumCols(numCols))
+	}
+
+	// if an arbitrary number of columns may be generated, randomly choose 1-3 columns
+	if numCols == 0 {
+		numCols = g.r.Intn(3) + 1
 	}
 
 	tuple := ValTuple{}
 	for i := 0; i < numCols; i++ {
-		tuple = append(tuple, g.makeAggregateIfNecessary(genConfig, g.randomOf(exprOptions)))
+		tuple = append(tuple, g.makeAggregateIfNecessary(genConfig, g.randomOf(options)))
 	}
 
 	return tuple
@@ -249,7 +245,7 @@ func (g *Generator) makeAggregateIfNecessary(genConfig ExprGeneratorConfig, expr
 }
 
 func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
-	isDistinct := g.r.Intn(2) < 1
+	isDistinct := g.r.Intn(10) < 1
 
 	options := []exprF{
 		func() Expr { return &CountStar{} },
@@ -259,6 +255,7 @@ func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return &Max{Arg: g.Expression(genConfig), Distinct: isDistinct} },
 	}
 
+	g.isAggregate = true
 	return g.randomOf(options)
 }
 
@@ -277,6 +274,7 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
 		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
 		func() Expr { return g.inExpr(genConfig) },
+		func() Expr { return g.existsExpr(genConfig) },
 		func() Expr { return g.between(genConfig.intTypeConfig()) },
 		func() Expr { return g.isExpr(genConfig) },
 		func() Expr { return g.notExpr(genConfig) },
@@ -312,6 +310,28 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 	options := []exprF{
 		g.stringLiteral,
 		func() Expr { return g.caseExpr(genConfig) },
+	}
+
+	return g.randomOf(options)
+}
+
+func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
+	var options []exprF
+
+	for _, generator := range g.exprGenerators {
+		if qg, ok := generator.(QueryGenerator); ok {
+			options = append(options, func() Expr {
+				expr := qg.Generate(g.r, genConfig)
+				if expr == nil {
+					return g.randomTupleLiteral(genConfig.NumCols)
+				}
+				return expr
+			})
+		}
+	}
+
+	if len(options) == 0 {
+		return g.makeAggregateIfNecessary(genConfig, g.randomTupleLiteral(genConfig.NumCols))
 	}
 
 	return g.randomOf(options)
@@ -529,4 +549,24 @@ func (g *Generator) isExpr(genConfig ExprGeneratorConfig) Expr {
 		Right: ops[g.r.Intn(len(ops))],
 		Left:  g.Expression(genConfig),
 	}
+}
+
+func (g *Generator) existsExpr(genConfig ExprGeneratorConfig) Expr {
+	expr := g.subqueryExpr(genConfig.MultiRowConfig().SetNumCols(0))
+	if subquery, ok := expr.(*Subquery); ok {
+		expr = NewExistsExpr(subquery)
+	} else {
+		// if g.subqueryExpr doesn't return a valid subquery, replace with
+		// select 1
+		selectExprs := SelectExprs{NewAliasedExpr(NewIntLiteral("1"), "")}
+		from := TableExprs{NewAliasedTableExpr(NewTableName("dual"), "")}
+		expr = NewExistsExpr(NewSubquery(NewSelect(nil, selectExprs, nil, nil, from, nil, nil, nil, nil)))
+	}
+
+	// not exists
+	if g.randomBool(0.5) {
+		expr = NewNotExpr(expr)
+	}
+
+	return expr
 }

@@ -147,7 +147,9 @@ func TestMustFix(t *testing.T) {
 	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
 
-	// EOF
+	// Passes with different errors
+	// vitess error: EOF
+	// mysql error: Operand should contain 1 column(s)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ 8 < -31 xor (-29, sum((tbl0.deptno, 'wren', 'ostrich')), max(distinct (tbl0.dname, -15, -8))) in ((sum(distinct (tbl0.dname, 'bengal', -10)), 'ant', true)) as caggr0 from dept as tbl0 where tbl0.deptno * (77 - 61)")
 
 	// EOF
@@ -165,6 +167,10 @@ func TestKnownFailures(t *testing.T) {
 
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
+
+	// vitess error: <nil>
+	// mysql error: Operand should contain 1 column(s)
+	helperTest(t, "select (count('sheepdog') ^ (-71 % sum(emp.mgr) ^ count('koi')) and count(*), 'fly') from emp, dept")
 
 	// rhs of an In operation should be a tuple
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (case when true then min(distinct tbl1.job) else 'bee' end, 'molly') not in (('dane', 0)) as caggr1 from emp as tbl0, emp as tbl1")
@@ -249,6 +255,10 @@ func TestKnownFailures(t *testing.T) {
 	// unsupported
 	// VT12001: unsupported: LEFT JOIN with derived tables
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ -1 as crandom0 from emp as tbl2 left join (select count(*) from dept as tbl1) as tbl3 on 6 != tbl2.deptno")
+
+	// unsupported
+	// VT12001: unsupported: subqueries in GROUP BY
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ exists (select 1) as crandom0 from dept as tbl0 group by exists (select 1)")
 }
 
 func TestRandom(t *testing.T) {

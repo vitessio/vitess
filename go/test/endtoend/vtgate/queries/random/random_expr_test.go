@@ -22,12 +22,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // This test tests that generating random expressions with a schema does not panic
 func TestRandomExprWithTables(t *testing.T) {
+	//t.Skip("Skip CI")
+	mcmp, closer := start(t)
+	defer closer()
+
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+
 	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
 		{tableExpr: sqlparser.NewTableName("emp")},
@@ -49,11 +60,19 @@ func TestRandomExprWithTables(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	seed := time.Now().UnixNano()
-	r := rand.New(rand.NewSource(seed))
-	g := sqlparser.NewGenerator(r, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 	for i := 0; i < 100; i++ {
-		expr := g.Expression(sqlparser.ExprGeneratorConfig{AggrRule: sqlparser.IsAggregate})
+
+		seed := time.Now().UnixNano()
+		fmt.Printf("seed: %d\n", seed)
+
+		r := rand.New(rand.NewSource(seed))
+		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.IsAggregate, "", 0, false)
+		g := sqlparser.NewGenerator(r, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+		expr := g.Expression(genConfig)
 		fmt.Println(sqlparser.String(expr))
+
+		from := sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("emp"), ""), sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("dept"), "")}
+		query := sqlparser.NewSelect(nil, sqlparser.SelectExprs{sqlparser.NewAliasedExpr(expr, "")}, nil, nil, from, nil, nil, nil, nil)
+		mcmp.ExecAllowAndCompareError(sqlparser.String(query))
 	}
 }

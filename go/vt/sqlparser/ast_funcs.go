@@ -641,6 +641,19 @@ func NewTableNameWithQualifier(name, qualifier string) TableName {
 	}
 }
 
+// NewSubquery makes a new Subquery
+func NewSubquery(selectStatement SelectStatement) *Subquery {
+	return &Subquery{Select: selectStatement}
+}
+
+// NewDerivedTable makes a new DerivedTable
+func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+	return &DerivedTable{
+		Lateral: lateral,
+		Select:  selectStatement,
+	}
+}
+
 // NewAliasedTableExpr makes a new AliasedTableExpr with an alias
 func NewAliasedTableExpr(simpleTableExpr SimpleTableExpr, alias string) *AliasedTableExpr {
 	return &AliasedTableExpr{
@@ -687,6 +700,11 @@ func NewOrder(expr Expr, direction OrderDirection) *Order {
 	}
 }
 
+// NewNotExpr makes a new NotExpr
+func NewNotExpr(expr Expr) *NotExpr {
+	return &NotExpr{Expr: expr}
+}
+
 // NewComparisonExpr makes a new ComparisonExpr
 func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr) *ComparisonExpr {
 	return &ComparisonExpr{
@@ -695,6 +713,11 @@ func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr
 		Right:    right,
 		Escape:   escape,
 	}
+}
+
+// NewExistsExpr makes a new ExistsExpr
+func NewExistsExpr(subquery *Subquery) *ExistsExpr {
+	return &ExistsExpr{Subquery: subquery}
 }
 
 // NewLimit makes a new Limit
@@ -719,14 +742,6 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 			Type: IntVal,
 			Val:  fmt.Sprint(rowCount),
 		},
-	}
-}
-
-// NewDerivedTable makes a new DerivedTable
-func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
-	return &DerivedTable{
-		Lateral: lateral,
-		Select:  selectStatement,
 	}
 }
 
