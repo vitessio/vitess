@@ -239,12 +239,14 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
+	var fromBackupName string
 	if params.IncrementalFromPos == autoIncrementalFromPos {
 		params.Logger.Infof("auto evaluating incremental_from_pos")
-		pos, err := FindLatestSuccessfulBackupPosition(ctx, params)
+		backupName, pos, err := FindLatestSuccessfulBackupPosition(ctx, params, bh.Name())
 		if err != nil {
 			return false, err
 		}
+		fromBackupName = backupName
 		params.IncrementalFromPos = mysql.EncodePosition(pos)
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
@@ -325,7 +327,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
-	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID, mysqlVersion); err != nil {
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, fromBackupName, binaryLogsToBackup, serverUUID, mysqlVersion); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -436,7 +438,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID, mysqlVersion)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, "", nil, serverUUID, mysqlVersion)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -519,6 +521,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	replicationPosition mysql.Position,
 	purgedPosition mysql.Position,
 	fromPosition mysql.Position,
+	fromBackupName string,
 	binlogFiles []string,
 	serverUUID string,
 	mysqlVersion string,
@@ -610,6 +613,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 			Position:       replicationPosition,
 			PurgedPosition: purgedPosition,
 			FromPosition:   fromPosition,
+			FromBackup:     fromBackupName,
 			Incremental:    !fromPosition.IsZero(),
 			ServerUUID:     serverUUID,
 			TabletAlias:    params.TabletAlias,
