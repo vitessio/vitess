@@ -1,5 +1,11 @@
-# This file is executed immediately after mysql_install_db,
-# to initialize a fresh data directory.
+# This file is for testing purpose only.
+# This file is executed immediately after initializing a fresh data directory.
+# It is equivalent of init_db.sql. Given init_db.sql is for mysql which has super_read_only
+# related stuff therefore for testing purpose we avoid setting `super_read_only` during initialization.
+
+###############################################################################
+# WARNING: Any change to init_db.sql should gets reflected in this file as well.
+###############################################################################
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,
@@ -11,12 +17,9 @@
 ###############################################################################
 # Equivalent of mysql_secure_installation
 ###############################################################################
-# We need to ensure that super_read_only is disabled so that we can execute
-# these commands. Note that disabling it does NOT disable read_only.
-# We save the current value so that we only re-enable it at the end if it was
-# enabled before.
-SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');
-SET GLOBAL super_read_only='OFF';
+# We need to ensure that read_only is disabled so that we can execute
+# these commands.
+SET GLOBAL read_only='OFF';
 
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
@@ -42,9 +45,9 @@ GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
 # User for app traffic, with global read-write access.
 CREATE USER 'vt_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
-  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+    REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+    SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_app'@'localhost';
 
 # User for app debug traffic, with global read access.
@@ -55,9 +58,9 @@ GRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost';
 # Same permissions as vt_app here.
 CREATE USER 'vt_allprivs'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
-  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+    REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+    SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_allprivs'@'localhost';
 
 # User for slave replication connections.
@@ -67,17 +70,17 @@ GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
 # User for Vitess VReplication (base vstreamers and vplayer).
 CREATE USER 'vt_filtered'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
-  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+    REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+    SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'localhost';
 
 # User for general MySQL monitoring.
 CREATE USER 'vt_monitoring'@'localhost';
 GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
-  ON *.* TO 'vt_monitoring'@'localhost';
+      ON *.* TO 'vt_monitoring'@'localhost';
 GRANT SELECT, UPDATE, DELETE, DROP
-  ON performance_schema.* TO 'vt_monitoring'@'localhost';
+      ON performance_schema.* TO 'vt_monitoring'@'localhost';
 
 FLUSH PRIVILEGES;
 
@@ -86,6 +89,3 @@ RESET MASTER;
 
 # custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
 # {{custom_sql}}
-
-# We need to set super_read_only back to what it was before
-SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'ON');

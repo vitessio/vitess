@@ -306,3 +306,23 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 		}
 	}
 }
+
+func GetInitDBSQL(initDBSQL string, updatedPasswords string, oldAlterTableMode string) (string, error) {
+	// Since password update is DML we need to insert it before we disable
+	// super_read_only therefore doing the split below.
+	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
+	if len(splitString) != 2 {
+		return "", fmt.Errorf("missing `# {{custom_sql}}` in init_db.sql file")
+	}
+	var builder strings.Builder
+	builder.WriteString(splitString[0])
+	builder.WriteString(updatedPasswords)
+
+	// https://github.com/vitessio/vitess/issues/8315
+	if oldAlterTableMode != "" {
+		builder.WriteString(oldAlterTableMode)
+	}
+	builder.WriteString(splitString[1])
+
+	return builder.String(), nil
+}
