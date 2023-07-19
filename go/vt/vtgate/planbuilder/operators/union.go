@@ -307,10 +307,36 @@ func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparse
 		}
 	}
 
+	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
+	// be truncated to the expected result columns and nothing else
+	for _, src := range u.Sources {
+		columns, err := src.GetColumns(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for len(columns) > len(u.unionColumnsAsAlisedExprs) {
+			u.unionColumnsAsAlisedExprs = append(u.unionColumnsAsAlisedExprs, aeWrap(sqlparser.NewIntLiteral("0")))
+		}
+	}
+
 	return u.unionColumnsAsAlisedExprs, nil
 }
 
 func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
+	// be truncated to the expected result columns and nothing else
+	for _, src := range u.Sources {
+		columns, err := src.GetSelectExprs(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for len(columns) > len(u.unionColumns) {
+			u.unionColumns = append(u.unionColumns, aeWrap(sqlparser.NewIntLiteral("0")))
+		}
+	}
+
 	return u.unionColumns, nil
 }
 
