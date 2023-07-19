@@ -87,8 +87,8 @@ func TestTranslateSimplification(t *testing.T) {
 		{"coalesce(NULL, 2, NULL, 4)", ok("COALESCE(NULL, INT64(2), NULL, INT64(4))"), ok("INT64(2)")},
 		{"coalesce(NULL, NULL)", ok("COALESCE(NULL, NULL)"), ok("NULL")},
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
-		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R")`)},
-		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R\x00 \x00 \x00 \x00 \x00 \x00 ")`)},
+		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
+		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
 		{"case when 1 = 1 then 2 else 3 end", ok("CASE WHEN INT64(1) = INT64(1) THEN INT64(2) ELSE INT64(3)"), ok("INT64(2)")},
 		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`CASE WHEN NULL THEN INT64(2) WHEN INT64(12) = INT64(4) THEN VARCHAR("ohnoes") ELSE INT64(42)`), ok(`VARCHAR("42")`)},
 		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
@@ -125,7 +125,7 @@ func TestTranslateSimplification(t *testing.T) {
 
 			cfg := &Config{
 				ResolveColumn: fields.Column,
-				Collation:     45,
+				Collation:     collations.Default(),
 				Optimization:  OptimizationLevelNone,
 			}
 
@@ -300,7 +300,7 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: 45})
+			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
@@ -317,7 +317,7 @@ func TestEvaluate(t *testing.T) {
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.Default()), "expected %s", test.expected.String())
 		})
 	}
 }
@@ -345,7 +345,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: 45})
+			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
@@ -382,7 +382,7 @@ func TestTranslationFailures(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + testcase.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			_, err = Translate(astExpr, &Config{Collation: 45})
+			_, err = Translate(astExpr, &Config{Collation: collations.Default()})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
@@ -418,7 +418,7 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 				}
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				_, err = Translate(astExpr, &Config{Collation: 45})
+				_, err = Translate(astExpr, &Config{Collation: collations.Default()})
 				return err
 			}()
 

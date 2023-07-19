@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -93,7 +94,7 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa")}
+	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)}
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `query arguments missing for aa`)
 }

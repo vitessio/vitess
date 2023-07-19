@@ -620,17 +620,18 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	length := evalToInt64(l).i
-	if length < 0 {
-		return nil, nil
-	}
-
+	cs := text.col.Collation.Get().Charset()
 	pad, ok := p.(*evalBytes)
-	if !ok {
-		pad, err = evalToVarchar(p, call.collate, true)
+	if !ok || pad.col.Collation.Get().Charset() != cs {
+		pad, err = evalToVarchar(p, text.col.Collation, true)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	length := evalToInt64(l).i
+	if length < 0 {
+		return nil, nil
 	}
 
 	if !validMaxLength(int64(len(pad.bytes)), length) {
@@ -638,7 +639,6 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	// LPAD / RPAD operates on characters, not bytes
-	cs := text.col.Collation.Get().Charset()
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen >= int(length) {
@@ -700,14 +700,19 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col
 	default:
-		c.asm.Convert_xc(3, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xce(3, sqltypes.VarChar, col.Collation)
 	}
 	_ = c.compileToInt64(l, 2)
 
 	switch {
 	case pad.isTextual():
+		fromCharset := pad.Col.Collation.Get().Charset()
+		toCharset := col.Collation.Get().Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 	}
 
 	if call.left {
@@ -859,7 +864,7 @@ func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	pat, ok := p.(*evalBytes)
-	if !ok {
+	if !ok || pat.col.Collation.Get().Charset() != text.col.Collation.Get().Charset() {
 		pat, err = evalToVarchar(p, text.col.Collation, true)
 		if err != nil {
 			return nil, err
@@ -919,8 +924,13 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	switch {
 	case pat.isTextual():
+		fromCharset := pat.Col.Collation.Get().Charset()
+		toCharset := col.Collation.Get().Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 	}
 
 	switch call.trim {

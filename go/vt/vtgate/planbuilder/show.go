@@ -134,7 +134,7 @@ func buildShowTargetPlan(vschema plancontext.VSchema) (engine.Primitive, error) 
 
 func buildCharsetPlan(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 	fields := buildVarCharFields("Charset", "Description", "Default collation")
-	maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
+	maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}
 	fields = append(fields, maxLenField)
 
 	charsets := []string{utf8, utf8mb4}
@@ -340,7 +340,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 		fields[i] = &querypb.Field{
 			Name:    v,
 			Type:    sqltypes.VarChar,
-			Charset: collations.CollationUtf8ID,
+			Charset: uint32(collations.SystemCollation.Collation),
 			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 		}
 	}
@@ -596,9 +596,9 @@ func buildWarnings() (engine.Primitive, error) {
 
 	f := func(sa engine.SessionActions) (*sqltypes.Result, error) {
 		fields := []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
+			{Name: "Level", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
+			{Name: "Code", Type: sqltypes.Uint16, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Message", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
 		}
 
 		warns := sa.GetWarnings()

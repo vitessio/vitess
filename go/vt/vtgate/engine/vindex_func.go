@@ -117,10 +117,11 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 		return nil, err
 	}
 	var values []sqltypes.Value
-	if k.Value().Type() == querypb.Type_TUPLE {
+	value := k.Value(vcursor.ConnCollation())
+	if value.Type() == querypb.Type_TUPLE {
 		values = k.TupleValues()
 	} else {
-		values = append(values, k.Value())
+		values = append(values, value)
 	}
 	result := &sqltypes.Result{
 		Fields: vf.Fields,

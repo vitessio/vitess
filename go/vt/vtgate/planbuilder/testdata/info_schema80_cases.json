@@ -122,29 +122,28 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:21)",
-          "(1:22)",
-          "(2:23)",
-          "(3:24)",
-          "(4:25)",
-          "5: binary",
-          "(6:26)",
-          "7: binary",
-          "8: binary",
-          "9: binary",
-          "10: binary",
-          "11: binary",
-          "12: binary",
-          "13: binary",
-          "(14:27)",
-          "(15:28)",
-          "(16:29)",
-          "(17:30)",
-          "18: binary",
-          "(19:31)",
-          "(20:32)"
+          "0: utf8mb4_0900_ai_ci",
+          "1: utf8mb4_0900_ai_ci",
+          "2: utf8mb4_0900_ai_ci",
+          "3",
+          "4: utf8mb4_0900_ai_ci",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17: utf8mb4_0900_ai_ci",
+          "18",
+          "19: utf8mb4_0900_ai_ci",
+          "20: utf8mb4_0900_ai_ci"
         ],
-        "ResultColumns": 21,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -156,8 +155,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
-                "Query": "select distinct TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
                 "SysTableTableSchema": "[VARCHAR(\"user\")]",
                 "Table": "information_schema.`tables`"
               },
@@ -168,8 +167,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
-                "Query": "select distinct TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
                 "SysTableTableSchema": "[VARCHAR(\"main\")]",
                 "Table": "information_schema.`tables`"
               }
