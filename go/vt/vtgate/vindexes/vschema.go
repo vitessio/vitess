@@ -184,11 +184,12 @@ type KeyspaceSchema struct {
 }
 
 type ksJSON struct {
-	Sharded  bool              `json:"sharded,omitempty"`
-	Tables   map[string]*Table `json:"tables,omitempty"`
-	Vindexes map[string]Vindex `json:"vindexes,omitempty"`
-	Views    map[string]string `json:"views,omitempty"`
-	Error    string            `json:"error,omitempty"`
+	Sharded        bool              `json:"sharded,omitempty"`
+	ForeignKeyMode string            `json:"foreignKeyMode,omitempty"`
+	Tables         map[string]*Table `json:"tables,omitempty"`
+	Vindexes       map[string]Vindex `json:"vindexes,omitempty"`
+	Views          map[string]string `json:"views,omitempty"`
+	Error          string            `json:"error,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -217,9 +218,10 @@ func (ks *KeyspaceSchema) findTable(
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
 func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 	ksJ := ksJSON{
-		Sharded:  ks.Keyspace.Sharded,
-		Tables:   ks.Tables,
-		Vindexes: ks.Vindexes,
+		Sharded:        ks.Keyspace.Sharded,
+		Tables:         ks.Tables,
+		ForeignKeyMode: ks.ForeignKeyMode.String(),
+		Vindexes:       ks.Vindexes,
 	}
 	if ks.Error != nil {
 		ksJ.Error = ks.Error.Error()
