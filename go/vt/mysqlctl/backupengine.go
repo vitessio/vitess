@@ -422,7 +422,7 @@ func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams
 	}
 	pos = manifest.Position
 	// For restore purposes, and for all we care, the backup position should also include the gtid_purged
-	// pos.GTIDSet = pos.GTIDSet.Union(manifest.PurgedPosition.GTIDSet)
+	pos.GTIDSet = pos.GTIDSet.Union(manifest.PurgedPosition.GTIDSet)
 	return bh.Name(), pos, nil
 }
 
