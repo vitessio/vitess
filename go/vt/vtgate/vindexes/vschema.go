@@ -175,11 +175,12 @@ func (col *Column) MarshalJSON() ([]byte, error) {
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
-	Keyspace *Keyspace
-	Tables   map[string]*Table
-	Vindexes map[string]Vindex
-	Views    map[string]sqlparser.SelectStatement
-	Error    error
+	Keyspace       *Keyspace
+	ForeignKeyMode vschemapb.Keyspace_ForeignKeyMode
+	Tables         map[string]*Table
+	Vindexes       map[string]Vindex
+	Views          map[string]sqlparser.SelectStatement
+	Error          error
 }
 
 type ksJSON struct {
@@ -304,12 +305,21 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			Tables:   make(map[string]*Table),
-			Vindexes: make(map[string]Vindex),
+			ForeignKeyMode: replaceDefaultForeignKeyMode(ks.ForeignKeyMode),
+			Tables:         make(map[string]*Table),
+			Vindexes:       make(map[string]Vindex),
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema)
 	}
+}
+
+// replaceDefaultForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
+func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
+	if fkMode == vschemapb.Keyspace_Fk_default {
+		return vschemapb.Keyspace_Fk_unmanaged
+	}
+	return fkMode
 }
 
 func (vschema *VSchema) AddView(ksname string, viewName, query string) error {

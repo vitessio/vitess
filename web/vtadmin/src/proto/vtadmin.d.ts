@@ -39492,9 +39492,10 @@ export namespace vschema {
 
         /** ForeignKeyMode enum. */
         enum ForeignKeyMode {
-            Fk_unmanaged = 0,
+            Fk_default = 0,
             Fk_disallow = 1,
-            Fk_managed = 2
+            Fk_unmanaged = 2,
+            Fk_managed = 3
         }
     }
 

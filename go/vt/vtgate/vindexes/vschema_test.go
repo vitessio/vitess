@@ -243,6 +243,45 @@ func TestUnshardedVSchemaValid(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestForeignKeyMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		fkMode       vschemapb.Keyspace_ForeignKeyMode
+		wantedFkMode vschemapb.Keyspace_ForeignKeyMode
+	}{
+		{
+			name:         "Default Value",
+			wantedFkMode: vschemapb.Keyspace_Fk_unmanaged,
+		}, {
+			name:         "Managed Value",
+			fkMode:       vschemapb.Keyspace_Fk_managed,
+			wantedFkMode: vschemapb.Keyspace_Fk_managed,
+		}, {
+			name:         "Unmanaged Value",
+			fkMode:       vschemapb.Keyspace_Fk_unmanaged,
+			wantedFkMode: vschemapb.Keyspace_Fk_unmanaged,
+		}, {
+			name:         "Disallow Value",
+			fkMode:       vschemapb.Keyspace_Fk_disallow,
+			wantedFkMode: vschemapb.Keyspace_Fk_disallow,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ksSchema, err := BuildKeyspace(&vschemapb.Keyspace{
+				Sharded:        false,
+				ForeignKeyMode: test.fkMode,
+				Vindexes:       make(map[string]*vschemapb.Vindex),
+				Tables:         make(map[string]*vschemapb.Table),
+			})
+			require.NoError(t, err)
+			require.Equal(t, test.wantedFkMode, ksSchema.ForeignKeyMode)
+		})
+
+	}
+}
+
 func TestUnshardedVSchema(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
