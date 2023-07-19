@@ -50,8 +50,12 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 	}
 
 	notifications := make(chan *topo.WatchData, 100)
+
+	nextWatchIndexMu.Lock()
 	watchIndex := nextWatchIndex
 	nextWatchIndex++
+	nextWatchIndexMu.Unlock()
+
 	n.watches[watchIndex] = watch{contents: notifications}
 
 	go func() {
@@ -105,8 +109,12 @@ func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Watc
 	})
 
 	notifications := make(chan *topo.WatchDataRecursive, 100)
+
+	nextWatchIndexMu.Lock()
 	watchIndex := nextWatchIndex
 	nextWatchIndex++
+	nextWatchIndexMu.Unlock()
+
 	n.watches[watchIndex] = watch{recursive: notifications}
 
 	go func() {

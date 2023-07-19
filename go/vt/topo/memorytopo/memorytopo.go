@@ -50,7 +50,8 @@ const (
 )
 
 var (
-	nextWatchIndex = 0
+	nextWatchIndex   = 0
+	nextWatchIndexMu sync.Mutex
 )
 
 // Factory is a memory-based implementation of topo.Factory.  It
