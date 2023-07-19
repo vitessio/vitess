@@ -2,44 +2,7 @@
   {
     "comment": "Tests in this file are for testing symtab functionality\n#\n# Column names need not be qualified if they are predefined in vschema and unambiguous.",
     "query": "select predef2, predef3 from user join unsharded on predef2 = predef3",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "JoinVars": {
-          "predef2": 0
-        },
-        "TableName": "`user`_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select predef2 from `user` where 1 != 1",
-            "Query": "select predef2 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select predef3 from unsharded where 1 != 1",
-            "Query": "select predef3 from unsharded where predef3 = :predef2",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
       "Instructions": {
@@ -84,7 +47,6 @@
   {
     "comment": "predef1 is in both user and unsharded. So, it's ambiguous.",
     "query": "select predef1, predef3 from user join unsharded on predef1 = predef3",
-    "v3-plan": "VT03019: column predef1 not found",
-    "gen4-plan": "Column 'predef1' in field list is ambiguous"
+    "plan": "Column 'predef1' in field list is ambiguous"
   }
 ]
