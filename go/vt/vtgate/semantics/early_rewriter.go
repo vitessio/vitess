@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -310,7 +311,7 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 			return false
 		}
 
-		boolValue, err := res.Value().ToBool()
+		boolValue, err := res.Value(collations.Default()).ToBool()
 		if err != nil {
 			return false
 		}

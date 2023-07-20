@@ -22,7 +22,7 @@ Usage of vtbackup:
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                         Paths to search for config files in. (default [/home/runner/work/vitess/vitess/go/flags/endtoend])
+      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
@@ -183,7 +183,7 @@ Usage of vtbackup:
       --topo_zk_tls_ca string                                       the server ca to use to validate servers when connecting to the zk topo server
       --topo_zk_tls_cert string                                     the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
       --topo_zk_tls_key string                                      the key to use to connect to the zk topo server, enables TLS
-      --upgrade_safe                                                Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.
+      --upgrade-safe                                                Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule moduleSpec                                          comma-separated list of pattern=N settings for file-filtered logging

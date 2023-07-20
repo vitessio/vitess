@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -119,7 +120,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		toInt64, err := res.Value().ToInt64()
+		toInt64, err := res.Value(collations.Default()).ToInt64()
 		if err != nil {
 			return false
 		}

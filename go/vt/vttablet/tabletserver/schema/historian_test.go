@@ -23,6 +23,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -35,10 +38,14 @@ func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks [
 	}
 	fields := []*querypb.Field{}
 	for i := range fieldNames {
+		typ := fieldTypes[i]
+		cs := collations.DefaultCollationForType(typ)
 		fields = append(fields, &querypb.Field{
-			Name:  fieldNames[i],
-			Type:  fieldTypes[i],
-			Table: name,
+			Name:    fieldNames[i],
+			Type:    typ,
+			Charset: uint32(cs),
+			Flags:   mysql.FlagsForColumn(typ, cs),
+			Table:   name,
 		})
 	}
 	table := &binlogdatapb.MinimalTable{
@@ -119,7 +126,7 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp1 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:INT32 table:"t1"} p_k_columns:0`
+	exp1 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:INT32 table:"t1" charset:63 flags:32768} p_k_columns:0`
 	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
 	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
@@ -139,7 +146,7 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:VARBINARY table:"t1"} p_k_columns:0`
+	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} p_k_columns:0`
 	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
@@ -159,7 +166,7 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp3 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:VARBINARY table:"t1"} fields:{name:"id3" type:INT32 table:"t1"} p_k_columns:0`
+	exp3 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} fields:{name:"id3" type:INT32 table:"t1" charset:63 flags:32768} p_k_columns:0`
 	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
 	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
@@ -242,7 +249,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:VARBINARY table:"t1"} p_k_columns:0`
+	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} p_k_columns:0`
 	tab, err := se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
