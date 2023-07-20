@@ -550,6 +550,9 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 		}
 	}
 
+	// PrimaryAlias in the shard record is updated asynchronously, so we should wait for it to succeed.
+	waitForShardPrimary(t, wr, newPrimary.Tablet)
+
 	shardInfo, err := ts.GetShard(context.Background(), newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard)
 	assert.NoError(t, err)
 

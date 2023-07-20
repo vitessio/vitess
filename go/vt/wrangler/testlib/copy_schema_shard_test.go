@@ -171,6 +171,10 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	if useShardAsSource {
 		source = "ks/-80"
 	}
+
+	// PrimaryAlias in the shard record is updated asynchronously, so we should wait for it to succeed.
+	waitForShardPrimary(t, wr, destinationPrimary.Tablet)
+
 	if err := vp.Run([]string{"CopySchemaShard", "--include-views", source, "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
