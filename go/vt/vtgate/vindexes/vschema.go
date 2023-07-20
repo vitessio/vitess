@@ -318,8 +318,8 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 
 // replaceDefaultForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
 func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
-	if fkMode == vschemapb.Keyspace_Fk_default {
-		return vschemapb.Keyspace_Fk_unmanaged
+	if fkMode == vschemapb.Keyspace_FK_DEFAULT {
+		return vschemapb.Keyspace_FK_UNMANAGED
 	}
 	return fkMode
 }
