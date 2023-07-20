@@ -428,10 +428,11 @@ func main() {
 		log.Printf("Running make build...")
 		command := exec.Command("make", "build")
 		if !*buildVTAdmin {
-			command.Env = append(command.Env, "NOVTADMINBUILD=1")
+			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
 		}
 		if out, err := command.CombinedOutput(); err != nil || command.ProcessState.ExitCode() != 0 {
-			log.Fatalf("make build failed; exit code: error text: %v\n%s", err, out)
+			log.Fatalf("make build failed; exit code: %d, error: output: %v\n%s",
+				command.ProcessState.ExitCode(), err, out)
 		}
 	}
 
