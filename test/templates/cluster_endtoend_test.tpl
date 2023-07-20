@@ -156,7 +156,7 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         {{if .LimitResourceUsage}}
         # Increase our open file descriptor limit as we could hit this
