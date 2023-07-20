@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -29,6 +30,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -39,9 +41,6 @@ import (
 )
 
 const (
-	utf8    = "utf8"
-	utf8mb4 = "utf8mb4"
-	both    = "both"
 	charset = "charset"
 )
 
@@ -134,16 +133,13 @@ func buildShowTargetPlan(vschema plancontext.VSchema) (engine.Primitive, error) 
 
 func buildCharsetPlan(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 	fields := buildVarCharFields("Charset", "Description", "Default collation")
-	maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}
+	maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}
 	fields = append(fields, maxLenField)
-
-	charsets := []string{utf8, utf8mb4}
-	rows, err := generateCharsetRows(show.Filter, charsets)
+	cs, err := generateCharsetRows(show.Filter)
 	if err != nil {
 		return nil, err
 	}
-
-	return engine.NewRowsPrimitive(rows, fields), nil
+	return engine.NewRowsPrimitive(cs, fields), nil
 }
 
 func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -355,20 +351,13 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 	return row
 }
 
-func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
+func generateCharsetRows(showFilter *sqlparser.ShowFilter) ([][]sqltypes.Value, error) {
 	if showFilter == nil {
-		return buildCharsetRows(both), nil
+		return charsets(), nil
 	}
 
-	var filteredColName string
-	var err error
-
 	if showFilter.Like != "" {
-		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
-		if err != nil {
-			return nil, err
-		}
-
+		return filterLike(showFilter.Like, charsets())
 	} else {
 		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 		if !ok {
@@ -390,61 +379,84 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 
 			switch cmpExp.Operator {
 			case sqlparser.EqualOp:
-				for _, colName := range colNames {
+				for _, row := range charsets() {
+					colName := row[0].ToString()
 					if rightString == colName {
-						filteredColName = colName
+						return [][]sqltypes.Value{row}, nil
 					}
 				}
+				return nil, nil
 			case sqlparser.LikeOp:
-				filteredColName, err = checkLikeOpt(rightString, colNames)
-				if err != nil {
-					return nil, err
-				}
+				return filterLike(rightString, charsets())
 			}
+		} else {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'where clause'", left.Name.String())
 		}
-
 	}
 
-	return buildCharsetRows(filteredColName), nil
+	return charsets(), nil
 }
 
-func buildCharsetRows(colName string) [][]sqltypes.Value {
-	row0 := buildVarCharRow(
-		"utf8",
-		"UTF-8 Unicode",
-		"utf8_general_ci")
-	row0 = append(row0, sqltypes.NewInt32(3))
-	row1 := buildVarCharRow(
-		"utf8mb4",
-		"UTF-8 Unicode",
-		"utf8mb4_general_ci")
-	row1 = append(row1, sqltypes.NewInt32(4))
+var once sync.Once
+var charsetRows [][]sqltypes.Value
 
-	switch colName {
-	case utf8:
-		return [][]sqltypes.Value{row0}
-	case utf8mb4:
-		return [][]sqltypes.Value{row1}
-	case both:
-		return [][]sqltypes.Value{row0, row1}
-	}
+func charsets() [][]sqltypes.Value {
+	once.Do(func() {
+		charsetRows = [][]sqltypes.Value{
+			append(buildVarCharRow("armscii8", "ARMSCII-8 Armenian", "armscii8_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("ascii", "US ASCII", "ascii_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("binary", "Binary pseudo charset", "binary"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp1250", "Windows Central European", "cp1250_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp1251", "Windows Cyrillic", "cp1251_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp1256", "Windows Arabic", "cp1256_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp1257", "Windows Baltic", "cp1257_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp850", "DOS West European", "cp850_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp852", "DOS Central European", "cp852_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp866", "DOS Russian", "cp866_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("cp932", "SJIS for Windows Japanese", "cp932_japanese_ci"), sqltypes.NewUint32(2)),
+			append(buildVarCharRow("dec8", "DEC West European", "dec8_swedish_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("eucjpms", "UJIS for Windows Japanese", "eucjpms_japanese_ci"), sqltypes.NewUint32(3)),
+			append(buildVarCharRow("euckr", "EUC-KR Korean", "euckr_korean_ci"), sqltypes.NewUint32(2)),
+			append(buildVarCharRow("gb2312", "GB2312 Simplified Chinese", "gb2312_chinese_ci"), sqltypes.NewUint32(2)),
+			append(buildVarCharRow("geostd8", "GEOSTD8 Georgian", "geostd8_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("greek", "ISO 8859-7 Greek", "greek_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("hebrew", "ISO 8859-8 Hebrew", "hebrew_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("hp8", "HP West European", "hp8_english_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("keybcs2", "DOS Kamenicky Czech-Slovak", "keybcs2_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("koi8r", "KOI8-R Relcom Russian", "koi8r_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("koi8u", "KOI8-U Ukrainian", "koi8u_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("latin1", "cp1252 West European", "latin1_swedish_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("latin2", "ISO 8859-2 Central European", "latin2_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("latin5", "ISO 8859-9 Turkish", "latin5_turkish_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("latin7", "ISO 8859-13 Baltic", "latin7_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("macce", "Mac Central European", "macce_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("macroman", "Mac West European", "macroman_general_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("sjis", "Shift-JIS Japanese", "sjis_japanese_ci"), sqltypes.NewUint32(2)),
+			append(buildVarCharRow("swe7", "7bit Swedish", "swe7_swedish_ci"), sqltypes.NewUint32(1)),
+			append(buildVarCharRow("ucs2", "UCS-2 Unicode", "ucs2_general_ci"), sqltypes.NewUint32(2)),
+			append(buildVarCharRow("ujis", "EUC-JP Japanese", "ujis_japanese_ci"), sqltypes.NewUint32(3)),
+			append(buildVarCharRow("utf16", "UTF-16 Unicode", "utf16_general_ci"), sqltypes.NewUint32(4)),
+			append(buildVarCharRow("utf16le", "UTF-16LE Unicode", "utf16le_general_ci"), sqltypes.NewUint32(4)),
+			append(buildVarCharRow("utf32", "UTF-32 Unicode", "utf32_general_ci"), sqltypes.NewUint32(4)),
+			append(buildVarCharRow("utf8mb3", "UTF-8 Unicode", "utf8mb3_general_ci"), sqltypes.NewUint32(3)),
+			append(buildVarCharRow("utf8mb4", "UTF-8 Unicode", "utf8mb4_0900_ai_ci"), sqltypes.NewUint32(4)),
+		}
+	})
 
-	return [][]sqltypes.Value{}
+	return charsetRows
 }
 
-func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
-	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
-	for _, v := range colNames {
-		match, err := regexp.MatchString(likeRegexp, v)
-		if err != nil {
-			return "", err
-		}
-		if match {
-			return v, nil
+func filterLike(likeOpt string, charsets [][]sqltypes.Value) ([][]sqltypes.Value, error) {
+	likeRegexp := sqlparser.LikeToRegexp(likeOpt)
+	var results [][]sqltypes.Value
+	for _, row := range charsets {
+		colName := row[0].ToString()
+		if likeRegexp.MatchString(colName) {
+			results = append(results, row)
 		}
 	}
 
-	return "", nil
+	return results, nil
 }
 
 func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {
