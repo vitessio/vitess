@@ -27,7 +27,9 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -36,7 +38,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -85,7 +89,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		done:            make(chan struct{}),
 		source:          &binlogdatapb.BinlogSource{},
 	}
-	ct.sourceTablet.Store("")
+	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
 	// id
@@ -180,7 +184,7 @@ func (ct *controller) run(ctx context.Context) {
 
 func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
-		ct.sourceTablet.Store("")
+		ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 		if x := recover(); x != nil {
 			log.Errorf("stream %v: caught panic: %v\n%s", ct.id, x, tb.Stack(4))
 			err = fmt.Errorf("panic: %v", x)
@@ -199,25 +203,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	var tablet *topodatapb.Tablet
-	if ct.source.GetExternalMysql() == "" {
-		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
-		defer tpCancel()
-		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
-		if err != nil {
-			select {
-			case <-ctx.Done():
-			default:
-				ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
-				ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
-			}
-			return err
-		}
-		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
-		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
-		ct.sourceTablet.Store(tablet.Alias.String())
+	tablet, err := ct.pickSourceTablet(ctx, dbClient)
+	if err != nil {
+		return err
 	}
+
 	switch {
 	case len(ct.source.Tables) > 0:
 		// Table names can have search patterns. Resolve them against the schema.
@@ -266,8 +256,17 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
+
+		// If the source tablet is now unhealthy, then pick a new one.
+		if ct.sourceTabletIsUnhealthy() {
+			if _, err = ct.pickSourceTablet(ctx, dbClient); err != nil {
+				return err
+			}
+		}
+
 		// If this is a mysql error that we know needs manual intervention OR
-		// we cannot identify this as non-recoverable, but it has persisted beyond the retry limit (maxTimeToRetryError)
+		// we cannot identify this as non-recoverable, but it has persisted
+		// beyond the retry limit (maxTimeToRetryError).
 		if isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
@@ -293,6 +292,59 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 	}
 	return nil
 }
+
+// pickSourceTablet picks a healthy tablet to source for the
+// vreplication stream. If the source is marked as external, it
+// returns nil.
+func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplayer.DBClient) (tablet *topodatapb.Tablet, err error) {
+	if ct.source.GetExternalMysql() == "" {
+		log.Infof("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s",
+			ct.id, ct.workflow)
+		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
+		defer tpCancel()
+		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+			default:
+				ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+				ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+			}
+			return tablet, err
+		}
+		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
+		log.Infof("Found eligible source tablet %s for vreplication stream id %d for workflow %s",
+			tablet.Alias.String(), ct.id, ct.workflow)
+		ct.sourceTablet.Store(tablet.Alias)
+	}
+	return tablet, err
+}
+
+func (ct *controller) sourceTabletIsUnhealthy() bool {
+	ctx, cancel := context.WithTimeout(ct.vre.ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	tabletAlias := ct.sourceTablet.Load().(*topodatapb.TabletAlias)
+	tabletInfo, err := ct.vre.ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		log.Warningf("Unable to get tablet info for %v when checking the source tablet's health for the vreplication controller %d for workflow %s: %v",
+			tabletAlias, ct.id, ct.workflow, err)
+		return false
+	}
+	if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
+		// Ensure that the tablet is healthy and serving.
+		if err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+			if shr.RealtimeStats.HealthError == "" && shr.Serving {
+				return nil
+			}
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not serving")
+		}); err == nil {
+			_ = conn.Close(ctx)
+			return true
+		}
+	}
+	return false
+}
+
 func (ct *controller) Stop() {
 	ct.cancel()
 	<-ct.done
