@@ -181,6 +181,7 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 				}
 				return err
 			}
+			return nil
 		}
 	}
 }

@@ -791,7 +791,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
 
-		// When err is not nil then we got a retryable error and will loop again
+		// When err is not nil then we got a retryable error and will loop again.
 		if err == nil {
 			current, dcerr := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
 			if dcerr != nil {
