@@ -26,22 +26,7 @@
   {
     "comment": "create view with authoritative columns",
     "query": "create view user.view_ac as select * from authoritative",
-    "v3-plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_ac as select * from authoritative",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_ac as select * from authoritative"
-      },
-      "TablesUsed": [
-        "user.view_ac"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view user.view_ac as select * from authoritative",
       "Instructions": {

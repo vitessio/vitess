@@ -43,10 +43,6 @@ func RewritePredicate(ast SQLNode) SQLNode {
 				exprChanged = true
 				cursor.Replace(rewritten)
 			}
-
-			if col, isCol := cursor.node.(*ColName); isCol {
-				col.Metadata = nil
-			}
 			return !exprChanged
 		})
 

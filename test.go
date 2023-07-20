@@ -95,8 +95,9 @@ var (
 	skipBuild        = flag.Bool("skip-build", false, "skip running 'make build'. Assumes pre-existing binaries exist")
 	partialKeyspace  = flag.Bool("partial-keyspace", false, "add a second keyspace for sharded tests and mark first shard as moved to this keyspace in the shard routing rules")
 	// `go run test.go --dry-run --skip-build` to quickly test this file and see what tests will run
-	dryRun      = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
-	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
+	dryRun       = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
+	remoteStats  = flag.String("remote-stats", "", "url to send remote stats")
+	buildVTAdmin = flag.Bool("build-vtadmin", false, "Enable or disable VTAdmin build during 'make build'")
 )
 
 var (
@@ -425,7 +426,11 @@ func main() {
 	} else {
 		// Since we're sharing the working dir, do the build once for all tests.
 		log.Printf("Running make build...")
-		if out, err := exec.Command("make", "build").CombinedOutput(); err != nil {
+		command := exec.Command("make", "build")
+		if !*buildVTAdmin {
+			command.Env = append(command.Env, "NOVTADMINBUILD=1")
+		}
+		if out, err := command.CombinedOutput(); err != nil {
 			log.Fatalf("make build failed: %v\n%s", err, out)
 		}
 	}

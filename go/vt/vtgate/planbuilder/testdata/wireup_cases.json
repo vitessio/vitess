@@ -2,44 +2,7 @@
   {
     "comment": "join on having clause",
     "query": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:0,R:1",
-        "JoinVars": {
-          "uid": 0
-        },
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
-            "Query": "select u.id as uid from `user` as u",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
-            "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
       "Instructions": {
@@ -88,44 +51,7 @@
   {
     "comment": "bind var already in use",
     "query": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:0,R:1",
-        "JoinVars": {
-          "uid1": 0
-        },
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
-            "Query": "select u.id as uid from `user` as u",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
-            "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid1 and e.col = :uid",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
       "Instructions": {
@@ -174,63 +100,7 @@
   {
     "comment": "wire-up join with join, going left",
     "query": "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u1_col": 1
-        },
-        "TableName": "`user`_`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "TableName": "`user`_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-                "Query": "select u1.id, u1.col from `user` as u1",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                "Query": "select 1 from `user` as u2",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col",
       "Instructions": {
@@ -293,63 +163,7 @@
   {
     "comment": "wire-up join with join, going left, then right",
     "query": "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u2_col": 1
-        },
-        "TableName": "`user`_`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
-            "TableName": "`user`_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.id from `user` as u1",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
-                "Query": "select u2.col from `user` as u2",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.col = :u2_col",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col",
       "Instructions": {
@@ -411,66 +225,7 @@
   {
     "comment": "wire-up join with join, reuse existing result from a lower join",
     "query": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u1_col": 1
-        },
-        "TableName": "`user`_`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "JoinVars": {
-              "u1_col": 1
-            },
-            "TableName": "`user`_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-                "Query": "select u1.id, u1.col from `user` as u1",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
       "Instructions": {
@@ -536,89 +291,7 @@
   {
     "comment": "wire-up join with join, reuse existing result from a lower join.\n# You need two levels of join nesting to test this: when u3 requests\n# col from u1, the u1-u2 joins exports the column to u2-u3. When\n# u4 requests it, it should be reused from the u1-u2 join.",
     "query": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u1_col": 1
-        },
-        "TableName": "`user`_`user`_`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "JoinVars": {
-              "u1_col": 1
-            },
-            "TableName": "`user`_`user`_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_`user`",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-                    "Query": "select u1.id, u1.col from `user` as u1",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                    "Query": "select 1 from `user` as u2",
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
-                "Table": "`user`",
-                "Values": [
-                  ":u1_col"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` as u4 where 1 != 1",
-            "Query": "select 1 from `user` as u4 where u4.col = :u1_col",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
       "Instructions": {
@@ -707,70 +380,7 @@
   {
     "comment": "Test reuse of join var already being supplied to the right of a node.",
     "query": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u1_col": 1
-        },
-        "TableName": "`user`_`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-            "Query": "select u1.id, u1.col from `user` as u1",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "TableName": "`user`_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                "Query": "select 1 from `user` as u2 where u2.id = :u1_col",
-                "Table": "`user`",
-                "Values": [
-                  ":u1_col"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
-                "Table": "`user`",
-                "Values": [
-                  ":u1_col"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
       "Instructions": {
@@ -844,44 +454,7 @@
   {
     "comment": "Join on weird columns.",
     "query": "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "JoinVars": {
-          "weird_name_a_b_c": 1
-        },
-        "TableName": "`weird``name`_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name` where 1 != 1",
-            "Query": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name`",
-            "Table": "`weird``name`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
-            "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
       "Instructions": {
@@ -930,44 +503,7 @@
   {
     "comment": "Join on weird column (col is not in select)",
     "query": "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "weird_name_a_b_c": 0
-        },
-        "TableName": "`weird``name`_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `weird``name`.`a``b*c` from `weird``name` where 1 != 1",
-            "Query": "select `weird``name`.`a``b*c` from `weird``name`",
-            "Table": "`weird``name`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
-            "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
       "Instructions": {
@@ -1016,50 +552,7 @@
   {
     "comment": "wire-up with limit primitive",
     "query": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(10)",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
-            "JoinVars": {
-              "u_col": 1
-            },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
-                "Query": "select u.id, u.col from `user` as u",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                "Query": "select e.id from user_extra as e where e.id = :u_col",
-                "Table": "user_extra"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
       "Instructions": {
@@ -1110,75 +603,7 @@
   {
     "comment": "Wire-up in subquery",
     "query": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(10)",
-            "Inputs": [
-              {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0",
-                "JoinVars": {
-                  "u_col": 1
-                },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
-                    "Query": "select u.id, u.col from `user` as u",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                    "Query": "select e.id from user_extra as e where e.id = :u_col",
-                    "Table": "user_extra"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
-            "Table": "`user`",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
       "Instructions": {
@@ -1254,71 +679,7 @@
   {
     "comment": "Wire-up in underlying primitive after pullout",
     "query": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(10)",
-        "Inputs": [
-          {
-            "OperatorType": "Subquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq_has_values1",
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,L:1",
-                "JoinVars": {
-                  "u_col": 2
-                },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select u.id, :__sq1, u.col from `user` as u where 1 != 1",
-                    "Query": "select u.id, :__sq1, u.col from `user` as u",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                    "Query": "select e.id from user_extra as e where e.id = :u_col",
-                    "Table": "user_extra"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
       "Instructions": {
@@ -1389,26 +750,7 @@
   {
     "comment": "Invalid value in IN clause",
     "query": "select id from user where id in (18446744073709551616, 1)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id from user where id in (18446744073709551616, 1)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id in ::__vals",
-        "Table": "`user`",
-        "Values": [
-          "(DECIMAL(18446744073709551616), INT64(1))"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id from user where id in (18446744073709551616, 1)",
       "Instructions": {
@@ -1434,45 +776,7 @@
   {
     "comment": "Invalid value in IN clause from LHS of join",
     "query": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
-            "Table": "`user`",
-            "Values": [
-              "DECIMAL(18446744073709551616)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
       "Instructions": {
@@ -1517,45 +821,7 @@
   {
     "comment": "Invalid value in IN clause from RHS of join",
     "query": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.id from `user` as u1",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
-            "Table": "`user`",
-            "Values": [
-              "DECIMAL(18446744073709551616)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
       "Instructions": {
@@ -1598,11 +864,11 @@
     }
   },
   {
-    "comment": "derived table with column aliases not supported by v3, but planner is overridden with hint",
-    "query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
+    "comment": "derived table with column aliases",
+    "query": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
+      "Original": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
       "Instructions": {
         "OperatorType": "VindexLookup",
         "Variant": "Equal",
@@ -1638,7 +904,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-            "Query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+            "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
             "Table": "`user`"
           }
         ]
@@ -1647,11 +913,6 @@
         "user.user"
       ]
     }
-  },
-  {
-    "comment": "derived table with column aliases not supported by v3, but planner is overridden with hint",
-    "query": "select /*vt+ PLANNER=v3 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
-    "plan": "VT12001: unsupported: column aliases in derived table"
   },
   {
     "comment": "Three-way join using the left2right. The normal gen4 planner would merge m1 and m2 first, but the left to right doesnt",

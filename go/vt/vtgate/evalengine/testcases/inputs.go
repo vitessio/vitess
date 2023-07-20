@@ -192,6 +192,7 @@ var inputStrings = []string{
 	"-999999999999999999999999",
 	"_binary 'Müller' ",
 	"_utf8mb4 'abcABCÅå'",
+	"_latin1 0xFF",
 	// TODO: support other multibyte encodings
 	// "_dec8 'ÒòÅå'",
 	// "_utf8mb3 'abcABCÅå'",
@@ -273,9 +274,8 @@ var inputTrimStrings = []string{
 	"_utf8mb4 '\nabcABCÅå '",
 	// utf8mb4 version of the non-breaking space
 	"_utf8mb4 0xC2A078C2A0",
-	// TODO: support other multibyte encodings
 	// latin1 version of the non-breaking space
-	///"_latin1 0xA078A0",
+	"_latin1 0xA078A0",
 }
 
 var ipInputs = []string{

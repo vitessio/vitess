@@ -1158,7 +1158,6 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 
 func TestDeleteByDestination(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
-	// This query is not supported in v3, so we know for sure is taking the DeleteByDestination route
 	_, err := executorExec(executor, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
 	require.NoError(t, err)
 	// Queries get annotatted.
@@ -2381,7 +2380,7 @@ func TestUpdateReference(t *testing.T) {
 	sbclookup.Queries = nil
 
 	_, err = executorExec(executor, "update TestExecutor.zip_detail set status = 'CLOSED' where id = 1", nil)
-	require.Error(t, err)
+	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
 
 func TestDeleteLookupOwnedEqual(t *testing.T) {
@@ -2446,7 +2445,7 @@ func TestDeleteReference(t *testing.T) {
 	sbclookup.Queries = nil
 
 	_, err = executorExec(executor, "delete from TestExecutor.zip_detail where id = 1", nil)
-	require.Error(t, err)
+	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
 
 func TestReservedConnDML(t *testing.T) {
@@ -2742,6 +2741,9 @@ func TestInsertSelectFromDual(t *testing.T) {
 
 	query := "insert into user(id, v, name) select 1, 2, 'myname' from dual"
 	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select 1, 2, 'myname' from dual lock in share mode",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
 		Sql: "insert into `user`(id, v, `name`) values (:_c0_0, :_c0_1, :_c0_2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_c0_0": sqltypes.Int64BindVariable(1),
@@ -2759,23 +2761,28 @@ func TestInsertSelectFromDual(t *testing.T) {
 	}}
 
 	for _, workload := range []string{"olap", "oltp"} {
-		sbc1.Queries = nil
-		sbc2.Queries = nil
-		sbclookup.Queries = nil
-		wQuery := fmt.Sprintf("set @@workload = %s", workload)
-		_, err := executor.Execute(context.Background(), nil, "TestInsertSelect", session, wQuery, nil)
-		require.NoError(t, err)
+		t.Run(workload, func(t *testing.T) {
+			sbc1.Queries = nil
+			sbc2.Queries = nil
+			sbclookup.Queries = nil
+			wQuery := fmt.Sprintf("set @@workload = %s", workload)
+			// set result for dual query.
+			sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
 
-		_, err = executor.Execute(context.Background(), nil, "TestInsertSelect", session, query, nil)
-		require.NoError(t, err)
+			_, err := executor.Execute(context.Background(), nil, "TestInsertSelect", session, wQuery, nil)
+			require.NoError(t, err)
 
-		assertQueries(t, sbc1, wantQueries)
-		assertQueries(t, sbc2, nil)
-		assertQueries(t, sbclookup, wantlkpQueries)
+			_, err = executor.Execute(context.Background(), nil, "TestInsertSelect", session, query, nil)
+			require.NoError(t, err)
 
-		testQueryLog(t, logChan, "TestInsertSelect", "SET", wQuery, 0)
-		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into `user`(id, v, `name`) select 1, 2, 'myname' from dual", 1)
+			assertQueries(t, sbc1, wantQueries)
+			assertQueries(t, sbc2, nil)
+			assertQueries(t, sbclookup, wantlkpQueries)
+
+			testQueryLog(t, logChan, "TestInsertSelect", "SET", wQuery, 0)
+			testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+			testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into `user`(id, v, `name`) select 1, 2, 'myname' from dual", 2)
+		})
 	}
 }
 
@@ -2789,7 +2796,7 @@ func TestInsertSelectFromTable(t *testing.T) {
 
 	query := "insert into user(id, name) select c1, c2 from music"
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select c1, c2 from music for update",
+		Sql:           "select c1, c2 from music lock in share mode",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql: "insert into `user`(id, `name`) values (:_c0_0, :_c0_1), (:_c1_0, :_c1_1), (:_c2_0, :_c2_1), (:_c3_0, :_c3_1), (:_c4_0, :_c4_1), (:_c5_0, :_c5_1), (:_c6_0, :_c6_1), (:_c7_0, :_c7_1)",
@@ -2876,5 +2883,5 @@ func TestInsertReference(t *testing.T) {
 	sbclookup.Queries = nil
 
 	_, err = executorExec(executor, "insert into TestExecutor.zip_detail(id, status) values (1, 'CLOSED')", nil)
-	require.Error(t, err)
+	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
