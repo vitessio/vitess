@@ -153,13 +153,7 @@ func (mp *cLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan st
 	}
 
 	notifications := make(chan string, 8)
-
-	nextWatchIndexMu.Lock()
-	watchIndex := nextWatchIndex
-	nextWatchIndex++
-	nextWatchIndexMu.Unlock()
-
-	n.watches[watchIndex] = watch{lock: notifications}
+	watchIndex := n.addWatch(watch{lock: notifications})
 
 	if n.lock != nil {
 		notifications <- n.lockContents
