@@ -40,8 +40,7 @@ type (
 		ExprGenerator
 	}
 
-	AggregateRule  int8
-	AggregateState int8
+	AggregateRule int8
 
 	ExprGeneratorConfig struct {
 		// AggrRule determines if the random expression can, cannot, or must be an aggregation expression
@@ -323,7 +322,7 @@ func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
 			options = append(options, func() Expr {
 				expr := qg.Generate(g.r, genConfig)
 				if expr == nil {
-					return g.randomTupleLiteral(genConfig.NumCols)
+					return g.randomTupleLiteral(genConfig)
 				}
 				return expr
 			})
@@ -331,15 +330,19 @@ func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
 	}
 
 	if len(options) == 0 {
-		return g.makeAggregateIfNecessary(genConfig, g.randomTupleLiteral(genConfig.NumCols))
+		return g.makeAggregateIfNecessary(genConfig, g.randomTupleLiteral(genConfig))
 	}
 
 	return g.randomOf(options)
 }
 
-func (g *Generator) randomTupleLiteral(len int) Expr {
+func (g *Generator) randomTupleLiteral(genConfig ExprGeneratorConfig) Expr {
+	if genConfig.NumCols == 0 {
+		genConfig.NumCols = g.r.Intn(3) + 1
+	}
+
 	tuple := ValTuple{}
-	for i := 0; i < len; i++ {
+	for i := 0; i < genConfig.NumCols; i++ {
 		tuple = append(tuple, g.randomLiteral())
 	}
 

@@ -66,7 +66,7 @@ func TestRandomExprWithTables(t *testing.T) {
 		fmt.Printf("seed: %d\n", seed)
 
 		r := rand.New(rand.NewSource(seed))
-		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.IsAggregate, "", 0, false)
+		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CanAggregate, "", 0, false)
 		g := sqlparser.NewGenerator(r, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 		expr := g.Expression(genConfig)
 		fmt.Println(sqlparser.String(expr))

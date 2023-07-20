@@ -125,9 +125,6 @@ func TestMustFix(t *testing.T) {
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0 from dept as tbl0, emp as tbl1 where case when false then tbl0.dname end group by tbl1.comm")
 
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
-
-	// mismatched results
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0")
 
 	// mismatched results
@@ -298,7 +295,7 @@ func TestRandom(t *testing.T) {
 		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CannotAggregate, "", 0, false)
 		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
 		qg.randomQuery()
-		query := sqlparser.String(qg.sel)
+		query := sqlparser.String(qg.stmt)
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
 
 		// this assumes all queries are valid mysql queries
@@ -359,5 +356,6 @@ func TestBuggyQueries(t *testing.T) {
 	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
 	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno")
 	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
+	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
 
 }

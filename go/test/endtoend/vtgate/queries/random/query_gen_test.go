@@ -53,10 +53,10 @@ func TestSeed(t *testing.T) {
 	genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CannotAggregate, "", 0, false)
 	qg := newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
 	qg.randomQuery()
-	query1 := sqlparser.String(qg.sel)
+	query1 := sqlparser.String(qg.stmt)
 	qg = newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
 	qg.randomQuery()
-	query2 := sqlparser.String(qg.sel)
+	query2 := sqlparser.String(qg.stmt)
 	fmt.Println(query1)
 	require.Equal(t, query1, query2)
 }
