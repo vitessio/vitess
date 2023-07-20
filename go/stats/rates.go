@@ -94,9 +94,11 @@ func NewRates(name string, countTracker CountTracker, samples int, interval time
 }
 
 func (rt *Rates) track() {
+	t := time.NewTicker(rt.interval)
+	defer t.Stop()
 	for {
 		rt.snapshot()
-		<-time.After(rt.interval)
+		<-t.C
 	}
 }
 
