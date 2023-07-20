@@ -48,7 +48,9 @@ var (
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch string
 
-	bufferImplementation = "keyspace_events"
+	// deprecated: remove bufferImplementation and the associated flag in Vitess 19
+	bufferImplementationDeprecated = "deprecated"
+
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
@@ -57,7 +59,7 @@ var (
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
-		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
+		fs.StringVar(&bufferImplementationDeprecated, "buffer_implementation", "deprecated", "DEPRECATED: will be deleted in Vitess 19")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 	})
@@ -118,55 +120,25 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	cfg := buffer.NewConfigFromFlags()
 	gw.buffer = buffer.New(cfg)
 
-	switch bufferImplementation {
-	case "healthcheck":
-		// subscribe to healthcheck updates so that buffer can be notified if needed
-		// we run this in a separate goroutine so that normal processing doesn't need to block
-		hcChan := gw.hc.Subscribe()
-		bufferCtx, bufferCancel := context.WithCancel(ctx)
+	gw.kev = discovery.NewKeyspaceEventWatcher(ctx, gw.srvTopoServer, gw.hc, gw.localCell)
+	ksChan := gw.kev.Subscribe()
+	bufferCtx, bufferCancel := context.WithCancel(ctx)
 
-		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
-			defer bufferCancel()
+	go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.Buffer) {
+		defer bufferCancel()
 
-			for {
-				select {
-				case <-ctx.Done():
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case result := <-ksChan:
+				if result == nil {
 					return
-				case result := <-hcChan:
-					if result == nil {
-						return
-					}
-					if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
-						buffer.ProcessPrimaryHealth(result)
-					}
 				}
+				buffer.HandleKeyspaceEvent(result)
 			}
-		}(bufferCtx, hcChan, gw.buffer)
-
-	case "keyspace_events":
-		gw.kev = discovery.NewKeyspaceEventWatcher(ctx, gw.srvTopoServer, gw.hc, gw.localCell)
-		ksChan := gw.kev.Subscribe()
-		bufferCtx, bufferCancel := context.WithCancel(ctx)
-
-		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.Buffer) {
-			defer bufferCancel()
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case result := <-ksChan:
-					if result == nil {
-						return
-					}
-					buffer.HandleKeyspaceEvent(result)
-				}
-			}
-		}(bufferCtx, ksChan, gw.buffer)
-
-	default:
-		log.Exitf("unknown buffering implementation for TabletGateway: %q", bufferImplementation)
-	}
+		}
+	}(bufferCtx, ksChan, gw.buffer)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
