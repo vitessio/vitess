@@ -172,7 +172,7 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 		// first we remove unnecessary DISTINCTs
 		for idx, source := range u.Sources {
 			d, ok := source.(*Distinct)
-			if !ok || !d.Original {
+			if !ok || !d.Required {
 				continue
 			}
 			u.Sources[idx] = d.Source

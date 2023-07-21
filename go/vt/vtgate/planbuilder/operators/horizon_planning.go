@@ -603,40 +603,50 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 }
 
 func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
-	if in.Pushed {
+	if in.Required && in.PushedPerformance {
 		return in, rewrite.SameTree, nil
 	}
-	in.Pushed = true
 	switch src := in.Source.(type) {
 	case *Route:
 		if isDistinct(src.Source) && src.IsSingleShard() {
 			return src, rewrite.NewTree("distinct not needed", in), nil
 		}
-		if src.IsSingleShard() || !in.Original {
+		if src.IsSingleShard() || !in.Required {
 			return rewrite.Swap(in, src, "push distinct under route")
 		}
 
+		if isDistinct(src.Source) {
+			return in, rewrite.SameTree, nil
+		}
+
 		src.Source = &Distinct{Source: src.Source}
+		in.PushedPerformance = true
 
 		return in, rewrite.NewTree("added distinct under route - kept original", src), nil
 	case *Distinct:
+		src.Required = false
+		src.PushedPerformance = false
 		return src, rewrite.NewTree("removed double distinct", src), nil
-	case *Aggregator:
-		return in, rewrite.SameTree, nil
 	case *Union:
 		for i := range src.Sources {
 			src.Sources[i] = &Distinct{Source: src.Sources[i]}
 		}
+		in.PushedPerformance = true
+
 		return in, rewrite.NewTree("pushed down DISTINCT under UNION", src), nil
 	case *ApplyJoin:
 		src.LHS = &Distinct{Source: src.LHS}
 		src.RHS = &Distinct{Source: src.RHS}
+		in.PushedPerformance = true
 
-		if in.Original {
+		if in.Required {
 			return in, rewrite.NewTree("pushed distinct under join - kept original", in.Source), nil
 		}
 
 		return in.Source, rewrite.NewTree("pushed distinct under join", in.Source), nil
+	case *Ordering:
+		in.Source = src.Source
+		return in, rewrite.NewTree("removed ordering under distinct", in), nil
 	}
 
 	return in, rewrite.SameTree, nil
@@ -650,6 +660,8 @@ func isDistinct(op ops.Operator) bool {
 		return op.distinct
 	case *Horizon:
 		return op.Query.IsDistinct()
+	case *Limit:
+		return isDistinct(op.Source)
 	default:
 		return false
 	}
@@ -677,7 +689,7 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 
 		return &Distinct{
 			Source:   result,
-			Original: true,
+			Required: true,
 		}, rewrite.NewTree("pushed union under route", op), nil
 	}
 

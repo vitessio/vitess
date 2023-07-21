@@ -88,7 +88,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 
 	if qp.NeedsDistinct() {
 		op = &Distinct{
-			Original: true,
+			Required: true,
 			Source:   op,
 			QP:       qp,
 		}

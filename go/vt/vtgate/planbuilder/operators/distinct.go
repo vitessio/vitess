@@ -22,20 +22,24 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
 	Distinct struct {
-		// When splitting a distinct up, we only need one total DISTINCT at the route, any other
-		// intermediate DISTINCTs while we are pushing down can simply be removed
-		Original bool
-		Source   ops.Operator
-		QP       *QueryProjection
-		Pushed   bool
+		Source ops.Operator
+		QP     *QueryProjection
 
-		// When offset planning, we'll fill in this field
+		// When we go from AST to operator, we place DISTINCT ops in the required places in the op tree
+		// These are marked as `Required`, because they are semantically important to the results of the query.
+		// During planning, when we can't push down the DISTINCT op any further, we sometimes create and push down
+		// additional DISTINCT ops that are not strictly required, but that limit the number of incoming rows so less
+		// work has to be done. When we have pushed down these performance DISTINCTs, we set the `PushedPerformance`
+		// field to true on the originating op
+		Required          bool
+		PushedPerformance bool
+
+		// This is only filled in during offset planning
 		Columns []engine.CheckCol
 
 		Truncate int
@@ -80,12 +84,12 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
 	return &Distinct{
-		Original: d.Original,
-		Source:   inputs[0],
-		Columns:  slices.Clone(d.Columns),
-		QP:       d.QP,
-		Pushed:   d.Pushed,
-		Truncate: d.Truncate,
+		Required:          d.Required,
+		Source:            inputs[0],
+		Columns:           slices.Clone(d.Columns),
+		QP:                d.QP,
+		PushedPerformance: d.PushedPerformance,
+		Truncate:          d.Truncate,
 	}
 }
 
@@ -128,10 +132,10 @@ func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.S
 }
 
 func (d *Distinct) ShortDescription() string {
-	if d.Original {
-		return "ORG"
+	if d.Required {
+		return "Required"
 	}
-	return ""
+	return "Performance"
 }
 
 func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
@@ -140,13 +144,4 @@ func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
 
 func (d *Distinct) setTruncateColumnCount(offset int) {
 	d.Truncate = offset
-}
-
-func (d *Distinct) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
-	other, ok := d.Source.(*Distinct)
-	if !ok {
-		return d, rewrite.SameTree, nil
-	}
-	d.Source = other.Source
-	return d, rewrite.NewTree("removed double distinct", other), nil
 }

@@ -139,20 +139,22 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		return p, offset, nil
 	}
 
+	ae := sqlparser.CloneRefOfAliasedExpr(expr)
+
 	if p.TableID != nil {
 		vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
 		if err != nil {
 			return nil, 0, err
 		}
-		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, vt)
+		ae.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, vt)
 	}
 
-	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
+	sourceOp, offset, err := p.Source.AddColumn(ctx, ae, true, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
 	p.Source = sourceOp
-	p.Projections = append(p.Projections, Offset{Offset: offset, Expr: expr.Expr})
+	p.Projections = append(p.Projections, Offset{Offset: offset, Expr: ae.Expr})
 	p.Columns = append(p.Columns, expr)
 	return p, len(p.Projections) - 1, nil
 }
