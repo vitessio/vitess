@@ -8,7 +8,7 @@ INPUT
 select concat(a, if(b>10, _utf8 0xC3A6, _utf8 0xC3AF)) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, _utf8 0xC3A6, _utf8 0xC3AF)) from t1
+select concat(a, if(b > 10, _utf8mb3 0xC3A6, _utf8mb3 0xC3AF)) from t1
 END
 INPUT
 select a as 'x', t1.*, b as 'x' from t1;
@@ -404,7 +404,7 @@ INPUT
 select locate(_utf8 0xD091, _utf8 0xD0B0D0B1D0B2 collate utf8_bin);
 END
 OUTPUT
-select locate(_utf8 0xD091, _utf8 0xD0B0D0B1D0B2 collate utf8_bin) from dual
+select locate(_utf8mb3 0xD091, _utf8mb3 0xD0B0D0B1D0B2 collate utf8_bin) from dual
 END
 INPUT
 select hex('a'), hex('a ');
@@ -1004,7 +1004,7 @@ INPUT
 select soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB);
 END
 OUTPUT
-select soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB) from dual
+select soundex(_utf8mb3 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB) from dual
 END
 INPUT
 select t1.a, (case t1.a when 0 then 0 else t1.b end) d from t1 join t2 on t1.a=t2.c where b=11120436154190595086 order by d;
@@ -1676,7 +1676,7 @@ INPUT
 select hex(soundex(_utf8 0xD091D092D093));
 END
 OUTPUT
-select hex(soundex(_utf8 0xD091D092D093)) from dual
+select hex(soundex(_utf8mb3 0xD091D092D093)) from dual
 END
 INPUT
 select * from t1 where btn like "ff%";
@@ -2450,7 +2450,7 @@ INPUT
 select length(uuid()), charset(uuid()), length(unhex(replace(uuid(),_utf8'-',_utf8'')));
 END
 OUTPUT
-select length(uuid()), charset(uuid()), length(unhex(replace(uuid(), _utf8 '-', _utf8 ''))) from dual
+select length(uuid()), charset(uuid()), length(unhex(replace(uuid(), _utf8mb3 '-', _utf8mb3 ''))) from dual
 END
 INPUT
 select substring('hello', 4294967296, 4294967296);
@@ -2588,7 +2588,7 @@ INPUT
 select _utf8 0xD0B0D0B1D0B2 like concat(_utf8'%',_utf8 0xD0B1,_utf8 '%');
 END
 OUTPUT
-select _utf8 0xD0B0D0B1D0B2 like concat(_utf8 '%', _utf8 0xD0B1, _utf8 '%') from dual
+select _utf8mb3 0xD0B0D0B1D0B2 like concat(_utf8mb3 '%', _utf8mb3 0xD0B1, _utf8mb3 '%') from dual
 END
 INPUT
 select * from t1 where MATCH(a,b) AGAINST ("indexes");
@@ -2666,7 +2666,7 @@ INPUT
 select concat(a, if(b>10, _utf8'æ', _utf8'ß')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, _utf8 'æ', _utf8 'ß')) from t1
+select concat(a, if(b > 10, _utf8mb3 'æ', _utf8mb3 'ß')) from t1
 END
 INPUT
 select hex(group_concat(a separator ',')) from t1;
@@ -2702,7 +2702,7 @@ INPUT
 select hex(_utf8 X'616263FF');
 END
 OUTPUT
-select hex(_utf8 X'616263FF') from dual
+select hex(_utf8mb3 X'616263FF') from dual
 END
 INPUT
 select t2.count, t1.name from t2 inner join t1 using (color);
@@ -3098,7 +3098,7 @@ INPUT
 select locate(_utf8 0xD091, _utf8 0xD0B0D0B1D0B2);
 END
 OUTPUT
-select locate(_utf8 0xD091, _utf8 0xD0B0D0B1D0B2) from dual
+select locate(_utf8mb3 0xD091, _utf8mb3 0xD0B0D0B1D0B2) from dual
 END
 INPUT
 select group_concat(distinct a, c order by a desc, c desc) from t1;
@@ -3308,7 +3308,7 @@ INPUT
 select i from t1 where a=repeat(_utf8 0xD0B1,200);
 END
 OUTPUT
-select i from t1 where a = repeat(_utf8 0xD0B1, 200)
+select i from t1 where a = repeat(_utf8mb3 0xD0B1, 200)
 END
 INPUT
 select @@read_rnd_buffer_size;
@@ -3422,7 +3422,7 @@ INPUT
 select t1.*,t2.* from t1 left join t2 on (t1.b=t2.b) where charset(t2.a) = _utf8'binary' order by t1.a,t2.a;
 END
 OUTPUT
-select t1.*, t2.* from t1 left join t2 on t1.b = t2.b where charset(t2.a) = _utf8 'binary' order by t1.a asc, t2.a asc
+select t1.*, t2.* from t1 left join t2 on t1.b = t2.b where charset(t2.a) = _utf8mb3 'binary' order by t1.a asc, t2.a asc
 END
 INPUT
 select 1 from (select 1) as a;
@@ -5846,7 +5846,7 @@ INPUT
 select concat(a, if(b>10, _utf8'x', _utf8'y')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, _utf8 'x', _utf8 'y')) from t1
+select concat(a, if(b > 10, _utf8mb3 'x', _utf8mb3 'y')) from t1
 END
 INPUT
 select /lib32/ /libx32/ user, host, db, info from information_schema.processlist where state = 'User lock' and info = 'select get_lock('ee_16407_2', 60)';
@@ -6458,7 +6458,7 @@ INPUT
 select right(_utf8 0xD0B0D0B2D0B2,1);
 END
 OUTPUT
-select right(_utf8 0xD0B0D0B2D0B2, 1) from dual
+select right(_utf8mb3 0xD0B0D0B2D0B2, 1) from dual
 END
 INPUT
 select 5 div 2;
@@ -7790,7 +7790,7 @@ INPUT
 select user() like _utf8"%@%";
 END
 OUTPUT
-select user() like _utf8 '%@%' from dual
+select user() like _utf8mb3 '%@%' from dual
 END
 INPUT
 select st_distance(linestring(point(26,87),point(13,95)), geometrycollection(point(4.297374e+307,8.433875e+307), point(1e308, 1e308))) as dist;
@@ -8462,7 +8462,7 @@ INPUT
 select locate(_utf8 0xD0B1, _utf8 0xD0B0D091D0B2);
 END
 OUTPUT
-select locate(_utf8 0xD0B1, _utf8 0xD0B0D091D0B2) from dual
+select locate(_utf8mb3 0xD0B1, _utf8mb3 0xD0B0D091D0B2) from dual
 END
 INPUT
 select 18446744073709551615, 18446744073709551615 DIV 1, 18446744073709551615 DIV 2;
@@ -9182,7 +9182,7 @@ INPUT
 select locate(_utf8 0xD0B1, _utf8 0xD0B0D0B1D0B2);
 END
 OUTPUT
-select locate(_utf8 0xD0B1, _utf8 0xD0B0D0B1D0B2) from dual
+select locate(_utf8mb3 0xD0B1, _utf8mb3 0xD0B0D0B1D0B2) from dual
 END
 INPUT
 select * from t1 where b like 'foob%';
@@ -11186,7 +11186,7 @@ INPUT
 select (_utf8 X'616263FF');
 END
 OUTPUT
-select _utf8 X'616263FF' from dual
+select _utf8mb3 X'616263FF' from dual
 END
 INPUT
 select f1, group_concat(f1+1) from t1 group by f1 with rollup;
@@ -12368,7 +12368,7 @@ INPUT
 select concat(a, if(b>10, _utf8 0x78, _utf8 0x79)) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, _utf8 0x78, _utf8 0x79)) from t1
+select concat(a, if(b > 10, _utf8mb3 0x78, _utf8mb3 0x79)) from t1
 END
 INPUT
 select cast(19999999999999999999 as signed);
@@ -12626,7 +12626,7 @@ INPUT
 select length(_utf8 0xD0B1), bit_length(_utf8 0xD0B1), char_length(_utf8 0xD0B1);
 END
 OUTPUT
-select length(_utf8 0xD0B1), bit_length(_utf8 0xD0B1), char_length(_utf8 0xD0B1) from dual
+select length(_utf8mb3 0xD0B1), bit_length(_utf8mb3 0xD0B1), char_length(_utf8mb3 0xD0B1) from dual
 END
 INPUT
 select @@keycache1.key_buffer_size;
@@ -12794,7 +12794,7 @@ INPUT
 select version()>=_utf8"3.23.29";
 END
 OUTPUT
-select version() >= _utf8 '3.23.29' from dual
+select version() >= _utf8mb3 '3.23.29' from dual
 END
 INPUT
 select table_name, column_name, privileges from information_schema.columns where table_schema = 'mysqltest' and table_name = 'v1' order by table_name, column_name;
@@ -13538,7 +13538,7 @@ INPUT
 select left(_utf8 0xD0B0D0B1D0B2,1);
 END
 OUTPUT
-select left(_utf8 0xD0B0D0B1D0B2, 1) from dual
+select left(_utf8mb3 0xD0B0D0B1D0B2, 1) from dual
 END
 INPUT
 select * from information_schema.SCHEMA_PRIVILEGES where grantee like '%mysqltest_1%';
@@ -14426,7 +14426,7 @@ INPUT
 select i from t1 where a=repeat(_utf8 'a',200);
 END
 OUTPUT
-select i from t1 where a = repeat(_utf8 'a', 200)
+select i from t1 where a = repeat(_utf8mb3 'a', 200)
 END
 INPUT
 select time_format('100:00:00', '%H %k %h %I %l');
@@ -14684,7 +14684,7 @@ INPUT
 select collation(charset(_utf8'a')), collation(collation(_utf8'a'));
 END
 OUTPUT
-select collation(charset(_utf8 'a')), collation(collation(_utf8 'a')) from dual
+select collation(charset(_utf8mb3 'a')), collation(collation(_utf8mb3 'a')) from dual
 END
 INPUT
 select last_day('2000-02-05') as f1, last_day('2002-12-31') as f2, last_day('2003-03-32') as f3, last_day('2003-04-01') as f4, last_day('2001-01-01 01:01:01') as f5, last_day(NULL), last_day('2001-02-12');
@@ -15800,7 +15800,7 @@ INPUT
 select hex(soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB));
 END
 OUTPUT
-select hex(soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB)) from dual
+select hex(soundex(_utf8mb3 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB)) from dual
 END
 INPUT
 select a2 from t3 join (t1 join t2 using (a1)) on b=c1 join t4 using (c2);
@@ -16802,7 +16802,7 @@ INPUT
 select locate(_utf8 0xD0B1, _utf8 0xD0B0D091D0B2 collate utf8_bin);
 END
 OUTPUT
-select locate(_utf8 0xD0B1, _utf8 0xD0B0D091D0B2 collate utf8_bin) from dual
+select locate(_utf8mb3 0xD0B1, _utf8mb3 0xD0B0D091D0B2 collate utf8_bin) from dual
 END
 INPUT
 select insert('hello', 1, -4294967295, 'hi');
@@ -17906,7 +17906,7 @@ INPUT
 select export_set(3, _latin1'foo', _utf8'bar', ',', 4);
 END
 OUTPUT
-select export_set(3, _latin1 'foo', _utf8 'bar', ',', 4) from dual
+select export_set(3, _latin1 'foo', _utf8mb3 'bar', ',', 4) from dual
 END
 INPUT
 select a,hex(a) from t1;
@@ -18116,7 +18116,7 @@ INPUT
 select database() = _utf8"test";
 END
 OUTPUT
-select database() = _utf8 'test' from dual
+select database() = _utf8mb3 'test' from dual
 END
 INPUT
 select collation(char(123)), collation(char(123 using binary));
@@ -18746,7 +18746,7 @@ INPUT
 select charset(charset(_utf8'a')), charset(collation(_utf8'a'));
 END
 OUTPUT
-select charset(charset(_utf8 'a')), charset(collation(_utf8 'a')) from dual
+select charset(charset(_utf8mb3 'a')), charset(collation(_utf8mb3 'a')) from dual
 END
 INPUT
 select * from `information_schema`.`key_column_usage` where `TABLE_NAME` = NULL;
@@ -18944,7 +18944,7 @@ INPUT
 select i from t1 where b=repeat(_utf8 'b',310);
 END
 OUTPUT
-select i from t1 where b = repeat(_utf8 'b', 310)
+select i from t1 where b = repeat(_utf8mb3 'b', 310)
 END
 INPUT
 select * from t1 where not(not(a));
@@ -18962,13 +18962,13 @@ INPUT
 select ifnull(NULL, _utf8'string');
 END
 OUTPUT
-select ifnull(null, _utf8 'string') from dual
+select ifnull(null, _utf8mb3 'string') from dual
 END
 INPUT
 select hex(_utf8 B'001111111111');
 END
 OUTPUT
-select hex(_utf8 B'001111111111') from dual
+select hex(_utf8mb3 B'001111111111') from dual
 END
 INPUT
 select right('hello', -18446744073709551615);
@@ -19430,7 +19430,7 @@ INPUT
 select t1.*,t2.* from t1 left join t2 on (t1.b=t2.b) where collation(t2.a) = _utf8'binary' order by t1.a,t2.a;
 END
 OUTPUT
-select t1.*, t2.* from t1 left join t2 on t1.b = t2.b where collation(t2.a) = _utf8 'binary' order by t1.a asc, t2.a asc
+select t1.*, t2.* from t1 left join t2 on t1.b = t2.b where collation(t2.a) = _utf8mb3 'binary' order by t1.a asc, t2.a asc
 END
 INPUT
 select * from t1 where i = 2;
@@ -19646,7 +19646,7 @@ INPUT
 select greatest(1,_utf16'.',_utf8'');
 END
 OUTPUT
-select greatest(1, _utf16 '.', _utf8 '') from dual
+select greatest(1, _utf16 '.', _utf8mb3 '') from dual
 END
 INPUT
 select round(1e1,308), truncate(1e1, 308);
@@ -20552,7 +20552,7 @@ INPUT
 select soundex(_utf8 0xD091D092D093);
 END
 OUTPUT
-select soundex(_utf8 0xD091D092D093) from dual
+select soundex(_utf8mb3 0xD091D092D093) from dual
 END
 INPUT
 select sum(a) from t1 where a > 10;
@@ -20840,7 +20840,7 @@ INPUT
 select repeat(_utf8'+',3) as h union select NULL;
 END
 OUTPUT
-select repeat(_utf8 '+', 3) as h from dual union select null from dual
+select repeat(_utf8mb3 '+', 3) as h from dual union select null from dual
 END
 INPUT
 select fld1,fld3 FROM t2 where fld1 like "25050%";
@@ -20978,7 +20978,7 @@ INPUT
 select hex(_utf8 0x616263FF);
 END
 OUTPUT
-select hex(_utf8 0x616263FF) from dual
+select hex(_utf8mb3 0x616263FF) from dual
 END
 INPUT
 select avg(a) as x from t1 having x=2;
