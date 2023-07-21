@@ -206,6 +206,11 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 		})
 	}
 
+	// if an arbitrary number of columns may be generated, randomly choose 1-3 columns
+	if numCols == 0 {
+		numCols = g.r.Intn(3) + 1
+	}
+
 	if numCols == 1 {
 		return g.makeAggregateIfNecessary(genConfig, g.randomOf(options))
 	}
@@ -213,11 +218,6 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 	// with 1/5 probability choose a tuple subquery
 	if g.randomBool(0.2) {
 		return g.subqueryExpr(genConfig.SetNumCols(numCols))
-	}
-
-	// if an arbitrary number of columns may be generated, randomly choose 1-3 columns
-	if numCols == 0 {
-		numCols = g.r.Intn(3) + 1
 	}
 
 	tuple := ValTuple{}
@@ -315,6 +315,10 @@ func (g *Generator) stringExpr(genConfig ExprGeneratorConfig) Expr {
 }
 
 func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
+	if g.atMaxDepth() {
+		return g.makeAggregateIfNecessary(genConfig, g.randomTupleLiteral(genConfig))
+	}
+
 	var options []exprF
 
 	for _, generator := range g.exprGenerators {
@@ -330,7 +334,7 @@ func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
 	}
 
 	if len(options) == 0 {
-		return g.makeAggregateIfNecessary(genConfig, g.randomTupleLiteral(genConfig))
+		return g.Expression(genConfig)
 	}
 
 	return g.randomOf(options)
@@ -399,10 +403,13 @@ func (g *Generator) comparison(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
+	// specifc 1-3 columns
+	numCols := g.r.Intn(3) + 1
+
 	cmp := &ComparisonExpr{
 		Operator: comparisonOps[g.r.Intn(len(comparisonOps))],
-		Left:     g.Expression(genConfig),
-		Right:    g.Expression(genConfig),
+		Left:     g.Expression(genConfig.SetNumCols(numCols)),
+		Right:    g.Expression(genConfig.SetNumCols(numCols)),
 	}
 	return cmp
 }
