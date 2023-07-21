@@ -644,49 +644,50 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 
-	for _, query := range []string{"show charset", "show character set"} {
+	for _, query := range []string{"show charset like 'utf8%'", "show character set like 'utf8%'"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			Rows: [][]sqltypes.Value{
 				append(buildVarCharRow(
-					"utf8",
+					"utf8mb3",
 					"UTF-8 Unicode",
-					"utf8_general_ci"), sqltypes.NewInt32(3)),
+					"utf8mb3_general_ci"),
+					sqltypes.NewUint32(3)),
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					"utf8mb4_general_ci"),
-					sqltypes.NewInt32(4)),
+					collations.Default().Get().Name()),
+					sqltypes.NewUint32(4)),
 			},
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
 	}
 
-	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where foo like 'utf8'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
+	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
-			Rows:         [][]sqltypes.Value{},
+			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			RowsAffected: 0,
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
 	}
 
-	for _, query := range []string{"show charset like 'utf8'", "show character set like 'utf8'", "show charset where charset = 'utf8'", "show character set where charset = 'utf8'"} {
+	for _, query := range []string{"show charset like 'utf8mb3'", "show character set like 'utf8mb3'", "show charset where charset = 'utf8mb3'", "show character set where charset = 'utf8mb3'"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			Rows: [][]sqltypes.Value{
 				append(buildVarCharRow(
-					"utf8",
+					"utf8mb3",
 					"UTF-8 Unicode",
-					"utf8_general_ci"), sqltypes.NewInt32(3)),
+					"utf8mb3_general_ci"),
+					sqltypes.NewUint32(3)),
 			},
 		}
 
@@ -697,16 +698,21 @@ func TestExecutorShow(t *testing.T) {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			Rows: [][]sqltypes.Value{
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					"utf8mb4_general_ci"),
-					sqltypes.NewInt32(4)),
+					collations.Default().Get().Name()),
+					sqltypes.NewUint32(4)),
 			},
 		}
 		utils.MustMatch(t, wantqr, qr, query)
+	}
+
+	for _, query := range []string{"show character set where foo like '%foo'"} {
+		_, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
+		require.Error(t, err)
 	}
 
 	query = "show engines"

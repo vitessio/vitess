@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttls"
 
@@ -416,6 +418,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		replParams:         genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
-		Charset:            "utf8mb4_general_ci",
+		Charset:            collations.Default().Get().Name(),
 	}
 }

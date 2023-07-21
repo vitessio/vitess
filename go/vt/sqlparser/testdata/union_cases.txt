@@ -572,7 +572,7 @@ INPUT
 select repeat(_utf8'+',3) as h union select NULL;
 END
 OUTPUT
-select repeat(_utf8 '+', 3) as h from dual union select null from dual
+select repeat(_utf8mb3 '+', 3) as h from dual union select null from dual
 END
 INPUT
 SELECT * FROM t1 UNION SELECT /*+ MAX_EXECUTION_TIME(0) */ * FROM t1;
