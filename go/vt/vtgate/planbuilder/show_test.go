@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,8 +32,8 @@ import (
 )
 
 func TestBuildDBPlan(t *testing.T) {
-	vschema := &vschemaWrapper{
-		keyspace: &vindexes.Keyspace{Name: "main"},
+	vschema := &utils.VSchemaWrapper{
+		Keyspace: &vindexes.Keyspace{Name: "main"},
 	}
 
 	testCases := []struct {

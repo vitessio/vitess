@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 	"testing"
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -39,21 +40,21 @@ type collationTestCase struct {
 }
 
 func (tc *collationTestCase) run(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/schema.json", false),
-		sysVarEnabled: true,
-		version:       Gen4,
+	vschemaWrapper := &utils.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/schema.json", false),
+		SysVarEnabled: true,
+		Version:       Gen4,
 	}
 
 	tc.addCollationsToSchema(vschemaWrapper)
-	plan, err := TestBuilder(tc.query, vschemaWrapper, vschemaWrapper.currentDb())
+	plan, err := TestBuilder(tc.query, vschemaWrapper, vschemaWrapper.CurrentDb())
 	require.NoError(t, err)
 	tc.check(t, tc.collations, plan.Instructions)
 }
 
-func (tc *collationTestCase) addCollationsToSchema(vschema *vschemaWrapper) {
+func (tc *collationTestCase) addCollationsToSchema(vschema *utils.VSchemaWrapper) {
 	for _, collation := range tc.collations {
-		tbl := vschema.v.Keyspaces[collation.ks].Tables[collation.table]
+		tbl := vschema.V.Keyspaces[collation.ks].Tables[collation.table]
 		for i, c := range tbl.Columns {
 			if c.Name.EqualString(collation.colName) {
 				tbl.Columns[i].CollationName = collation.collationName
