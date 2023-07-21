@@ -590,10 +590,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
 		log.Errorf("executeCheckAndRecoverFunction: Proceeding with %v recovery on %v validation after acquiring shard lock.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-		// The first step we have to do is refresh the keyspace information
+		// The first step we have to do is refresh the keyspace and shard information
 		// This is required to know if the durability policies have changed or not
-		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore
-		err := RefreshKeyspace(analysisEntry.AnalyzedKeyspace)
+		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore.
+		// Similarly, a new primary could have been elected in the mean-time that can cause
+		// a change in the recovery we run.
+		err = RefreshKeyspaceAndShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 		if err != nil {
 			return err
 		}

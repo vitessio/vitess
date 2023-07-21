@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,13 +61,9 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 		clustersToWatch = oldClustersToWatch
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_keyspace table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
+	db.ClearVTOrcDatabase()
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_keyspace")
-		require.NoError(t, err)
+		db.ClearVTOrcDatabase()
 	}()
 
 	ts = memorytopo.NewServer("zone1")
@@ -77,30 +74,50 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	for i, keyspace := range keyspaces {
 		err := ts.CreateKeyspace(context.Background(), keyspaceNames[i], keyspace)
 		require.NoError(t, err)
+		for idx, shardName := range []string{"-80", "80-"} {
+			err = ts.CreateShard(context.Background(), keyspaceNames[i], shardName)
+			require.NoError(t, err)
+			_, err = ts.UpdateShardFields(context.Background(), keyspaceNames[i], shardName, func(si *topo.ShardInfo) error {
+				si.PrimaryAlias = &topodatapb.TabletAlias{
+					Cell: fmt.Sprintf("zone_%v", keyspaceNames[i]),
+					Uid:  uint32(100 + idx),
+				}
+				return nil
+			})
+			require.NoError(t, err)
+		}
 	}
 
 	// Set clusters to watch to only watch ks1 and ks3
-	onlyKs1and3 := []string{"ks1/-", "ks3/-80", "ks3/80-"}
+	onlyKs1and3 := []string{"ks1/-80", "ks3/-80", "ks3/80-"}
 	clustersToWatch = onlyKs1and3
-	RefreshAllKeyspaces()
+	RefreshAllKeyspacesAndShards()
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
+	verifyPrimaryAlias(t, "ks1", "-80", "zone_ks1-0000000100", "")
 	verifyKeyspaceInfo(t, "ks2", nil, "keyspace not found")
+	verifyPrimaryAlias(t, "ks2", "80-", "", "shard not found")
 	verifyKeyspaceInfo(t, "ks3", keyspaceSnapshot, "")
+	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
 	verifyKeyspaceInfo(t, "ks4", nil, "keyspace not found")
 
 	// Set clusters to watch to watch all keyspaces
 	clustersToWatch = nil
 	// Change the durability policy of ks1
 	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "ks1", "semi_sync")
-	RefreshAllKeyspaces()
+	RefreshAllKeyspacesAndShards()
 
 	// Verify that all the keyspaces are correctly reloaded
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilitySemiSync, "")
+	verifyPrimaryAlias(t, "ks1", "-80", "zone_ks1-0000000100", "")
 	verifyKeyspaceInfo(t, "ks2", keyspaceDurabilitySemiSync, "")
+	verifyPrimaryAlias(t, "ks2", "80-", "zone_ks2-0000000101", "")
 	verifyKeyspaceInfo(t, "ks3", keyspaceSnapshot, "")
+	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
+	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
+
 }
 
 func TestRefreshKeyspace(t *testing.T) {
@@ -110,13 +127,8 @@ func TestRefreshKeyspace(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_keyspace table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_keyspace")
-		require.NoError(t, err)
+		db.ClearVTOrcDatabase()
 	}()
 
 	tests := []struct {
@@ -190,7 +202,7 @@ func TestRefreshKeyspace(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err := RefreshKeyspace(tt.keyspaceName)
+			err := refreshKeyspace(tt.keyspaceName)
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
 			} else {
@@ -209,7 +221,92 @@ func verifyKeyspaceInfo(t *testing.T, keyspaceName string, keyspace *topodatapb.
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
+		assert.NoError(t, err)
 		assert.Equal(t, keyspaceName, ksInfo.KeyspaceName())
 		assert.True(t, topotools.KeyspaceEquality(keyspace, ksInfo.Keyspace))
 	}
+}
+
+func TestRefreshShard(t *testing.T) {
+	// Store the old flags and restore on test completion
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+	}()
+
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	tests := []struct {
+		name               string
+		keyspaceName       string
+		shardName          string
+		shard              *topodatapb.Shard
+		ts                 *topo.Server
+		primaryAliasWanted string
+		err                string
+	}{
+		{
+			name:         "Success with primaryAlias",
+			keyspaceName: "ks1",
+			shardName:    "0",
+			ts:           memorytopo.NewServer("zone1"),
+			shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  302,
+				},
+			},
+			primaryAliasWanted: "zone1-0000000302",
+			err:                "",
+		}, {
+			name:               "Success with empty primaryAlias",
+			keyspaceName:       "ks1",
+			shardName:          "-80",
+			ts:                 memorytopo.NewServer("zone1"),
+			shard:              &topodatapb.Shard{},
+			primaryAliasWanted: "",
+			err:                "",
+		}, {
+			name:         "No shard found",
+			keyspaceName: "ks2",
+			shardName:    "-",
+			ts:           memorytopo.NewServer("zone1"),
+			err:          "node doesn't exist: keyspaces/ks2/shards/-/Shard",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts = tt.ts
+			if tt.shard != nil {
+				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName)
+				require.NoError(t, err)
+				_, err = ts.UpdateShardFields(context.Background(), tt.keyspaceName, tt.shardName, func(info *topo.ShardInfo) error {
+					info.PrimaryAlias = tt.shard.PrimaryAlias
+					return nil
+				})
+				require.NoError(t, err)
+			}
+
+			err := refreshShard(tt.keyspaceName, tt.shardName)
+			if tt.err != "" {
+				require.EqualError(t, err, tt.err)
+			} else {
+				require.NoError(t, err)
+				verifyPrimaryAlias(t, tt.keyspaceName, tt.shardName, tt.primaryAliasWanted, "")
+			}
+		})
+	}
+}
+
+// verifyPrimaryAlias verifies the correct primary alias is stored in the database for the given keyspace shard.
+func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAliasWanted string, errString string) {
+	primaryAlias, err := inst.ReadShardPrimaryAlias(keyspaceName, shardName)
+	if errString != "" {
+		require.ErrorContains(t, err, errString)
+		return
+	}
+	require.NoError(t, err)
+	require.Equal(t, primaryAliasWanted, primaryAlias)
 }
