@@ -255,7 +255,6 @@ func (ft *fakeTablet) StreamHealth(ctx context.Context, callback func(*querypb.S
 		Target: &querypb.Target{
 			Keyspace:   ft.Tablet.Keyspace,
 			Shard:      ft.Tablet.Shard,
-			Cell:       ft.Tablet.Alias.Cell,
 			TabletType: ft.Tablet.Type,
 		},
 		RealtimeStats: &querypb.RealtimeStats{},

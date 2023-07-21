@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -336,13 +337,13 @@ func (ct *controller) sourceTabletIsUnhealthy() bool {
 		// Ensure that the tablet is healthy and serving.
 		if err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.HealthError == "" && shr.Serving {
-				return nil
+				return io.EOF // End the stream
 			}
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not serving")
-		}); err == nil {
-			_ = conn.Close(ctx)
+		}); err == nil || err == io.EOF {
 			return true
 		}
+		_ = conn.Close(ctx)
 	}
 	return false
 }

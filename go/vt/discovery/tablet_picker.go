@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"sort"
 	"strings"
@@ -431,13 +432,13 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				// Ensure that the tablet is healthy and serving.
 				if err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 					if shr.RealtimeStats.HealthError == "" && shr.Serving {
-						return nil
+						return io.EOF // End the stream
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not serving")
-				}); err == nil {
-					_ = conn.Close(ctx)
+				}); err == nil || err == io.EOF {
 					tablets = append(tablets, tabletInfo)
 				}
+				_ = conn.Close(ctx)
 			}
 		}
 	}

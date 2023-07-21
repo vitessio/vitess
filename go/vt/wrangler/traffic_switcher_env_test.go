@@ -155,7 +155,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		}
 		return nil, nil
 	})
-	tabletconntest.SetProtocol("go.vt.traffic_switcher_env_test", dialerName)
+	tabletconntest.SetProtocol("go.vt.wrangler.traffic_switcher_env_test", dialerName)
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -336,7 +336,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		}
 		return nil, nil
 	})
-	tabletconntest.SetProtocol("go.vt.traffic_switcher_env_test", dialerName)
+	tabletconntest.SetProtocol("go.vt.wrangler.traffic_switcher_env_test", dialerName)
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -494,7 +494,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		}
 		return nil, nil
 	})
-	tabletconntest.SetProtocol("go.vt.traffic_switcher_env_test", dialerName)
+	tabletconntest.SetProtocol("go.vt.wrangler.traffic_switcher_env_test", dialerName)
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
