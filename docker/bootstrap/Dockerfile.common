@@ -22,7 +22,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vt/vtdataroot
 ENV VTPORTSTART 15000
-ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
+ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
 ENV USER vitess
 
 # Copy files needed for bootstrap

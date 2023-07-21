@@ -25,7 +25,6 @@ source ./dev.env
 
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
-BUILD_CHROME=${BUILD_CHROME:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -198,37 +197,6 @@ install_consul() {
 }
 
 
-# Download chromedriver
-install_chromedriver() {
-  local version="$1"
-  local dist="$2"
-
-  case $(uname) in
-    Linux)  local platform=linux;;
-    *)   echo "Platform not supported for vtctl-web tests. Skipping chromedriver install."; return;;
-  esac
-
-  if [ "$(arch)" == "aarch64" ] ; then
-      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
-      case $os in
-        ubuntu|debian)
-          sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
-        ;;
-        centos|fedora)
-          sudo yum update -y && yum install -y libX11 unzip wget
-        ;;
-      esac
-      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
-      "${VTROOT}/tools/wget-retry" https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
-      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
-      rm chromedriver-v6.0.3-linux-arm64.zip
-  else
-      "${VTROOT}/tools/wget-retry" "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip"
-      unzip -o -q chromedriver_linux64.zip -d "$dist"
-      rm chromedriver_linux64.zip
-  fi
-}
-
 # Download and install toxiproxy, link toxiproxy binary into our root.
 install_toxiproxy() {
   local version="$1"
@@ -273,11 +241,6 @@ install_all() {
   # consul
   if [ "$BUILD_CONSUL" == 1 ] ; then
     install_dep "Consul" "1.11.4" "$VTROOT/dist/consul" install_consul
-  fi
-
-  # chromedriver
-  if [ "$BUILD_CHROME" == 1 ] ; then
-    install_dep "chromedriver" "90.0.4430.24" "$VTROOT/dist/chromedriver" install_chromedriver
   fi
 
   # toxiproxy
