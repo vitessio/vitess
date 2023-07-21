@@ -48,9 +48,6 @@ var (
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch string
 
-	// deprecated: remove bufferImplementation and the associated flag in Vitess 19
-	bufferImplementationDeprecated = "deprecated"
-
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
@@ -59,7 +56,7 @@ var (
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
-		fs.StringVar(&bufferImplementationDeprecated, "buffer_implementation", "deprecated", "DEPRECATED: will be deleted in Vitess 19")
+		fs.MarkDeprecated("buffer_implementation", "keyspace_events")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 	})
