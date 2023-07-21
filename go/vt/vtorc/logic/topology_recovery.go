@@ -371,7 +371,7 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry *inst.ReplicationAna
 func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryTabletDeleted:
 		// If ERS is disabled, we have no way of repairing the cluster.
 		if !config.ERSEnabled() {
 			return noRecoveryFunc

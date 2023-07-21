@@ -30,6 +30,7 @@ type StructureAnalysisCode string
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
 	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
 	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
@@ -90,17 +91,19 @@ const (
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceHostname                  string
-	AnalyzedInstancePort                      int
-	AnalyzedInstanceAlias                     string
-	AnalyzedInstancePrimaryAlias              string
-	TabletType                                topodatapb.TabletType
-	PrimaryTimeStamp                          time.Time
-	ClusterDetails                            ClusterInfo
-	AnalyzedInstanceDataCenter                string
-	AnalyzedInstanceRegion                    string
-	AnalyzedKeyspace                          string
-	AnalyzedShard                             string
+	AnalyzedInstanceHostname     string
+	AnalyzedInstancePort         int
+	AnalyzedInstanceAlias        string
+	AnalyzedInstancePrimaryAlias string
+	TabletType                   topodatapb.TabletType
+	PrimaryTimeStamp             time.Time
+	ClusterDetails               ClusterInfo
+	AnalyzedInstanceDataCenter   string
+	AnalyzedInstanceRegion       string
+	AnalyzedKeyspace             string
+	AnalyzedShard                string
+	// ShardPrimaryAlias is the primary alias stored in the shard record
+	ShardPrimaryAlias                         string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool

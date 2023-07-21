@@ -200,6 +200,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			analysisCode:         inst.DeadPrimary,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
+			name:                 "PrimaryTabletDeleted with ERS enabled",
+			ersEnabled:           true,
+			analysisCode:         inst.PrimaryTabletDeleted,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+		}, {
+			name:                 "PrimaryTabletDeleted with ERS disabled",
+			ersEnabled:           false,
+			analysisCode:         inst.PrimaryTabletDeleted,
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
 			name:                 "PrimaryHasPrimary",
 			ersEnabled:           false,
 			analysisCode:         inst.PrimaryHasPrimary,
