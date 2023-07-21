@@ -111,6 +111,31 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		offsets[ae.ColumnName()] = i
 	}
 
+	exprPerSource, err := u.predicatePerSource(expr, offsets)
+	if err == errUseFilter {
+		return &Filter{
+			Source:     u,
+			Predicates: []sqlparser.Expr{expr},
+		}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	for i, src := range u.Sources {
+		u.Sources[i], err = src.AddPredicate(ctx, exprPerSource[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return u, nil
+}
+
+var errUseFilter = fmt.Errorf("use filter")
+
+func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) ([]sqlparser.Expr, error) {
+	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
 	for i := range u.Sources {
 		var err error
 		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -121,7 +146,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				err = vterrors.VT13001("cannot push predicates on concatenate, missing columns from the UNION")
+				err = errUseFilter
 				cursor.StopTreeWalk()
 				return
 			}
@@ -144,13 +169,9 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		if err != nil {
 			return nil, err
 		}
-		u.Sources[i], err = u.Sources[i].AddPredicate(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
+		exprPerSource[i] = predicate
 	}
-
-	return u, nil
+	return exprPerSource, nil
 }
 
 func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {

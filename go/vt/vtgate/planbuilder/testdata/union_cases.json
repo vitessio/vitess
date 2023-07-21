@@ -1140,7 +1140,63 @@
   {
     "comment": "systable union query in derived table with constraint on outside (without star projection)",
     "query": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
-    "plan": "VT13001: [BUG] cannot push predicates on concatenate, missing columns from the UNION"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "COLUMN_NAME = 'primary'",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0: utf8mb4_0900_ai_ci"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "DBA",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                        "Query": "select distinct kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */",
+                        "SysTableTableName": "[kcu_table_name:VARCHAR(\"user_extra\")]",
+                        "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                        "Table": "information_schema.key_column_usage"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "DBA",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                        "Query": "select distinct kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */",
+                        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\")]",
+                        "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                        "Table": "information_schema.key_column_usage"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "pushes predicate on both sides of UNION",
@@ -1172,7 +1228,85 @@
   {
     "comment": "systable union query in derived table with constraint on outside (star projection)",
     "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-    "plan": "VT13001: [BUG] cannot push predicates on concatenate, missing columns from the UNION"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "constraint_name = 'primary'",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0: utf8mb4_0900_ai_ci",
+                  "1: utf8mb4_0900_ai_ci",
+                  "2: utf8mb4_0900_ai_ci",
+                  "3: utf8mb4_0900_ai_ci",
+                  "4: utf8mb4_0900_ai_ci",
+                  "5: utf8mb4_0900_ai_ci",
+                  "6: utf8mb4_0900_ai_ci",
+                  "7",
+                  "8",
+                  "9: utf8mb4_0900_ai_ci",
+                  "10: utf8mb4_0900_ai_ci",
+                  "11: utf8mb4_0900_ai_ci"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "DBA",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                        "Query": "select distinct kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */",
+                        "SysTableTableName": "[kcu_table_name:VARCHAR(\"user_extra\")]",
+                        "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                        "Table": "information_schema.key_column_usage"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "DBA",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                        "Query": "select distinct kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */",
+                        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\")]",
+                        "SysTableTableSchema": "[VARCHAR(\"user\")]",
+                        "Table": "information_schema.key_column_usage"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "comment": "unknown columns are OK as long as the whole query is unsharded",
