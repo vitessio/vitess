@@ -430,8 +430,8 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
-			confirmReplication(t, primary, replicas, time.Until(endTime), clusterInfo.lastUsedValue)
 			clusterInfo.lastUsedValue++
+			confirmReplication(t, primary, replicas, time.Until(endTime), clusterInfo.lastUsedValue)
 			validateTopology(t, clusterInfo, true, time.Until(endTime))
 			return
 		}
@@ -442,8 +442,8 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 // Call this function only after CheckReplication has been executed once, since that function creates the table that this function uses.
 func VerifyWritesSucceed(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	t.Helper()
-	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 	clusterInfo.lastUsedValue++
+	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 }
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
@@ -476,6 +476,12 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 			return
 		}
 	}
+}
+
+// CheckTabletUptoDate verifies that the tablet has all the writes so far
+func CheckTabletUptoDate(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet) {
+	err := checkInsertedValues(t, tablet, clusterInfo.lastUsedValue)
+	require.NoError(t, err)
 }
 
 func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) error {
