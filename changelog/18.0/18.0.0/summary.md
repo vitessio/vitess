@@ -55,6 +55,10 @@ Throttler related `vttablet` flags:
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
 - `--throttler-config-via-topo` is deprecated after asummed `true` in `v17.0`. It will be removed in a future version.
 
+VTGate flag:
+
+- `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
+
 #### <a id="deleted-v3"/>Deleted `v3` planner
 
 The `Gen4` planner has been the default planner since Vitess 14. The `v3` planner was deprecated in Vitess 15 and has now been removed in this release.
