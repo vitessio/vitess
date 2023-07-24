@@ -212,7 +212,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
-%token <bytes> SYSTEM_TIME
+%token <bytes> SYSTEM_TIME CONTAINED
 %token <bytes> VALUES LAST_INSERT_ID SQL_CALC_FOUND_ROWS
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -451,7 +451,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <triggerName> trigger_name
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
-%type <asOf> as_of_clause
+%type <asOf> as_of_clause as_of_point_clause between_times between_versions all_times all_versions
 %type <procedureName> procedure_name
 %type <eventName> event_name rename_event_name_opt
 %type <indexHints> index_hint_list
@@ -5686,6 +5686,68 @@ aliased_table_options:
   }
 
 as_of_clause:
+  as_of_point_clause
+  {
+    $$ = $1
+  }
+| between_times
+  {
+    $$ = $1
+  }
+| between_versions
+  {
+    $$ = $1
+  }
+| all_times
+  {
+    $$ = $1
+  }
+| all_versions
+  {
+    $$ = $1
+  }
+  
+between_times:
+  FOR_SYSTEM_TIME BETWEEN value_expression AND value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| FOR_SYSTEM_TIME FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+  }
+| FOR_SYSTEM_TIME CONTAINED IN openb value_expression ',' value_expression closeb
+  {
+    $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
+  }
+
+between_versions:
+  FOR_VERSIONS BETWEEN value_expression AND value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| FOR_VERSIONS FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+  }
+| FOR_VERSIONS CONTAINED IN openb value_expression ',' value_expression closeb
+  {
+    $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
+  }
+
+all_times:
+  FOR_SYSTEM_TIME ALL
+  {
+    $$ = &AsOf{All: true}
+  }
+
+all_versions:
+  FOR_VERSIONS ALL
+  {
+    $$ = &AsOf{All: true}
+  }
+
+as_of_point_clause:
   AS OF value_expression
   {
     $$ = &AsOf{Time: $3}
@@ -5699,7 +5761,7 @@ as_of_opt:
   {
     $$ = nil
   }
-| as_of_clause
+| as_of_point_clause
   {
     $$ = $1.Time
   }

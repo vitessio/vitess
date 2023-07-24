@@ -4055,6 +4055,11 @@ type AliasedTableExpr struct {
 
 type AsOf struct {
 	Time Expr
+	Start Expr
+	End Expr
+	StartInclusive bool
+	EndInclusive bool
+	All bool
 }
 
 func (node *AsOf) Format(buf *TrackedBuffer) {
