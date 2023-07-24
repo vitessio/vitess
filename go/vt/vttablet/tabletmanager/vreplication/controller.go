@@ -19,7 +19,6 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -28,9 +27,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -39,9 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -258,14 +253,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 
-		// If the source tablet has become unhealthy then we need to wait
-		// and re-run the binlog player again, thus picking a new source
-		// tablet.
-		if ct.sourceTabletIsUnhealthy() {
-			return vterrors.NewErrorf(vtrpcpb.Code_INTERNAL, vterrors.ServerNotAvailable,
-				"source tablet %s is unhealthy", ct.sourceTablet.Load().(*topodatapb.TabletAlias).String())
-		}
-
 		// If this is a mysql error that we know needs manual intervention OR
 		// we cannot identify this as non-recoverable, but it has persisted
 		// beyond the retry limit (maxTimeToRetryError).
@@ -321,31 +308,6 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 		ct.sourceTablet.Store(tablet.Alias)
 	}
 	return tablet, err
-}
-
-func (ct *controller) sourceTabletIsUnhealthy() bool {
-	ctx, cancel := context.WithTimeout(ct.vre.ctx, topo.RemoteOperationTimeout)
-	defer cancel()
-	tabletAlias := ct.sourceTablet.Load().(*topodatapb.TabletAlias)
-	tabletInfo, err := ct.vre.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		log.Warningf("Unable to get tablet info for %v when checking the source tablet's health for the vreplication controller %d for workflow %s: %v",
-			tabletAlias, ct.id, ct.workflow, err)
-		return false
-	}
-	if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
-		// Ensure that the tablet is healthy and serving.
-		if err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
-			if shr.RealtimeStats.HealthError == "" && shr.Serving {
-				return io.EOF // End the stream
-			}
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not serving")
-		}); err == nil || err == io.EOF {
-			return true
-		}
-		_ = conn.Close(ctx)
-	}
-	return false
 }
 
 func (ct *controller) Stop() {
