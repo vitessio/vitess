@@ -79,7 +79,7 @@ message MaterializeSettings {
   repeated TableMaterializeSettings table_settings = 5;
   // optional parameters.
   string cell = 6;
-  repeated topodata.TabletType tablet_types = 7;
+  string tablet_types = 7;
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 8;

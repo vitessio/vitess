@@ -40,7 +40,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -237,7 +236,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
 			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 		}
-		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, topoprotopb.MakeStringTypeCSV(mz.ms.TabletTypes),
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
 			workflowType,
 			workflowSubType, mz.ms.DeferSecondaryKeys)
 	}

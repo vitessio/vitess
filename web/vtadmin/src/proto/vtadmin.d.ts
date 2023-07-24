@@ -41611,7 +41611,7 @@ export namespace vtctldata {
         cell?: (string|null);
 
         /** MaterializeSettings tablet_types */
-        tablet_types?: (topodata.TabletType[]|null);
+        tablet_types?: (string|null);
 
         /** MaterializeSettings external_cluster */
         external_cluster?: (string|null);
@@ -41666,7 +41666,7 @@ export namespace vtctldata {
         public cell: string;
 
         /** MaterializeSettings tablet_types. */
-        public tablet_types: topodata.TabletType[];
+        public tablet_types: string;
 
         /** MaterializeSettings external_cluster. */
         public external_cluster: string;

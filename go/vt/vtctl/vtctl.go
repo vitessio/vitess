@@ -2088,7 +2088,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	const defaultMaxReplicationLagAllowed = defaultWaitTime
 
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
+	tabletTypesStr := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchTraffic and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
 	timeout := subFlags.Duration("timeout", defaultWaitTime, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. --timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). --reverse_replication is only supported for SwitchTraffic.")
@@ -2275,11 +2275,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		vrwp.OnDDL = onDDL
 		vrwp.DeferSecondaryKeys = *deferNonPKeys
 		vrwp.Cells = *cells
-		vrwp.TabletTypes = *tabletTypes
+		vrwp.TabletTypes = *tabletTypesStr
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
 		if subFlags.Changed("tablet_types") {
-			vrwp.TabletTypes = *tabletTypes
+			vrwp.TabletTypes = *tabletTypesStr
 		} else {
 			// When no tablet types are specified we are supposed to switch all traffic so
 			// we override the normal default for tablet_types.
@@ -2490,7 +2490,7 @@ func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Source cells to replicate from.")
-	tabletTypesStr := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
+	tabletTypesStr := subFlags.String("tablet_types", "replica", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2510,7 +2510,7 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	if inorder {
 		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 	}
-	ms.TabletTypes = tabletTypes
+	ms.TabletTypes = topoproto.MakeStringTypeCSV(tabletTypes)
 	ms.TabletSelectionPreference = tsp
 	return wr.Materialize(ctx, ms)
 }
@@ -2532,7 +2532,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fl
 
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
-	tabletTypes := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source and target")
+	tabletTypesStr := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
@@ -2562,7 +2562,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fl
 		}
 	}()
 
-	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format,
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypesStr, *filteredReplicationWaitTime, *format,
 		*maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)

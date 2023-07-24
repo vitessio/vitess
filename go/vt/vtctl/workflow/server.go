@@ -1041,7 +1041,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		SourceKeyspace:            sourceKeyspace,
 		TargetKeyspace:            targetKeyspace,
 		Cell:                      strings.Join(req.Cells, ","),
-		TabletTypes:               req.TabletTypes,
+		TabletTypes:               topoproto.MakeStringTypeCSV(req.TabletTypes),
 		TabletSelectionPreference: req.TabletSelectionPreference,
 		StopAfterCopy:             req.StopAfterCopy,
 		ExternalCluster:           req.ExternalClusterName,

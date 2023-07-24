@@ -260,7 +260,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		SourceKeyspace:            sourceKeyspace,
 		TargetKeyspace:            targetKeyspace,
 		Cell:                      cell,
-		TabletTypes:               tabletTypes,
+		TabletTypes:               topoproto.MakeStringTypeCSV(tabletTypes),
 		TabletSelectionPreference: tsp,
 		StopAfterCopy:             stopAfterCopy,
 		ExternalCluster:           externalCluster,
@@ -452,7 +452,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 	if inorder {
 		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 	}
-	ms.TabletTypes = tabletTypes
+	ms.TabletTypes = topoproto.MakeStringTypeCSV(tabletTypes)
 	ms.TabletSelectionPreference = tsp
 	if err := wr.Materialize(ctx, ms); err != nil {
 		return err
@@ -1346,7 +1346,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 		}
 
-		tabletTypeStr := topoproto.MakeStringTypeCSV(mz.ms.TabletTypes)
+		tabletTypeStr := mz.ms.TabletTypes
 		if mz.ms.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
 			tabletTypeStr = discovery.InOrderHint + tabletTypeStr
 		}

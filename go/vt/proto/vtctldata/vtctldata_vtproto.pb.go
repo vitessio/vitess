@@ -262,23 +262,9 @@ func (m *MaterializeSettings) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x42
 	}
 	if len(m.TabletTypes) > 0 {
-		var pksize2 int
-		for _, num := range m.TabletTypes {
-			pksize2 += sov(uint64(num))
-		}
-		i -= pksize2
-		j1 := i
-		for _, num1 := range m.TabletTypes {
-			num := uint64(num1)
-			for num >= 1<<7 {
-				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j1++
-			}
-			dAtA[j1] = uint8(num)
-			j1++
-		}
-		i = encodeVarint(dAtA, i, uint64(pksize2))
+		i -= len(m.TabletTypes)
+		copy(dAtA[i:], m.TabletTypes)
+		i = encodeVarint(dAtA, i, uint64(len(m.TabletTypes)))
 		i--
 		dAtA[i] = 0x3a
 	}
@@ -11100,12 +11086,9 @@ func (m *MaterializeSettings) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if len(m.TabletTypes) > 0 {
-		l = 0
-		for _, e := range m.TabletTypes {
-			l += sov(uint64(e))
-		}
-		n += 1 + sov(uint64(l)) + l
+	l = len(m.TabletTypes)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.ExternalCluster)
 	if l > 0 {
@@ -15653,74 +15636,37 @@ func (m *MaterializeSettings) UnmarshalVT(dAtA []byte) error {
 			m.Cell = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 7:
-			if wireType == 0 {
-				var v topodata.TabletType
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= topodata.TabletType(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.TabletTypes = append(m.TabletTypes, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= int(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLength
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex < 0 {
-					return ErrInvalidLength
-				}
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				if elementCount != 0 && len(m.TabletTypes) == 0 {
-					m.TabletTypes = make([]topodata.TabletType, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v topodata.TabletType
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflow
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= topodata.TabletType(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.TabletTypes = append(m.TabletTypes, v)
-				}
-			} else {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
 			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TabletTypes = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ExternalCluster", wireType)

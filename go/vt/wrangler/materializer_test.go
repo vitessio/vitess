@@ -37,6 +37,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -1772,10 +1773,10 @@ func TestMaterializerOneToOne(t *testing.T) {
 			},
 		},
 		Cell: "zone1",
-		TabletTypes: []topodatapb.TabletType{
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
 			topodatapb.TabletType_PRIMARY,
 			topodatapb.TabletType_RDONLY,
-		},
+		}),
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
