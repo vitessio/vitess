@@ -657,6 +657,7 @@ var keywords = map[string]int{
 	"sum":                           SUM,
 	"super":                         SUPER,
 	"system":                        SYSTEM,
+	"system_time":                   SYSTEM_TIME,
 	"system_variables_admin":        SYSTEM_VARIABLES_ADMIN,
 	"table":                         TABLE,
 	"table_encryption_admin":        TABLE_ENCRYPTION_ADMIN,
@@ -1040,13 +1041,16 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 	loweredStr := string(lowered)
 	keywordID, found := keywords[loweredStr]
 	if found {
-		// Some tokens require special handling to avoid conflicts in the grammar
+		// Some tokens require special handling to avoid conflicts in the grammar. 
+		// This means we're doing additional look-ahead just for these special tokens.
 		switch keywordID {
 		case FOR:
 			token, val := tkn.Scan()
 			switch token {
 			case SYSTEM_TIME:
-				return FOR_SYSTEM_TIME, nil
+				return FOR_SYSTEM_TIME, append(buffer.Bytes(), append([]byte{' '}, val...)...)
+			case VERSIONS:
+				return FOR_VERSIONS, append(buffer.Bytes(), append([]byte{' '}, val...)...)
 			default:
 				tkn.digestToken(token, val)
 				return FOR, buffer.Bytes()

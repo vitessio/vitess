@@ -5688,9 +5688,9 @@ aliased_table_options:
   {
     $$ = &AliasedTableExpr{As: $1, Hints: $2}
   }
-| FOR_SYSTEM_TIME AS OF STRING
+| FOR_SYSTEM_TIME AS OF value_expression
   {
-    $$ = &AsOf{Time: string($5)}
+    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $4}}
   }
 
 as_of_opt:
