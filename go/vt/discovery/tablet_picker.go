@@ -283,12 +283,12 @@ func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo
 	return candidates
 }
 
-// PickForStreaming picks an available tablet.
+// PickForStreaming picks a tablet that is healthy and serving.
 // Selection is based on CellPreference.
 // See prioritizeTablets for prioritization logic.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
-	// Keep trying at intervals (tabletPickerRetryDelay) until a tablet
-	// is found or the context is cancelled.
+	// Keep trying at intervals (tabletPickerRetryDelay) until a healthy
+	// serving tablet is found or the context is cancelled.
 	for {
 		select {
 		case <-ctx.Done():
@@ -327,9 +327,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			})
 		}
 		if len(candidates) == 0 {
-			// If no candidates were found, sleep and try again.
+			// If no viable candidates were found, sleep and try again.
 			tp.incNoTabletFoundStat()
-			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %.3f seconds.",
+			log.Infof("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %.3f seconds.",
 				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0)
 			timer := time.NewTimer(GetTabletPickerRetryDelay())
 			select {
@@ -339,18 +339,18 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			case <-timer.C:
 			}
 			// Got here? Means we iterated all tablets and did not find a
-			// healthy viable candidate.
+			// viable candidate.
 			tp.incNoTabletFoundStat()
 			continue
 		}
-		log.Infof("Tablet picker found healthy tablet for streaming: %s", candidates[0].Tablet.String())
+		log.Infof("Tablet picker found a healthy serving tablet for streaming: %s", candidates[0].Tablet.String())
 		return candidates[0].Tablet, nil
 	}
 }
 
 // GetMatchingTablets returns a list of TabletInfo for healthy
-// tablets that match the cells, keyspace, shard and tabletTypes
-// for this TabletPicker.
+// serving tablets that match the cells, keyspace, shard and
+// tabletTypes for this TabletPicker.
 func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletInfo {
 	// Special handling for PRIMARY tablet type: since there is only
 	// one primary per shard, we ignore cell and find the primary.
@@ -434,7 +434,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 					if shr.RealtimeStats.HealthError == "" && shr.Serving {
 						return io.EOF // End the stream
 					}
-					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not serving")
+					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")
 				}); err == nil || err == io.EOF {
 					tablets = append(tablets, tabletInfo)
 				}
@@ -446,7 +446,6 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 }
 
 func init() {
-	// TODO(sougou): consolidate this call to be once per process.
 	globalTPStats = newTabletPickerStats()
 }
 

@@ -283,8 +283,8 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 	return nil
 }
 
-// pickSourceTablet picks a healthy tablet to source for the
-// vreplication stream. If the source is marked as external, it
+// pickSourceTablet picks a healthy serving tablet to source for
+// the vreplication stream. If the source is marked as external, it
 // returns nil.
 func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplayer.DBClient) (tablet *topodatapb.Tablet, err error) {
 	if ct.source.GetExternalMysql() == "" {
