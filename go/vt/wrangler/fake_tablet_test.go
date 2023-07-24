@@ -51,7 +51,7 @@ import (
 )
 
 func init() {
-	// enforce we will use the right protocol (gRPC) in all unit tests
+	// Ensure we will use the right protocol (gRPC) in all unit tests.
 	tabletconntest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
 	tmclienttest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
 }

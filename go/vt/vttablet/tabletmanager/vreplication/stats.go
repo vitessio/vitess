@@ -24,10 +24,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -153,7 +154,9 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[fmt.Sprintf("%v", ct.id)] = ct.sourceTablet.Load().(*topodatapb.TabletAlias).String()
+			if ta := ct.sourceTablet.Load().(*topodatapb.TabletAlias); ta != nil {
+				result[fmt.Sprintf("%v", ct.id)] = ta.String()
+			}
 		}
 		return result
 	}))

@@ -286,27 +286,28 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 // pickSourceTablet picks a healthy serving tablet to source for
 // the vreplication stream. If the source is marked as external, it
 // returns nil.
-func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplayer.DBClient) (tablet *topodatapb.Tablet, err error) {
-	if ct.source.GetExternalMysql() == "" {
-		log.Infof("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s",
-			ct.id, ct.workflow)
-		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
-		defer tpCancel()
-		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
-		if err != nil {
-			select {
-			case <-ctx.Done():
-			default:
-				ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
-				ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
-			}
-			return tablet, err
-		}
-		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
-		log.Infof("Found eligible source tablet %s for vreplication stream id %d for workflow %s",
-			tablet.Alias.String(), ct.id, ct.workflow)
-		ct.sourceTablet.Store(tablet.Alias)
+func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplayer.DBClient) (*topodatapb.Tablet, error) {
+	if ct.source.GetExternalMysql() != "" {
+		return nil, nil
 	}
+	log.Infof("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s",
+		ct.id, ct.workflow)
+	tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
+	defer tpCancel()
+	tablet, err := ct.tabletPicker.PickForStreaming(tpCtx)
+	if err != nil {
+		select {
+		case <-ctx.Done():
+		default:
+			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+			ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+		}
+		return tablet, err
+	}
+	ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
+	log.Infof("Found eligible source tablet %s for vreplication stream id %d for workflow %s",
+		tablet.Alias.String(), ct.id, ct.workflow)
+	ct.sourceTablet.Store(tablet.Alias)
 	return tablet, err
 }
 
