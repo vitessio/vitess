@@ -17,6 +17,7 @@ limitations under the License.
 package datetime
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -287,6 +288,56 @@ func TestParseDateTime(t *testing.T) {
 			assert.Equal(t, test.output.second, got.Time.Second())
 			assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
 			assert.Equal(t, test.l, l)
+		})
+	}
+}
+
+func TestParseDateTimeInt64(t *testing.T) {
+	type datetime struct {
+		year       int
+		month      int
+		day        int
+		hour       int
+		minute     int
+		second     int
+		nanosecond int
+	}
+	tests := []struct {
+		input  int64
+		output datetime
+		l      int
+		err    bool
+	}{
+		{input: 1, output: datetime{}, err: true},
+		{input: 20221012000000, output: datetime{2022, 10, 12, 0, 0, 0, 0}},
+		{input: 20221012112233, output: datetime{2022, 10, 12, 11, 22, 33, 0}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%d", test.input), func(t *testing.T) {
+			got, ok := ParseDateTimeInt64(test.input)
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.output.year, got.Date.Year())
+					assert.Equal(t, test.output.month, got.Date.Month())
+					assert.Equal(t, test.output.day, got.Date.Day())
+					assert.Equal(t, test.output.hour, got.Time.Hour())
+					assert.Equal(t, test.output.minute, got.Time.Minute())
+					assert.Equal(t, test.output.second, got.Time.Second())
+					assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.output.year, got.Date.Year())
+			assert.Equal(t, test.output.month, got.Date.Month())
+			assert.Equal(t, test.output.day, got.Date.Day())
+			assert.Equal(t, test.output.hour, got.Time.Hour())
+			assert.Equal(t, test.output.minute, got.Time.Minute())
+			assert.Equal(t, test.output.second, got.Time.Second())
+			assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
 		})
 	}
 }
