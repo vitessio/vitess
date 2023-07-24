@@ -34,7 +34,7 @@ import (
 
 // this test uses the AST defined in the sqlparser package to randomly generate queries
 
-// if true then execution will always stop on a "must fix" error: a mismatched results or EOF
+// if true then execution will always stop on a "must fix" error: a results mismatched or EOF
 const stopOnMustFixError = false
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -84,62 +84,62 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case count(*) when -41 ^ 10 then -17 when 22 then -52 else 7 end from emp as tbl0, emp as tbl1 where tbl1.job < tbl1.job")
 
-	// mismatched results (maybe derived tables)
+	// results mismatched (maybe derived tables)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (68 - -16) / case false when -45 then 3 when 28 then -43 else -62 end as crandom0 from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ distinct not not false and count(*) from emp as tbl0, emp as tbl1 where tbl1.ename) as tbl1 limit 1")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case true when 'burro' then 'trout' else 'elf' end < case count(distinct true) when 'bobcat' then 'turkey' else 'penguin' end from dept as tbl0, emp as tbl1 where 'spider'")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(distinct tbl1.deptno) from dept as tbl0, emp as tbl1 where tbl0.deptno and tbl1.comm in (12, tbl0.deptno, case false when 67 then -17 when -78 then -35 end, -76 >> -68)")
 
 	// mismatched number of columns
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) + 1 from emp as tbl0 order by count(*) desc")
 
-	// mismatched results (mismatched types)
+	// results mismatched (mismatched types)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(2 >> tbl2.mgr), sum(distinct tbl2.empno <=> 15) from emp as tbl0 left join emp as tbl2 on -32")
 
-	// mismatched results (decimals off by a little; evalengine problem)
+	// results mismatched (decimals off by a little; evalengine problem)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(case false when true then tbl1.deptno else -154 / 132 end) as caggr1 from emp as tbl0, dept as tbl1")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
 
 	// EOF
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1, tbl1.deptno as crandom0 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
 
-	// mismatched results
+	// results mismatched
 	// limit >= 9 works
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) = sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr1 from dept as tbl0, emp as tbl1 group by tbl1.sal having max(tbl1.comm) != true")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0 from dept as tbl0, emp as tbl1 where case when false then tbl0.dname end group by tbl1.comm")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0")
 
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'")
 
 	// similar to previous two
-	// mismatched results
+	// results mismatched
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)")
 
-	// mismatched results (group by + right join)
+	// results mismatched (group by + right join)
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
 
-	// mismatched results (count + right join)
+	// results mismatched (count + right join)
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
@@ -288,7 +288,7 @@ func TestRandom(t *testing.T) {
 
 	endBy := time.Now().Add(1 * time.Second)
 
-	var queryCount int
+	var queryCount, queryFailCount int
 	// continue testing after an error if and only if testFailingQueries is true
 	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
 		seed := time.Now().UnixNano()
@@ -303,15 +303,16 @@ func TestRandom(t *testing.T) {
 			fmt.Printf("seed: %d\n", seed)
 			fmt.Println(query)
 			fmt.Println(vtErr)
-			fmt.Printf("\n\n\n")
 
 			if stopOnMustFixError {
-				// EOF
-				if sqlError, ok := vtErr.(*mysql.SQLError); ok && strings.Contains(sqlError.Message, "EOF") {
+				// results mismatched
+				if strings.Contains(vtErr.Error(), "results mismatched") {
+					simplified := simplifyResultsMismatchedQuery(t, query)
+					fmt.Printf("final simplified query: %s\n", simplified)
 					break
 				}
-				// mismatched results
-				if strings.Contains(vtErr.Error(), "results mismatched") {
+				// EOF
+				if sqlError, ok := vtErr.(*mysql.SQLError); ok && strings.Contains(sqlError.Message, "EOF") {
 					break
 				}
 			}
@@ -319,10 +320,14 @@ func TestRandom(t *testing.T) {
 			// restart the mysql and vitess connections in case something bad happened
 			closer()
 			mcmp, closer = start(t)
+
+			fmt.Printf("\n\n\n")
+			queryFailCount++
 		}
 		queryCount++
 	}
 	fmt.Printf("Queries successfully executed: %d\n", queryCount)
+	fmt.Printf("Queries failed: %d\n", queryFailCount)
 }
 
 // these queries were previously failing and have now been fixed

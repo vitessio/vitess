@@ -374,7 +374,7 @@ func (sg *selectGenerator) createTablesAndJoin() ([]tableT, bool) {
 		tables[i+1].setAlias(alias)
 	}
 
-	// TODO: outer joins produce mismatched results
+	// TODO: outer joins produce results mismatched
 	isJoin := sg.r.Intn(2) < 1 && testFailingQueries
 	if isJoin {
 		// TODO: do nested joins
