@@ -304,6 +304,13 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	}
 	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)
+	// VTOrc now uses shard record too, so we need to clear that as well for correct testing.
+	_, err = clusterInfo.Ts.UpdateShardFields(context.Background(), keyspaceName, shardName, func(info *topo.ShardInfo) error {
+		info.PrimaryTermStartTime = nil
+		info.PrimaryAlias = nil
+		return nil
+	})
+	require.NoError(t, err)
 
 	// start vtorc
 	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
