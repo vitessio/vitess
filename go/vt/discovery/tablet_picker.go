@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -26,22 +27,16 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"context"
-
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type TabletPickerCellPreference int
