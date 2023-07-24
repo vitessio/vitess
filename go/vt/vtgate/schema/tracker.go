@@ -109,7 +109,7 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 	if err != nil {
 		return err
 	}
-	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numTables)
+	log.Infof("finished loading tables for keyspace %s. Found %d tables", target.Keyspace, numTables)
 
 	return nil
 }

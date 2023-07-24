@@ -42,7 +42,6 @@ var (
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
-	signalInterval  = 1
 	sqlSchema       = `
 		create table vt_user (
 			id bigint,
