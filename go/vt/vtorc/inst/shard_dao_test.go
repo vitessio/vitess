@@ -18,10 +18,12 @@ package inst
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 
+	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -32,14 +34,15 @@ func TestSaveAndReadShard(t *testing.T) {
 	defer func() {
 		db.ClearVTOrcDatabase()
 	}()
-
+	timeToUse := time.Date(2023, 7, 24, 5, 0, 5, 1000, time.UTC)
 	tests := []struct {
-		name               string
-		keyspaceName       string
-		shardName          string
-		shard              *topodatapb.Shard
-		primaryAliasWanted string
-		err                string
+		name                   string
+		keyspaceName           string
+		shardName              string
+		shard                  *topodatapb.Shard
+		primaryAliasWanted     string
+		primaryTimestampWanted string
+		err                    string
 	}{
 		{
 			name:         "Success",
@@ -50,14 +53,31 @@ func TestSaveAndReadShard(t *testing.T) {
 					Cell: "zone1",
 					Uid:  301,
 				},
+				PrimaryTermStartTime: logutil.TimeToProto(timeToUse.Add(1 * time.Hour)),
 			},
-			primaryAliasWanted: "zone1-0000000301",
+			primaryTimestampWanted: "2023-07-24 06:00:05.000001 +0000 UTC",
+			primaryAliasWanted:     "zone1-0000000301",
 		}, {
-			name:               "Success with empty primary alias",
-			keyspaceName:       "ks1",
-			shardName:          "-",
-			shard:              &topodatapb.Shard{},
-			primaryAliasWanted: "",
+			name:         "Success with empty primary alias",
+			keyspaceName: "ks1",
+			shardName:    "-",
+			shard: &topodatapb.Shard{
+				PrimaryTermStartTime: logutil.TimeToProto(timeToUse),
+			},
+			primaryTimestampWanted: "2023-07-24 05:00:05.000001 +0000 UTC",
+			primaryAliasWanted:     "",
+		}, {
+			name:         "Success with empty primary term start time",
+			keyspaceName: "ks1",
+			shardName:    "80-",
+			shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  301,
+				},
+			},
+			primaryTimestampWanted: "",
+			primaryAliasWanted:     "zone1-0000000301",
 		},
 		{
 			name:         "No shard found",
@@ -74,13 +94,14 @@ func TestSaveAndReadShard(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			shardPrimaryAlias, err := ReadShardPrimaryAlias(tt.keyspaceName, tt.shardName)
+			shardPrimaryAlias, primaryTimestamp, err := ReadShardPrimaryInformation(tt.keyspaceName, tt.shardName)
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
 				return
 			}
 			require.NoError(t, err)
 			require.EqualValues(t, tt.primaryAliasWanted, shardPrimaryAlias)
+			require.EqualValues(t, tt.primaryTimestampWanted, primaryTimestamp)
 		})
 	}
 }

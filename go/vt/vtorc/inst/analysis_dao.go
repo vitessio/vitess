@@ -84,7 +84,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
-		vitess_shard.primary_alias AS shard_primary_alias,
+		vitess_shard.primary_timestamp AS shard_primary_timestamp,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.data_center) AS data_center,
@@ -331,7 +331,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 
-		a.ShardPrimaryAlias = m.GetString("shard_primary_alias")
+		a.ShardPrimaryTimestamp = m.GetString("shard_primary_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
 		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
 		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
@@ -475,13 +475,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryAlias == "" {
-			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary specified either.
+		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTimestamp == "" {
+			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
 			ca.hasClusterwideAction = true
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryAlias != "" {
-			// If there are no primary tablets, but the shard primary alias isn't empty, then we know
+		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTimestamp != "" {
+			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
 			// the primary tablet was deleted.
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"

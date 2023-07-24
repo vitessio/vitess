@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -28,13 +29,13 @@ import (
 // ErrShardNotFound is a fixed error message used when a shard is not found in the database.
 var ErrShardNotFound = errors.New("shard not found")
 
-// ReadShardPrimaryAlias reads the vitess shard record and gets the shard primary alias.
-func ReadShardPrimaryAlias(keyspaceName, shardName string) (string, error) {
-	if err := topo.ValidateKeyspaceName(keyspaceName); err != nil {
-		return "", err
+// ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
+func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias string, primaryTimestamp string, err error) {
+	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {
+		return
 	}
-	if _, _, err := topo.ValidateShardName(shardName); err != nil {
-		return "", err
+	if _, _, err = topo.ValidateShardName(shardName); err != nil {
+		return
 	}
 
 	query := `
@@ -46,19 +47,19 @@ func ReadShardPrimaryAlias(keyspaceName, shardName string) (string, error) {
 		`
 	args := sqlutils.Args(keyspaceName, shardName)
 	shardFound := false
-	primaryAlias := ""
-	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		shardFound = true
 		primaryAlias = row.GetString("primary_alias")
+		primaryTimestamp = row.GetString("primary_timestamp")
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return
 	}
 	if !shardFound {
-		return "", ErrShardNotFound
+		return "", "", ErrShardNotFound
 	}
-	return primaryAlias, nil
+	return primaryAlias, primaryTimestamp, nil
 }
 
 // SaveShard saves the shard record against the shard name.
@@ -66,14 +67,15 @@ func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
 		replace
 			into vitess_shard (
-				keyspace, shard, primary_alias
+				keyspace, shard, primary_alias, primary_timestamp
 			) values (
-				?, ?, ?
+				?, ?, ?, ?
 			)
 		`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
+		getShardPrimaryTermStartTimeString(shard),
 	)
 	return err
 }
@@ -84,4 +86,12 @@ func getShardPrimaryAliasString(shard *topo.ShardInfo) string {
 		return ""
 	}
 	return topoproto.TabletAliasString(shard.PrimaryAlias)
+}
+
+// getShardPrimaryAliasString gets the shard primary term start time to be stored as a string in the database.
+func getShardPrimaryTermStartTimeString(shard *topo.ShardInfo) string {
+	if shard.PrimaryTermStartTime == nil {
+		return ""
+	}
+	return logutil.ProtoToTime(shard.PrimaryTermStartTime).String()
 }

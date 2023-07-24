@@ -302,7 +302,7 @@ func TestRefreshShard(t *testing.T) {
 
 // verifyPrimaryAlias verifies the correct primary alias is stored in the database for the given keyspace shard.
 func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAliasWanted string, errString string) {
-	primaryAlias, err := inst.ReadShardPrimaryAlias(keyspaceName, shardName)
+	primaryAlias, _, err := inst.ReadShardPrimaryInformation(keyspaceName, shardName)
 	if errString != "" {
 		require.ErrorContains(t, err, errString)
 		return
