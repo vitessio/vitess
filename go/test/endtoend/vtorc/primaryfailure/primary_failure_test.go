@@ -217,7 +217,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// log prefix printed at the end of analysis where we conclude we have DeadPrimary
 	t1 := extractTimeFromLog(t, logFile, "Proceeding with DeadPrimary recovery")
 	// log prefix printed at the end of recovery
-	t2 := extractTimeFromLog(t, logFile, "auditType:recover-dead-primary")
+	t2 := extractTimeFromLog(t, logFile, "auditType:RecoverDeadPrimary")
 	curr := time.Now().Format("2006-01-02")
 	timeLayout := "2006-01-02 15:04:05.000000"
 	timeStr1 := fmt.Sprintf("%s %s", curr, t1)

@@ -217,6 +217,7 @@ func stopReplicationAndBuildStatusMaps(
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
 	durability Durabler,
+	waitForAllTablets bool,
 	logger logutil.Logger,
 ) (*replicationSnapshot, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -307,9 +308,18 @@ func stopReplicationAndBuildStatusMaps(
 		}
 	}
 
+	numGoRoutines := len(tabletMap) - ignoredTablets.Len()
+	// In general we want to wait for n-1 tablets to respond, since we know the primary tablet is down.
+	requiredSuccesses := numGoRoutines - 1
+	if waitForAllTablets {
+		// In the special case, where we are explicitly told to wait for all the tablets to return,
+		// we set the required success to all the go-routines.
+		requiredSuccesses = numGoRoutines
+	}
+
 	errgroup := concurrency.ErrorGroup{
-		NumGoroutines:        len(tabletMap) - ignoredTablets.Len(),
-		NumRequiredSuccesses: len(tabletMap) - ignoredTablets.Len() - 1,
+		NumGoroutines:        numGoRoutines,
+		NumRequiredSuccesses: requiredSuccesses,
 		NumAllowedErrors:     len(tabletMap), // We set the number of allowed errors to a very high value, because we don't want to exit early
 		// even in case of multiple failures. We rely on the revoke function below to determine if we have more failures than we can tolerate
 		NumErrorsToWaitFor: numErrorsToWaitFor,
