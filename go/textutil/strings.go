@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 

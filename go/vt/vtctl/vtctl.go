@@ -2490,7 +2490,7 @@ func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Source cells to replicate from.")
-	tabletTypesStr := subFlags.String("tablet_types", "replica", "Source tablet types to replicate from.")
+	tabletTypesStr := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
