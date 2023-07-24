@@ -106,12 +106,14 @@ func NewStringTokenizerForAnsiQuotes(sql string) *Tokenizer {
 	}
 }
 
-// NewTokenizer creates a new Tokenizer reading a sql
-// string from the io.Reader.
+// NewTokenizer creates a new Tokenizer reading a sql string from the io.Reader, using the
+// default parser options.
 func NewTokenizer(r io.Reader) *Tokenizer {
 	return &Tokenizer{
 		InStream: r,
 		buf:      make([]byte, defaultBufSize),
+		identifierQuotes:    []uint16{backtickQuote},
+		stringLiteralQuotes: []uint16{doubleQuote, singleQuote},
 	}
 }
 
@@ -1080,7 +1082,9 @@ func (tkn *Tokenizer) scanBitLiteral() (int, []byte) {
 	return BIT_LITERAL, buffer.Bytes()
 }
 
-// TODO: Add godocs
+// scanLiteralIdentifier scans a quoted identifier. The first byte of the quoted identifier has already
+// been read from the tokenizer and is passed in as the |startingChar| parameter. The type of token is
+// returned as well as the actual content that was parsed.
 func (tkn *Tokenizer) scanLiteralIdentifier(startingChar uint16) (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	identifierQuoteSeen := false
