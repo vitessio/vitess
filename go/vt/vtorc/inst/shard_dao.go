@@ -40,7 +40,7 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 
 	query := `
 		select
-			primary_alias
+			primary_alias, primary_timestamp
 		from
 			vitess_shard
 		where keyspace = ? and shard=?
