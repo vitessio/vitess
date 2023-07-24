@@ -453,7 +453,11 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
 		}, {
+			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
+		}, {
 			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01'",
+			output: "select /* use */ 1 from t1 as of '2019-01-01'",
 		}, {
 			input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
 		}, {

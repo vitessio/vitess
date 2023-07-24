@@ -451,6 +451,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <triggerName> trigger_name
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
+%type <asOf> table_version_clause
 %type <procedureName> procedure_name
 %type <eventName> event_name rename_event_name_opt
 %type <indexHints> index_hint_list
@@ -5665,32 +5666,33 @@ aliased_table_name:
   }
 
 // All possible combinations of qualifiers for a table alias expression, declared in a single rule to avoid
-// shift/reduce conflicts. To avoid grammar ambiguity, we can't always use optional rules that match empty
-// (such as as_opt).
+// shift/reduce conflicts.
 aliased_table_options:
   index_hint_list
   {
     $$ = &AliasedTableExpr{Hints: $1}
   }
-| AS OF value_expression index_hint_list
-  {
-    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $3}, Hints: $4}
-  }
-| AS OF value_expression as_opt table_alias index_hint_list
-  {
-    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $3}, As: $5, Hints: $6}
-  }
-| AS table_alias index_hint_list
+| as_opt table_alias index_hint_list
   {
     $$ = &AliasedTableExpr{As: $2, Hints: $3}
   }
-| table_alias index_hint_list
+| table_version_clause index_hint_list
   {
-    $$ = &AliasedTableExpr{As: $1, Hints: $2}
+    $$ = &AliasedTableExpr{AsOf: $1, Hints: $2}
+  }
+| table_version_clause as_opt table_alias index_hint_list
+  {
+    $$ = &AliasedTableExpr{AsOf: $1, As: $3, Hints: $4}
+  }
+
+table_version_clause:
+  AS OF value_expression
+  {
+    $$ = &AsOf{Time: $3}
   }
 | FOR_SYSTEM_TIME AS OF value_expression
   {
-    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $4}}
+    $$ = &AsOf{Time: $4}
   }
 
 as_of_opt:
