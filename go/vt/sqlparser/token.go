@@ -34,6 +34,11 @@ const (
 	eofChar        = 0x100
 )
 
+type tokenAndValue struct {
+	token int
+	value []byte
+}
+
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
@@ -54,6 +59,7 @@ type Tokenizer struct {
 	specialComment       *Tokenizer
 	specialCommentEndPos int
 	potentialAccountName bool
+	digestedTokens       []tokenAndValue
 
 	// If true, the parser should collaborate to set `stopped` on this
 	// tokenizer after a statement is parsed. From that point forward, the
@@ -780,11 +786,34 @@ func (tkn *Tokenizer) Error(err string) {
 	tkn.skipStatement()
 }
 
+// digestToken stores a token and its value for later retrieval when necessary for additional look-ahead
+func (tkn *Tokenizer) digestToken(token int, value []byte) {
+	tkn.digestedTokens = append(tkn.digestedTokens, tokenAndValue{token, value})
+}
+
+// digestedToken returns the first digested token and removes it from the list of digested tokens
+func (tkn *Tokenizer) digestedToken() (token int, value []byte) {
+	if tkn.digestedTokens == nil || len(tkn.digestedTokens) == 0 {
+		panic("popDigestedToken called with no digested tokens")
+	}
+	tokenAndValue := tkn.digestedTokens[0]
+	tkn.digestedTokens = tkn.digestedTokens[1:]
+	
+	if len(tkn.digestedTokens) == 0 {
+		tkn.digestedTokens = nil
+	}
+	return tokenAndValue.token, tokenAndValue.value
+}
+
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.stopped {
 		return 0, nil
+	}
+	
+	if tkn.digestedTokens != nil {
+		return tkn.digestedToken()
 	}
 
 	tkn.OldPosition = tkn.Position
@@ -1009,13 +1038,24 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
 	loweredStr := string(lowered)
-	if keywordID, found := keywords[loweredStr]; found {
+	keywordID, found := keywords[loweredStr]
+	if found {
+		// Some tokens require special handling to avoid conflicts in the grammar
+		switch keywordID {
+		case FOR:
+			token, val := tkn.Scan()
+			switch token {
+			case SYSTEM_TIME:
+				return FOR_SYSTEM_TIME, nil
+			default:
+				tkn.digestToken(token, val)
+				return FOR, buffer.Bytes()
+			}
+		}
+		
 		return keywordID, buffer.Bytes()
 	}
-	// dual must always be case-insensitive
-	if loweredStr == "dual" {
-		return ID, lowered
-	}
+	
 	return ID, buffer.Bytes()
 }
 

@@ -202,8 +202,13 @@ func yySpecialCommentMode(yylex interface{}) bool {
 }
 
 %token LEX_ERROR
+
+// Special tokens
+%token <bytes> FOR_SYSTEM_TIME
+%token <bytes> FOR_VERSIONS
+
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL VERSIONS
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
@@ -5683,12 +5688,10 @@ aliased_table_options:
   {
     $$ = &AliasedTableExpr{As: $1, Hints: $2}
   }
-// SQL:2011 grammar would be nice to have, but it generates
-// a parser conflict with FOR UPDATE which is hard to fix
-//| FOR SYSTEM_TIME AS OF STRING
-//  {
-//    $$ = &AsOf{Time: string($5)}
-//  }
+| FOR_SYSTEM_TIME AS OF STRING
+  {
+    $$ = &AsOf{Time: string($5)}
+  }
 
 as_of_opt:
   {
