@@ -338,9 +338,6 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 				return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 			case <-timer.C:
 			}
-			// Got here? Means we iterated all tablets and did not find a
-			// viable candidate.
-			tp.incNoTabletFoundStat()
 			continue
 		}
 		log.Infof("Tablet picker found a healthy serving tablet for streaming: %s", candidates[0].Tablet.String())
