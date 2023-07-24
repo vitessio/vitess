@@ -54,9 +54,6 @@ type (
 // defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
 const defaultConsumeDelay = 1 * time.Second
 
-// aclErrorMessageLog is for logging a warning when an acl error message is received for querying schema tracking table.
-const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
-
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth, enableViews bool) *Tracker {
 	t := &Tracker{
