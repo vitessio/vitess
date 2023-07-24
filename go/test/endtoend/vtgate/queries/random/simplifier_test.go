@@ -20,10 +20,11 @@ import (
 	"strings"
 	"testing"
 
+	utils2 "vitess.io/vitess/go/test/vschemawrapper"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
-	utils2 "vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"

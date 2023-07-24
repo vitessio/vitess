@@ -19,7 +19,8 @@ package planbuilder
 import (
 	"fmt"
 	"testing"
-	"vitess.io/vitess/go/test/utils"
+
+	"vitess.io/vitess/go/test/vschemawrapper"
 
 	"github.com/stretchr/testify/require"
 
@@ -40,7 +41,7 @@ type collationTestCase struct {
 }
 
 func (tc *collationTestCase) run(t *testing.T) {
-	vschemaWrapper := &utils.VSchemaWrapper{
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/schema.json", false),
 		SysVarEnabled: true,
 		Version:       Gen4,
@@ -52,7 +53,7 @@ func (tc *collationTestCase) run(t *testing.T) {
 	tc.check(t, tc.collations, plan.Instructions)
 }
 
-func (tc *collationTestCase) addCollationsToSchema(vschema *utils.VSchemaWrapper) {
+func (tc *collationTestCase) addCollationsToSchema(vschema *vschemawrapper.VSchemaWrapper) {
 	for _, collation := range tc.collations {
 		tbl := vschema.V.Keyspaces[collation.ks].Tables[collation.table]
 		for i, c := range tbl.Columns {

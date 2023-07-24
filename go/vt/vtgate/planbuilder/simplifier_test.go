@@ -20,7 +20,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"vitess.io/vitess/go/test/utils"
+
+	"vitess.io/vitess/go/test/vschemawrapper"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -39,7 +40,7 @@ import (
 // It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyBuggyQuery(t *testing.T) {
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from user union select name from unsharded)"
-	vschema := &utils.VSchemaWrapper{
+	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
 	}
@@ -61,7 +62,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 func TestSimplifyPanic(t *testing.T) {
 	t.Skip("not needed to run")
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
-	vschema := &utils.VSchemaWrapper{
+	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
 	}
@@ -82,7 +83,7 @@ func TestSimplifyPanic(t *testing.T) {
 
 func TestUnsupportedFile(t *testing.T) {
 	t.Skip("run manually to see if any queries can be simplified")
-	vschema := &utils.VSchemaWrapper{
+	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
 	}
@@ -126,7 +127,7 @@ func TestUnsupportedFile(t *testing.T) {
 	}
 }
 
-func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *utils.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
 	stmt, _, err := sqlparser.Parse2(query)
 	if err != nil {
 		panic(err)
@@ -150,7 +151,7 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	}
 }
 
-func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *utils.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
 	cmp := func(statement sqlparser.SelectStatement) (res bool) {
 		defer func() {
 			r := recover()

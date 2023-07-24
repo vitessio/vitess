@@ -20,7 +20,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"vitess.io/vitess/go/test/utils"
+
+	"vitess.io/vitess/go/test/vschemawrapper"
 
 	"github.com/stretchr/testify/require"
 
@@ -32,7 +33,7 @@ import (
 )
 
 func TestBuildDBPlan(t *testing.T) {
-	vschema := &utils.VSchemaWrapper{
+	vschema := &vschemawrapper.VSchemaWrapper{
 		Keyspace: &vindexes.Keyspace{Name: "main"},
 	}
 
