@@ -86,9 +86,6 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 	}
 
 	for _, e := range qp.SelectExprs {
-		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-			return nil, errHorizonNotPlanned()
-		}
 		ae, err := e.GetAliasedExpr()
 		if err != nil {
 			return nil, err
