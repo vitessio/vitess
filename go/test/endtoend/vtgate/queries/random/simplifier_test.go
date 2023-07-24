@@ -32,8 +32,8 @@ import (
 )
 
 func TestSimplifyBuggyQuery(t *testing.T) {
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "uemp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "udept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	query := "select /*vt+ PLANNER=Gen4 */ distinct 'opossum' and count(*) as caggr0, case count('mustang') > -36 when min(18 * -41) then 22 - max(tbl0.sal) else 7 end as caggr1 from emp as tbl0 where case when false then tbl0.ename when 17 then 'gator' else 'mite' end and case false and true when 'worm' then tbl0.job when tbl0.ename then case when true then tbl0.ename when false then 'squirrel' end end"
 
