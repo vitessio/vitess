@@ -451,7 +451,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <triggerName> trigger_name
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
-%type <asOf> table_version_clause
+%type <asOf> as_of_clause
 %type <procedureName> procedure_name
 %type <eventName> event_name rename_event_name_opt
 %type <indexHints> index_hint_list
@@ -5676,16 +5676,16 @@ aliased_table_options:
   {
     $$ = &AliasedTableExpr{As: $2, Hints: $3}
   }
-| table_version_clause index_hint_list
+| as_of_clause index_hint_list
   {
     $$ = &AliasedTableExpr{AsOf: $1, Hints: $2}
   }
-| table_version_clause as_opt table_alias index_hint_list
+| as_of_clause as_opt table_alias index_hint_list
   {
     $$ = &AliasedTableExpr{AsOf: $1, As: $3, Hints: $4}
   }
 
-table_version_clause:
+as_of_clause:
   AS OF value_expression
   {
     $$ = &AsOf{Time: $3}
@@ -5699,9 +5699,9 @@ as_of_opt:
   {
     $$ = nil
   }
-| AS OF value_expression
+| as_of_clause
   {
-    $$ = $3
+    $$ = $1.Time
   }
 
 column_list_opt:

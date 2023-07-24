@@ -465,6 +465,9 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 		}, {
+			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+			output: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+		}, {
 			input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
 		}, {
 			input:  "select /* table alias */ 1 from t as of '2019-01-01' t1",
@@ -1657,6 +1660,9 @@ var (
 			input:  "show create table t as of 'version'",
 			output: "show create table t as of 'version'",
 		}, {
+			input:  "show create table t for system_time as of 'version'",
+			output: "show create table t as of 'version'",
+		}, {
 			input:  "show create trigger t",
 			output: "show create trigger t",
 		}, {
@@ -1775,9 +1781,15 @@ var (
 		}, {
 			input: "show tables as of 123",
 		}, {
+			input: "show tables for system_time as of 123",
+			output: "show tables as of 123",
+		}, {
 			input: "show tables like '%keyspace%'",
 		}, {
 			input: "show tables as of 123 like '%keyspace%'",
+		}, {
+			input: "show tables for system_time as of 123 like '%keyspace%'",
+			output: "show tables as of 123 like '%keyspace%'",
 		}, {
 			input: "show tables where 1 = 0",
 		}, {
@@ -1915,10 +1927,16 @@ var (
 			input:  "describe a as of 'foo'",
 			output: "show columns from a as of 'foo'",
 		}, {
+			input:  "describe a for system_time as of 'foo'",
+			output: "show columns from a as of 'foo'",
+		}, {
 			input:  "describe a as of func('foo')",
 			output: "show columns from a as of func('foo')",
 		}, {
 			input:  "show columns from a as of 'foo'",
+			output: "show columns from a as of 'foo'",
+		}, {
+			input:  "show columns from a for system_time as of 'foo'",
 			output: "show columns from a as of 'foo'",
 		}, {
 			input: "explain select * from foobar",
@@ -2432,6 +2450,9 @@ var (
 			input: "call f1(now(), rand())",
 		}, {
 			input: "call f1(a) as of '2023-10-10'",
+		}, {
+			input: "call f1(a) for system_time as of '2023-10-10'",
+			output: "call f1(a) as of '2023-10-10'",
 		}, {
 			input: "call f1(now(), rand()) as of 'uo5qcl722f891g6aisqp3ma7r41s4ha4'",
 		}, {
