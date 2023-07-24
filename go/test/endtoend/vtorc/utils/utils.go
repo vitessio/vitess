@@ -203,10 +203,8 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 			}
 			// Remove the tablet record for this tablet
 		}
-		err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
-		if err != nil {
-			return err
-		}
+		// Ignoring error here because some tests delete tablets themselves.
+		_ = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 	}
 	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	return nil
