@@ -431,7 +431,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
 				// Ensure that the tablet is healthy and serving.
 				if err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
-					if shr.RealtimeStats.HealthError == "" && shr.Serving {
+					if shr != nil && shr.Serving && shr.RealtimeStats != nil && shr.RealtimeStats.HealthError == "" {
 						return io.EOF // End the stream
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")
