@@ -125,7 +125,7 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         cat <<-EOF>>./config/mycnf/mysql80.cnf
         binlog-transaction-compression=ON

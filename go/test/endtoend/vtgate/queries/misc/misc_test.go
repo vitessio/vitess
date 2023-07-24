@@ -100,21 +100,21 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.04) from dual")
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.24) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.24) from dual")
 	assert.Error(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
 	require.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.04) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.01) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.01) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
 }
 
@@ -129,37 +129,20 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	}
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
 
 	// the query usually takes more than 5ms to return. So this should fail.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
 
 	// sharded
-	for i := 0; i < 300000; i += 1000 {
-		var str strings.Builder
-		for j := 1; j <= 1000; j++ {
-			if j == 1 {
-				str.WriteString(fmt.Sprintf("(%d)", i*1000+j))
-				continue
-			}
-			str.WriteString(fmt.Sprintf(",(%d)", i*1000+j))
-		}
-		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1) values %s", str.String()))
-	}
-	// too much data added in the loop, do drop and recreate the table.
-	defer func() {
-		mcmp.Exec("drop /*vt+ QUERY_TIMEOUT_MS=1000 */ table t1")
-		mcmp.Exec(schemaSQL)
-	}()
+	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
 
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1000 */ count(*) from t1 where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1000 */ count(*) from t1 where id1 > 31")
-
-	// the query usually takes more than 5ms to return. So this should fail.
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from t1 where id1 > 31")
+	// sleep take in seconds, so 0.1 is 100ms
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")

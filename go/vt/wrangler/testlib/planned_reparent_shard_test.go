@@ -878,26 +878,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	assert.True(t, oldPrimary.FakeMysqlDaemon.ReadOnly, "oldPrimary.FakeMysqlDaemon.ReadOnly")
 }
 
-// waitForTabletType waits for the given tablet type to be reached.
-func waitForTabletType(t *testing.T, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType) {
-	timeout := time.After(15 * time.Second)
-	for {
-		tablet, err := wr.TopoServer().GetTablet(context.Background(), tabletAlias)
-		require.NoError(t, err)
-		if tablet.Type == tabletType {
-			return
-		}
-
-		select {
-		case <-timeout:
-			t.Fatalf("%s didn't reach the tablet type %v", topoproto.TabletAliasString(tabletAlias), tabletType.String())
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-}
-
 // TestPlannedReparentShardSamePrimary tests PRS with oldPrimary works correctly
 // Simulate failure of previous PRS and oldPrimary is ReadOnly
 // Verify that primary correctly gets set to ReadWrite
