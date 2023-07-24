@@ -1086,16 +1086,22 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		var statement sqlparser.Statement
 		var remainder string
 
+		parserOptions, err := handler.ParserOptionsForConnection(c)
+		if err != nil {
+			return err
+		}
+
 		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
 			var ri int
-			statement, ri, err = sqlparser.ParseOne(query)
+			statement, ri, err = sqlparser.ParseOneWithOptions(query, parserOptions)
 			if ri < len(query) {
 				remainder = query[ri:]
 			}
 		} else {
-			statement, err = sqlparser.Parse(query)
+			statement, err = sqlparser.ParseWithOptions(query, parserOptions)
 		}
 		if err != nil {
+			log.Errorf("Error while parsing prepared statement: %s", err.Error())
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Errorf("Error writing query error to %s: %v", c, werr)
@@ -1113,6 +1119,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return nil
 		}
 
+		// Walk the parsed statement tree and find any SQLVal nodes that are parameterized.
 		paramsCount := uint16(0)
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 			switch node := node.(type) {

@@ -83,12 +83,35 @@ func yyParsePooled(yylex yyLexer) int {
 // a set of types, define the function as iTypeName.
 // This will help avoid name collisions.
 
+// ParserOptions defines options that customize how statements are parsed.
+type ParserOptions struct {
+	// AnsiQuotes controls whether " characters are treated as the identifier character, as
+	// defined in the SQL92 standard, or as a string quote character. By default, AnsiQuotes is
+	// disabled, and ` characters are treated as the identifier character (and not a string
+	// quoting character). When AnsiQuotes is set to true, " characters are instead treated
+	// as identifier quotes and NOT valid as string quotes. Note that the ` character may always
+	// be used to quote identifiers, regardless of whether AnsiQuotes is enabled or not. For
+	// more info, see: https://dev.mysql.com/doc/refman/8.0/en/sql-mode.html#sqlmode_ansi_quotes
+	AnsiQuotes bool
+}
+
 // Parse parses the SQL in full and returns a Statement, which
 // is the AST representation of the query. If a DDL statement
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
+	return ParseWithOptions(sql, ParserOptions{})
+}
+
+// ParseWithOptions fully parses the SQL in |sql|, using any custom options specified
+// in |options|, and returns a Statement, which is the AST representation of the query.
+// If a DDL statement is partially parsed but contains a syntax error, the
+// error is ignored and the DDL is returned anyway.
+func ParseWithOptions(sql string, options ParserOptions) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
+	if options.AnsiQuotes {
+		tokenizer = NewStringTokenizerForAnsiQuotes(sql)
+	}
 	return parseTokenizer(sql, tokenizer)
 }
 
@@ -96,7 +119,18 @@ func Parse(sql string) (Statement, error) {
 // index of the start of the next statement in |sql|. If there was only one
 // statement in |sql|, the value of the returned index will be |len(sql)|.
 func ParseOne(sql string) (Statement, int, error) {
+	return ParseOneWithOptions(sql, ParserOptions{})
+}
+
+// ParseOneWithOptions parses the first SQL statement in |sql|, using any parsing
+// options specified in |options|, and returns the parsed Statement, along with
+// the index of the start of the next statement in |sql|. If there was only one
+// statement in |sql|, the value of the returned index will be |len(sql)|.
+func ParseOneWithOptions(sql string, options ParserOptions) (Statement, int, error) {
 	tokenizer := NewStringTokenizer(sql)
+	if options.AnsiQuotes {
+		tokenizer = NewStringTokenizerForAnsiQuotes(sql)
+	}
 	tokenizer.stopAfterFirstStmt = true
 	tree, err := parseTokenizer(sql, tokenizer)
 	if err != nil {
@@ -212,12 +246,6 @@ func stringIsUnbrokenQuote(s string, quoteChar byte) bool {
 		}
 	}
 	return true
-}
-
-// ParseTokenizer is a raw interface to parse from the given tokenizer.
-// This does not used pooled parsers, and should not be used in general.
-func ParseTokenizer(tokenizer *Tokenizer) int {
-	return yyParse(tokenizer)
 }
 
 // ParseNext parses a single SQL statement from the tokenizer

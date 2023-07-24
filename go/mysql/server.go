@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/log"
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 )
 
@@ -121,6 +122,13 @@ type Handler interface {
 	WarningCount(c *Conn) uint16
 
 	ComResetConnection(c *Conn)
+
+	// ParserOptionsForConnection returns any parser options that should be used for the given connection. For
+	// example, if the connection has enabled ANSI_QUOTES or ANSI SQL_MODE, then the parser needs to know that
+	// in order to parse queries correctly. This is primarily needed when a prepared statement request comes in,
+	// and the Vitess layer needs to parse the query to identify the query parameters so that the correct response
+	// packets can be sent.
+	ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error)
 }
 
 // Listener is the MySQL server protocol listener.

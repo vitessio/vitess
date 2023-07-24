@@ -32,6 +32,9 @@ import (
 const (
 	defaultBufSize = 4096
 	eofChar        = 0x100
+	backtickQuote  = uint16('`')
+	doubleQuote    = uint16('"')
+	singleQuote    = uint16('\'')
 )
 
 // Tokenizer is the struct used to generate SQL
@@ -67,6 +70,14 @@ type Tokenizer struct {
 	bufPos  int
 	bufSize int
 
+	// identifierQuotes holds the characters that are treated as identifier quotes. This always includes
+	// the backtick char. When the ANSI_QUOTES SQL mode is enabled, it also includes the double quote char.
+	identifierQuotes []uint16
+
+	// stringLiteralQuotes holds the characters that are treated as string literal quotes. This always includes the
+	// single quote char. When ANSI_QUOTES SQL mode is NOT enabled, this also contains the double quote character.
+	stringLiteralQuotes []uint16
+
 	queryBuf []byte
 }
 
@@ -77,6 +88,21 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
 		buf:     buf,
 		bufSize: len(buf),
+		identifierQuotes:    []uint16{backtickQuote},
+		stringLiteralQuotes: []uint16{doubleQuote, singleQuote},
+	}
+}
+
+// NewStringTokenizerForAnsiQuotes creates a new Tokenizer for the specified |sql| string, configured for
+// ANSI_QUOTES SQL mode, meaning that any double quotes will be interpreted as quotes around an identifier,
+// not around a string literal.
+func NewStringTokenizerForAnsiQuotes(sql string) *Tokenizer {
+	buf := []byte(sql)
+	return &Tokenizer{
+		buf:                 buf,
+		bufSize:             len(buf),
+		identifierQuotes:    []uint16{backtickQuote, doubleQuote},
+		stringLiteralQuotes: []uint16{singleQuote},
 	}
 }
 
@@ -965,14 +991,26 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return NE, nil
 			}
 			return int(ch), nil
-		case '\'', '"':
+		case contains(tkn.stringLiteralQuotes, ch):
 			return tkn.scanString(ch, STRING)
-		case '`':
-			return tkn.scanLiteralIdentifier()
+		case contains(tkn.identifierQuotes, ch):
+			return tkn.scanLiteralIdentifier(ch)
 		default:
 			return LEX_ERROR, []byte{byte(ch)}
 		}
 	}
+}
+
+// contains searches the specified |slice| for the target |x|, and returns the same value of |x| if it is found. The
+// target value is returned, instead of a boolean response, so that this function can be directly used inside the
+// switch statement above that switches on a uint16 value.
+func contains(slice []uint16, x uint16) uint16 {
+	for _, element := range slice {
+		if element == x {
+			return element
+		}
+	}
+	return 0
 }
 
 // skipStatement scans until end of statement.
@@ -1022,7 +1060,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 func (tkn *Tokenizer) scanHex() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	tkn.scanMantissa(16, buffer)
-	if tkn.lastChar != '\'' {
+	if tkn.lastChar != singleQuote {
 		return LEX_ERROR, buffer.Bytes()
 	}
 	tkn.next()
@@ -1042,23 +1080,24 @@ func (tkn *Tokenizer) scanBitLiteral() (int, []byte) {
 	return BIT_LITERAL, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
+// TODO: Add godocs
+func (tkn *Tokenizer) scanLiteralIdentifier(startingChar uint16) (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	backTickSeen := false
+	identifierQuoteSeen := false
 	for {
-		if backTickSeen {
-			if tkn.lastChar != '`' {
+		if identifierQuoteSeen {
+			if tkn.lastChar != startingChar {
 				break
 			}
-			backTickSeen = false
-			buffer.WriteByte('`')
+			identifierQuoteSeen = false
+			buffer.WriteByte(byte(startingChar))
 			tkn.next()
 			continue
 		}
 		// The previous char was not a backtick.
 		switch tkn.lastChar {
-		case '`':
-			backTickSeen = true
+		case startingChar:
+			identifierQuoteSeen = true
 		case eofChar:
 			// Premature EOF.
 			return LEX_ERROR, buffer.Bytes()
@@ -1227,7 +1266,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	
 	// mysql strings get auto concatenated, so see if the next token is a string and scan it if so
 	tkn.skipBlank()
-	if tkn.lastChar == '\'' || tkn.lastChar == '"' {
+	if contains(tkn.stringLiteralQuotes, tkn.lastChar) == tkn.lastChar {
 		delim := tkn.lastChar
 		tkn.next()
 		nextTyp, nextStr := tkn.scanString(delim, STRING)
