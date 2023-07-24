@@ -1,0 +1,60 @@
+{
+  "keyspaces": {
+    "ks_random": {
+      "tables": {
+        "uemp": {
+          "columns": [
+            {
+              "name": "empno",
+              "type": "INT64"
+            },
+            {
+              "name": "ename",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "job",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "mgr",
+              "type": "INT64"
+            },
+            {
+              "name": "hiredate",
+              "type": "DATE"
+            },
+            {
+              "name": "sal",
+              "type": "INT64"
+            },
+            {
+              "name": "comm",
+              "type": "INT64"
+            },
+            {
+              "name": "deptno",
+              "type": "INT64"
+            }
+          ]
+        },
+        "udept": {
+          "columns": [
+            {
+              "name": "deptno",
+              "type": "INT64"
+            },
+            {
+              "name": "dname",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "loc",
+              "type": "VARCHAR"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

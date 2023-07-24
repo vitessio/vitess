@@ -18,3 +18,24 @@ CREATE TABLE dept (
  PRIMARY KEY (DEPTNO)
 ) Engine = InnoDB
   COLLATE = utf8mb4_general_ci;
+
+CREATE TABLE uemp (
+ empno bigint NOT NULL,
+ ename VARCHAR(10),
+ job VARCHAR(9),
+ mgr bigint,
+ hiredate DATE,
+ sal bigint,
+ comm bigint,
+ deptno bigint,
+ PRIMARY KEY (empno)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+
+CREATE TABLE udept (
+ deptno bigint,
+ dname VARCHAR(14),
+ loc VARCHAR(13),
+ PRIMARY KEY (deptno)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;

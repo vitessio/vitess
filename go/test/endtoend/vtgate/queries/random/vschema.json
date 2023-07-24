@@ -21,6 +21,22 @@
           "name": "hash"
         }
       ]
+    },
+    "uemp": {
+      "column_vindexes": [
+        {
+          "column": "deptno",
+          "name": "hash"
+        }
+      ]
+    },
+    "udept": {
+      "column_vindexes": [
+        {
+          "column": "deptno",
+          "name": "hash"
+        }
+      ]
     }
   }
 }
