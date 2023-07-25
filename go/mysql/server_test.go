@@ -32,6 +32,7 @@ import (
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	vtenv "github.com/dolthub/vitess/go/vt/env"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/tlstest"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/dolthub/vitess/go/vt/vttls"
@@ -109,6 +110,10 @@ func (th *testHandler) NewConnection(c *Conn) {
 }
 
 func (th *testHandler) ConnectionClosed(c *Conn) {
+}
+
+func (th *testHandler) ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error) {
+	return sqlparser.ParserOptions{}, nil
 }
 
 func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
