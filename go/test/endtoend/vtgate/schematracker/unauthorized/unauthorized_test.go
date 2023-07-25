@@ -100,6 +100,12 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaTrackingError(t *testing.T) {
+	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if vtgateVersion > 17 {
+		t.Skip("schema tracking error is only logged in vtgate version < 18")
+	}
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
