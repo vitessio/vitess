@@ -453,11 +453,59 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
 		}, {
+			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for version as of '2019-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for version from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for version between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for version contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for version all use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 versions from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 versions between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 versions contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 versions all use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01'",
+			output: "select /* use */ 1 from t1 as of '2019-01-01'",
+		}, {
 			input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
 		}, {
 			input: "select /* ignore */ 1 from t1 as of '2019-01-01' as t2 ignore index (a), t3 use index (b) where b = 1",
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+			output: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 		}, {
 			input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
 		}, {
@@ -1651,6 +1699,9 @@ var (
 			input:  "show create table t as of 'version'",
 			output: "show create table t as of 'version'",
 		}, {
+			input:  "show create table t for system_time as of 'version'",
+			output: "show create table t as of 'version'",
+		}, {
 			input:  "show create trigger t",
 			output: "show create trigger t",
 		}, {
@@ -1769,9 +1820,15 @@ var (
 		}, {
 			input: "show tables as of 123",
 		}, {
+			input: "show tables for system_time as of 123",
+			output: "show tables as of 123",
+		}, {
 			input: "show tables like '%keyspace%'",
 		}, {
 			input: "show tables as of 123 like '%keyspace%'",
+		}, {
+			input: "show tables for system_time as of 123 like '%keyspace%'",
+			output: "show tables as of 123 like '%keyspace%'",
 		}, {
 			input: "show tables where 1 = 0",
 		}, {
@@ -1909,10 +1966,16 @@ var (
 			input:  "describe a as of 'foo'",
 			output: "show columns from a as of 'foo'",
 		}, {
+			input:  "describe a for system_time as of 'foo'",
+			output: "show columns from a as of 'foo'",
+		}, {
 			input:  "describe a as of func('foo')",
 			output: "show columns from a as of func('foo')",
 		}, {
 			input:  "show columns from a as of 'foo'",
+			output: "show columns from a as of 'foo'",
+		}, {
+			input:  "show columns from a for system_time as of 'foo'",
 			output: "show columns from a as of 'foo'",
 		}, {
 			input: "explain select * from foobar",
@@ -2426,6 +2489,9 @@ var (
 			input: "call f1(now(), rand())",
 		}, {
 			input: "call f1(a) as of '2023-10-10'",
+		}, {
+			input: "call f1(a) for system_time as of '2023-10-10'",
+			output: "call f1(a) as of '2023-10-10'",
 		}, {
 			input: "call f1(now(), rand()) as of 'uo5qcl722f891g6aisqp3ma7r41s4ha4'",
 		}, {
@@ -3443,7 +3509,7 @@ func TestAnsiQuotesMode(t *testing.T) {
 func TestSingle(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
-		if tcase.input == "select \"'ain't'\", '\"hello\"' from t" {
+		if tcase.input == "select /* use */ 1 from t1 for system_time as of '2019-01-01'" {
 			runParseTestCase(t, tcase)
 		}
 	}

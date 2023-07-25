@@ -202,12 +202,17 @@ func yySpecialCommentMode(yylex interface{}) bool {
 }
 
 %token LEX_ERROR
+
+// Special tokens
+%token <bytes> FOR_SYSTEM_TIME
+%token <bytes> FOR_VERSION
+
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
-%token <bytes> SYSTEM_TIME
+%token <bytes> SYSTEM_TIME CONTAINED VERSION VERSIONS
 %token <bytes> VALUES LAST_INSERT_ID SQL_CALC_FOUND_ROWS
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -446,6 +451,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <triggerName> trigger_name
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
+%type <asOf> as_of_clause as_of_point_clause between_times between_versions all_times all_versions
 %type <procedureName> procedure_name
 %type <eventName> event_name rename_event_name_opt
 %type <indexHints> index_hint_list
@@ -5660,43 +5666,124 @@ aliased_table_name:
   }
 
 // All possible combinations of qualifiers for a table alias expression, declared in a single rule to avoid
-// shift/reduce conflicts. To avoid grammar ambiguity, we can't always use optional rules that match empty
-// (such as as_opt).
+// shift/reduce conflicts.
 aliased_table_options:
   index_hint_list
   {
     $$ = &AliasedTableExpr{Hints: $1}
   }
-| AS OF value_expression index_hint_list
-  {
-    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $3}, Hints: $4}
-  }
-| AS OF value_expression as_opt table_alias index_hint_list
-  {
-    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $3}, As: $5, Hints: $6}
-  }
-| AS table_alias index_hint_list
+| as_opt table_alias index_hint_list
   {
     $$ = &AliasedTableExpr{As: $2, Hints: $3}
   }
-| table_alias index_hint_list
+| as_of_clause index_hint_list
   {
-    $$ = &AliasedTableExpr{As: $1, Hints: $2}
+    $$ = &AliasedTableExpr{AsOf: $1, Hints: $2}
   }
-// SQL:2011 grammar would be nice to have, but it generates
-// a parser conflict with FOR UPDATE which is hard to fix
-//| FOR SYSTEM_TIME AS OF STRING
-//  {
-//    $$ = &AsOf{Time: string($5)}
-//  }
+| as_of_clause as_opt table_alias index_hint_list
+  {
+    $$ = &AliasedTableExpr{AsOf: $1, As: $3, Hints: $4}
+  }
+
+as_of_clause:
+  as_of_point_clause
+  {
+    $$ = $1
+  }
+| between_times
+  {
+    $$ = $1
+  }
+| between_versions
+  {
+    $$ = $1
+  }
+| all_times
+  {
+    $$ = $1
+  }
+| all_versions
+  {
+    $$ = $1
+  }
+  
+between_times:
+  FOR_SYSTEM_TIME BETWEEN value_expression AND value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+  }
+| FOR_SYSTEM_TIME FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| FOR_SYSTEM_TIME CONTAINED IN openb value_expression ',' value_expression closeb
+  {
+    $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
+  }
+
+between_versions:
+  FOR_VERSION BETWEEN value_expression AND value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+  }
+| FOR_VERSION FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| FOR_VERSION CONTAINED IN openb value_expression ',' value_expression closeb
+  {
+    $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
+  }
+| VERSIONS BETWEEN value_expression AND value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+  }
+| VERSIONS FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| VERSIONS CONTAINED IN openb value_expression ',' value_expression closeb
+  {
+    $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
+  }
+
+all_times:
+  FOR_SYSTEM_TIME ALL
+  {
+    $$ = &AsOf{All: true}
+  }
+
+all_versions:
+  FOR_VERSION ALL
+  {
+    $$ = &AsOf{All: true}
+  }
+| VERSIONS ALL
+  {
+    $$ = &AsOf{All: true}
+  }
+
+as_of_point_clause:
+  AS OF value_expression
+  {
+    $$ = &AsOf{Time: $3}
+  }
+| FOR_SYSTEM_TIME AS OF value_expression
+  {
+    $$ = &AsOf{Time: $4}
+  }
+| FOR_VERSION AS OF value_expression
+  {
+    $$ = &AsOf{Time: $4}
+  }
 
 as_of_opt:
   {
     $$ = nil
   }
-| AS OF value_expression
+| as_of_point_clause
   {
-    $$ = $3
+    $$ = $1.Time
   }
 
 column_list_opt:
@@ -6659,6 +6746,10 @@ function_call_keyword:
 | VALUES openb non_reserved_keyword3 closeb
   {
     $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
+  }
+| VERSION openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | REPEAT openb argument_expression_list closeb
   {

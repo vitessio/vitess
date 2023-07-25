@@ -4083,17 +4083,34 @@ type AliasedTableExpr struct {
 
 type AsOf struct {
 	Time Expr
+	Start Expr
+	End Expr
+	StartInclusive bool
+	EndInclusive bool
+	All bool
 }
 
 func (node *AsOf) Format(buf *TrackedBuffer) {
-	buf.Myprintf("as of %v", node.Time)
+	if node.Time != nil {
+		buf.Myprintf("as of %v", node.Time)
+	} else if node.Start != nil && node.End != nil {
+		if node.StartInclusive && node.EndInclusive {
+			buf.Myprintf("for system_time contained in (%v, %v)", node.Start, node.End)
+		} else if node.EndInclusive {
+			buf.Myprintf("for system_time between %v and %v", node.Start, node.End)
+		} else {
+			buf.Myprintf("for system_time from %v to %v", node.Start, node.End)
+		}
+	} else if node.All {
+		buf.Myprintf("for system_time all")
+	}
 }
 
 func (node *AsOf) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(visit, node.Time)
+	return Walk(visit, node.Time, node.Start, node.End)
 }
 
 // Format formats the node.
