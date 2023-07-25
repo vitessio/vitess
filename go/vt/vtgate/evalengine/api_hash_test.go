@@ -25,6 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vthash"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -37,24 +40,33 @@ func TestHashCodes(t *testing.T) {
 		equal           bool
 		err             error
 	}{
-		{sqltypes.NewInt64(-1), sqltypes.NewUint64(^uint64(0)), true, nil},
-		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewInt64(-1), true, nil},
 		{sqltypes.NewFloat64(-1), sqltypes.NewVarChar("-1"), true, nil},
 		{sqltypes.NewDecimal("-1"), sqltypes.NewVarChar("-1"), true, nil},
+		{sqltypes.NewDate("2000-01-01"), sqltypes.NewInt64(20000101), true, nil},
+		{sqltypes.NewDatetime("2000-01-01 11:22:33"), sqltypes.NewInt64(20000101112233), true, nil},
+		{sqltypes.NewTime("11:22:33"), sqltypes.NewInt64(112233), true, nil},
+		{sqltypes.NewInt64(20000101), sqltypes.NewDate("2000-01-01"), true, nil},
+		{sqltypes.NewInt64(20000101112233), sqltypes.NewDatetime("2000-01-01 11:22:33"), true, nil},
+		{sqltypes.NewInt64(112233), sqltypes.NewTime("11:22:33"), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"2": "bar", "1": "foo"}`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), false, nil},
+		{sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), false, nil},
 	}
 
 	for _, tc := range cases {
-		cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
-		require.NoError(t, err)
-		require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
+		t.Run(fmt.Sprintf("%v %s %v", tc.static, equality(tc.equal).Operator(), tc.dynamic), func(t *testing.T) {
+			cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
+			require.NoError(t, err)
+			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
-		h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
-		require.NoError(t, err)
+			h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
+			require.NoError(t, err)
 
-		h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
-		require.ErrorIs(t, err, tc.err)
+			h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
+			require.ErrorIs(t, err, tc.err)
 
-		assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
+			assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
+		})
 	}
 }
 
@@ -70,7 +82,7 @@ func TestHashCodesRandom(t *testing.T) {
 		v1, v2 := randomValues()
 		cmp, err := NullsafeCompare(v1, v2, collation)
 		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
-		typ, err := CoerceTo(v1.Type(), v2.Type())
+		typ, err := coerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)
 
 		hash1, err := NullsafeHashcode(v1, collation, typ)
@@ -107,32 +119,43 @@ func TestHashCodes128(t *testing.T) {
 		equal           bool
 		err             error
 	}{
-		{sqltypes.NewInt64(-1), sqltypes.NewUint64(^uint64(0)), true, nil},
-		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewInt64(-1), true, nil},
+		{sqltypes.NewInt64(-1), sqltypes.NewUint64(^uint64(0)), false, nil},
+		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewInt64(-1), false, nil},
 		{sqltypes.NewInt64(-1), sqltypes.NewVarChar("-1"), true, nil},
 		{sqltypes.NewVarChar("-1"), sqltypes.NewInt64(-1), true, nil},
 		{sqltypes.NewInt64(23), sqltypes.NewFloat64(23.0), true, nil},
 		{sqltypes.NewInt64(23), sqltypes.NewFloat64(23.1), false, ErrHashCoercionIsNotExact},
 		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewFloat64(-1.0), false, ErrHashCoercionIsNotExact},
 		{sqltypes.NewUint64(42), sqltypes.NewFloat64(42.0), true, nil},
+		{sqltypes.NewDate("2000-01-01"), sqltypes.NewInt64(20000101), true, nil},
+		{sqltypes.NewDatetime("2000-01-01 11:22:33"), sqltypes.NewInt64(20000101112233), true, nil},
+		{sqltypes.NewTime("11:22:33"), sqltypes.NewInt64(112233), true, nil},
+		{sqltypes.NewInt64(20000101), sqltypes.NewDate("2000-01-01"), true, nil},
+		{sqltypes.NewInt64(20000101112233), sqltypes.NewDatetime("2000-01-01 11:22:33"), true, nil},
+		{sqltypes.NewInt64(112233), sqltypes.NewTime("11:22:33"), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"2": "bar", "1": "foo"}`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), false, nil},
+		{sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), false, nil},
 	}
 
 	for _, tc := range cases {
-		cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
-		require.NoError(t, err)
-		require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
+		t.Run(fmt.Sprintf("%v %s %v", tc.static, equality(tc.equal).Operator(), tc.dynamic), func(t *testing.T) {
+			cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
+			require.NoError(t, err)
+			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
-		hasher1 := vthash.New()
-		err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
-		require.NoError(t, err)
+			hasher1 := vthash.New()
+			err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
+			require.NoError(t, err)
 
-		hasher2 := vthash.New()
-		err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
-		require.ErrorIs(t, err, tc.err)
+			hasher2 := vthash.New()
+			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
+			require.ErrorIs(t, err, tc.err)
 
-		h1 := hasher1.Sum128()
-		h2 := hasher2.Sum128()
-		assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
+			h1 := hasher1.Sum128()
+			h2 := hasher2.Sum128()
+			assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
+		})
 	}
 }
 
@@ -148,7 +171,7 @@ func TestHashCodesRandom128(t *testing.T) {
 		v1, v2 := randomValues()
 		cmp, err := NullsafeCompare(v1, v2, collation)
 		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
-		typ, err := CoerceTo(v1.Type(), v2.Type())
+		typ, err := coerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)
 
 		hasher1 := vthash.New()
@@ -207,6 +230,10 @@ var randomGenerators = []func() sqltypes.Value{
 	randomVarChar,
 	randomComplexVarChar,
 	randomDecimal,
+	randomDate,
+	randomDatetime,
+	randomTimestamp,
+	randomTime,
 }
 
 func randomValue() sqltypes.Value {
@@ -214,15 +241,73 @@ func randomValue() sqltypes.Value {
 	return randomGenerators[r]()
 }
 
-func randomNull() sqltypes.Value    { return sqltypes.NULL }
-func randomInt8() sqltypes.Value    { return sqltypes.NewInt8(int8(rand.Intn(255))) }
-func randomInt32() sqltypes.Value   { return sqltypes.NewInt32(rand.Int31()) }
-func randomInt64() sqltypes.Value   { return sqltypes.NewInt64(rand.Int63()) }
-func randomUint32() sqltypes.Value  { return sqltypes.NewUint32(rand.Uint32()) }
-func randomUint64() sqltypes.Value  { return sqltypes.NewUint64(rand.Uint64()) }
-func randomDecimal() sqltypes.Value { return sqltypes.NewDecimal(fmt.Sprintf("%d", rand.Int63())) }
-func randomVarChar() sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
+func randTime() time.Time {
+	min := time.Date(1970, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
+	max := time.Date(2070, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
+	delta := max - min
+
+	sec := rand.Int63n(delta) + min
+	return time.Unix(sec, 0)
+}
+
+func randomNull() sqltypes.Value      { return sqltypes.NULL }
+func randomInt8() sqltypes.Value      { return sqltypes.NewInt8(int8(rand.Intn(255))) }
+func randomInt32() sqltypes.Value     { return sqltypes.NewInt32(rand.Int31()) }
+func randomInt64() sqltypes.Value     { return sqltypes.NewInt64(rand.Int63()) }
+func randomUint32() sqltypes.Value    { return sqltypes.NewUint32(rand.Uint32()) }
+func randomUint64() sqltypes.Value    { return sqltypes.NewUint64(rand.Uint64()) }
+func randomDecimal() sqltypes.Value   { return sqltypes.NewDecimal(fmt.Sprintf("%d", rand.Int63())) }
+func randomVarChar() sqltypes.Value   { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
+func randomDate() sqltypes.Value      { return sqltypes.NewDate(randTime().Format(time.DateOnly)) }
+func randomDatetime() sqltypes.Value  { return sqltypes.NewDatetime(randTime().Format(time.DateTime)) }
+func randomTimestamp() sqltypes.Value { return sqltypes.NewTimestamp(randTime().Format(time.DateTime)) }
+func randomTime() sqltypes.Value      { return sqltypes.NewTime(randTime().Format(time.TimeOnly)) }
 
 func randomComplexVarChar() sqltypes.Value {
 	return sqltypes.NewVarChar(fmt.Sprintf(" \t %f apa", float64(rand.Intn(1000))*1.10))
+}
+
+// coerceTo takes two input types, and decides how they should be coerced before compared
+func coerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
+	if v1 == v2 {
+		return v1, nil
+	}
+	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
+		return sqltypes.Null, nil
+	}
+	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+		return sqltypes.VarChar, nil
+	}
+	if sqltypes.IsDateOrTime(v1) {
+		return v1, nil
+	}
+	if sqltypes.IsDateOrTime(v2) {
+		return v2, nil
+	}
+
+	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
+		switch {
+		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+			return sqltypes.Float64, nil
+		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
+			return sqltypes.Float64, nil
+		case sqltypes.IsSigned(v1):
+			switch {
+			case sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			case sqltypes.IsSigned(v2):
+				return sqltypes.Int64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		case sqltypes.IsUnsigned(v1):
+			switch {
+			case sqltypes.IsSigned(v2) || sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
 }

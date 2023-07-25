@@ -1214,17 +1214,24 @@ func TestNullsafeCompareCollate(t *testing.T) {
 		},
 	}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
+		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
+			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
+			if tcase.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+			if !vterrors.Equals(err, tcase.err) {
+				t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+			}
+			if tcase.err != nil {
+				return
+			}
 
-		if got != tcase.out {
-			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-		}
+			if got != tcase.out {
+				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
+			}
+		})
 	}
 }
 

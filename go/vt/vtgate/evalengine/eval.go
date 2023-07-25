@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
 	"strconv"
 	"unicode/utf8"
 
@@ -199,14 +198,18 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 		return evalToInt64(e), nil
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return evalToInt64(e).toUint64(), nil
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Year, sqltypes.TypeJSON, sqltypes.Time, sqltypes.Bit:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
+	case sqltypes.Date:
+		return evalToDate(e), nil
+	case sqltypes.Datetime, sqltypes.Timestamp:
+		return evalToDateTime(e, -1), nil
+	case sqltypes.Time:
+		return evalToTime(e, -1), nil
 	default:
-		panic(fmt.Sprintf("BUG: emitted unknown type: %s", typ))
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	}
 }
 
-func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
+func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID) (eval, error) {
 	switch {
 	case typ == sqltypes.Null:
 		return nil, nil
@@ -226,7 +229,16 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			return newEvalFloat(fval), nil
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+			e, err := valueToEval(v, collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			f, _ := evalToFloat(e)
+			return f, nil
 		}
 
 	case sqltypes.IsDecimal(typ):
@@ -248,7 +260,15 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
+			e, err := valueToEval(v, collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return evalToDecimal(e, 0, 0), nil
 		}
 		return &evalDecimal{dec: dec, length: -dec.Exponent()}, nil
 
@@ -260,8 +280,19 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 		case v.IsUnsigned():
 			uval, err := v.ToUint64()
 			return newEvalInt64(int64(uval)), err
+		case v.IsText() || v.IsBinary():
+			i, err := fastparse.ParseInt64(v.RawStr(), 10)
+			return newEvalInt64(i), err
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
+			e, err := valueToEval(v, collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return evalToInt64(e), nil
 		}
 
 	case sqltypes.IsUnsigned(typ):
@@ -272,18 +303,99 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 		case v.IsUnsigned():
 			uval, err := v.ToUint64()
 			return newEvalUint64(uval), err
+		case v.IsText() || v.IsBinary():
+			u, err := fastparse.ParseUint64(v.RawStr(), 10)
+			return newEvalUint64(u), err
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+			e, err := valueToEval(v, collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			i := evalToInt64(e)
+			return newEvalUint64(uint64(i.i)), nil
 		}
 
 	case sqltypes.IsText(typ) || sqltypes.IsBinary(typ):
 		switch {
 		case v.IsText() || v.IsBinary():
-			// TODO: collation
-			return newEvalRaw(v.Type(), v.Raw(), collationBinary), nil
+			return newEvalRaw(v.Type(), v.Raw(), collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceImplicit,
+				Repertoire:   collations.RepertoireUnicode,
+			}), nil
+		case sqltypes.IsText(typ):
+			e, err := valueToEval(v, collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return evalToVarchar(e, collation, true)
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a text: %v", v)
+			e, err := valueToEval(v, collations.TypedCollation{
+				Collation:    collation,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return evalToBinary(e), nil
 		}
+
+	case typ == sqltypes.TypeJSON:
+		return json.NewFromSQL(v)
+	case typ == sqltypes.Date:
+		e, err := valueToEval(v, collations.TypedCollation{
+			Collation:    collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireUnicode,
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Separate return here to avoid nil wrapped in interface type
+		d := evalToDate(e)
+		if d == nil {
+			return nil, nil
+		}
+		return d, nil
+	case typ == sqltypes.Datetime || typ == sqltypes.Timestamp:
+		e, err := valueToEval(v, collations.TypedCollation{
+			Collation:    collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireUnicode,
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Separate return here to avoid nil wrapped in interface type
+		dt := evalToDateTime(e, -1)
+		if dt == nil {
+			return nil, nil
+		}
+		return dt, nil
+	case typ == sqltypes.Time:
+		e, err := valueToEval(v, collations.TypedCollation{
+			Collation:    collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireUnicode,
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Separate return here to avoid nil wrapped in interface type
+		t := evalToTime(e, -1)
+		if t == nil {
+			return nil, nil
+		}
+		return t, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
