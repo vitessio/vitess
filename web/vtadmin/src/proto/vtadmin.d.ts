@@ -13022,6 +13022,9 @@ export namespace mysqlctl {
 
         /** ApplyBinlogFileRequest binlog_restore_position */
         binlog_restore_position?: (string|null);
+
+        /** ApplyBinlogFileRequest binlog_restore_datetime */
+        binlog_restore_datetime?: (vttime.ITime|null);
     }
 
     /** Represents an ApplyBinlogFileRequest. */
@@ -13038,6 +13041,9 @@ export namespace mysqlctl {
 
         /** ApplyBinlogFileRequest binlog_restore_position. */
         public binlog_restore_position: string;
+
+        /** ApplyBinlogFileRequest binlog_restore_datetime. */
+        public binlog_restore_datetime?: (vttime.ITime|null);
 
         /**
          * Creates a new ApplyBinlogFileRequest instance using the specified properties.
@@ -13202,6 +13208,218 @@ export namespace mysqlctl {
 
         /**
          * Gets the default type url for ApplyBinlogFileResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadBinlogFilesTimestampsRequest. */
+    interface IReadBinlogFilesTimestampsRequest {
+
+        /** ReadBinlogFilesTimestampsRequest binlog_file_names */
+        binlog_file_names?: (string[]|null);
+    }
+
+    /** Represents a ReadBinlogFilesTimestampsRequest. */
+    class ReadBinlogFilesTimestampsRequest implements IReadBinlogFilesTimestampsRequest {
+
+        /**
+         * Constructs a new ReadBinlogFilesTimestampsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IReadBinlogFilesTimestampsRequest);
+
+        /** ReadBinlogFilesTimestampsRequest binlog_file_names. */
+        public binlog_file_names: string[];
+
+        /**
+         * Creates a new ReadBinlogFilesTimestampsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadBinlogFilesTimestampsRequest instance
+         */
+        public static create(properties?: mysqlctl.IReadBinlogFilesTimestampsRequest): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsRequest message. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsRequest.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IReadBinlogFilesTimestampsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsRequest message, length delimited. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsRequest.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IReadBinlogFilesTimestampsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadBinlogFilesTimestampsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadBinlogFilesTimestampsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Verifies a ReadBinlogFilesTimestampsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadBinlogFilesTimestampsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadBinlogFilesTimestampsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Creates a plain object from a ReadBinlogFilesTimestampsRequest message. Also converts values to other types if specified.
+         * @param message ReadBinlogFilesTimestampsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ReadBinlogFilesTimestampsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadBinlogFilesTimestampsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadBinlogFilesTimestampsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadBinlogFilesTimestampsResponse. */
+    interface IReadBinlogFilesTimestampsResponse {
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp */
+        first_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp_binlog */
+        first_timestamp_binlog?: (string|null);
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp */
+        last_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog */
+        last_timestamp_binlog?: (string|null);
+    }
+
+    /** Represents a ReadBinlogFilesTimestampsResponse. */
+    class ReadBinlogFilesTimestampsResponse implements IReadBinlogFilesTimestampsResponse {
+
+        /**
+         * Constructs a new ReadBinlogFilesTimestampsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IReadBinlogFilesTimestampsResponse);
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp. */
+        public first_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp_binlog. */
+        public first_timestamp_binlog: string;
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp. */
+        public last_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog. */
+        public last_timestamp_binlog: string;
+
+        /**
+         * Creates a new ReadBinlogFilesTimestampsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadBinlogFilesTimestampsResponse instance
+         */
+        public static create(properties?: mysqlctl.IReadBinlogFilesTimestampsResponse): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsResponse message. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsResponse.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IReadBinlogFilesTimestampsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsResponse message, length delimited. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsResponse.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IReadBinlogFilesTimestampsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadBinlogFilesTimestampsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadBinlogFilesTimestampsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Verifies a ReadBinlogFilesTimestampsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadBinlogFilesTimestampsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadBinlogFilesTimestampsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Creates a plain object from a ReadBinlogFilesTimestampsResponse message. Also converts values to other types if specified.
+         * @param message ReadBinlogFilesTimestampsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ReadBinlogFilesTimestampsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadBinlogFilesTimestampsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadBinlogFilesTimestampsResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -13837,6 +14055,20 @@ export namespace mysqlctl {
         public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
 
         /**
+         * Calls ReadBinlogFilesTimestamps.
+         * @param request ReadBinlogFilesTimestampsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ReadBinlogFilesTimestampsResponse
+         */
+        public readBinlogFilesTimestamps(request: mysqlctl.IReadBinlogFilesTimestampsRequest, callback: mysqlctl.MysqlCtl.ReadBinlogFilesTimestampsCallback): void;
+
+        /**
+         * Calls ReadBinlogFilesTimestamps.
+         * @param request ReadBinlogFilesTimestampsRequest message or plain object
+         * @returns Promise
+         */
+        public readBinlogFilesTimestamps(request: mysqlctl.IReadBinlogFilesTimestampsRequest): Promise<mysqlctl.ReadBinlogFilesTimestampsResponse>;
+
+        /**
          * Calls ReinitConfig.
          * @param request ReinitConfigRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and ReinitConfigResponse
@@ -13908,6 +14140,13 @@ export namespace mysqlctl {
          * @param [response] ApplyBinlogFileResponse
          */
         type ApplyBinlogFileCallback = (error: (Error|null), response?: mysqlctl.ApplyBinlogFileResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#readBinlogFilesTimestamps}.
+         * @param error Error, if any
+         * @param [response] ReadBinlogFilesTimestampsResponse
+         */
+        type ReadBinlogFilesTimestampsCallback = (error: (Error|null), response?: mysqlctl.ReadBinlogFilesTimestampsResponse) => void;
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#reinitConfig}.
@@ -25913,6 +26152,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** RestoreFromBackupRequest restore_to_timestamp */
+        restore_to_timestamp?: (vttime.ITime|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -25932,6 +26174,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest dry_run. */
         public dry_run: boolean;
+
+        /** RestoreFromBackupRequest restore_to_timestamp. */
+        public restore_to_timestamp?: (vttime.ITime|null);
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -54066,6 +54311,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** RestoreFromBackupRequest restore_to_timestamp */
+        restore_to_timestamp?: (vttime.ITime|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -54088,6 +54336,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest dry_run. */
         public dry_run: boolean;
+
+        /** RestoreFromBackupRequest restore_to_timestamp. */
+        public restore_to_timestamp?: (vttime.ITime|null);
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
