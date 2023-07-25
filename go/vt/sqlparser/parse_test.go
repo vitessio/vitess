@@ -3383,12 +3383,24 @@ end`,
 		},
 	}
 
-	// validAnsiQuotesSql contains SQL statements that are valid when the ANSI_QUOTES SQL mode is enabled. This
+	// validAnsiQuotesSQL contains SQL statements that are valid when the ANSI_QUOTES SQL mode is enabled. This
 	// mode treats double quotes (and backticks) as identifier quotes, and single quotes as string quotes.
-	validAnsiQuotesSql = []parseTest{
+	validAnsiQuotesSQL = []parseTest{
 		{
 			input: `select "count", "foo", "bar" from t order by "COUNT"`,
 			output: "select `count`, foo, bar from t order by `COUNT` asc",
+		},
+		{
+			input: `INSERT INTO hourly_logins ("applications_id", "count", "hour") VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE "count" = "count" + VALUES(count)`,
+			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
+		},
+		{
+			input: `CREATE TABLE "webhook_events" ("pk" int primary key, "event" varchar(255) DEFAULT NULL)`,
+			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
+		},
+		{
+			input:  `with "test" as (select 1 from "dual"), "test_two" as (select 2 from "dual") select * from "test", "test_two" union all (with "b" as (with "c" as (select 1, 2 from "dual") select * from "c") select * from "b")`,
+			output: "with test as (select 1 from `dual`), test_two as (select 2 from `dual`) select * from test, test_two union all (with b as (with c as (select 1, 2 from `dual`) select * from c) select * from b)",
 		},
 		{
 			input: `select '"' from t order by "foo"`,
@@ -3416,7 +3428,7 @@ func TestValid(t *testing.T) {
 
 func TestAnsiQuotesMode(t *testing.T) {
 	parserOptions := ParserOptions{AnsiQuotes: true}
-	for _, tcase := range validAnsiQuotesSql {
+	for _, tcase := range validAnsiQuotesSQL {
 		runParseTestCaseWithParserOptions(t, tcase, parserOptions)
 	}
 	for _, tcase := range invalidAnsiQuotesSQL {
@@ -6391,6 +6403,7 @@ var (
 			output: "syntax error at position 13 near 'bar\"'",
 		},
 		{
+			// Assert that single and double quotes do not auto concatenate in ANSI_QUOTES mode
 			input: "select 'a' \"b\" 'c'",
 			output: "syntax error at position 19 near 'c'",
 		},
