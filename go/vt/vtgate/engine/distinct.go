@@ -40,6 +40,7 @@ type (
 	CheckCol struct {
 		Col       int
 		WsCol     *int
+		Type      sqltypes.Type
 		Collation collations.ID
 	}
 	probeTable struct {
@@ -274,15 +275,15 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 	return CheckCol{
 		Col:       *cc.WsCol,
 		WsCol:     nil,
+		Type:      sqltypes.VarBinary,
 		Collation: collations.CollationBinaryID,
 	}
 }
 
 func (cc CheckCol) String() string {
-	coll := cc.Collation.Get()
 	var collation string
-	if coll != nil {
-		collation = ": " + coll.Name()
+	if sqltypes.IsText(cc.Type) && cc.Collation != collations.Unknown {
+		collation = ": " + cc.Collation.Get().Name()
 	}
 
 	var column string

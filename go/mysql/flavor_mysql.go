@@ -361,7 +361,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 		i.allocated_size
 	FROM information_schema.tables t
 		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8_general_ci
+	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
 	WHERE
 		t.table_schema = database() AND not t.create_options <=> 'partitioned'
 UNION ALL
@@ -374,7 +374,7 @@ UNION ALL
 		SUM(i.allocated_size)
 	FROM information_schema.tables t
 		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8_general_ci )
+	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci )
 	WHERE
 		t.table_schema = database() AND t.create_options <=> 'partitioned'
 	GROUP BY

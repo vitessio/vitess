@@ -310,7 +310,7 @@ func TestSchemaVersioning(t *testing.T) {
 		`version`,
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary) so the types don't match. Hence the @ fieldnames*/
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"@1" type:INT32} fields:{name:"@2" type:INT32} fields:{name:"@3" type:INT32}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:INT32 charset:63} fields:{name:"@3" type:INT32 charset:63}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
 		`gtid`,
 		`gtid`,

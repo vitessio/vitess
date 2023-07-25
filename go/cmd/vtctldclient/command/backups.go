@@ -35,7 +35,7 @@ import (
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
 	Backup = &cobra.Command{
-		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|auto] <tablet_alias>",
+		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|auto] [--upgrade-safe] <tablet_alias>",
 		Short:                 "Uses the BackupStorage service on the given tablet to create and store a new backup.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -43,7 +43,7 @@ var (
 	}
 	// BackupShard makes a BackupShard gRPC call to a vtctld.
 	BackupShard = &cobra.Command{
-		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] <keyspace/shard>",
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--upgrade-safe] <keyspace/shard>",
 		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
 		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
 
@@ -82,6 +82,7 @@ var backupOptions = struct {
 	AllowPrimary       bool
 	Concurrency        uint64
 	IncrementalFromPos string
+	UpgradeSafe        bool
 }{}
 
 func commandBackup(cmd *cobra.Command, args []string) error {
@@ -97,6 +98,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		AllowPrimary:       backupOptions.AllowPrimary,
 		Concurrency:        backupOptions.Concurrency,
 		IncrementalFromPos: backupOptions.IncrementalFromPos,
+		UpgradeSafe:        backupOptions.UpgradeSafe,
 	})
 	if err != nil {
 		return err
@@ -118,6 +120,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 var backupShardOptions = struct {
 	AllowPrimary bool
 	Concurrency  uint64
+	UpgradeSafe  bool
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -133,6 +136,7 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		Shard:        shard,
 		AllowPrimary: backupOptions.AllowPrimary,
 		Concurrency:  backupOptions.Concurrency,
+		UpgradeSafe:  backupOptions.UpgradeSafe,
 	})
 	if err != nil {
 		return err
@@ -263,10 +267,12 @@ func init() {
 	Backup.Flags().Uint64Var(&backupOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
 	Backup.Flags().StringVar(&backupOptions.IncrementalFromPos, "incremental-from-pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
 
+	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Root.AddCommand(Backup)
 
 	BackupShard.Flags().BoolVar(&backupShardOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	BackupShard.Flags().Uint64Var(&backupShardOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
+	BackupShard.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Root.AddCommand(BackupShard)
 
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups.")

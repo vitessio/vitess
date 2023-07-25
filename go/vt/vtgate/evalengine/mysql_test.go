@@ -130,11 +130,11 @@ func TestMySQLGolden(t *testing.T) {
 					continue
 				}
 				if tc.Error != "" {
-					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value())
+					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.Default()))
 					continue
 				}
-				if eval.Value().String() != tc.Value {
-					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value())
+				if eval.String() != tc.Value {
+					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.Default()))
 					continue
 				}
 				ok++

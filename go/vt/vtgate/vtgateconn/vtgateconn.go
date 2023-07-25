@@ -62,7 +62,7 @@ type VTGateConn struct {
 	impl Impl
 }
 
-// Session returns a VTGateSession that can be used to access V3 functions.
+// Session returns a VTGateSession that can be used to access execution functions.
 func (conn *VTGateConn) Session(targetString string, options *querypb.ExecuteOptions) *VTGateSession {
 	return &VTGateSession{
 		session: &vtgatepb.Session{
@@ -111,7 +111,7 @@ func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
 }
 
-// VTGateSession exposes the V3 API to the clients.
+// VTGateSession exposes the Vitess Execution API to the clients.
 // The object maintains client-side state and is comparable to a native MySQL connection.
 // For example, if you enable autocommit on a Session object, all subsequent calls will respect this.
 // Functions within an object must not be called concurrently.
@@ -163,13 +163,13 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string, bindVars map
 // Impl defines the interface for a vtgate client protocol
 // implementation. It can be used concurrently across goroutines.
 type Impl interface {
-	// Execute executes a non-streaming query on vtgate. This is a V3 function.
+	// Execute executes a non-streaming query on vtgate.
 	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteBatch executes a non-streaming queries on vtgate. This is a V3 function.
+	// ExecuteBatch executes a non-streaming queries on vtgate.
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
 
-	// StreamExecute executes a streaming query on vtgate. This is a V3 function.
+	// StreamExecute executes a streaming query on vtgate.
 	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error)
 
 	// Prepare returns the fields information for the query as part of supporting prepare statements.

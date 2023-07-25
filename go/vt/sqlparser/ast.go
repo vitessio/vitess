@@ -2299,11 +2299,6 @@ type (
 
 	// ColName represents a column name.
 	ColName struct {
-		// Metadata is not populated by the parser.
-		// It's a placeholder for analyzers to store
-		// additional data, typically info about which
-		// table or column this node references.
-		Metadata  any
 		Name      IdentifierCI
 		Qualifier TableName
 	}

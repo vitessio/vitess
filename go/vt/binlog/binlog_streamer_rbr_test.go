@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -44,11 +45,14 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewIdentifierCS("vt_a"),
 		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: querypb.Type_INT64,
+			Name:    "id",
+			Type:    querypb.Type_INT64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "message",
-			Type: querypb.Type_VARCHAR,
+			Name:    "message",
+			Type:    querypb.Type_VARCHAR,
+			Charset: uint32(collations.Default()),
 		}},
 	})
 
@@ -290,11 +294,14 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewIdentifierCS("insert"),
 		Fields: []*querypb.Field{{
-			Name: "update",
-			Type: querypb.Type_INT64,
+			Name:    "update",
+			Type:    querypb.Type_INT64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "delete",
-			Type: querypb.Type_VARCHAR,
+			Name:    "delete",
+			Type:    querypb.Type_VARCHAR,
+			Charset: uint32(collations.Default()),
 		}},
 	})
 

@@ -154,7 +154,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -174,7 +174,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 

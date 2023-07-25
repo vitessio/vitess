@@ -12042,7 +12042,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1897
 		{
-			yyVAL.str = Utf8Str
+			yyVAL.str = Utf8mb3Str
 		}
 	case 291:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12054,7 +12054,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1905
 		{
-			yyVAL.str = Utf8Str
+			yyVAL.str = Utf8mb3Str
 		}
 	case 295:
 		yyDollar = yyS[yypt-1 : yypt+1]

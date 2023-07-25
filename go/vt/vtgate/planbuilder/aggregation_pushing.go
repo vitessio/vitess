@@ -44,12 +44,12 @@ func (hp *horizonPlanning) pushAggregation(
 	err error) {
 	pushed = true
 	switch plan := plan.(type) {
-	case *routeGen4:
+	case *route:
 		output = plan
 		groupingOffsets, outputAggrsOffset, _, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
 		return
 
-	case *joinGen4:
+	case *join:
 		output = plan
 		groupingOffsets, outputAggrsOffset, err = hp.pushAggrOnJoin(ctx, plan, grouping, aggregations)
 		return
@@ -112,7 +112,7 @@ func (hp *horizonPlanning) pushAggregation(
 
 func pushAggrOnRoute(
 	ctx *plancontext.PlanningContext,
-	plan *routeGen4,
+	plan *route,
 	aggregations []operators.Aggr,
 	grouping []operators.GroupBy,
 	ignoreOutputOrder bool,
@@ -184,7 +184,7 @@ func pushAggrOnRoute(
 
 func pushAggrsAndGroupingInOrder(
 	ctx *plancontext.PlanningContext,
-	plan *routeGen4,
+	plan *route,
 	it *sortedIterator,
 	sel *sqlparser.Select,
 	vtgateAggregation [][]offsets,
@@ -246,7 +246,7 @@ vtgate level, we can offload most of the work to MySQL, and at the vtgate just s
 */
 func (hp *horizonPlanning) pushAggrOnJoin(
 	ctx *plancontext.PlanningContext,
-	join *joinGen4,
+	join *join,
 	grouping []operators.GroupBy,
 	aggregations []operators.Aggr,
 ) ([]offsets, [][]offsets, error) {
@@ -432,7 +432,7 @@ func isAnyValue(in popcode.AggregateOpcode) bool {
 func splitAggregationsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregations []operators.Aggr,
-	join *joinGen4,
+	join *join,
 ) ([]*operators.Aggr, []*operators.Aggr, error) {
 	var lhsAggrs, rhsAggrs []*operators.Aggr
 	for _, aggr := range aggregations {
@@ -464,7 +464,7 @@ func splitAggregationsToLeftAndRight(
 
 func splitGroupingsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
-	join *joinGen4,
+	join *join,
 	grouping, lhsGrouping []operators.GroupBy,
 ) ([]operators.GroupBy, []operators.GroupBy, []int, error) {
 	var rhsGrouping []operators.GroupBy

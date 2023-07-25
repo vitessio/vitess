@@ -78,7 +78,7 @@ jobs:
     - name: Build
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        make build
+        NOVTADMINBUILD=1 make build
 
     - name: endtoend
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

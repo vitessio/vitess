@@ -35,6 +35,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -539,7 +541,7 @@ func TestExecutorShow(t *testing.T) {
 
 	showResults := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "Tables_in_keyspace", Type: sqltypes.VarChar},
+			{Name: "Tables_in_keyspace", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
@@ -642,49 +644,50 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 
-	for _, query := range []string{"show charset", "show character set"} {
+	for _, query := range []string{"show charset like 'utf8%'", "show character set like 'utf8%'"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			Rows: [][]sqltypes.Value{
 				append(buildVarCharRow(
-					"utf8",
+					"utf8mb3",
 					"UTF-8 Unicode",
-					"utf8_general_ci"), sqltypes.NewInt32(3)),
+					"utf8mb3_general_ci"),
+					sqltypes.NewUint32(3)),
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					"utf8mb4_general_ci"),
-					sqltypes.NewInt32(4)),
+					collations.Default().Get().Name()),
+					sqltypes.NewUint32(4)),
 			},
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
 	}
 
-	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where foo like 'utf8'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
+	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
-			Rows:         [][]sqltypes.Value{},
+			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			RowsAffected: 0,
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
 	}
 
-	for _, query := range []string{"show charset like 'utf8'", "show character set like 'utf8'", "show charset where charset = 'utf8'", "show character set where charset = 'utf8'"} {
+	for _, query := range []string{"show charset like 'utf8mb3'", "show character set like 'utf8mb3'", "show charset where charset = 'utf8mb3'", "show character set where charset = 'utf8mb3'"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			Rows: [][]sqltypes.Value{
 				append(buildVarCharRow(
-					"utf8",
+					"utf8mb3",
 					"UTF-8 Unicode",
-					"utf8_general_ci"), sqltypes.NewInt32(3)),
+					"utf8mb3_general_ci"),
+					sqltypes.NewUint32(3)),
 			},
 		}
 
@@ -695,16 +698,21 @@ func TestExecutorShow(t *testing.T) {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
-			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Uint32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)}),
 			Rows: [][]sqltypes.Value{
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					"utf8mb4_general_ci"),
-					sqltypes.NewInt32(4)),
+					collations.Default().Get().Name()),
+					sqltypes.NewUint32(4)),
 			},
 		}
 		utils.MustMatch(t, wantqr, qr, query)
+	}
+
+	for _, query := range []string{"show character set where foo like '%foo'"} {
+		_, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
+		require.Error(t, err)
 	}
 
 	query = "show engines"
@@ -745,8 +753,8 @@ func TestExecutorShow(t *testing.T) {
 		require.NoError(t, err)
 		wantqr = &sqltypes.Result{
 			Fields: []*querypb.Field{
-				{Name: "id", Type: sqltypes.Int32},
-				{Name: "value", Type: sqltypes.VarChar},
+				{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "value", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
 			},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1), sqltypes.NewVarChar("foo")},
@@ -946,9 +954,9 @@ func TestExecutorShow(t *testing.T) {
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
+			{Name: "Level", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
+			{Name: "Code", Type: sqltypes.Uint16, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Message", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
 		},
 		Rows: [][]sqltypes.Value{},
 	}
@@ -960,9 +968,9 @@ func TestExecutorShow(t *testing.T) {
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
+			{Name: "Level", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
+			{Name: "Code", Type: sqltypes.Uint16, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Message", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
 		},
 		Rows: [][]sqltypes.Value{},
 	}
@@ -977,9 +985,9 @@ func TestExecutorShow(t *testing.T) {
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
+			{Name: "Level", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
+			{Name: "Code", Type: sqltypes.Uint16, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "Message", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
 		},
 
 		Rows: [][]sqltypes.Value{

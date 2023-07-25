@@ -166,7 +166,7 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         {{if .LimitResourceUsage}}
         # Increase our local ephemeral port range as we could exhaust this
