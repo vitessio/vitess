@@ -124,6 +124,30 @@
         "name_muticoltbl_map": {
           "type": "name_lkp_test",
           "owner": "multicol_tbl"
+        },
+        "shard_index": {
+          "type": "xxhash"
+        },
+        "unq_lkp_bf_vdx": {
+          "type": "unq_lkp_test",
+          "owner": "customer",
+          "params": {
+            "table": "unq_lkp_idx",
+            "from": " ",
+            "to": "keyspace_id",
+            "cost": "100",
+            "write_only": "true"
+          }
+        },
+        "unq_lkp_vdx": {
+          "type": "unq_lkp_test",
+          "owner": "customer",
+          "params": {
+            "table": "unq_lkp_idx",
+            "from": "unq_key",
+            "to": "keyspace_id",
+            "cost": "300"
+          }
         }
       },
       "tables": {
@@ -374,6 +398,30 @@
             {
               "column": "name",
               "name": "user_index"
+            }
+          ]
+        },
+        "customer": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "shard_index"
+            },
+            {
+              "column": "email",
+              "name": "unq_lkp_vdx"
+            },
+            {
+              "column": "phone",
+              "name": "unq_lkp_bf_vdx"
+            }
+          ]
+        },
+        "unq_lkp_idx": {
+          "column_vindexes": [
+            {
+              "column": "unq_key",
+              "name": "shard_index"
             }
           ]
         }
