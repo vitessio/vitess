@@ -4110,7 +4110,7 @@ func (node *AsOf) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(visit, node.Time)
+	return Walk(visit, node.Time, node.Start, node.End)
 }
 
 // Format formats the node.
