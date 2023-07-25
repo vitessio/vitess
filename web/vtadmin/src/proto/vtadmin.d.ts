@@ -39381,6 +39381,9 @@ export namespace vschema {
 
         /** Keyspace require_explicit_routing */
         require_explicit_routing?: (boolean|null);
+
+        /** Keyspace foreign_key_mode */
+        foreign_key_mode?: (vschema.Keyspace.ForeignKeyMode|null);
     }
 
     /** Represents a Keyspace. */
@@ -39403,6 +39406,9 @@ export namespace vschema {
 
         /** Keyspace require_explicit_routing. */
         public require_explicit_routing: boolean;
+
+        /** Keyspace foreign_key_mode. */
+        public foreign_key_mode: vschema.Keyspace.ForeignKeyMode;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -39480,6 +39486,17 @@ export namespace vschema {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace Keyspace {
+
+        /** ForeignKeyMode enum. */
+        enum ForeignKeyMode {
+            FK_DEFAULT = 0,
+            FK_DISALLOW = 1,
+            FK_UNMANAGED = 2,
+            FK_MANAGED = 3
+        }
     }
 
     /** Properties of a Vindex. */

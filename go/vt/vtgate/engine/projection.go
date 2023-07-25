@@ -20,6 +20,8 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -63,16 +65,16 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 		env.Row = row
 		for _, exp := range p.Exprs {
-			result, err := env.Evaluate(exp)
+			c, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
-			resultRow = append(resultRow, result.Value())
+			resultRow = append(resultRow, c.Value(vcursor.ConnCollation()))
 		}
 		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
-		result.Fields, err = p.evalFields(env, result.Fields)
+		result.Fields, err = p.evalFields(env, result.Fields, vcursor)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +92,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		var err error
 		if wantfields {
 			once.Do(func() {
-				fields, err = p.evalFields(env, qr.Fields)
+				fields, err = p.evalFields(env, qr.Fields, vcursor)
 				if err != nil {
 					return
 				}
@@ -113,7 +115,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				if err != nil {
 					return err
 				}
-				resultRow = append(resultRow, c.Value())
+				resultRow = append(resultRow, c.Value(vcursor.ConnCollation()))
 			}
 			resultRows = append(resultRows, resultRow)
 		}
@@ -129,23 +131,34 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	qr.Fields, err = p.evalFields(env, qr.Fields)
+	qr.Fields, err = p.evalFields(env, qr.Fields, vcursor)
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
 }
 
-func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field) ([]*querypb.Field, error) {
+func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field, vcursor VCursor) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
 	for i, col := range p.Cols {
-		q, err := env.TypeOf(p.Exprs[i], infields)
+		q, f, err := env.TypeOf(p.Exprs[i], infields)
 		if err != nil {
 			return nil, err
 		}
+		var cs collations.ID = collations.CollationBinaryID
+		if sqltypes.IsText(q) {
+			cs = vcursor.ConnCollation()
+		}
+
+		fl := mysql.FlagsForColumn(q, cs)
+		if !sqltypes.IsNull(q) && !f.Nullable() {
+			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
+		}
 		fields = append(fields, &querypb.Field{
-			Name: col,
-			Type: q,
+			Name:    col,
+			Type:    q,
+			Charset: uint32(cs),
+			Flags:   fl,
 		})
 	}
 	return fields, nil

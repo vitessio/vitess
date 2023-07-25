@@ -21,7 +21,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang/glog v1.0.0
-	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.5.9
@@ -72,6 +71,7 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.8
 	go.etcd.io/etcd/client/pkg/v3 v3.5.8
 	go.etcd.io/etcd/client/v3 v3.5.8
+	go.uber.org/mock v0.2.0
 	golang.org/x/crypto v0.8.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.9.0

@@ -36,19 +36,16 @@ import (
 )
 
 func TestWatchConfig(t *testing.T) {
-	t.Skip("flaky test (@ajm188): https://github.com/vitessio/vitess/issues/13498")
 	type config struct {
 		A, B int
 	}
 
-	tmp, err := os.CreateTemp(".", "TestWatchConfig_*.json")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
+	writeConfig := func(tmp *os.File, a, b int) error {
+		stat, err := os.Stat(tmp.Name())
+		if err != nil {
+			return err
+		}
 
-	stat, err := os.Stat(tmp.Name())
-	require.NoError(t, err)
-
-	writeConfig := func(a, b int) error {
 		data, err := json.Marshal(&config{A: a, B: b})
 		if err != nil {
 			return err
@@ -75,19 +72,22 @@ func TestWatchConfig(t *testing.T) {
 
 		return nil
 	}
-	writeRandomConfig := func() error {
+	writeRandomConfig := func(tmp *os.File) error {
 		a, b := rand.Intn(100), rand.Intn(100)
-		return writeConfig(a, b)
+		return writeConfig(tmp, a, b)
 	}
 
-	require.NoError(t, writeRandomConfig())
+	tmp, err := os.CreateTemp(t.TempDir(), "TestWatchConfig_*.json")
+	require.NoError(t, err)
+
+	require.NoError(t, writeRandomConfig(tmp))
 
 	v := viper.New()
 	v.SetConfigFile(tmp.Name())
 	require.NoError(t, v.ReadInConfig())
 
 	wCh, rCh := make(chan struct{}), make(chan struct{})
-	v.OnConfigChange(func(in fsnotify.Event) {
+	v.OnConfigChange(func(event fsnotify.Event) {
 		select {
 		case <-rCh:
 			return
@@ -103,7 +103,7 @@ func TestWatchConfig(t *testing.T) {
 	// Make sure that basic, unsynchronized WatchConfig is set up before
 	// beginning the actual test.
 	a, b := v.GetInt("a"), v.GetInt("b")
-	require.NoError(t, writeConfig(a+1, b+1))
+	require.NoError(t, writeConfig(tmp, a+1, b+1))
 	<-wCh // wait for the update to finish
 
 	require.Equal(t, a+1, v.GetInt("a"))
@@ -163,7 +163,7 @@ func TestWatchConfig(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, writeRandomConfig())
+		require.NoError(t, writeRandomConfig(tmp))
 		time.Sleep(writeJitter())
 	}
 

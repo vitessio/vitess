@@ -124,15 +124,6 @@ func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query stri
 	}
 }
 
-// NewSimpleInsert creates an Insert for a Table.
-func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vindexes.Keyspace) *Insert {
-	return &Insert{
-		Opcode:   opcode,
-		Table:    table,
-		Keyspace: keyspace,
-	}
-}
-
 // NewInsert creates a new Insert.
 func NewInsert(
 	opcode InsertOpcode,
@@ -679,7 +670,7 @@ func (ins *Insert) getInsertShardedRoute(
 				if err != nil {
 					return nil, nil, err
 				}
-				rowsResolvedValues = append(rowsResolvedValues, result.Value())
+				rowsResolvedValues = append(rowsResolvedValues, result.Value(vcursor.ConnCollation()))
 			}
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {
