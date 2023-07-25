@@ -422,7 +422,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			// Try to connect to the tablet and confirm that it's usable.
 			if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
 				// Ensure that the tablet is healthy and serving.
-				if err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+				defer cancel()
+				if err := conn.StreamHealth(shortCtx, func(shr *querypb.StreamHealthResponse) error {
 					if shr != nil && shr.Serving && shr.RealtimeStats != nil && shr.RealtimeStats.HealthError == "" {
 						return io.EOF // End the stream
 					}
