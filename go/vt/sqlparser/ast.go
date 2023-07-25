@@ -86,10 +86,10 @@ func yyParsePooled(yylex yyLexer) int {
 // ParserOptions defines options that customize how statements are parsed.
 type ParserOptions struct {
 	// AnsiQuotes controls whether " characters are treated as the identifier character, as
-	// defined in the SQL92 standard, or as a string quote character. By default, AnsiQuotes is
-	// disabled, and ` characters are treated as the identifier character (and not a string
-	// quoting character). When AnsiQuotes is set to true, " characters are instead treated
-	// as identifier quotes and NOT valid as string quotes. Note that the ` character may always
+	// defined in the SQL92 standard, or as a string quote character. By default, AnsiQuotes
+	// mode is disabled, and " chars are treated as string literal quoting characters.
+	// When AnsiQuotes is set to true, " characters are treated as identifier quotes and are
+	// NOT valid as string literal quotes. Note that the ` character may always
 	// be used to quote identifiers, regardless of whether AnsiQuotes is enabled or not. For
 	// more info, see: https://dev.mysql.com/doc/refman/8.0/en/sql-mode.html#sqlmode_ansi_quotes
 	AnsiQuotes bool

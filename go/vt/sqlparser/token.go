@@ -72,11 +72,11 @@ type Tokenizer struct {
 
 	// identifierQuotes holds the characters that are treated as identifier quotes. This always includes
 	// the backtick char. When the ANSI_QUOTES SQL mode is enabled, it also includes the double quote char.
-	identifierQuotes []uint16
+	identifierQuotes map[uint16]struct{}
 
 	// stringLiteralQuotes holds the characters that are treated as string literal quotes. This always includes the
 	// single quote char. When ANSI_QUOTES SQL mode is NOT enabled, this also contains the double quote character.
-	stringLiteralQuotes []uint16
+	stringLiteralQuotes map[uint16]struct{}
 
 	queryBuf []byte
 }
@@ -88,8 +88,8 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
 		buf:     buf,
 		bufSize: len(buf),
-		identifierQuotes:    []uint16{backtickQuote},
-		stringLiteralQuotes: []uint16{doubleQuote, singleQuote},
+		identifierQuotes:    map[uint16]struct{}{backtickQuote: {}},
+		stringLiteralQuotes: map[uint16]struct{}{doubleQuote: {}, singleQuote: {}},
 	}
 }
 
@@ -101,8 +101,8 @@ func NewStringTokenizerForAnsiQuotes(sql string) *Tokenizer {
 	return &Tokenizer{
 		buf:                 buf,
 		bufSize:             len(buf),
-		identifierQuotes:    []uint16{backtickQuote, doubleQuote},
-		stringLiteralQuotes: []uint16{singleQuote},
+		identifierQuotes:    map[uint16]struct{}{backtickQuote: {}, doubleQuote: {}},
+		stringLiteralQuotes: map[uint16]struct{}{singleQuote: {}},
 	}
 }
 
@@ -112,8 +112,8 @@ func NewTokenizer(r io.Reader) *Tokenizer {
 	return &Tokenizer{
 		InStream: r,
 		buf:      make([]byte, defaultBufSize),
-		identifierQuotes:    []uint16{backtickQuote},
-		stringLiteralQuotes: []uint16{doubleQuote, singleQuote},
+		identifierQuotes:    map[uint16]struct{}{backtickQuote: {}},
+		stringLiteralQuotes: map[uint16]struct{}{doubleQuote: {}, singleQuote: {}},
 	}
 }
 
@@ -1003,14 +1003,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	}
 }
 
-// contains searches the specified |slice| for the target |x|, and returns the same value of |x| if it is found. The
-// target value is returned, instead of a boolean response, so that this function can be directly used inside the
-// switch statement above that switches on a uint16 value.
-func contains(slice []uint16, x uint16) uint16 {
-	for _, element := range slice {
-		if element == x {
-			return element
-		}
+// contains searches the specified map |m| for the target key |x|, and returns the same value of |x| if it is found.
+// If the target value, |x|, is NOT found, zero is returned. The target value is returned, instead of a boolean, so
+// that this function can be directly used inside the switch statement above that switches on a uint16 value.
+func contains(m map[uint16]struct{}, x uint16) uint16 {
+	if _, ok := m[x]; ok {
+		return x
 	}
 	return 0
 }
