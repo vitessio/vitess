@@ -2257,11 +2257,11 @@ func getResult(id int, state string, keyspace string, shard string) *sqltypes.Re
 }
 
 func stoppedResult(id int) *sqltypes.Result {
-	return getResult(id, "Stopped", tpChoice.keyspace, tpChoice.shard)
+	return getResult(id, binlogdatapb.VReplicationWorkflowState_Stopped.String(), tpChoice.keyspace, tpChoice.shard)
 }
 
 func runningResult(id int) *sqltypes.Result {
-	return getResult(id, "Running", tpChoice.keyspace, tpChoice.shard)
+	return getResult(id, binlogdatapb.VReplicationWorkflowState_Running.String(), tpChoice.keyspace, tpChoice.shard)
 }
 
 func switchWrites(tmeT any) {

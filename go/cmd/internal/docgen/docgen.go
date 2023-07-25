@@ -156,7 +156,7 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 }
 
 func newParentLinkSedCommand(parent string, file string) *exec.Cmd {
-	return exec.Command("sed", "-i ''", "-e", fmt.Sprintf("s:(./%s/):(../):", parent), file)
+	return exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:(./%s/):(../):i", parent), file)
 }
 
 func recursivelyDisableAutoGenTags(root *cobra.Command) {

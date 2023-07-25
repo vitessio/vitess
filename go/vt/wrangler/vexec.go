@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -37,14 +38,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -369,9 +371,9 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	updateSQL := "update _vt.vreplication set state = %s"
 	switch action {
 	case "stop":
-		query = fmt.Sprintf(updateSQL, encodeString("Stopped"))
+		query = fmt.Sprintf(updateSQL, encodeString(binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	case "start":
-		query = fmt.Sprintf(updateSQL, encodeString("Running"))
+		query = fmt.Sprintf(updateSQL, encodeString(binlogdatapb.VReplicationWorkflowState_Running.String()))
 	case "update":
 		// We don't use the SQL interface, so there's no query
 		// and no error.
@@ -390,7 +392,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 		return nil, err
 	}
 	if action == "update" {
-		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVRWorkflowRequest)
+		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest)
 		if !ok {
 			return nil, fmt.Errorf("invalid RPC request: %+v", rpcReq)
 		}
@@ -406,7 +408,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			}
 			if !textutil.ValueIsSimulatedNull(rpcReq.TabletTypes) {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", strings.Join(rpcReq.TabletTypes, ",")))
+				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes)))
 			}
 			if !textutil.ValueIsSimulatedNull(rpcReq.OnDdl) {
 				changes = true
@@ -433,7 +435,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			return nil, nil
 		} else {
 			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, rpcReq)
+				res, err := wr.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, rpcReq)
 				if err != nil {
 					return nil, err
 				}
@@ -552,7 +554,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	var err error
 	var id int32
 	var timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
-	var state, dbName, pos, stopPos, message, tags, componentThrottled string
+	var dbName, pos, stopPos, message, tags, componentThrottled string
+	var state string
 	var workflowType, workflowSubType int32
 	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
@@ -658,7 +661,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		return nil, "", err
 	}
 
-	status.State = updateState(message, status.State, status.CopyState, timeUpdated)
+	status.State = updateState(message, binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]), status.CopyState, timeUpdated)
 	return status, bls.Keyspace, nil
 }
 
@@ -754,7 +757,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			// All timestamps are in seconds since epoch
 			lastTransactionTimestamp := status.TransactionTimestamp
 			lastHeartbeatTime := status.TimeHeartbeat
-			if status.State == "Copying" {
+			if status.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
 				rsr.MaxVReplicationTransactionLag = math.MaxInt64
 			} else {
 				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
@@ -838,15 +841,15 @@ func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string)
 	return replStatus, nil
 }
 
-func updateState(message, state string, cs []copyState, timeUpdated int64) string {
+func updateState(message string, state binlogdatapb.VReplicationWorkflowState, cs []copyState, timeUpdated int64) string {
 	if strings.Contains(strings.ToLower(message), "error") {
-		state = "Error"
-	} else if state == "Running" && len(cs) > 0 {
-		state = "Copying"
-	} else if state == "Running" && int64(time.Now().Second())-timeUpdated > 10 /* seconds */ {
-		state = "Lagging"
+		state = binlogdatapb.VReplicationWorkflowState_Error
+	} else if state == binlogdatapb.VReplicationWorkflowState_Running && len(cs) > 0 {
+		state = binlogdatapb.VReplicationWorkflowState_Copying
+	} else if state == binlogdatapb.VReplicationWorkflowState_Running && int64(time.Now().Second())-timeUpdated > 10 /* seconds */ {
+		state = binlogdatapb.VReplicationWorkflowState_Lagging
 	}
-	return state
+	return state.String()
 }
 
 func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) error {
