@@ -434,6 +434,8 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		var p json.Parser
 		j, err := p.ParseBytes(value.Raw())
 		return j, wrap(err)
+	case fallbackBinary(tt):
+		return newEvalRaw(tt, value.Raw(), collation), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}
