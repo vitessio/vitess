@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -63,8 +65,9 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "col1",
-			Type: sqltypes.VarChar,
+			Name:    "col1",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -150,8 +153,9 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "col1",
-			Type: sqltypes.VarChar,
+			Name:    "col1",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -185,7 +189,14 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 	// set the serving type for the primary tablet false and broadcast it so that the buffering code registers this change
 	hc.SetServing(primaryTablet, false)
+	// We call the broadcast twice to ensure that the change has been processed by the keyspace event watcher.
+	// The second broadcast call is blocking until the first one has been processed.
 	hc.Broadcast(primaryTablet)
+	hc.Broadcast(primaryTablet)
+
+	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+	_, isNotServing := tg.kev.PrimaryIsNotServing(target)
+	require.True(t, isNotServing)
 
 	// add a result to the sandbox connection of the new primary
 	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
@@ -196,8 +207,6 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		res, err = tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
-
-	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
 
 	// set the serving type for the new primary tablet true and broadcast it so that the buffering code registers this change
 	// this should stop the buffering and the query executed in the go routine should work. This should be done with some delay so
@@ -272,8 +281,9 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "col1",
-			Type: sqltypes.VarChar,
+			Name:    "col1",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -308,7 +318,11 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	case <-queryChan:
 		require.Nil(t, res)
 		require.Error(t, err)
-		require.Equal(t, "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet", err.Error())
+		// depending on whether the health check ticks before or after the buffering code, we might get different errors
+		if !(err.Error() == "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet" ||
+			err.Error() == "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'") {
+			t.Fatalf("wrong error returned: %v", err)
+		}
 	case <-time.After(15 * time.Second):
 		t.Fatalf("timed out waiting for query to execute")
 	}

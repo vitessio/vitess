@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -29,9 +30,24 @@ type EvalResult struct {
 	v eval
 }
 
-// Value allows for retrieval of the value we expose for public consumption
-func (er EvalResult) Value() sqltypes.Value {
-	return evalToSQLValue(er.v)
+// Value allows for retrieval of the value we expose for public consumption.
+// It will be converted to the passed in collation which is the connection
+// collation and what the client expects the result to be in.
+func (er EvalResult) Value(id collations.ID) sqltypes.Value {
+	str, ok := er.v.(*evalBytes)
+	if !ok || str.isBinary() || str.col.Collation == collations.Unknown || str.col.Collation == id {
+		return evalToSQLValue(er.v)
+	}
+
+	dst, err := charset.Convert(nil, id.Get().Charset(), str.bytes, str.col.Collation.Get().Charset())
+	if err != nil {
+		// If we can't convert, we just return what we have, but it's going
+		// to be invalidly encoded. Should normally never happen as only utf8mb4
+		// is really supported for the connection character set anyway and all
+		// other charsets can be converted to utf8mb4.
+		return sqltypes.MakeTrusted(str.SQLType(), str.bytes)
+	}
+	return sqltypes.MakeTrusted(str.SQLType(), dst)
 }
 
 func (er EvalResult) Collation() collations.ID {
@@ -39,7 +55,7 @@ func (er EvalResult) Collation() collations.ID {
 }
 
 func (er EvalResult) String() string {
-	return er.Value().String()
+	return er.Value(collations.Default()).String()
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption

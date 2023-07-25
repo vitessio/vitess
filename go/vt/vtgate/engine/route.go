@@ -89,16 +89,6 @@ type Route struct {
 	noTxNeeded
 }
 
-// NewSimpleRoute creates a Route with the bare minimum of parameters.
-func NewSimpleRoute(opcode Opcode, keyspace *vindexes.Keyspace) *Route {
-	return &Route{
-		RoutingParameters: &RoutingParameters{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-		},
-	}
-}
-
 // NewRoute creates a Route.
 func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
 	return &Route{
@@ -120,8 +110,8 @@ type OrderByParams struct {
 	WeightStringCol   int
 	Desc              bool
 	StarColFixedIndex int
-	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
-	FromGroupBy bool
+	// Type for knowing if the collation is relevant
+	Type querypb.Type
 	// Collation ID for comparison using collation
 	CollationID collations.ID
 }
@@ -140,7 +130,8 @@ func (obp OrderByParams) String() string {
 	} else {
 		val += " ASC"
 	}
-	if obp.CollationID != collations.Unknown {
+
+	if sqltypes.IsText(obp.Type) && obp.CollationID != collations.Unknown {
 		collation := obp.CollationID.Get()
 		val += " COLLATE " + collation.Name()
 	}

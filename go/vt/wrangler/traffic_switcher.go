@@ -218,8 +218,8 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	}
 
 	var (
-		reverse  bool
-		keyspace string
+		reverse        bool
+		sourceKeyspace string
 	)
 
 	// We reverse writes by using the source_keyspace.workflowname_reverse workflow
@@ -229,17 +229,19 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	// source to check if writes have been switched.
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
-		keyspace = state.SourceKeyspace
+		// Flip the source and target keyspaces.
+		sourceKeyspace = state.TargetKeyspace
+		targetKeyspace = state.SourceKeyspace
 		workflowName = workflow.ReverseWorkflowName(workflowName)
 	} else {
-		keyspace = targetKeyspace
+		sourceKeyspace = state.SourceKeyspace
 	}
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		state.WorkflowType = workflow.TypeMoveTables
 
 		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
-			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
+			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", targetKeyspace, workflowName)
 
 		}
 		table := ts.Tables()[0]
@@ -252,19 +254,22 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 			rules := shardRoutingRules.Rules
 			for _, rule := range rules {
-				if rule.ToKeyspace == ts.SourceKeyspaceName() {
+				switch rule.ToKeyspace {
+				case sourceKeyspace:
 					state.ShardsNotYetSwitched = append(state.ShardsNotYetSwitched, rule.Shard)
-				} else {
+				case targetKeyspace:
 					state.ShardsAlreadySwitched = append(state.ShardsAlreadySwitched, rule.Shard)
+				default:
+					// Not a relevant rule.
 				}
 			}
 		} else {
-			state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_RDONLY)
+			state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, topodatapb.TabletType_RDONLY)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_REPLICA)
+			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, topodatapb.TabletType_REPLICA)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -275,7 +280,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			for _, table := range ts.Tables() {
 				rr := globalRules[table]
 				// if a rule exists for the table and points to the target keyspace, writes have been switched
-				if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
+				if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", targetKeyspace, table) {
 					state.WritesSwitched = true
 					break
 				}
@@ -292,12 +297,12 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			shard = ts.SourceShards()[0]
 		}
 
-		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_RDONLY)
+		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, shard, topodatapb.TabletType_RDONLY)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_REPLICA)
+		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, shard, topodatapb.TabletType_REPLICA)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -330,11 +335,13 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 		}
-		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
-			return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
-		}
-		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
-			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
+		if !ts.isPartialMigration { // shard level traffic switching is all or nothing
+			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
+				return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
+			}
+			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
+				return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
+			}
 		}
 		switch servedType {
 		case topodatapb.TabletType_REPLICA:

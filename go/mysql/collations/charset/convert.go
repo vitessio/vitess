@@ -33,6 +33,7 @@ func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, er
 	if dst == nil {
 		dst = make([]byte, len(src)*3)
 	} else {
+		nDst = len(dst)
 		dst = dst[:cap(dst)]
 	}
 
@@ -65,6 +66,7 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
 	if dst == nil {
 		dst = make([]byte, len(src)*3)
 	} else {
+		nDst = len(dst)
 		dst = dst[:cap(dst)]
 	}
 
@@ -180,6 +182,7 @@ func Collapse(dst []byte, src []rune, dstCharset Charset) []byte {
 		if dst == nil {
 			dst = make([]byte, len(src)*dstCharset.MaxWidth())
 		} else {
+			nDst = len(dst)
 			dst = dst[:cap(dst)]
 		}
 		for _, c := range src {

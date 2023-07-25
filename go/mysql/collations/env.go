@@ -194,7 +194,7 @@ func makeEnv(version collver) *Environment {
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	CollationUtf8ID        = 33
+	CollationUtf8mb3ID     = 33
 	CollationUtf8mb4ID     = 255
 	CollationBinaryID      = 63
 	CollationUtf8mb4BinID  = 46
@@ -203,6 +203,16 @@ const (
 
 // Binary is the default Binary collation
 var Binary = ID(CollationBinaryID).Get()
+
+// SystemCollation is the default collation for the system tables
+// such as the information schema. This is still utf8mb3 to match
+// MySQLs behavior. This means that you can't use utf8mb4 in table
+// names, column names, without running into significant issues.
+var SystemCollation = TypedCollation{
+	Collation:    CollationUtf8mb3ID,
+	Coercibility: CoerceCoercible,
+	Repertoire:   RepertoireUnicode,
+}
 
 // CharsetAlias returns the internal charset name for the given charset.
 // For now, this only maps `utf8` to `utf8mb3`; in future versions of MySQL,

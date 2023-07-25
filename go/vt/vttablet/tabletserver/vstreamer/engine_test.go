@@ -110,6 +110,7 @@ func TestUpdateVSchema(t *testing.T) {
   "keyspaces": {
     "vttest": {
       "sharded": true,
+      "foreignKeyMode": "FK_UNMANAGED",
       "tables": {
         "t1": {
           "name": "t1",

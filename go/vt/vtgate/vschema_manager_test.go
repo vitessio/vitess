@@ -222,8 +222,10 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 			Name:    ks,
 			Sharded: sharded,
 		},
-		Tables:   tbls,
-		Vindexes: map[string]vindexes.Vindex{},
+		// Default foreign key mode
+		ForeignKeyMode: vschemapb.Keyspace_FK_UNMANAGED,
+		Tables:         tbls,
+		Vindexes:       map[string]vindexes.Vindex{},
 	}
 	vs := makeTestEmptyVSchema()
 	vs.Keyspaces[ks] = keyspaceSchema
@@ -241,6 +243,8 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 	keyspaceSchema := &vschemapb.Keyspace{
 		Sharded: sharded,
 		Tables:  tbls,
+		// Default foreign key mode
+		ForeignKeyMode: vschemapb.Keyspace_FK_UNMANAGED,
 	}
 	return &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},

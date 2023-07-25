@@ -271,6 +271,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
+				log.Errorf("INTERNAL: unable to setState() in controller. Attempting to set error text: [%v]; setState() error is: %v", err, errSetState)
 				return err // yes, err and not errSetState.
 			}
 			return nil // this will cause vreplicate to quit the workflow

@@ -2599,7 +2599,8 @@ var (
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
-		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		input:  "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		output: "select 1 from t where foo = _utf8mb3 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -2610,10 +2611,10 @@ var (
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
 		input:  "select 1 from t where foo = _utf8mb3 'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
-		input:  "select 1 from t where foo = _utf8mb3'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		input:  "select 1 from t where foo = _utf8'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
@@ -4036,13 +4037,13 @@ func TestIntroducers(t *testing.T) {
 		output: "select _utf32 'x' from dual",
 	}, {
 		input:  "select _utf8 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
 	}, {
 		input:  "select _utf8mb3 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {

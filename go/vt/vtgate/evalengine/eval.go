@@ -66,6 +66,10 @@ const (
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 )
 
+func (f typeFlag) Nullable() bool {
+	return f&flagNullable != 0 || f&flagNull != 0
+}
+
 type eval interface {
 	ToRawBytes() []byte
 	SQLType() sqltypes.Type
