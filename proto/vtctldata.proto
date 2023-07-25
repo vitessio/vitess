@@ -1006,6 +1006,9 @@ message RestoreFromBackupRequest {
   string restore_to_pos = 3;
   // Dry run does not actually performs the restore, but validates the steps and availability of backups
   bool dry_run = 4;
+  // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
+  // RestoreToTimestamp and RestoreToPos are mutually exclusive.
+  vttime.Time restore_to_timestamp = 5;
 }
 
 message RestoreFromBackupResponse {
