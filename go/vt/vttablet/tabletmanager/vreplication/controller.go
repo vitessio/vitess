@@ -100,7 +100,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	state := params["state"]
 	blpStats.State.Store(state)
 	// Nothing to do if replication is stopped or is known to have an unrecoverable error.
-	if state == binlogplayer.BlpStopped || state == binlogplayer.BlpError {
+	if state == binlogdatapb.VReplicationWorkflowState_Stopped.String() || state == binlogdatapb.VReplicationWorkflowState_Error.String() {
 		ct.cancel = func() {}
 		close(ct.done)
 		return ct, nil
@@ -270,7 +270,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// we cannot identify this as non-recoverable, but it has persisted beyond the retry limit (maxTimeToRetryError)
 		if isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
-			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
+			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
 				log.Errorf("INTERNAL: unable to setState() in controller. Attempting to set error text: [%v]; setState() error is: %v", err, errSetState)
 				return err // yes, err and not errSetState.
 			}

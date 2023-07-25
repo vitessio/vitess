@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
@@ -564,7 +563,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 	}
 
 	return sm.ts.ForAllTargets(func(target *MigrationTarget) error {
-		ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, target.GetPrimary().DbName())
+		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, target.GetPrimary().DbName())
 		tabletStreams := VReplicationStreams(tmpl).Copy().ToSlice()
 
 		for _, vrs := range tabletStreams {
