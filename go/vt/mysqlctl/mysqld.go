@@ -1138,7 +1138,6 @@ func buildLdPaths() ([]string, error) {
 func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 	// Execute as remote action on mysqlctld to ensure we get the actual running MySQL version.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.VersionString() remotely via mysqlctld server: %v", socketFile)
 		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return "", fmt.Errorf("can't dial mysqlctld: %v", err)
