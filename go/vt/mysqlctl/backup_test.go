@@ -615,7 +615,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 	}
 
 	manifest := BackupManifest{
-		BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+		BackupTime:   FormatRFC3339(time.Now().Add(-1 * time.Hour)),
 		BackupMethod: "fake",
 		Keyspace:     "test",
 		Shard:        "-",

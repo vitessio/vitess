@@ -199,12 +199,19 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DryRun:              request.DryRun,
 		Stats:               backupstats.RestoreStats(),
 	}
+	if request.RestoreToPos != "" && !logutil.ProtoToTime(request.RestoreToTimestamp).IsZero() {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore_to_pos and --restore_to_timestamp are mutually exclusive")
+	}
 	if request.RestoreToPos != "" {
 		pos, err := mysql.DecodePosition(request.RestoreToPos)
 		if err != nil {
 			return vterrors.Wrapf(err, "restore failed: unable to decode --restore_to_pos: %s", request.RestoreToPos)
 		}
 		params.RestoreToPos = pos
+	}
+	if restoreToTimestamp := logutil.ProtoToTime(request.RestoreToTimestamp); !restoreToTimestamp.IsZero() {
+		// Restore to given timestamp
+		params.RestoreToTimestamp = restoreToTimestamp
 	}
 	params.Logger.Infof("Restore: original tablet type=%v", originalType)
 

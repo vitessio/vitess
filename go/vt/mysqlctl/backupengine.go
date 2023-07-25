@@ -120,6 +120,10 @@ type RestoreParams struct {
 	// RestoreToPos hints that a point in time recovery is requested, to recover up to the specific given pos.
 	// When empty, the restore is a normal from full backup
 	RestoreToPos mysql.Position
+	// RestoreToTimestamp hints that a  point in time recovery is requested, to recover up to, and excluding, the
+	// given timestamp.
+	// RestoreToTimestamp and RestoreToPos are mutually exclusive.
+	RestoreToTimestamp time.Time
 	// When DryRun is set, no restore actually takes place; but some of its steps are validated.
 	DryRun bool
 	// Stats let's restore engines report detailed restore timings.
@@ -139,13 +143,20 @@ func (p *RestoreParams) Copy() RestoreParams {
 		Shard:               p.Shard,
 		StartTime:           p.StartTime,
 		RestoreToPos:        p.RestoreToPos,
+		RestoreToTimestamp:  p.RestoreToTimestamp,
 		DryRun:              p.DryRun,
 		Stats:               p.Stats,
 	}
 }
 
 func (p *RestoreParams) IsIncrementalRecovery() bool {
-	return !p.RestoreToPos.IsZero()
+	if !p.RestoreToPos.IsZero() {
+		return true
+	}
+	if !p.RestoreToTimestamp.IsZero() {
+		return true
+	}
+	return false
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
@@ -237,6 +248,14 @@ func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandl
 	return nil
 }
 
+// IncrementalBackupDetails lists some incremental backup specific information
+type IncrementalBackupDetails struct {
+	FirstTimestamp       string
+	FirstTimestampBinlog string
+	LastTimestamp        string
+	LastTimestampBinlog  string
+}
+
 // BackupManifest defines the common fields in the MANIFEST file.
 // All backup engines must include at least these fields. They are free to add
 // their own custom fields by embedding this struct anonymously into their own
@@ -282,6 +301,9 @@ type BackupManifest struct {
 
 	// UpgradeSafe indicates whether the backup is safe to use for an upgrade to a newer MySQL version
 	UpgradeSafe bool
+
+	// IncrementalDetails is nil for non-incremental backups
+	IncrementalDetails *IncrementalBackupDetails
 }
 
 func (m *BackupManifest) HashKey() string {
@@ -393,7 +415,7 @@ func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 
 // FindBackupToRestore returns a path, a sequence of backup handles, to be restored.
 // The returned handles stand for valid backups with complete manifests.
-func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (*RestorePath, error) {
+func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (restorePath *RestorePath, err error) {
 	// if a StartTime is provided in params, then find a backup that was taken at or before that time
 	checkBackupTime := !params.StartTime.IsZero()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
@@ -406,84 +428,86 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 		return nil, err
 	}
 
-	fullBackupIndex := func() int {
-		for index := len(bhs) - 1; index >= 0; index-- {
-			bh := bhs[index]
-			// Check that the backup MANIFEST exists and can be successfully decoded.
-			bm, err := GetBackupManifest(ctx, bh)
-			if err != nil {
-				params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
-				continue
-			}
-			// the manifest is valid
-			manifests[index] = bm // manifests's order is insignificant, it will be sorted later on
-			manifestHandleMap.Map(bm, bh)
-			if bm.Incremental {
-				// We're looking for a full backup
-				continue
-			}
-
-			// check if the backup can be used with this MySQL version.
-			if bm.MySQLVersion != "" {
-				if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
-					params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
-					continue
-				}
-			}
-
-			var backupTime time.Time
-			if checkBackupTime {
-				backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
-				if err != nil {
-					params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
-					continue
-				}
-			}
-
-			switch {
-			case checkBackupTime:
-				// restore to specific time
-				if backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
-					params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
-					return index
-				}
-			case !params.RestoreToPos.IsZero():
-				// restore to specific pos
-				if params.RestoreToPos.GTIDSet.Contains(bm.Position.GTIDSet) {
-					// this is the most recent backup which is <= desired position
-					return index
-				}
-			default:
-				// restore latest full backup
-				params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
-				return index
-			}
+	// Let's first populate the manifests
+	for i, bh := range bhs {
+		// Check that the backup MANIFEST exists and can be successfully decoded.
+		bm, err := GetBackupManifest(ctx, bh)
+		if err != nil {
+			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
+			continue
 		}
-		return -1
-	}()
-	if fullBackupIndex < 0 {
-		if checkBackupTime {
-			params.Logger.Errorf("No valid backup found before time %v", params.StartTime.Format(BackupTimestampFormat))
-		}
-		// There is at least one attempted backup, but none could be read.
-		// This implies there is data we ought to have, so it's not safe to start
-		// up empty.
-		return nil, ErrNoCompleteBackup
+		// the manifest is valid
+		manifests[i] = bm // manifests's order is insignificant, it will be sorted later on
+		manifestHandleMap.Map(bm, bh)
 	}
-	// Anything taken before the full backup that we picked, is not of interest:
-	manifests = manifests[fullBackupIndex:]
-	restorePath := &RestorePath{
+	restorePath = &RestorePath{
 		manifestHandleMap: manifestHandleMap,
 	}
-	if params.RestoreToPos.IsZero() {
+	if !params.IsIncrementalRecovery() {
+		// incremental recovery has its own logic for searching the best full backup. Here we only deal with full backup recovery.
+		fullBackupIndex := func() int {
+			for index := len(manifests) - 1; index >= 0; index-- {
+				bm := manifests[index]
+				if bm == nil {
+					continue
+				}
+				if bm.Incremental {
+					// We're looking for a full backup
+					continue
+				}
+				bh := manifestHandleMap.Handle(bm)
+
+				// check if the backup can be used with this MySQL version.
+				if bm.MySQLVersion != "" {
+					if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
+						params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
+						continue
+					}
+				}
+
+				switch {
+				case checkBackupTime:
+					backupTime, err := ParseRFC3339(bm.BackupTime)
+					if err != nil {
+						params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
+						continue
+					}
+					// restore to specific time
+					if backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
+						params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
+						return index
+					}
+				default:
+					// restore latest full backup
+					params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
+					return index
+				}
+			}
+			return -1
+		}()
+		if fullBackupIndex < 0 {
+			if checkBackupTime {
+				params.Logger.Errorf("No valid backup found before time %v", params.StartTime.Format(BackupTimestampFormat))
+			}
+			// There is at least one attempted backup, but none could be read.
+			// This implies there is data we ought to have, so it's not safe to start
+			// up empty.
+			return nil, ErrNoCompleteBackup
+		}
 		// restoring from a single full backup:
-		restorePath.Add(manifests[0])
+		restorePath.Add(manifests[fullBackupIndex])
 		return restorePath, nil
 	}
-	// restore to a position (using incremental backups):
+	// restore to a position/timestamp (using incremental backups):
 	// we calculate a possible restore path based on the manifests. The resulting manifests are
 	// a sorted subsequence, with the full backup first, and zero or more incremental backups to follow.
-	restorePath.manifests, err = FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
+	switch {
+	case !params.RestoreToPos.IsZero():
+		manifests, err = FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
+	case !params.RestoreToTimestamp.IsZero():
+		manifests, err = FindPITRToTimePath(params.RestoreToTimestamp, manifests)
+	}
+	restorePath.manifests = manifests
 	if err != nil {
 		return nil, err
 	}

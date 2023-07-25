@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -31,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -500,17 +498,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		tableType := row[1].String()
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
 		if err != nil {
-			isView := strings.Contains(tableType, tmutils.TableView)
-			var emptyColumnsError *mysqlctl.EmptyColumnsErr
-			if errors.As(err, &emptyColumnsError) && isView {
-				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
-				continue
-			}
-			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchUser && isView {
-				// A VIEW that has an invalid DEFINER, leading to:
-				// ERROR 1449 (HY000): The user specified as a definer (...) does not exist
-				log.Warningf("Failed reading schema for the table: %s, error: %v", tableName, err)
+			if isView := strings.Contains(tableType, tmutils.TableView); isView {
+				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
 				continue
 			}
 			// Non recoverable error:

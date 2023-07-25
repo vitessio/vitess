@@ -2761,9 +2761,10 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("shard", ti.Shard)
 
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:   req.BackupTime,
-		RestoreToPos: req.RestoreToPos,
-		DryRun:       req.DryRun,
+		BackupTime:         req.BackupTime,
+		RestoreToPos:       req.RestoreToPos,
+		RestoreToTimestamp: req.RestoreToTimestamp,
+		DryRun:             req.DryRun,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
@@ -2792,7 +2793,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			if mysqlctl.DisableActiveReparents {
 				return nil
 			}
-			if req.RestoreToPos != "" && !req.DryRun {
+			if (req.RestoreToPos != "" || !logutil.ProtoToTime(req.RestoreToTimestamp).IsZero()) && !req.DryRun {
 				// point in time recovery. Do not restore replication
 				return nil
 			}
