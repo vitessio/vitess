@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -216,9 +217,10 @@ func commandRemoveBackup(cmd *cobra.Command, args []string) error {
 }
 
 var restoreFromBackupOptions = struct {
-	BackupTimestamp string
-	RestoreToPos    string
-	DryRun          bool
+	BackupTimestamp    string
+	RestoreToPos       string
+	RestoreToTimestamp string
+	DryRun             bool
 }{}
 
 func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
@@ -227,10 +229,23 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if restoreFromBackupOptions.RestoreToPos != "" && restoreFromBackupOptions.RestoreToTimestamp != "" {
+		return fmt.Errorf("--restore-to-pos and --restore-to-timestamp are mutually exclusive")
+	}
+
+	var restoreToTimestamp time.Time
+	if restoreFromBackupOptions.RestoreToTimestamp != "" {
+		restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreFromBackupOptions.RestoreToTimestamp)
+		if err != nil {
+			return err
+		}
+	}
+
 	req := &vtctldatapb.RestoreFromBackupRequest{
-		TabletAlias:  alias,
-		RestoreToPos: restoreFromBackupOptions.RestoreToPos,
-		DryRun:       restoreFromBackupOptions.DryRun,
+		TabletAlias:        alias,
+		RestoreToPos:       restoreFromBackupOptions.RestoreToPos,
+		RestoreToTimestamp: logutil.TimeToProto(restoreToTimestamp),
+		DryRun:             restoreFromBackupOptions.DryRun,
 	}
 
 	if restoreFromBackupOptions.BackupTimestamp != "" {
@@ -283,6 +298,7 @@ func init() {
 
 	RestoreFromBackup.Flags().StringVarP(&restoreFromBackupOptions.BackupTimestamp, "backup-timestamp", "t", "", "Use the backup taken at, or closest before, this timestamp. Omit to use the latest backup. Timestamp format is \"YYYY-mm-DD.HHMMSS\".")
 	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToPos, "restore-to-pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
+	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToTimestamp, "restore-to-timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
 	RestoreFromBackup.Flags().BoolVar(&restoreFromBackupOptions.DryRun, "dry-run", false, "Only validate restore steps, do not actually restore data")
 	Root.AddCommand(RestoreFromBackup)
 }
