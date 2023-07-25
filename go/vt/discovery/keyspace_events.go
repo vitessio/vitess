@@ -379,6 +379,18 @@ func (kss *keyspaceState) onSrvKeyspace(newKeyspace *topodatapb.SrvKeyspace, new
 	return true
 }
 
+// isServing returns whether a keyspace has at least one serving shard or not.
+func (kss *keyspaceState) isServing() bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	for _, state := range kss.shards {
+		if state.serving {
+			return true
+		}
+	}
+	return false
+}
+
 // newKeyspaceState allocates the internal state required to keep track of availability incidents
 // in this keyspace, and starts up a SrvKeyspace watcher on our topology server which will update
 // our keyspaceState with any topology changes in real time.
@@ -470,4 +482,18 @@ func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) (*top
 		return state.currentPrimary, !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
 	}
 	return nil, false
+}
+
+// GetServingKeyspaces gets the serving keyspaces from the keyspace event watcher.
+func (kew *KeyspaceEventWatcher) GetServingKeyspaces() []string {
+	kew.mu.Lock()
+	defer kew.mu.Unlock()
+
+	var servingKeyspaces []string
+	for ksName, state := range kew.keyspaces {
+		if state.isServing() {
+			servingKeyspaces = append(servingKeyspaces, ksName)
+		}
+	}
+	return servingKeyspaces
 }

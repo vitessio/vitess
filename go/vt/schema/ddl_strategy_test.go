@@ -116,6 +116,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		fastOverRevertible   bool
 		fastRangeRotation    bool
 		allowForeignKeys     bool
+		analyzeTable         bool
 		cutOverThreshold     time.Duration
 		runtimeOptions       string
 		err                  error
@@ -238,6 +239,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			cutOverThreshold: 5 * time.Minute,
 		},
+		{
+			strategyVariable: "vitess --analyze-table",
+			strategy:         DDLStrategyVitess,
+			options:          "--analyze-table",
+			runtimeOptions:   "",
+			analyzeTable:     true,
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.strategyVariable, func(t *testing.T) {
@@ -253,6 +261,7 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
 			assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
 			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
+			assert.Equal(t, ts.analyzeTable, setting.IsAnalyzeTableFlag())
 			cutOverThreshold, err := setting.CutOverThreshold()
 			assert.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)

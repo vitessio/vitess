@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -118,6 +119,9 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
+	// StopReplicationError error is used by StopReplication
+	StopReplicationError error
+
 	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
 	// in it, then the function returns nil, else the function returns an error
 	WaitPrimaryPositions []mysql.Position
@@ -167,6 +171,9 @@ type FakeMysqlDaemon struct {
 	// TimeoutHook is a func that can be called at the beginning of any method to fake a timeout.
 	// all a test needs to do is make it { return context.DeadlineExceeded }
 	TimeoutHook func() error
+
+	// Version is the version that will be returned by GetVersionString.
+	Version string
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -177,6 +184,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		db:              db,
 		Running:         true,
 		IOThreadRunning: true,
+		Version:         "8.0.32",
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0, 0)
@@ -227,8 +235,13 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
 }
 
 // ApplyBinlogFile is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	return nil
+}
+
+// ReadBinlogFilesTimestamps is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
+	return nil, nil
 }
 
 // ReinitConfig is part of the MysqlDaemon interface
@@ -417,6 +430,9 @@ func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos 
 
 // StopReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
+	if fmd.StopReplicationError != nil {
+		return fmd.StopReplicationError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 	})
@@ -458,11 +474,12 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if stopReplicationBefore {
 		cmds = append(cmds, "STOP SLAVE")
 	}
-	cmds = append(cmds, "RESET SLAVE ALL")
 	cmds = append(cmds, "FAKE SET MASTER")
 	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")
 	}
+	fmd.CurrentSourceHost = host
+	fmd.CurrentSourcePort = port
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
 
@@ -679,11 +696,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 }
 
 // GetVersionString is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
+	return fmd.Version, nil
 }
 
 // GetVersionComment is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
+	return "", nil
 }

@@ -100,6 +100,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_pitr_xtrabackup": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/pitr_xtrabackup", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "backup_pitr_xtrabackup",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],
@@ -109,7 +118,7 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"backup_mysqlctld": { 
+		"backup_mysqlctld": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld", "-timeout", "30m"],
 			"Command": [],
@@ -438,34 +447,12 @@
 				"site_test"
 			]
 		},
-		"tabletmanager_throttler": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "tabletmanager_throttler",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"tabletmanager_throttler_topo": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "tabletmanager_throttler_topo",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"tabletmanager_throttler_custom_config": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_custom_config"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "tabletmanager_throttler_custom_config",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -621,6 +608,24 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_queries_random": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/random"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_kill": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/kill"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml"],
@@ -669,15 +674,6 @@
 		"vtgate_schematracker_sharded_prs": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs", "-timeout", "20m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_schema"]
-		},
-		"vtgate_schematracker_unauthorized": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unauthorized", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
@@ -999,12 +995,12 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vreplication_partialmovetables": {
+		"vreplication_partial_movetables_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTablesBasic"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cellalias",
+			"Shard": "vreplication_partial_movetables_basic",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -1035,21 +1031,21 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_copy_throttling": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyThrottling"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_basic",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vreplication_copy_parallel": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_partial_movetables_sequences": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestPartialMoveTablesWithSequences"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_partial_movetables_sequences",
 			"RetryMax": 1,
 			"Tags": []
 		},

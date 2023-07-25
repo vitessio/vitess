@@ -685,17 +685,16 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 			// Check if it's an aggregate expression
 			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
-				switch fname := strings.ToLower(expr.AggrName()); fname {
+				switch fname := expr.AggrName(); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"
 					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
 					// but will need to be revisited when we add such support to vreplication
-					aggregateFuncType := "sum"
-					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: opcode.SupportedAggregates[aggregateFuncType],
-						Col:    len(sourceSelect.SelectExprs) - 1,
-					})
+					aggregates = append(aggregates, engine.NewAggregateParam(
+						/*opcode*/ opcode.AggregateSum,
+						/*offset*/ len(sourceSelect.SelectExprs)-1,
+						/*alias*/ ""))
 				}
 			}
 		default:
@@ -768,7 +767,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: sqltypes.Unknown})
 	}
 	return res
 }
@@ -784,9 +783,9 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
 		if cpk.collation == nil {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationBinaryID})
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID})
 		} else {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation.ID()})
 		}
 	}
 	return &engine.MergeSort{

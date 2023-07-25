@@ -49,13 +49,24 @@ var collationJSON = collations.TypedCollation{
 }
 
 var collationUtf8mb3 = collations.TypedCollation{
-	Collation:    collations.CollationUtf8ID,
+	Collation:    collations.CollationUtf8mb3ID,
 	Coercibility: collations.CoerceCoercible,
 	Repertoire:   collations.RepertoireUnicode,
 }
 
+var collationRegexpFallback = collations.TypedCollation{
+	Collation:    collations.CollationLatin1Swedish,
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 type (
 	CollateExpr struct {
+		UnaryExpr
+		TypedCollation collations.TypedCollation
+	}
+
+	IntroducerExpr struct {
 		UnaryExpr
 		TypedCollation collations.TypedCollation
 	}
@@ -152,16 +163,16 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (co
 	})
 }
 
-func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.ID, error) {
+func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.TypedCollation, error) {
 	lt := left.SQLType()
 	rt := right.SQLType()
 
 	mc, coerceLeft, coerceRight, err := mergeCollations(evalCollation(left), evalCollation(right), lt, rt)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, collations.TypedCollation{}, err
 	}
 	if coerceLeft == nil && coerceRight == nil {
-		return left, right, mc.Collation, nil
+		return left, right, mc, nil
 	}
 
 	left1 := newEvalRaw(lt, left.(*evalBytes).bytes, mc)
@@ -170,16 +181,16 @@ func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.ID, erro
 	if coerceLeft != nil {
 		left1.bytes, err = coerceLeft(nil, left1.bytes)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, collations.TypedCollation{}, err
 		}
 	}
 	if coerceRight != nil {
 		right1.bytes, err = coerceRight(nil, right1.bytes)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, collations.TypedCollation{}, err
 		}
 	}
-	return left1, right1, mc.Collation, nil
+	return left1, right1, mc, nil
 }
 
 type collationAggregation struct {
@@ -201,4 +212,41 @@ func (ca *collationAggregation) add(env *collations.Environment, tc collations.T
 
 func (ca *collationAggregation) result() collations.TypedCollation {
 	return ca.cur
+}
+
+var _ Expr = (*IntroducerExpr)(nil)
+
+func (expr *IntroducerExpr) eval(env *ExpressionEnv) (eval, error) {
+	e, err := expr.Inner.eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if expr.TypedCollation.Collation == collations.CollationBinaryID {
+		return evalToBinary(e), nil
+	}
+	return evalToVarchar(e, expr.TypedCollation.Collation, false)
+}
+
+func (expr *IntroducerExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	if expr.TypedCollation.Collation == collations.CollationBinaryID {
+		return sqltypes.VarBinary, flagExplicitCollation
+	}
+	return sqltypes.VarChar, flagExplicitCollation
+}
+
+func (expr *IntroducerExpr) compile(c *compiler) (ctype, error) {
+	_, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	var ct ctype
+	ct.Type = sqltypes.VarChar
+	if expr.TypedCollation.Collation == collations.CollationBinaryID {
+		ct.Type = sqltypes.VarBinary
+	}
+	c.asm.Introduce(1, ct.Type, expr.TypedCollation)
+	ct.Col = expr.TypedCollation
+	ct.Flag = flagExplicitCollation
+	return ct, nil
 }

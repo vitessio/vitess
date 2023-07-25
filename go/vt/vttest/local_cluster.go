@@ -89,7 +89,7 @@ type Config struct {
 	Charset string
 
 	// PlannerVersion is the planner version to use for the vtgate.
-	// Choose between V3, V3Insert, Gen4, Gen4Greedy and Gen4Fallback
+	// Choose between Gen4, Gen4Greedy and Gen4Left2Right
 	PlannerVersion string
 
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
@@ -491,28 +491,26 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 			}
 		}
 
-		glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
-		for _, filepath := range glob {
-			cmds, err := LoadSQLFile(filepath, schemaDir)
-			if err != nil {
-				return err
-			}
-
-			// One single vschema migration per file
-			if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
-				if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+		if shouldRunDatabaseMigrations {
+			glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
+			for _, filepath := range glob {
+				cmds, err := LoadSQLFile(filepath, schemaDir)
+				if err != nil {
 					return err
 				}
-				continue
-			}
 
-			if !shouldRunDatabaseMigrations {
-				continue
-			}
+				// One single vschema migration per file
+				if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
+					if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+						return err
+					}
+					continue
+				}
 
-			for _, dbname := range db.shardNames(kpb) {
-				if err := db.Execute(cmds, dbname); err != nil {
-					return err
+				for _, dbname := range db.shardNames(kpb) {
+					if err := db.Execute(cmds, dbname); err != nil {
+						return err
+					}
 				}
 			}
 		}

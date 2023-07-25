@@ -205,7 +205,13 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+			sqltypes.Int64BindVariable(wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
 		qr, err := dbClient.ExecuteFetch(query, 1)
 		if err != nil {
 			return err
@@ -235,7 +241,10 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 }
 
 func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	query := fmt.Sprintf(sqlGetIncompleteTables, wd.ct.id)
+	query, err := sqlparser.ParseAndBind(sqlGetIncompleteTables, sqltypes.Int64BindVariable(wd.ct.id))
+	if err != nil {
+		return err
+	}
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -305,7 +314,13 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 
 // getTableLastPK gets the lastPK protobuf message for a given vdiff table.
 func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
-	query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(wd.ct.id),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return nil, err
+	}
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return nil, err
@@ -332,7 +347,10 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 	for tableName := range wd.tableDiffers {
 		// Update the table statistics for each table if requested.
 		if wd.opts.CoreOptions.UpdateTableStats {
-			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, wd.ct.vde.dbName, tableName)
+			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable,
+				wd.ct.vde.dbName,
+				tableName,
+			)
 			log.Infof("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query)
 			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
 				return err
@@ -344,8 +362,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 			tableIn.WriteByte(',')
 		}
 	}
-	query := fmt.Sprintf(sqlGetAllTableRows, encodeString(wd.ct.vde.dbName), tableIn.String())
-	isqr, err := dbClient.ExecuteFetch(query, -1)
+	query := sqlparser.BuildParsedQuery(sqlGetAllTableRows,
+		encodeString(wd.ct.vde.dbName),
+		tableIn.String(),
+	)
+	isqr, err := dbClient.ExecuteFetch(query.Query, -1)
 	if err != nil {
 		return err
 	}
@@ -353,13 +374,26 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		tableName, _ := row.ToString("table_name")
 		tableRows, _ := row.ToInt64("table_rows")
 
-		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+			sqltypes.Int64BindVariable(wd.ct.id),
+			sqltypes.StringBindVariable(tableName),
+		)
+		if err != nil {
+			return err
+		}
 		qr, err := dbClient.ExecuteFetch(query, -1)
 		if err != nil {
 			return err
 		}
 		if len(qr.Rows) == 0 {
-			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(tableName), tableRows)
+			query, err = sqlparser.ParseAndBind(sqlNewVDiffTable,
+				sqltypes.Int64BindVariable(wd.ct.id),
+				sqltypes.StringBindVariable(tableName),
+				sqltypes.Int64BindVariable(tableRows),
+			)
+			if err != nil {
+				return err
+			}
 		} else if len(qr.Rows) == 1 {
 			query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
 				sqltypes.Int64BindVariable(tableRows),

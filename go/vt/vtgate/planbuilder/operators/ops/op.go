@@ -49,6 +49,8 @@ type (
 
 		GetColumns() ([]*sqlparser.AliasedExpr, error)
 
+		GetSelectExprs() (sqlparser.SelectExprs, error)
+
 		ShortDescription() string
 
 		GetOrdering() ([]OrderBy, error)

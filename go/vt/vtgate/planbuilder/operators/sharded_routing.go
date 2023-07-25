@@ -67,7 +67,7 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		vindex, _ := vindexes.CreateVindex("binary", "binary", nil)
 		routing.Selected = &VindexOption{
 			Ready:       true,
-			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.TypedCollation{})},
+			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.SystemCollation)},
 			ValueExprs:  nil,
 			Predicates:  nil,
 			OpCode:      engine.EqualUnique,
@@ -79,6 +79,10 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 
 	}
 	for _, columnVindex := range vtable.ColumnVindexes {
+		// ignore any backfilling vindexes from vindex selection.
+		if columnVindex.IsBackfilling() {
+			continue
+		}
 		routing.VindexPreds = append(routing.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: id})
 	}
 	return routing
@@ -652,7 +656,10 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{Collation: ctx.SemTable.Collation})
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.SemTable.TypeForExpr,
+		})
 		if ee != nil {
 			return ee
 		}

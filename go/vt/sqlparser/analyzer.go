@@ -62,6 +62,7 @@ const (
 	StmtPrepare
 	StmtExecute
 	StmtDeallocate
+	StmtKill
 )
 
 // ASTToStatementType returns a StatementType from an AST stmt
@@ -123,6 +124,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtExecute
 	case *DeallocateStmt:
 		return StmtDeallocate
+	case *Kill:
+		return StmtKill
 	default:
 		return StmtUnknown
 	}
@@ -250,6 +253,8 @@ func Preview(sql string) StatementType {
 		return StmtRelease
 	case "rollback":
 		return StmtSRollback
+	case "kill":
+		return StmtKill
 	}
 	return StmtUnknown
 }
@@ -314,6 +319,8 @@ func (s StatementType) String() string {
 		return "EXECUTE"
 	case StmtDeallocate:
 		return "DEALLOCATE PREPARE"
+	case StmtKill:
+		return "KILL"
 	default:
 		return "UNKNOWN"
 	}

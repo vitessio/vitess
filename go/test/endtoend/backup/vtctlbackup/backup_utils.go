@@ -810,6 +810,7 @@ func terminatedRestore(t *testing.T) {
 }
 
 func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
+	t.Helper()
 	// for loop for 15 seconds to check if tablet type is correct
 	for i := 0; i < 15; i++ {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
@@ -1060,8 +1061,8 @@ func terminateRestore(t *testing.T) {
 				assert.Fail(t, "restore in progress file missing")
 			}
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true //nolint
-			return
+			found = true
+			break
 		}
 	}
 	assert.True(t, found, "Restore message not found")
@@ -1190,6 +1191,19 @@ func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectEr
 	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
 }
 
+func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
+	require.False(t, restoreToTimestamp.IsZero())
+	restoreToTimestampArg := mysqlctl.FormatRFC3339(restoreToTimestamp)
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_timestamp", restoreToTimestampArg, replica1.Alias)
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
+}
+
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	// Currently only the builtin backup engine instruments bytes-processed
 	// counts.
@@ -1233,11 +1247,27 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
+
+}
+
+func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
+	backupPosition := vars["RestorePosition"].(string)
+	backupTime := vars["RestoredBackupTime"].(string)
+	require.Contains(t, vars, "RestoredBackupTime")
+	require.Contains(t, vars, "RestorePosition")
+	require.NotEqual(t, "", backupPosition)
+	require.NotEqual(t, "", backupTime)
+	rp, err := mysql.DecodePosition(backupPosition)
+	require.NoError(t, err)
+	require.False(t, rp.IsZero())
 }
 
 func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	// Currently only the builtin backup engine instruments bytes-processed
 	// counts.
+
+	verifyRestorePositionAndTimeStats(t, vars)
+
 	if !useXtrabackup {
 		require.Contains(t, vars, "RestoreBytes")
 		bb := vars["RestoreBytes"].(map[string]any)

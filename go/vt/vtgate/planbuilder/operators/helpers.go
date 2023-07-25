@@ -67,15 +67,15 @@ func Clone(op ops.Operator) ops.Operator {
 	return op.Clone(clones)
 }
 
-// TableIDIntroducer is used to signal that this operator introduces data from a new source
-type TableIDIntroducer interface {
-	Introduces() semantics.TableSet
+// tableIDIntroducer is used to signal that this operator introduces data from a new source
+type tableIDIntroducer interface {
+	introducesTableID() semantics.TableSet
 }
 
 func TableID(op ops.Operator) (result semantics.TableSet) {
 	_ = rewrite.Visit(op, func(this ops.Operator) error {
-		if tbl, ok := this.(TableIDIntroducer); ok {
-			result = result.Merge(tbl.Introduces())
+		if tbl, ok := this.(tableIDIntroducer); ok {
+			result = result.Merge(tbl.introducesTableID())
 		}
 		return nil
 	})

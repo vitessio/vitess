@@ -197,7 +197,7 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		if err != nil {
 			return nil, err
 		}
-		ks := result.Value().ToString()
+		ks := result.Value(vcursor.ConnCollation()).ToString()
 		if specifiedKS == "" {
 			specifiedKS = ks
 		}
@@ -215,7 +215,7 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		if err != nil {
 			return nil, err
 		}
-		tabName := val.Value().ToString()
+		tabName := val.Value(vcursor.ConnCollation()).ToString()
 		tableNames[tblBvName] = tabName
 		bindVars[tblBvName] = sqltypes.StringBindVariable(tabName)
 	}
@@ -338,7 +338,7 @@ func (rp *RoutingParameters) equal(ctx context.Context, vcursor VCursor, bindVar
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, []sqltypes.Value{value.Value()})
+	rss, _, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, []sqltypes.Value{value.Value(vcursor.ConnCollation())})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -357,7 +357,7 @@ func (rp *RoutingParameters) equalMultiCol(ctx context.Context, vcursor VCursor,
 		if err != nil {
 			return nil, nil, err
 		}
-		rowValue = append(rowValue, v.Value())
+		rowValue = append(rowValue, v.Value(vcursor.ConnCollation()))
 	}
 
 	rss, _, err := resolveShardsMultiCol(ctx, vcursor, rp.Vindex.(vindexes.MultiColumn), rp.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
@@ -577,7 +577,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 				return nil, nil, err
 			}
 			isSingleVal[colIdx] = nil
-			lv = []sqltypes.Value{v.Value()}
+			lv = []sqltypes.Value{v.Value(vcursor.ConnCollation())}
 		}
 		multiColValues = append(multiColValues, lv)
 	}

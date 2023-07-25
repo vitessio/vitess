@@ -22,30 +22,27 @@ package grpcvtgateconn
 // moved back to its own package for reusability.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
-	"context"
-
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 // fakeVTGateService has the server side of this fake
@@ -95,7 +92,7 @@ func (q *queryExecute) equal(q2 *queryExecute) bool {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -156,7 +153,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -504,9 +501,9 @@ func testPrepare(t *testing.T, session *vtgateconn.VTGateSession) {
 	execCase := execMap["request1"]
 	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	require.NoError(t, err)
-	//if !qr.Equal(execCase.result) {
+	// if !qr.Equal(execCase.result) {
 	//	t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
-	//}
+	// }
 
 	_, err = session.Prepare(ctx, "none", nil)
 	require.EqualError(t, err, "no match for: none")

@@ -140,18 +140,46 @@ func TestNormalize(t *testing.T) {
 			"foo": sqltypes.HexNumBindVariable([]byte("0x1234")),
 		},
 	}, {
+		// Hex number values are normalized to a consistent case
+		in:      "select * from t where foo = 0xdeadbeef",
+		outstmt: "select * from t where foo = :foo /* HEXNUM */",
+		outbv: map[string]*querypb.BindVariable{
+			"foo": sqltypes.HexNumBindVariable([]byte("0xDEADBEEF")),
+		},
+	}, {
+		// Hex number values are normalized to a consistent case
+		in:      "select * from t where foo = 0xDEADBEEF",
+		outstmt: "select * from t where foo = :foo /* HEXNUM */",
+		outbv: map[string]*querypb.BindVariable{
+			"foo": sqltypes.HexNumBindVariable([]byte("0xDEADBEEF")),
+		},
+	}, {
 		// Hex encoded string values should work for selects
 		in:      "select * from t where foo = x'7b7d'",
 		outstmt: "select * from t where foo = :foo /* HEXVAL */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
+			"foo": sqltypes.HexValBindVariable([]byte("x'7B7D'")),
+		},
+	}, {
+		// Hex encoded string are converted to a consistent case
+		in:      "select * from t where foo = x'7b7D'",
+		outstmt: "select * from t where foo = :foo /* HEXVAL */",
+		outbv: map[string]*querypb.BindVariable{
+			"foo": sqltypes.HexValBindVariable([]byte("x'7B7D'")),
+		},
+	}, {
+		// Hex encoded string values should work for selects
+		in:      "select * from t where foo = x'7B7D'",
+		outstmt: "select * from t where foo = :foo /* HEXVAL */",
+		outbv: map[string]*querypb.BindVariable{
+			"foo": sqltypes.HexValBindVariable([]byte("x'7B7D'")),
 		},
 	}, {
 		// Ensure that hex notation bind vars work with collation based conversions
 		in:      "select convert(x'7b7d' using utf8mb4) from dual",
 		outstmt: "select convert(:bv1 /* HEXVAL */ using utf8mb4) from dual",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
+			"bv1": sqltypes.HexValBindVariable([]byte("x'7B7D'")),
 		},
 	}, {
 		// Hex number values should work for DMLs
@@ -165,21 +193,21 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where foo = b'11'",
 		outstmt: "select * from t where foo = :foo /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexNumBindVariable([]byte("0x3")),
+			"foo": sqltypes.HexNumBindVariable([]byte("0x03")),
 		},
 	}, {
 		// Large bin values work fine
 		in:      "select * from t where foo = b'11101010100101010010101010101010101010101000100100100100100101001101010101010101000001'",
 		outstmt: "select * from t where foo = :foo /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexNumBindVariable([]byte("0x3aa54aaaaaa24925355541")),
+			"foo": sqltypes.HexNumBindVariable([]byte("0x3AA54AAAAAA24925355541")),
 		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
 		outstmt: "update a set v1 = :v1 /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"v1": sqltypes.HexNumBindVariable([]byte("0x3")),
+			"v1": sqltypes.HexNumBindVariable([]byte("0x03")),
 		},
 	}, {
 		// ORDER BY column_position
@@ -284,10 +312,10 @@ func TestNormalize(t *testing.T) {
 		in:      `select b'1', 0b01, b'1010', 0b1111111`,
 		outstmt: `select :bv1 /* HEXNUM */, :bv2 /* HEXNUM */, :bv3 /* HEXNUM */, :bv4 /* HEXNUM */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x1")),
-			"bv2": sqltypes.HexNumBindVariable([]byte("0x1")),
-			"bv3": sqltypes.HexNumBindVariable([]byte("0xa")),
-			"bv4": sqltypes.HexNumBindVariable([]byte("0x7f")),
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x01")),
+			"bv2": sqltypes.HexNumBindVariable([]byte("0x01")),
+			"bv3": sqltypes.HexNumBindVariable([]byte("0x0A")),
+			"bv4": sqltypes.HexNumBindVariable([]byte("0x7F")),
 		},
 	}, {
 		// DateVal should also be normalized

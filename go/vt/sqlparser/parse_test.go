@@ -2599,7 +2599,8 @@ var (
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
-		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		input:  "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		output: "select 1 from t where foo = _utf8mb3 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -2610,10 +2611,10 @@ var (
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
 		input:  "select 1 from t where foo = _utf8mb3 'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
-		input:  "select 1 from t where foo = _utf8mb3'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		input:  "select 1 from t where foo = _utf8'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
@@ -2641,6 +2642,8 @@ var (
 	}, {
 		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
 		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by `name`",
+	}, {
+		input: "select foo, any_value(id) from tbl group by foo",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -3647,6 +3650,13 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input: `kill connection 18446744073709551615`,
+	}, {
+		input: `kill query 18446744073709551615`,
+	}, {
+		input:  `kill 18446744073709551615`,
+		output: `kill connection 18446744073709551615`,
 	}}
 )
 
@@ -4027,13 +4037,13 @@ func TestIntroducers(t *testing.T) {
 		output: "select _utf32 'x' from dual",
 	}, {
 		input:  "select _utf8 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
 	}, {
 		input:  "select _utf8mb3 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {

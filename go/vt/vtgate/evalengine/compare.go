@@ -137,7 +137,7 @@ func compareStrings(l, r eval) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	collation := col.Get()
+	collation := col.Collation.Get()
 	if collation == nil {
 		panic("unknown collation after coercion")
 	}

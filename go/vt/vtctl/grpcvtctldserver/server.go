@@ -264,9 +264,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	})
 
 	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
-	if req.AllowLongUnavailability {
-		executor.AllowBigSchemaChange()
-	}
 
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
 		err = vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
@@ -455,7 +452,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary}
+	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
 }
@@ -467,6 +464,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		Concurrency:        int64(req.Concurrency),
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
+		UpgradeSafe:        req.UpgradeSafe,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -1569,6 +1567,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
+		if throttlerConfig.ThrottledApps == nil {
+			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+		}
 		if req.CustomQuerySet {
 			// custom query provided
 			throttlerConfig.CustomQuery = req.CustomQuery
@@ -1590,6 +1591,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if req.CheckAsCheckShard {
 			throttlerConfig.CheckAsCheckSelf = false
+		}
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
 		}
 		return throttlerConfig
 	}
@@ -2723,9 +2727,10 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("shard", ti.Shard)
 
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:   req.BackupTime,
-		RestoreToPos: req.RestoreToPos,
-		DryRun:       req.DryRun,
+		BackupTime:         req.BackupTime,
+		RestoreToPos:       req.RestoreToPos,
+		RestoreToTimestamp: req.RestoreToTimestamp,
+		DryRun:             req.DryRun,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
@@ -2754,7 +2759,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			if mysqlctl.DisableActiveReparents {
 				return nil
 			}
-			if req.RestoreToPos != "" && !req.DryRun {
+			if (req.RestoreToPos != "" || !logutil.ProtoToTime(req.RestoreToTimestamp).IsZero()) && !req.DryRun {
 				// point in time recovery. Do not restore replication
 				return nil
 			}

@@ -142,7 +142,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	session, result, err := vtg.server.Execute(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
@@ -184,7 +184,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, vtgErr := vtg.server.StreamExecute(ctx, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
+	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteResponse{

@@ -22,9 +22,10 @@ import (
 
 // OracleGtidSet represents a set of GTID ranges as depicted by Retrieved_Gtid_Set, Executed_Gtid_Set or @@gtid_purged.
 type OracleGtidSet struct {
-	GtidEntries [](*OracleGtidSetEntry)
+	GtidEntries []*OracleGtidSetEntry
 }
 
+// NewOracleGtidSet creates a new GTID set.
 // Example input:  `230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,
 // 316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-8935:8984-6124596,
 // 321f5c0d-70e5-11e5-adb2-ecf4bb2262ff:1-56`
@@ -54,7 +55,7 @@ func NewOracleGtidSet(gtidSet string) (res *OracleGtidSet, err error) {
 // By way of how this works there can only be one entry matching our UUID, but we generalize.
 // We keep order of entries.
 func (oracleGTIDSet *OracleGtidSet) RemoveUUID(uuid string) (removed bool) {
-	filteredEntries := [](*OracleGtidSetEntry){}
+	var filteredEntries []*OracleGtidSetEntry
 	for _, entry := range oracleGTIDSet.GtidEntries {
 		if entry.UUID == uuid {
 			removed = true
@@ -79,7 +80,7 @@ func (oracleGTIDSet *OracleGtidSet) RetainUUIDs(uuids []string) (anythingRemoved
 	for _, uuid := range uuids {
 		retainUUIDs[uuid] = true
 	}
-	filteredEntries := [](*OracleGtidSetEntry){}
+	var filteredEntries []*OracleGtidSetEntry
 	for _, entry := range oracleGTIDSet.GtidEntries {
 		if retainUUIDs[entry.UUID] {
 			filteredEntries = append(filteredEntries, entry)
@@ -107,8 +108,8 @@ func (oracleGTIDSet *OracleGtidSet) SharedUUIDs(other *OracleGtidSet) (shared []
 	return shared
 }
 
-// String returns a user-friendly string representation of this entry
-func (oracleGTIDSet *OracleGtidSet) Explode() (result [](*OracleGtidSetEntry)) {
+// Explode returns a user-friendly string representation of this entry
+func (oracleGTIDSet *OracleGtidSet) Explode() (result []*OracleGtidSetEntry) {
 	for _, entries := range oracleGTIDSet.GtidEntries {
 		result = append(result, entries.Explode()...)
 	}
@@ -116,7 +117,7 @@ func (oracleGTIDSet *OracleGtidSet) Explode() (result [](*OracleGtidSetEntry)) {
 }
 
 func (oracleGTIDSet *OracleGtidSet) String() string {
-	tokens := []string{}
+	var tokens []string
 	for _, entry := range oracleGTIDSet.GtidEntries {
 		tokens = append(tokens, entry.String())
 	}

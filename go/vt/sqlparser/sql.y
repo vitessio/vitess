@@ -178,6 +178,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   referenceDefinition *ReferenceDefinition
   txAccessModes []TxAccessMode
   txAccessMode TxAccessMode
+  killType KillType
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -247,6 +248,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
+%token <str> KILL
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -349,7 +351,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
-%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE
+%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE ANY_VALUE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
@@ -398,14 +400,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %type <partitionByType> range_or_list
 %type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
-%type <statement> command
-%type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
-%type <statement> explain_statement explainable_statement
-%type <statement> prepare_statement
-%type <statement> vexplain_statement
-%type <statement> execute_statement deallocate_statement
+%type <statement> command kill_statement
+%type <statement> explain_statement explainable_statement vexplain_statement
+%type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
+%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list
@@ -589,6 +589,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <literal> ratio_opt
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
+%type <killType> kill_type_opt
 %start any_command
 
 %%
@@ -650,6 +651,7 @@ command:
 | prepare_statement
 | execute_statement
 | deallocate_statement
+| kill_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -1893,7 +1895,7 @@ underscore_charsets:
   }
 | UNDERSCORE_UTF8
   {
-    $$ = Utf8Str
+    $$ = Utf8mb3Str
   }
 | UNDERSCORE_UTF8MB4
   {
@@ -1901,7 +1903,7 @@ underscore_charsets:
   }
 | UNDERSCORE_UTF8MB3
   {
-    $$ = Utf8Str
+    $$ = Utf8mb3Str
   }
 
 literal_or_null:
@@ -5983,6 +5985,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
+| ANY_VALUE openb expression closeb
+  {
+    $$ = &AnyValue{Arg:$3}
+  }
 | TIMESTAMPADD openb timestampadd_interval ',' expression ',' expression closeb
   {
     $$ = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: $7, Interval: $5, Unit: $3}
@@ -7869,6 +7875,28 @@ reserved_table_id:
   {
     $$ = NewIdentifierCS(string($1))
   }
+
+kill_statement:
+  KILL kill_type_opt INTEGRAL
+  {
+    $$ = &Kill{Type: $2, ProcesslistID: convertStringToUInt64($3)}
+  }
+
+kill_type_opt:
+  /* empty */
+  {
+    $$ = ConnectionType
+  }
+| CONNECTION
+  {
+    $$ = ConnectionType
+  }
+| QUERY
+  {
+    $$ = QueryType
+  }
+
+
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -7947,6 +7975,7 @@ reserved_keyword:
 | JOIN
 | JSON_TABLE
 | KEY
+| KILL
 | LAG
 | LAST_VALUE
 | LATERAL
@@ -8045,6 +8074,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
 | ASCII
 | AUTO_INCREMENT

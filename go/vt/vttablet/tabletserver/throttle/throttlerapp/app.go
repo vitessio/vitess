@@ -16,6 +16,12 @@ limitations under the License.
 
 package throttlerapp
 
+import "strings"
+
+func Concatenate(names ...string) string {
+	return strings.Join(names, ":")
+}
+
 type Name string
 
 func (n Name) String() string {
@@ -24,6 +30,14 @@ func (n Name) String() string {
 
 func (n Name) Equals(s string) bool {
 	return string(n) == s
+}
+
+func (n Name) ConcatenateString(s string) string {
+	return Concatenate(n.String(), s)
+}
+
+func (n Name) Concatenate(other Name) Name {
+	return Name(n.ConcatenateString(other.String()))
 }
 
 const (
@@ -36,8 +50,8 @@ const (
 	GhostName     Name = "gh-ost"
 	PTOSCName     Name = "pt-osc"
 
-	VStreamerName         Name = "vstreamer"
 	VReplicationName      Name = "vreplication"
+	VStreamerName         Name = "vstreamer"
 	VPlayerName           Name = "vplayer"
 	VCopierName           Name = "vcopier"
 	ResultStreamerName    Name = "resultstreamer"

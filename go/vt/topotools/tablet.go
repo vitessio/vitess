@@ -245,3 +245,29 @@ func TabletIdent(tablet *topodatapb.Tablet) string {
 func TargetIdent(target *querypb.Target) string {
 	return fmt.Sprintf("%s/%s (%s)", target.Keyspace, target.Shard, target.TabletType)
 }
+
+// TabletEquality returns true iff two Tablets are identical for testing purposes
+func TabletEquality(left, right *topodatapb.Tablet) bool {
+	if left.Keyspace != right.Keyspace {
+		return false
+	}
+	if left.Shard != right.Shard {
+		return false
+	}
+	if left.Hostname != right.Hostname {
+		return false
+	}
+	if left.Type != right.Type {
+		return false
+	}
+	if left.MysqlHostname != right.MysqlHostname {
+		return false
+	}
+	if left.MysqlPort != right.MysqlPort {
+		return false
+	}
+	if left.PrimaryTermStartTime.String() != right.PrimaryTermStartTime.String() {
+		return false
+	}
+	return topoproto.TabletAliasString(left.Alias) == topoproto.TabletAliasString(right.Alias)
+}

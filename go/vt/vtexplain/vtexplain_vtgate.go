@@ -213,7 +213,7 @@ func (vte *VTExplain) vtgateExecute(sql string) ([]*engine.Plan, map[string]*Tab
 	// clear afterwards for the next run
 	planCache := vte.vtgateExecutor.Plans()
 
-	_, err := vte.vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vte.vtgateSession), sql, nil)
+	_, err := vte.vtgateExecutor.Execute(context.Background(), nil, "VtexplainExecute", vtgate.NewSafeSession(vte.vtgateSession), sql, nil)
 	if err != nil {
 		for _, tc := range vte.explainTopo.TabletConns {
 			tc.tabletQueries = nil

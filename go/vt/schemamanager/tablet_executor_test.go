@@ -134,8 +134,8 @@ func TestTabletExecutorValidate(t *testing.T) {
 	// alter a table with more than 100,000 rows
 	if err := executor.Validate(ctx, []string{
 		"ALTER TABLE test_table_03 ADD COLUMN new_id bigint(20)",
-	}); err == nil {
-		t.Fatalf("executor.Validate should fail, alter a table more than 100,000 rows")
+	}); err != nil {
+		t.Fatalf("executor.Validate should not fail, even for a table with more than 100,000 rows")
 	}
 
 	if err := executor.Validate(ctx, []string{
@@ -148,21 +148,6 @@ func TestTabletExecutorValidate(t *testing.T) {
 		"DROP TABLE test_table_04",
 	}); err != nil {
 		t.Fatalf("executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
-	}
-
-	executor.AllowBigSchemaChange()
-	// alter a table with more than 100,000 rows
-	if err := executor.Validate(ctx, []string{
-		"ALTER TABLE test_table_03 ADD COLUMN new_id bigint(20)",
-	}); err != nil {
-		t.Fatalf("executor.Validate should succeed, big schema change is disabled")
-	}
-
-	executor.DisallowBigSchemaChange()
-	if err := executor.Validate(ctx, []string{
-		"ALTER TABLE test_table_03 ADD COLUMN new_id bigint(20)",
-	}); err == nil {
-		t.Fatalf("executor.Validate should fail, alter a table more than 100,000 rows")
 	}
 }
 
