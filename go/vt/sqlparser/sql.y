@@ -208,11 +208,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FOR_VERSION
 
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL VERSION
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
-%token <bytes> SYSTEM_TIME CONTAINED
+%token <bytes> SYSTEM_TIME CONTAINED VERSION VERSIONS
 %token <bytes> VALUES LAST_INSERT_ID SQL_CALC_FOUND_ROWS
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -5734,6 +5734,18 @@ between_versions:
   {
     $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
   }
+| VERSIONS BETWEEN value_expression AND value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+  }
+| VERSIONS FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| VERSIONS CONTAINED IN openb value_expression ',' value_expression closeb
+  {
+    $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
+  }
 
 all_times:
   FOR_SYSTEM_TIME ALL
@@ -5743,6 +5755,10 @@ all_times:
 
 all_versions:
   FOR_VERSION ALL
+  {
+    $$ = &AsOf{All: true}
+  }
+| VERSIONS ALL
   {
     $$ = &AsOf{All: true}
   }

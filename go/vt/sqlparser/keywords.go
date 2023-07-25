@@ -634,6 +634,7 @@ var keywords = map[string]int{
 	"variance":                      VARIANCE,
 	"varying":                       VARYING,
 	"version":                       VERSION,
+	"versions":                      VERSIONS,
 	"version_token_admin":           VERSION_TOKEN_ADMIN,
 	"view":                          VIEW,
 	"virtual":                       VIRTUAL,
