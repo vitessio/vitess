@@ -3147,6 +3147,7 @@ var (
 				"description 'description'",
 		},
 	}
+
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
 	// Multi-statement bodies do not follow this expectation, hence they are excluded from TestParseNextValid.
@@ -3435,12 +3436,61 @@ end case;
 end`,
 		},
 	}
+
+	// validAnsiQuotesSQL contains SQL statements that are valid when the ANSI_QUOTES SQL mode is enabled. This
+	// mode treats double quotes (and backticks) as identifier quotes, and single quotes as string quotes.
+	validAnsiQuotesSQL = []parseTest{
+		{
+			input: `select "count", "foo", "bar" from t order by "COUNT"`,
+			output: "select `count`, foo, bar from t order by `COUNT` asc",
+		},
+		{
+			input: `INSERT INTO hourly_logins ("applications_id", "count", "hour") VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE "count" = "count" + VALUES(count)`,
+			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
+		},
+		{
+			input: `CREATE TABLE "webhook_events" ("pk" int primary key, "event" varchar(255) DEFAULT NULL)`,
+			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
+		},
+		{
+			input:  `with "test" as (select 1 from "dual"), "test_two" as (select 2 from "dual") select * from "test", "test_two" union all (with "b" as (with "c" as (select 1, 2 from "dual") select * from "c") select * from "b")`,
+			output: "with test as (select 1 from `dual`), test_two as (select 2 from `dual`) select * from test, test_two union all (with b as (with c as (select 1, 2 from `dual`) select * from c) select * from b)",
+		},
+		{
+			input: `select '"' from t order by "foo"`,
+			output: `select '\"' from t order by foo asc`,
+		},
+		{
+			// Assert that quote escaping is the same as when ANSI_QUOTES is off
+			input: `select '''foo'''`,
+			output: `select '\'foo\''`,
+		},
+		{
+			// Assert that quote escaping is the same as when ANSI_QUOTES is off
+			input: `select """""""foo"""""""`,
+			output: "select `\"\"\"foo\"\"\"`",
+		},
+	}
 )
 
 func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
+	}
+}
+
+func TestAnsiQuotesMode(t *testing.T) {
+	parserOptions := ParserOptions{AnsiQuotes: true}
+	for _, tcase := range validAnsiQuotesSQL {
+		runParseTestCaseWithParserOptions(t, tcase, parserOptions)
+	}
+	for _, tcase := range invalidAnsiQuotesSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := ParseWithOptions(tcase.input, parserOptions)
+			require.NotNil(t, err)
+			assert.Equal(t, tcase.output, err.Error())
+		})
 	}
 }
 
@@ -4478,12 +4528,19 @@ func TestKeywords(t *testing.T) {
 	}
 }
 
+// runParseTestCase runs the specific test case, |tcase|, using the default parser options.
 func runParseTestCase(t *testing.T, tcase parseTest) bool {
+	return runParseTestCaseWithParserOptions(t, tcase, ParserOptions{})
+}
+
+// runParseTestCaseWithParserOptions runs the specific test case, |tcase|, using the specified parser
+// options, |options|, to control any parser behaviors.
+func runParseTestCaseWithParserOptions(t *testing.T, tcase parseTest, options ParserOptions) bool {
 	return t.Run(tcase.input, func(t *testing.T) {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := ParseWithOptions(tcase.input, options)
 		require.NoError(t, err)
 
 		assertTestcaseOutput(t, tcase, tree)
@@ -6385,6 +6442,25 @@ var (
 		input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent",
 		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 52 near 'myevent'",
 	},
+	}
+
+	// invalidAnsiQuotesSQL contains invalid SQL statements that use ANSI_QUOTES mode.
+	invalidAnsiQuotesSQL = []parseTest{
+		{
+			// Assert that the two identifier quotes do not match each other
+			input: "select \"foo`",
+			output: "syntax error at position 13 near 'foo`'",
+		},
+		{
+			// Assert that the two identifier quotes do not match each other
+			input: "select `bar\"",
+			output: "syntax error at position 13 near 'bar\"'",
+		},
+		{
+			// Assert that single and double quotes do not auto concatenate in ANSI_QUOTES mode
+			input: "select 'a' \"b\" 'c'",
+			output: "syntax error at position 19 near 'c'",
+		},
 	}
 )
 
