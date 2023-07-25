@@ -468,6 +468,9 @@ var (
 			input: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
+			input: "select /* use */ 1 from t1 for version as of '2019-01-01' use index (`By`) where b = 1",
+			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
+		}, {
 			input: "select /* use */ 1 from t1 for version from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {

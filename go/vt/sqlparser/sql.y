@@ -5756,6 +5756,10 @@ as_of_point_clause:
   {
     $$ = &AsOf{Time: $4}
   }
+| FOR_VERSION AS OF value_expression
+  {
+    $$ = &AsOf{Time: $4}
+  }
 
 as_of_opt:
   {
