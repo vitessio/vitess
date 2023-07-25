@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	postWriteSleepDuration = 2*time.Second + 100*time.Millisecond
+	postWriteSleepDuration = 2 * time.Second // Nice for debugging purposes: clearly distinguishes the timestamps of certain operations, and as results the names/timestamps of backups.
 )
 
 const (
