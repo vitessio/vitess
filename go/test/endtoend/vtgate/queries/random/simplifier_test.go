@@ -17,6 +17,7 @@ limitations under the License.
 package random
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -34,6 +35,7 @@ import (
 func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 	// t.Skip("Skip CI")
 	query := "select /*vt+ PLANNER=Gen4 */ distinct 'opossum' and count(*) as caggr0, case count('mustang') > -36 when min(18 * -41) then 22 - max(tbl0.sal) else 7 end as caggr1 from emp as tbl0 where case when false then tbl0.ename when 17 then 'gator' else 'mite' end and case false and true when 'worm' then tbl0.job when tbl0.ename then case when true then tbl0.ename when false then 'squirrel' end end"
+	// select /*vt+ PLANNER=Gen4 */ distinct case when min(-0) then 0 else 0 end as caggr1 from emp as tbl0 where false
 	simplified := simplifyResultsMismatchedQuery(t, query)
 
 	var err error
@@ -45,6 +47,7 @@ func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 		_, err = mcmp.ExecAllowAndCompareError(simplified)
 	})
 
+	fmt.Printf("final simplified query: %s\n", simplified)
 	require.ErrorContains(t, err, "mismatched")
 
 }

@@ -236,16 +236,34 @@ func (s *shrinker) fillQueue() bool {
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
 	case *sqlparser.CaseExpr:
-		for i := range e.Whens {
-			whensCopy := sqlparser.CloneSliceOfRefOfWhen(e.Whens)
-			// replace ith element with last element, then truncate last element
-			whensCopy[i] = whensCopy[len(whensCopy)-1]
-			whensCopy = whensCopy[:len(whensCopy)-1]
-			s.queue = append(s.queue, &sqlparser.CaseExpr{
-				Expr:  e.Expr,
-				Whens: whensCopy,
-				Else:  e.Else,
-			})
+		s.queue = append(s.queue, e.Expr, e.Else)
+		for _, when := range e.Whens {
+			s.queue = append(s.queue, when.Cond, when.Val)
+		}
+
+		if len(e.Whens) > 1 {
+			for i := range e.Whens {
+				whensCopy := sqlparser.CloneSliceOfRefOfWhen(e.Whens)
+				// replace ith element with last element, then truncate last element
+				whensCopy[i] = whensCopy[len(whensCopy)-1]
+				whensCopy = whensCopy[:len(whensCopy)-1]
+				s.queue = append(s.queue, &sqlparser.CaseExpr{
+					Expr:  e.Expr,
+					Whens: whensCopy,
+					Else:  e.Else,
+				})
+			}
+		}
+
+		if e.Else != nil {
+			klon := sqlparser.CloneRefOfCaseExpr(e)
+			klon.Else = nil
+			s.queue = append(s.queue, klon)
+		}
+		if e.Expr != nil {
+			klon := sqlparser.CloneRefOfCaseExpr(e)
+			klon.Expr = nil
+			s.queue = append(s.queue, klon)
 		}
 	default:
 		return false
