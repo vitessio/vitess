@@ -5877,5 +5877,40 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "aggregation on top of derived table with limit",
+    "query": "select count(val2), sum(val2) from (select id, val2 from user where val2 is null limit 2) as x",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(val2), sum(val2) from (select id, val2 from user where val2 is null limit 2) as x",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count(0) AS count(val2), sum(1) AS sum(val2)",
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select val2, val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
+                "Query": "select val2, val2 from (select id, val2 from `user` where val2 is null) as x limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
