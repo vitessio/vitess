@@ -315,6 +315,7 @@ message ExecuteOptions {
     Gen4Left2Right = 4;
     Gen4WithFallback = 5;
     Gen4CompareV3 = 6;
+    V3Insert = 7;
   }
   
   // PlannerVersion specifies which planner to use. 

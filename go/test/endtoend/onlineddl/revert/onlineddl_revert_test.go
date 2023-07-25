@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -150,9 +151,6 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
@@ -204,6 +202,8 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
 
 	t.Run("revertible", testRevertible)
 	t.Run("revert", testRevert)
@@ -764,11 +764,21 @@ func testRevert(t *testing.T) {
 				defer wg.Done()
 				runMultipleConnections(ctx, t)
 			}()
-			uuid := testOnlineDDLStatementForTable(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			uuids = append(uuids, uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
+
+			func() {
+				// Ensures runMultipleConnections completes before the overall
+				// test does, even in the face of calls to t.FailNow() in the
+				// main goroutine, which still executes deferred functions
+				defer func() {
+					cancel() // will cause runMultipleConnections() to terminate
+					wg.Wait()
+				}()
+
+				uuid := testOnlineDDLStatementForTable(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+				uuids = append(uuids, uuid)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			}()
+
 			testSelectTableMetrics(t)
 		})
 	}
@@ -783,11 +793,20 @@ func testRevert(t *testing.T) {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
-		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		cancel() // will cause runMultipleConnections() to terminate
-		wg.Wait()
+
+		func() {
+			// Ensures runMultipleConnections completes before the overall
+			// test does, even in the face of calls to t.FailNow() in the
+			// main goroutine, which still executes deferred functions
+			defer func() {
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			}()
+
+			uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		}()
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
@@ -802,11 +821,20 @@ func testRevert(t *testing.T) {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
-		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		cancel() // will cause runMultipleConnections() to terminate
-		wg.Wait()
+
+		func() {
+			// Ensures runMultipleConnections completes before the overall
+			// test does, even in the face of calls to t.FailNow() in the
+			// main goroutine, which still executes deferred functions
+			defer func() {
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			}()
+
+			uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		}()
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
 	})
@@ -821,11 +849,20 @@ func testRevert(t *testing.T) {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
-		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		cancel() // will cause runMultipleConnections() to terminate
-		wg.Wait()
+
+		func() {
+			// Ensures runMultipleConnections completes before the overall
+			// test does, even in the face of calls to t.FailNow() in the
+			// main goroutine, which still executes deferred functions
+			defer func() {
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			}()
+
+			uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		}()
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
@@ -839,6 +876,15 @@ func testRevert(t *testing.T) {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
+
+		// Ensures runMultipleConnections completes before the overall
+		// test does, even in the face of calls to t.FailNow() in the
+		// main goroutine, which still executes deferred functions
+		defer func() {
+			cancel() // will cause runMultipleConnections() to terminate
+			wg.Wait()
+		}()
+
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy+" --postpone-completion")
 		uuids = append(uuids, uuid)
 		// Should be still running!
@@ -849,8 +895,6 @@ func testRevert(t *testing.T) {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		cancel() // will cause runMultipleConnections() to terminate
-		wg.Wait()
 	}
 	t.Run("postponed revert", func(t *testing.T) {
 		testPostponedRevert(t, schema.OnlineDDLStatusRunning)

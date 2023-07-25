@@ -26,15 +26,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sidecardb"
 )
 
 var (
@@ -86,15 +83,10 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal",
-			"--vschema_ddl_authorized_users", "%",
-			"--schema_change_signal_user", "userData1"}
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal",
-			"--queryserver-config-schema-change-signal-interval", "0.1",
-			"--queryserver-config-strict-table-acl",
-			"--queryserver-config-acl-exempt-acl", "userData1",
-			"--table-acl-config", "dummy.json"}
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+			"--schema_change_signal",
+			"--vschema_ddl_authorized_users", "%")
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		if vtgateVer >= 16 && vttabletVer >= 16 {
 			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")

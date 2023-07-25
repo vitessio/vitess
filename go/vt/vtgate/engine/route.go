@@ -89,16 +89,6 @@ type Route struct {
 	noTxNeeded
 }
 
-// NewSimpleRoute creates a Route with the bare minimum of parameters.
-func NewSimpleRoute(opcode Opcode, keyspace *vindexes.Keyspace) *Route {
-	return &Route{
-		RoutingParameters: &RoutingParameters{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-		},
-	}
-}
-
 // NewRoute creates a Route.
 func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
 	return &Route{
@@ -120,8 +110,8 @@ type OrderByParams struct {
 	WeightStringCol   int
 	Desc              bool
 	StarColFixedIndex int
-	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
-	FromGroupBy bool
+	// Type for knowing if the collation is relevant
+	Type querypb.Type
 	// Collation ID for comparison using collation
 	CollationID collations.ID
 }
@@ -140,7 +130,8 @@ func (obp OrderByParams) String() string {
 	} else {
 		val += " ASC"
 	}
-	if obp.CollationID != collations.Unknown {
+
+	if sqltypes.IsText(obp.Type) && obp.CollationID != collations.Unknown {
 		collation := obp.CollationID.Get()
 		val += " COLLATE " + collation.Name()
 	}
@@ -389,15 +380,30 @@ func (route *Route) mergeSort(
 
 // GetFields fetches the field info.
 func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-	if err != nil {
-		return nil, err
+	var rs *srvtopo.ResolvedShard
+
+	// Use an existing shard session
+	sss := vcursor.Session().ShardSession()
+	for _, ss := range sss {
+		if ss.Target.Keyspace == route.Keyspace.Name {
+			rs = ss
+			break
+		}
 	}
-	if len(rss) != 1 {
-		// This code is unreachable. It's just a sanity check.
-		return nil, fmt.Errorf("no shards for keyspace: %s", route.Keyspace.Name)
+
+	// If not find, then pick any shard.
+	if rs == nil {
+		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		if err != nil {
+			return nil, err
+		}
+		if len(rss) != 1 {
+			// This code is unreachable. It's just a sanity check.
+			return nil, fmt.Errorf("no shards for keyspace: %s", route.Keyspace.Name)
+		}
+		rs = rss[0]
 	}
-	qr, err := execShard(ctx, route, vcursor, route.FieldQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	qr, err := execShard(ctx, route, vcursor, route.FieldQuery, bindVars, rs, false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}

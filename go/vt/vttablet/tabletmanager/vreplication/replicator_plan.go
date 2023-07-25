@@ -22,12 +22,12 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/bytes2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -317,21 +317,15 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		valString := val.ToString()
-		fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
-		if !encodingOK {
+		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
+		if fromCollation == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
-		if fromEncoding != nil {
-			// As reminder, encoding can be nil for trivial charsets, like utf8 or ascii.
-			// encoding will be non-nil for charsets like latin1, gbk, etc.
-			var err error
-			valString, err = fromEncoding.NewDecoder().String(valString)
-			if err != nil {
-				return nil, err
-			}
+		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), fromCollation.Charset())
+		if err != nil {
+			return nil, err
 		}
-		return sqltypes.StringBindVariable(valString), nil
+		return sqltypes.StringBindVariable(string(out)), nil
 	}
 	if tp.ConvertIntToEnum[field.Name] && !val.IsNull() {
 		// An integer converted to an enum. We must write the textual value of the int. i.e. 0 turns to '0'

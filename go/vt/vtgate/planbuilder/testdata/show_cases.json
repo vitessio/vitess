@@ -165,9 +165,9 @@
           "Charset": "VARCHAR",
           "Default collation": "VARCHAR",
           "Description": "VARCHAR",
-          "Maxlen": "INT32"
+          "Maxlen": "UINT32"
         },
-        "RowCount": 2
+        "RowCount": 37
       }
     }
   },
@@ -716,7 +716,7 @@
         "Fields": {
           "Tables": "VARCHAR"
         },
-        "RowCount": 10
+        "RowCount": 11
       }
     }
   },

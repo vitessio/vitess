@@ -63,11 +63,11 @@ func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *opera
 }
 
 func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *operators.SubQueryOp) logicalPlan {
-	iroute, ok := inner.(*routeGen4)
+	iroute, ok := inner.(*route)
 	if !ok {
 		return nil
 	}
-	oroute, ok := outer.(*routeGen4)
+	oroute, ok := outer.(*route)
 	if !ok {
 		return nil
 	}
@@ -83,7 +83,7 @@ func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalP
 }
 
 // mergeSystemTableInformation copies over information from the second route to the first and appends to it
-func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
+func mergeSystemTableInformation(a *route, b *route) logicalPlan {
 	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
 	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
@@ -94,7 +94,7 @@ func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
 	return a
 }
 
-func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool {
+func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false

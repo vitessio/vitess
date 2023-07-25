@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -33,7 +34,9 @@ type MysqlDaemon interface {
 	// methods related to mysql running or not
 	Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error
-	RunMysqlUpgrade() error
+	RunMysqlUpgrade(ctx context.Context) error
+	ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error
+	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
 
@@ -102,22 +105,16 @@ type MysqlDaemon interface {
 	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// GetVersionString returns the database version as a string
-	GetVersionString() string
+	GetVersionString(ctx context.Context) (string, error)
 
 	// GetVersionComment returns the version comment
-	GetVersionComment(ctx context.Context) string
+	GetVersionComment(ctx context.Context) (string, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
-
-	// EnableBinlogPlayback enables playback of binlog events
-	EnableBinlogPlayback() error
-
-	// DisableBinlogPlayback disable playback of binlog events
-	DisableBinlogPlayback() error
 
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.

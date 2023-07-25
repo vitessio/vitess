@@ -175,6 +175,14 @@ func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, targ
 	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 
+// GetServingKeyspaces returns list of serving keyspaces.
+func (gw *TabletGateway) GetServingKeyspaces() []string {
+	if gw.kev == nil {
+		return nil
+	}
+	return gw.kev.GetServingKeyspaces()
+}
+
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
 func (gw *TabletGateway) RegisterStats() {
@@ -309,6 +317,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				// if primary is serving, but we initially found no tablet, we're in an inconsistent state
 				// we then retry the entire loop
 				if primary != nil {
+					err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "inconsistent state detected, primary is serving but initially found no available tablet")
 					continue
 				}
 			}

@@ -30,7 +30,6 @@ var _ logicalPlan = (*semiJoin)(nil)
 // This gets built if a rhs is correlated and can
 // be pulled out but requires some variables to be supplied from outside.
 type semiJoin struct {
-	gen4Plan
 	rhs  logicalPlan
 	lhs  logicalPlan
 	cols []int
@@ -63,11 +62,11 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (ps *semiJoin) WireupGen4(ctx *plancontext.PlanningContext) error {
-	if err := ps.lhs.WireupGen4(ctx); err != nil {
+func (ps *semiJoin) Wireup(ctx *plancontext.PlanningContext) error {
+	if err := ps.lhs.Wireup(ctx); err != nil {
 		return err
 	}
-	return ps.rhs.WireupGen4(ctx)
+	return ps.rhs.Wireup(ctx)
 }
 
 // Rewrite implements the logicalPlan interface

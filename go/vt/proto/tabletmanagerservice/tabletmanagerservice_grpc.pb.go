@@ -42,6 +42,7 @@ type TabletManagerClient interface {
 	ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error)
+	ResetSequences(ctx context.Context, in *tabletmanagerdata.ResetSequencesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetSequencesResponse, error)
 	LockTables(ctx context.Context, in *tabletmanagerdata.LockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockTablesResponse, error)
 	UnlockTables(ctx context.Context, in *tabletmanagerdata.UnlockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(ctx context.Context, in *tabletmanagerdata.ExecuteQueryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteQueryResponse, error)
@@ -69,9 +70,12 @@ type TabletManagerClient interface {
 	// GetReplicas asks for the list of mysql replicas
 	GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
+	CreateVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.CreateVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error)
+	DeleteVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.DeleteVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error)
+	ReadVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.ReadVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadVReplicationWorkflowResponse, error)
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
-	UpdateVRWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
+	UpdateVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVReplicationWorkflowResponse, error)
 	// VDiff API
 	VDiff(ctx context.Context, in *tabletmanagerdata.VDiffRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VDiffResponse, error)
 	// ResetReplication makes the target not replicating
@@ -232,6 +236,15 @@ func (c *tabletManagerClient) ApplySchema(ctx context.Context, in *tabletmanager
 	return out, nil
 }
 
+func (c *tabletManagerClient) ResetSequences(ctx context.Context, in *tabletmanagerdata.ResetSequencesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetSequencesResponse, error) {
+	out := new(tabletmanagerdata.ResetSequencesResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ResetSequences", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) LockTables(ctx context.Context, in *tabletmanagerdata.LockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockTablesResponse, error) {
 	out := new(tabletmanagerdata.LockTablesResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/LockTables", in, out, opts...)
@@ -367,6 +380,33 @@ func (c *tabletManagerClient) GetReplicas(ctx context.Context, in *tabletmanager
 	return out, nil
 }
 
+func (c *tabletManagerClient) CreateVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.CreateVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error) {
+	out := new(tabletmanagerdata.CreateVReplicationWorkflowResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/CreateVReplicationWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) DeleteVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.DeleteVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error) {
+	out := new(tabletmanagerdata.DeleteVReplicationWorkflowResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DeleteVReplicationWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ReadVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.ReadVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadVReplicationWorkflowResponse, error) {
+	out := new(tabletmanagerdata.ReadVReplicationWorkflowResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadVReplicationWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	out := new(tabletmanagerdata.VReplicationExecResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationExec", in, out, opts...)
@@ -385,9 +425,9 @@ func (c *tabletManagerClient) VReplicationWaitForPos(ctx context.Context, in *ta
 	return out, nil
 }
 
-func (c *tabletManagerClient) UpdateVRWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVRWorkflowResponse, error) {
-	out := new(tabletmanagerdata.UpdateVRWorkflowResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/UpdateVRWorkflow", in, out, opts...)
+func (c *tabletManagerClient) UpdateVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVReplicationWorkflowResponse, error) {
+	out := new(tabletmanagerdata.UpdateVReplicationWorkflowResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/UpdateVReplicationWorkflow", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -607,6 +647,7 @@ type TabletManagerServer interface {
 	ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error)
+	ResetSequences(context.Context, *tabletmanagerdata.ResetSequencesRequest) (*tabletmanagerdata.ResetSequencesResponse, error)
 	LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error)
 	UnlockTables(context.Context, *tabletmanagerdata.UnlockTablesRequest) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(context.Context, *tabletmanagerdata.ExecuteQueryRequest) (*tabletmanagerdata.ExecuteQueryResponse, error)
@@ -634,9 +675,12 @@ type TabletManagerServer interface {
 	// GetReplicas asks for the list of mysql replicas
 	GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
+	CreateVReplicationWorkflow(context.Context, *tabletmanagerdata.CreateVReplicationWorkflowRequest) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error)
+	DeleteVReplicationWorkflow(context.Context, *tabletmanagerdata.DeleteVReplicationWorkflowRequest) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error)
+	ReadVReplicationWorkflow(context.Context, *tabletmanagerdata.ReadVReplicationWorkflowRequest) (*tabletmanagerdata.ReadVReplicationWorkflowResponse, error)
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
-	UpdateVRWorkflow(context.Context, *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
+	UpdateVReplicationWorkflow(context.Context, *tabletmanagerdata.UpdateVReplicationWorkflowRequest) (*tabletmanagerdata.UpdateVReplicationWorkflowResponse, error)
 	// VDiff API
 	VDiff(context.Context, *tabletmanagerdata.VDiffRequest) (*tabletmanagerdata.VDiffResponse, error)
 	// ResetReplication makes the target not replicating
@@ -716,6 +760,9 @@ func (UnimplementedTabletManagerServer) PreflightSchema(context.Context, *tablet
 func (UnimplementedTabletManagerServer) ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
 }
+func (UnimplementedTabletManagerServer) ResetSequences(context.Context, *tabletmanagerdata.ResetSequencesRequest) (*tabletmanagerdata.ResetSequencesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetSequences not implemented")
+}
 func (UnimplementedTabletManagerServer) LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LockTables not implemented")
 }
@@ -761,14 +808,23 @@ func (UnimplementedTabletManagerServer) StartReplicationUntilAfter(context.Conte
 func (UnimplementedTabletManagerServer) GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReplicas not implemented")
 }
+func (UnimplementedTabletManagerServer) CreateVReplicationWorkflow(context.Context, *tabletmanagerdata.CreateVReplicationWorkflowRequest) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateVReplicationWorkflow not implemented")
+}
+func (UnimplementedTabletManagerServer) DeleteVReplicationWorkflow(context.Context, *tabletmanagerdata.DeleteVReplicationWorkflowRequest) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteVReplicationWorkflow not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadVReplicationWorkflow(context.Context, *tabletmanagerdata.ReadVReplicationWorkflowRequest) (*tabletmanagerdata.ReadVReplicationWorkflowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadVReplicationWorkflow not implemented")
+}
 func (UnimplementedTabletManagerServer) VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationExec not implemented")
 }
 func (UnimplementedTabletManagerServer) VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationWaitForPos not implemented")
 }
-func (UnimplementedTabletManagerServer) UpdateVRWorkflow(context.Context, *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdata.UpdateVRWorkflowResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateVRWorkflow not implemented")
+func (UnimplementedTabletManagerServer) UpdateVReplicationWorkflow(context.Context, *tabletmanagerdata.UpdateVReplicationWorkflowRequest) (*tabletmanagerdata.UpdateVReplicationWorkflowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateVReplicationWorkflow not implemented")
 }
 func (UnimplementedTabletManagerServer) VDiff(context.Context, *tabletmanagerdata.VDiffRequest) (*tabletmanagerdata.VDiffResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VDiff not implemented")
@@ -1065,6 +1121,24 @@ func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_ResetSequences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ResetSequencesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ResetSequences(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ResetSequences",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ResetSequences(ctx, req.(*tabletmanagerdata.ResetSequencesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_LockTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.LockTablesRequest)
 	if err := dec(in); err != nil {
@@ -1335,6 +1409,60 @@ func _TabletManager_GetReplicas_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_CreateVReplicationWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.CreateVReplicationWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).CreateVReplicationWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/CreateVReplicationWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).CreateVReplicationWorkflow(ctx, req.(*tabletmanagerdata.CreateVReplicationWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_DeleteVReplicationWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.DeleteVReplicationWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).DeleteVReplicationWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/DeleteVReplicationWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).DeleteVReplicationWorkflow(ctx, req.(*tabletmanagerdata.DeleteVReplicationWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_ReadVReplicationWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadVReplicationWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadVReplicationWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadVReplicationWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadVReplicationWorkflow(ctx, req.(*tabletmanagerdata.ReadVReplicationWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_VReplicationExec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.VReplicationExecRequest)
 	if err := dec(in); err != nil {
@@ -1371,20 +1499,20 @@ func _TabletManager_VReplicationWaitForPos_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_UpdateVRWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.UpdateVRWorkflowRequest)
+func _TabletManager_UpdateVReplicationWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.UpdateVReplicationWorkflowRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).UpdateVRWorkflow(ctx, in)
+		return srv.(TabletManagerServer).UpdateVReplicationWorkflow(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/UpdateVRWorkflow",
+		FullMethod: "/tabletmanagerservice.TabletManager/UpdateVReplicationWorkflow",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).UpdateVRWorkflow(ctx, req.(*tabletmanagerdata.UpdateVRWorkflowRequest))
+		return srv.(TabletManagerServer).UpdateVReplicationWorkflow(ctx, req.(*tabletmanagerdata.UpdateVReplicationWorkflowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1743,6 +1871,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_ApplySchema_Handler,
 		},
 		{
+			MethodName: "ResetSequences",
+			Handler:    _TabletManager_ResetSequences_Handler,
+		},
+		{
 			MethodName: "LockTables",
 			Handler:    _TabletManager_LockTables_Handler,
 		},
@@ -1803,6 +1935,18 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_GetReplicas_Handler,
 		},
 		{
+			MethodName: "CreateVReplicationWorkflow",
+			Handler:    _TabletManager_CreateVReplicationWorkflow_Handler,
+		},
+		{
+			MethodName: "DeleteVReplicationWorkflow",
+			Handler:    _TabletManager_DeleteVReplicationWorkflow_Handler,
+		},
+		{
+			MethodName: "ReadVReplicationWorkflow",
+			Handler:    _TabletManager_ReadVReplicationWorkflow_Handler,
+		},
+		{
 			MethodName: "VReplicationExec",
 			Handler:    _TabletManager_VReplicationExec_Handler,
 		},
@@ -1811,8 +1955,8 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_VReplicationWaitForPos_Handler,
 		},
 		{
-			MethodName: "UpdateVRWorkflow",
-			Handler:    _TabletManager_UpdateVRWorkflow_Handler,
+			MethodName: "UpdateVReplicationWorkflow",
+			Handler:    _TabletManager_UpdateVReplicationWorkflow_Handler,
 		},
 		{
 			MethodName: "VDiff",

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -49,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -262,6 +264,27 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Get the VSchema on the target and source keyspaces. We can
+	// then use this for handling edge cases, such as adjusting
+	// results for reference tables when the shard count is
+	// different between the source and target as then there will
+	// be a extra rows reported on the side with more shards.
+	srcTopo := wr.ts
+	if ts.ExternalTopo() != nil {
+		srcTopo = ts.ExternalTopo()
+	}
+	srcvschema, err := srcTopo.GetVSchema(ctx, ts.SourceKeyspaceName())
+	if err != nil {
+		return nil, err
+	}
+	tgtvschema, err := wr.ts.GetVSchema(ctx, ts.TargetKeyspaceName())
+	if err != nil {
+		return nil, err
+	}
+	numSourceShards := len(ts.SourceShards())
+	numTargetShards := len(ts.TargetShards())
+	numShardDiff := int(math.Abs(float64(numSourceShards - numTargetShards)))
+
 	// TODO(sougou): parallelize
 	rowsToCompare := maxRows
 	diffReports := make(map[string]*DiffReport)
@@ -280,6 +303,30 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, vterrors.Wrap(err, "diff")
 		}
 		dr.TableName = table
+		// This could be a reference table with a different number of shards on
+		// the source and target, so let's check and adjust if needed. In that
+		// case we should have no mismatched rows and the number of extra rows
+		// should be a multiple of the extra shards.
+		if numShardDiff > 0 && (dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0) && dr.MismatchedRows == 0 {
+			// Each shard should have the same number of rows for a reference table.
+			perShardRows := (dr.ProcessedRows + dr.MatchingRows) / (numSourceShards + numTargetShards)
+			if perShardRows == dr.MatchingRows { // If not then there's a legitimate mismatch
+				svt, sok := srcvschema.Tables[table]
+				tvt, tok := tgtvschema.Tables[table]
+				if numSourceShards > numTargetShards && sok && svt.Type == vindexes.TypeReference &&
+					dr.ExtraRowsSource/numShardDiff == perShardRows {
+					dr.ExtraRowsSource = 0
+					dr.ExtraRowsSourceDiffs = nil
+					dr.ProcessedRows = dr.MatchingRows
+				}
+				if numTargetShards > numSourceShards && tok && tvt.Type == vindexes.TypeReference &&
+					dr.ExtraRowsTarget/numShardDiff == perShardRows {
+					dr.ExtraRowsTarget = 0
+					dr.ExtraRowsTargetDiffs = nil
+					dr.ProcessedRows = dr.MatchingRows
+				}
+			}
+		}
 		// If the only difference is the order in which the rows were returned
 		// by MySQL on each side then we'll have the same number of extras on
 		// both sides. If that's the case, then let's see if the extra rows on
@@ -638,17 +685,16 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 			// Check if it's an aggregate expression
 			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
-				switch fname := strings.ToLower(expr.AggrName()); fname {
+				switch fname := expr.AggrName(); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"
 					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
 					// but will need to be revisited when we add such support to vreplication
-					aggregateFuncType := "sum"
-					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: opcode.SupportedAggregates[aggregateFuncType],
-						Col:    len(sourceSelect.SelectExprs) - 1,
-					})
+					aggregates = append(aggregates, engine.NewAggregateParam(
+						/*opcode*/ opcode.AggregateSum,
+						/*offset*/ len(sourceSelect.SelectExprs)-1,
+						/*alias*/ ""))
 				}
 			}
 		default:
@@ -721,7 +767,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: sqltypes.Unknown})
 	}
 	return res
 }
@@ -737,9 +783,9 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
 		if cpk.collation == nil {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationBinaryID})
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID})
 		} else {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation.ID()})
 		}
 	}
 	return &engine.MergeSort{

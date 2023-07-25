@@ -54,6 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -182,8 +184,20 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeoHashFromLatLongExpr:
+		return VisitRefOfGeoHashFromLatLongExpr(in, f)
+	case *GeoHashFromPointExpr:
+		return VisitRefOfGeoHashFromPointExpr(in, f)
+	case *GeoJSONFromGeomExpr:
+		return VisitRefOfGeoJSONFromGeomExpr(in, f)
+	case *GeomCollPropertyFuncExpr:
+		return VisitRefOfGeomCollPropertyFuncExpr(in, f)
 	case *GeomFormatExpr:
 		return VisitRefOfGeomFormatExpr(in, f)
+	case *GeomFromGeoHashExpr:
+		return VisitRefOfGeomFromGeoHashExpr(in, f)
+	case *GeomFromGeoJSONExpr:
+		return VisitRefOfGeomFromGeoJSONExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -210,8 +224,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfInsert(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
@@ -272,6 +286,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJtOnResponse(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
+	case *Kill:
+		return VisitRefOfKill(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
@@ -374,6 +390,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
+	case *PolygonPropertyFuncExpr:
+		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
 	case *PurgeBinaryLogs:
@@ -476,8 +494,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfTableSpec(in, f)
 	case *TablespaceOperation:
 		return VisitRefOfTablespaceOperation(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *TruncateTable:
@@ -779,6 +797,18 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAnyValue(in *AnyValue, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -1691,6 +1721,72 @@ func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfGeoHashFromLatLongExpr(in *GeoHashFromLatLongExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Latitude, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Longitude, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MaxLength, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeoHashFromPointExpr(in *GeoHashFromPointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Point, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MaxLength, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeoJSONFromGeomExpr(in *GeoJSONFromGeomExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Geom, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MaxDecimalDigits, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Bitmask, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomCollPropertyFuncExpr(in *GeomCollPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.GeomColl, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.PropertyDefArg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfGeomFormatExpr(in *GeomFormatExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1702,6 +1798,39 @@ func VisitRefOfGeomFormatExpr(in *GeomFormatExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFromGeoHashExpr(in *GeomFromGeoHashExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.GeoHash, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.SridOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFromGeoJSONExpr(in *GeomFromGeoJSONExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.GeoJSON, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.HigherDimHandlerOpt, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Srid, f); err != nil {
 		return err
 	}
 	return nil
@@ -1863,7 +1992,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitRefOfAliasedTableExpr(in.Table, f); err != nil {
 		return err
 	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {
@@ -1901,14 +2030,17 @@ func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
+func VisitRefOfIntervalDateExpr(in *IntervalDateExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Expr, f); err != nil {
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Interval, f); err != nil {
 		return err
 	}
 	return nil
@@ -2360,6 +2492,15 @@ func VisitRefOfJtOnResponse(in *JtOnResponse, f Visit) error {
 	return nil
 }
 func VisitRefOfKeyState(in *KeyState, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfKill(in *Kill, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -3035,6 +3176,21 @@ func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExprs(in.LinestringParams, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPolygonPropertyFuncExpr(in *PolygonPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Polygon, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.PropertyDefArg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3775,7 +3931,7 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
+func VisitRefOfTimestampDiffExpr(in *TimestampDiffExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -4245,6 +4401,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
 	case *BitAnd:
@@ -4343,6 +4501,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4369,8 +4529,20 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeoHashFromLatLongExpr:
+		return VisitRefOfGeoHashFromLatLongExpr(in, f)
+	case *GeoHashFromPointExpr:
+		return VisitRefOfGeoHashFromPointExpr(in, f)
+	case *GeoJSONFromGeomExpr:
+		return VisitRefOfGeoJSONFromGeomExpr(in, f)
+	case *GeomCollPropertyFuncExpr:
+		return VisitRefOfGeomCollPropertyFuncExpr(in, f)
 	case *GeomFormatExpr:
 		return VisitRefOfGeomFormatExpr(in, f)
+	case *GeomFromGeoHashExpr:
+		return VisitRefOfGeomFromGeoHashExpr(in, f)
+	case *GeomFromGeoJSONExpr:
+		return VisitRefOfGeomFromGeoJSONExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -4381,6 +4553,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *JSONArrayExpr:
@@ -4459,6 +4633,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
+	case *PolygonPropertyFuncExpr:
+		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4471,8 +4647,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UpdateXMLExpr:
@@ -4579,6 +4755,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -4637,8 +4815,20 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeoHashFromLatLongExpr:
+		return VisitRefOfGeoHashFromLatLongExpr(in, f)
+	case *GeoHashFromPointExpr:
+		return VisitRefOfGeoHashFromPointExpr(in, f)
+	case *GeoJSONFromGeomExpr:
+		return VisitRefOfGeoJSONFromGeomExpr(in, f)
+	case *GeomCollPropertyFuncExpr:
+		return VisitRefOfGeomCollPropertyFuncExpr(in, f)
 	case *GeomFormatExpr:
 		return VisitRefOfGeomFormatExpr(in, f)
+	case *GeomFromGeoHashExpr:
+		return VisitRefOfGeomFromGeoHashExpr(in, f)
+	case *GeomFromGeoJSONExpr:
+		return VisitRefOfGeomFromGeoJSONExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -4649,8 +4839,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
@@ -4747,6 +4937,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
+	case *PolygonPropertyFuncExpr:
+		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4769,8 +4961,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:
@@ -4923,6 +5115,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfFlush(in, f)
 	case *Insert:
 		return VisitRefOfInsert(in, f)
+	case *Kill:
+		return VisitRefOfKill(in, f)
 	case *Load:
 		return VisitRefOfLoad(in, f)
 	case *LockTables:

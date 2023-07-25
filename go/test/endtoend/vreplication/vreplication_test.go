@@ -34,6 +34,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"github.com/buger/jsonparser"
 
@@ -44,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
@@ -58,8 +60,8 @@ var (
 	sourceKsOpts           = make(map[string]string)
 	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
-	sourceThrottlerAppName = "vstreamer"
-	targetThrottlerAppName = "vreplication"
+	sourceThrottlerAppName = throttlerapp.VStreamerName
+	targetThrottlerAppName = throttlerapp.VReplicationName
 )
 
 const (
@@ -94,16 +96,16 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody st
 	return respBody, err
 }
 
-func throttleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
+func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp.String()))
 }
 
-func unthrottleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
+func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
 }
 
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, app)
+func throttlerCheckSelf(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (respBody string, err error) {
+	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerApp.String())
 	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		return "", err
@@ -168,12 +170,24 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm workflow is still running fine
-	waitForWorkflowState(t, vc, ksWorkflow, "Running")
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	// Confirm new col does not exist on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
-	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Also test Cancel --keep_routing_rules
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table, "--keep_routing_rules")
+	// Confirm that the routing rules were NOT cleared
+	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	require.Greater(t, len(gjson.Get(rr, "rules").Array()), 0)
+	// Manually clear the routing rules
+	err = vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules", "{}")
+	require.NoError(t, err)
+	// Confirm that the routing rules are gone
+	rr, err = vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	require.Equal(t, len(gjson.Get(rr, "rules").Array()), 0)
 	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
@@ -186,7 +200,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm that the worfklow stopped because of the DDL
-	waitForWorkflowState(t, vc, ksWorkflow, "Stopped", fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
@@ -201,12 +215,19 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 	// Confirm workflow is still running fine
-	waitForWorkflowState(t, vc, ksWorkflow, "Running")
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 }
 
+// TestVreplicationCopyThrottling tests the logic that is used
+// by vstreamer when starting a copy phase cycle.
+// This logic today supports waiting for MySQL replication lag
+// and/or InnoDB MVCC history to be below a certain threshold
+// before starting the next copy phase. This test focuses on
+// the innodb history list length check.
+// NOTE: this is a manual test. It is not executed in the CI.
 func TestVreplicationCopyThrottling(t *testing.T) {
 	workflow := "copy-throttling"
 	cell := "zone1"
@@ -248,9 +269,9 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	// We use a small timeout and ignore errors as we don't expect the MoveTables to start here
 	// because of the InnoDB History List length.
-	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
+	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
 	// The initial copy phase should be blocking on the history list
 	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
@@ -595,6 +616,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	insertInitialData(t)
+
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, keyspace, 2)
 	})
@@ -683,7 +705,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blob_tbl,vdiff_order"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blüb_tbl,vdiff_order,reftable"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -748,7 +770,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		tbls := []string{"Lead", "Lead-1"}
 		for _, tbl := range tbls {
 			output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from `%s`", tbl)})
+				"--host=127.0.0.1", "--default-character-set=utf8mb4", "-e", fmt.Sprintf("select * from `%s`", tbl)})
 			if err != nil {
 				require.FailNow(t, output)
 			}
@@ -1100,7 +1122,7 @@ func shardMerchant(t *testing.T) {
 
 		// confirm that the backticking of keyspaces in the routing rules works
 		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "-e", "select * from merchant"})
+			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "--default-character-set=utf8mb4", "-e", "select * from merchant"})
 		if err != nil {
 			require.FailNow(t, output)
 		}
@@ -1332,21 +1354,19 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
-	if len(extraFlags) > 0 {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables,
-			"--cells="+cell, "--tablet_types=primary,replica,rdonly", strings.Join(extraFlags, " "),
-			action, fmt.Sprintf("%s.%s", targetKs, workflow))
-	} else {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-			"--tablet_types=primary,replica,rdonly", action, fmt.Sprintf("%s.%s", targetKs, workflow))
+	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, action}
+	if strings.EqualFold(action, strings.ToLower(workflowActionCreate)) {
+		extraFlags = append(extraFlags, "--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
 	}
+	args = append(args, extraFlags...)
+	err = vc.VtctldClient.ExecuteCommand(args...)
 	if err != nil {
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
 }
-func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-		"--tablet_types="+tabletTypes, "--timeout="+timeout.String(), action, fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, ignoreErrors bool) {
+	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
+		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
 		if !ignoreErrors {
 			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 		}

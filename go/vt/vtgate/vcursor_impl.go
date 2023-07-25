@@ -25,10 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/mysql"
@@ -51,9 +47,12 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
@@ -63,7 +62,7 @@ var _ vindexes.VCursor = (*vcursorImpl)(nil)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
-	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+	Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
@@ -343,13 +342,7 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	var keyspaces = make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
-	for _, ks := range vc.vschema.Keyspaces {
-		keyspaces = append(keyspaces, ks.Keyspace)
-	}
-	sort.Slice(keyspaces, func(i, j int) bool {
-		return keyspaces[i].Name < keyspaces[j].Name
-	})
+	keyspaces := vc.getSortedServingKeyspaces()
 
 	// Look for any sharded keyspace if present, otherwise take the first keyspace,
 	// sorted alphabetically
@@ -361,18 +354,38 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// getSortedServingKeyspaces gets the sorted serving keyspaces
+func (vc *vcursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
+	var keyspaces []*vindexes.Keyspace
+
+	if vc.resolver != nil && vc.resolver.GetGateway() != nil {
+		keyspaceNames := vc.resolver.GetGateway().GetServingKeyspaces()
+		for _, ksName := range keyspaceNames {
+			ks, exists := vc.vschema.Keyspaces[ksName]
+			if exists {
+				keyspaces = append(keyspaces, ks.Keyspace)
+			}
+		}
+	}
+
+	if len(keyspaces) == 0 {
+		for _, ks := range vc.vschema.Keyspaces {
+			keyspaces = append(keyspaces, ks.Keyspace)
+		}
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+	return keyspaces
+}
+
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	kss := vc.vschema.Keyspaces
-	keys := make([]string, 0, len(kss))
-	for ks := range kss {
-		keys = append(keys, ks)
-	}
-	sort.Strings(keys)
+	keyspaces := vc.getSortedServingKeyspaces()
 
-	return kss[keys[0]].Keyspace, nil
+	return keyspaces[0], nil
 }
 
 // SysVarSetEnabled implements the ContextVSchema interface
@@ -498,7 +511,7 @@ func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string,
 		return nil, err
 	}
 
-	qr, err := vc.executor.Execute(ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
+	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
 	vc.setRollbackOnPartialExecIfRequired(err != nil, rollbackOnError)
 
 	return qr, err
@@ -513,7 +526,7 @@ func (vc *vcursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 	}
 	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
 	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
-	_, err := vc.executor.Execute(ctx, "MarkSavepoint", vc.safeSession, spQuery, bindVars)
+	_, err := vc.executor.Execute(ctx, nil, "MarkSavepoint", vc.safeSession, spQuery, bindVars)
 	if err != nil {
 		return err
 	}

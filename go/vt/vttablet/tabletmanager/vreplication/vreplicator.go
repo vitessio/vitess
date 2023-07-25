@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -91,15 +92,6 @@ const (
 	table_name=%a and id=%a`
 )
 
-type ComponentName string
-
-const (
-	VPlayerComponentName     ComponentName = "vplayer"
-	VCopierComponentName     ComponentName = "vcopier"
-	VStreamerComponentName   ComponentName = "vstreamer"
-	RowStreamerComponentName ComponentName = "rowstreamer"
-)
-
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -108,7 +100,7 @@ type vreplicator struct {
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
-	state           string
+	state           binlogdatapb.VReplicationWorkflowState
 	stats           *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld     mysqlctl.MysqlDaemon
@@ -271,7 +263,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		}
 
 		// If any of the operations below changed state to Stopped or Error, we should return.
-		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
+		if settings.State == binlogdatapb.VReplicationWorkflowState_Stopped || settings.State == binlogdatapb.VReplicationWorkflowState_Error {
 			return nil
 		}
 		switch {
@@ -304,9 +296,9 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 			if vr.source.StopAfterCopy {
-				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
+				return vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped after copy.")
 			}
-			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
+			if err := vr.setState(binlogdatapb.VReplicationWorkflowState_Running, ""); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
@@ -453,24 +445,24 @@ func (vr *vreplicator) setMessage(message string) error {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
-	if err := insertLog(vr.dbClient, LogMessage, vr.id, vr.state, message); err != nil {
+	if err := insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (vr *vreplicator) insertLog(typ, message string) error {
-	return insertLog(vr.dbClient, typ, vr.id, vr.state, message)
+	return insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
 }
 
-func (vr *vreplicator) setState(state, message string) error {
+func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
 			Message: message,
 		})
 	}
-	vr.stats.State.Store(state)
+	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
@@ -478,7 +470,7 @@ func (vr *vreplicator) setState(state, message string) error {
 	if state == vr.state {
 		return nil
 	}
-	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state, message); err != nil {
+	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message); err != nil {
 		return err
 	}
 	vr.state = state
@@ -562,17 +554,17 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
-	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
+	names := []string{vr.WorkflowName, throttlerapp.VReplicationName.String()}
 	if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
-		names = append(names, throttlerOnlineDDLAppName)
+		names = append(names, throttlerapp.OnlineDDLName.String())
 	}
-	return strings.Join(names, ":")
+	return throttlerapp.Concatenate(names...)
 }
 
-func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
+func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled.String())
 		if err != nil {
 			return err
 		}

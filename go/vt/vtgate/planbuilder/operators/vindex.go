@@ -52,7 +52,7 @@ type (
 const VindexUnsupported = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
-func (v *Vindex) Introduces() semantics.TableSet {
+func (v *Vindex) introducesTableID() semantics.TableSet {
 	return v.Solved
 }
 
@@ -62,7 +62,11 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	return &clone
 }
 
-func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+	}
+
 	offset, err := addColumn(ctx, v, expr.Expr)
 	if err != nil {
 		return nil, 0, err
@@ -80,6 +84,10 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 
 func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(v.Columns, colNameToExpr), nil
+}
+
+func (v *Vindex) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(v)
 }
 
 func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
@@ -148,10 +156,6 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 // It is not keyspace-qualified.
 func (v *Vindex) TablesUsed() []string {
 	return []string{v.Table.Table.Name.String()}
-}
-
-func (v *Vindex) Description() ops.OpDescription {
-	return ops.OpDescription{OperatorType: "Vindex"}
 }
 
 func (v *Vindex) ShortDescription() string {

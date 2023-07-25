@@ -145,8 +145,8 @@ func TestMain(m *testing.M) {
 			sidecarDBName = sidecardb.DefaultName
 		}
 
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--schema_change_signal_user", "userData1"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "5", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		// Start topo server
 		err = clusterInstance.StartTopo()

@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -28,8 +29,6 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
-	"context"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -38,7 +37,7 @@ import (
 
 // TestVStreamSQLUnsharded tests the experimental 'vstream * from' vtgate olap query
 func TestVStreamSQLUnsharded(t *testing.T) {
-	t.Skip("this test is failing due to races") //FIXME
+	t.Skip("this test is failing due to races") // FIXME
 	executor, _, _, sbcLookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -80,17 +79,10 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := executor.StreamExecute(
-			ctx,
-			"TestExecuteStream",
-			NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}),
-			sql,
-			nil,
-			func(qr *sqltypes.Result) error {
-				results <- qr
-				return nil
-			},
-		)
+		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
+			results <- qr
+			return nil
+		})
 		require.NoError(t, err)
 	}()
 	timer := time.NewTimer(5 * time.Second)

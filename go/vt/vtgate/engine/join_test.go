@@ -237,9 +237,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 		},
 	}
 	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute  true`,
 	})

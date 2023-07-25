@@ -1,0 +1,43 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "hash_index": {
+      "type": "hash"
+    },
+    "lookup1": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "test_vdx",
+        "from": "val1",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "test"
+    },
+    "unicode_vdx":{
+      "type": "unicode_loose_md5"
+    }
+  },
+  "tables": {
+    "test":{
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        },
+        {
+          "column": "val1",
+          "name": "lookup1"
+        }
+      ]
+    },
+    "test_vdx":{
+      "column_vindexes": [
+        {
+          "column": "val1",
+          "name": "unicode_vdx"
+        }
+      ]
+    }
+  }
+}

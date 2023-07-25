@@ -19,6 +19,7 @@ limitations under the License.
 package grpcmysqlctlclient
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -26,8 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
@@ -84,6 +83,23 @@ func (c *client) RunMysqlUpgrade(ctx context.Context) error {
 	})
 }
 
+// ApplyBinlogFile is part of the MysqlctlClient interface.
+func (c *client) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.ApplyBinlogFile(ctx, req)
+		return err
+	})
+}
+
+// ReadBinlogFilesTimestamps is part of the MysqlctlClient interface.
+func (c *client) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (resp *mysqlctlpb.ReadBinlogFilesTimestampsResponse, err error) {
+	err = c.withRetry(ctx, func() error {
+		resp, err = c.c.ReadBinlogFilesTimestamps(ctx, req)
+		return err
+	})
+	return resp, err
+}
+
 // ReinitConfig is part of the MysqlctlClient interface.
 func (c *client) ReinitConfig(ctx context.Context) error {
 	return c.withRetry(ctx, func() error {
@@ -98,6 +114,20 @@ func (c *client) RefreshConfig(ctx context.Context) error {
 		_, err := c.c.RefreshConfig(ctx, &mysqlctlpb.RefreshConfigRequest{})
 		return err
 	})
+}
+
+// VersionString is part of the MysqlctlClient interface.
+func (c *client) VersionString(ctx context.Context) (string, error) {
+	var version string
+	err := c.withRetry(ctx, func() error {
+		r, err := c.c.VersionString(ctx, &mysqlctlpb.VersionStringRequest{})
+		if err != nil {
+			return err
+		}
+		version = r.Version
+		return nil
+	})
+	return version, err
 }
 
 // Close is part of the MysqlctlClient interface.

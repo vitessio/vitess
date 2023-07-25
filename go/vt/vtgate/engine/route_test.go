@@ -94,7 +94,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	stringListToExprList := func(in []string) []evalengine.Expr {
 		var schema []evalengine.Expr
 		for _, s := range in {
-			schema = append(schema, evalengine.NewLiteralString([]byte(s), collations.TypedCollation{}))
+			schema = append(schema, evalengine.NewLiteralString([]byte(s), collations.SystemCollation))
 		}
 		return schema
 	}
@@ -109,7 +109,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	tests := []testCase{{
 		testName:    "both schema and table predicates - routed table",
 		tableSchema: []string{"schema"},
-		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation)},
 		routed:      true,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -118,7 +118,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
-		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation)},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -127,7 +127,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
-		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{}), "t2": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{}), "t3": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
+		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation), "t2": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation), "t3": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation)},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -137,7 +137,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARCHAR value:\"table\" t2: type:VARCHAR value:\"table\" t3: type:VARCHAR value:\"table\"} false false"},
 	}, {
 		testName:  "table name predicate - routed table",
-		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
 		routed:    true,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -145,7 +145,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARCHAR value:\"routedTable\"} false false"},
 	}, {
 		testName:  "table name predicate - not routed",
-		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
 		routed:    false,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -236,7 +236,7 @@ func TestSelectScatter(t *testing.T) {
 }
 
 func TestSelectEqualUnique(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	sel := NewRoute(
 		EqualUnique,
 		&vindexes.Keyspace{
@@ -274,7 +274,7 @@ func TestSelectEqualUnique(t *testing.T) {
 }
 
 func TestSelectNone(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	sel := NewRoute(
 		None,
 		&vindexes.Keyspace{
@@ -325,7 +325,7 @@ func TestSelectNone(t *testing.T) {
 }
 
 func TestSelectEqualUniqueScatter(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table":      "lkp",
 		"from":       "from",
 		"to":         "toc",
@@ -368,7 +368,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 }
 
 func TestSelectEqual(t *testing.T) {
-	vindex, _ := vindexes.NewLookup("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -421,7 +421,7 @@ func TestSelectEqual(t *testing.T) {
 }
 
 func TestSelectEqualNoRoute(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -485,7 +485,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 }
 
 func TestINUnique(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	sel := NewRoute(
 		IN,
 		&vindexes.Keyspace{
@@ -530,7 +530,7 @@ func TestINUnique(t *testing.T) {
 }
 
 func TestINNonUnique(t *testing.T) {
-	vindex, _ := vindexes.NewLookup("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -597,7 +597,7 @@ func TestINNonUnique(t *testing.T) {
 }
 
 func TestMultiEqual(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	sel := NewRoute(
 		MultiEqual,
 		&vindexes.Keyspace{
@@ -640,7 +640,7 @@ func TestMultiEqual(t *testing.T) {
 }
 
 func TestSelectLike(t *testing.T) {
-	subshard, _ := vindexes.NewCFC("cfc", map[string]string{"hash": "md5", "offsets": "[1,2]"})
+	subshard, _ := vindexes.CreateVindex("cfc", "cfc", map[string]string{"hash": "md5", "offsets": "[1,2]"})
 	vindex := subshard.(*vindexes.CFC).PrefixVindex()
 	vc := &loggingVCursor{
 		// we have shards '-0c80', '0c80-0d', '0d-40', '40-80', '80-'
@@ -660,7 +660,7 @@ func TestSelectLike(t *testing.T) {
 
 	sel.Vindex = vindex
 	sel.Values = []evalengine.Expr{
-		evalengine.NewLiteralString([]byte("a%"), collations.TypedCollation{}),
+		evalengine.NewLiteralString([]byte("a%"), collations.SystemCollation),
 	}
 	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
 	// keyspace id prefix for "a" is 0x0c
@@ -690,7 +690,7 @@ func TestSelectLike(t *testing.T) {
 	vc.Rewind()
 
 	sel.Values = []evalengine.Expr{
-		evalengine.NewLiteralString([]byte("ab%"), collations.TypedCollation{}),
+		evalengine.NewLiteralString([]byte("ab%"), collations.SystemCollation),
 	}
 	// md5("b") = 92eb5ffee6ae2fec3ad71c777531578f
 	// keyspace id prefix for "ab" is 0x0c92
@@ -816,7 +816,7 @@ func TestSelectReference(t *testing.T) {
 }
 
 func TestRouteGetFields(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -1081,6 +1081,7 @@ func TestRouteSortCollation(t *testing.T) {
 
 	sel.OrderBy = []OrderByParams{{
 		Col:         0,
+		Type:        sqltypes.VarChar,
 		CollationID: collationID,
 	}}
 
@@ -1147,6 +1148,7 @@ func TestRouteSortCollation(t *testing.T) {
 	t.Run("Error when Unknown Collation", func(t *testing.T) {
 		sel.OrderBy = []OrderByParams{{
 			Col:         0,
+			Type:        sqltypes.Unknown,
 			CollationID: collations.Unknown,
 		}}
 
@@ -1452,7 +1454,7 @@ func TestExecFail(t *testing.T) {
 }
 
 func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
 		EqualUnique,
 		&vindexes.Keyspace{
@@ -1491,7 +1493,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 }
 
 func TestSelectEqualMultiColumnVindex(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "20-"},
@@ -1528,7 +1530,7 @@ func TestSelectEqualMultiColumnVindex(t *testing.T) {
 }
 
 func TestINMultiColumnVindex(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
 		IN,
 		&vindexes.Keyspace{
@@ -1574,7 +1576,7 @@ func TestINMultiColumnVindex(t *testing.T) {
 }
 
 func TestINMixedMultiColumnComparision(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
 		IN,
 		&vindexes.Keyspace{
@@ -1617,7 +1619,7 @@ func TestINMixedMultiColumnComparision(t *testing.T) {
 }
 
 func TestMultiEqualMultiCol(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
 		MultiEqual,
 		&vindexes.Keyspace{Name: "ks", Sharded: true},

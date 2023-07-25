@@ -149,13 +149,6 @@ type flavor interface {
 	// returns NULL if GTIDs are not enabled.
 	waitUntilPositionCommand(ctx context.Context, pos Position) (string, error)
 
-	// enableBinlogPlaybackCommand and disableBinlogPlaybackCommand return an
-	// optional command to run to enable or disable binlog
-	// playback. This is used internally in Google, as the
-	// timestamp cannot be set by regular clients.
-	enableBinlogPlaybackCommand() string
-	disableBinlogPlaybackCommand() string
-
 	baseShowTables() string
 	baseShowTablesWithSizes() string
 
@@ -559,18 +552,6 @@ func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (stri
 func (c *Conn) WaitUntilFilePositionCommand(ctx context.Context, pos Position) (string, error) {
 	filePosFlavor := filePosFlavor{}
 	return filePosFlavor.waitUntilPositionCommand(ctx, pos)
-}
-
-// EnableBinlogPlaybackCommand returns a command to run to enable
-// binlog playback.
-func (c *Conn) EnableBinlogPlaybackCommand() string {
-	return c.flavor.enableBinlogPlaybackCommand()
-}
-
-// DisableBinlogPlaybackCommand returns a command to run to disable
-// binlog playback.
-func (c *Conn) DisableBinlogPlaybackCommand() string {
-	return c.flavor.disableBinlogPlaybackCommand()
 }
 
 // BaseShowTables returns a query that shows tables

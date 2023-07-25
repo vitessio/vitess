@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -31,18 +30,62 @@ import (
 var hash SingleColumn
 
 func init() {
-	hv, err := CreateVindex("hash", "nn", map[string]string{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("hash", "nn", map[string]string{})
+	unknownParams := hv.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("hash test init: expected 0 unknown params")
+	}
 	if err != nil {
 		panic(err)
 	}
 	hash = hv.(SingleColumn)
 }
 
-func TestHashInfo(t *testing.T) {
-	assert.Equal(t, 1, hash.Cost())
-	assert.Equal(t, "nn", hash.String())
-	assert.True(t, hash.IsUnique())
-	assert.False(t, hash.NeedsVCursor())
+func hashCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "hash",
+		vindexName:   "hash",
+		vindexParams: vindexParams,
+
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "hash",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestHashCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		hashCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		hashCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		hashCreateVindexTestCase(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestHashMap(t *testing.T) {

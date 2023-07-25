@@ -17,7 +17,9 @@ limitations under the License.
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -90,7 +92,7 @@ func TestAPIEndpoints(t *testing.T) {
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
 	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response != "[]"
+		return response != "null"
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
@@ -110,29 +112,29 @@ func TestAPIEndpoints(t *testing.T) {
 		// Wait until VTOrc picks up on this issue and verify
 		// that we see a not null result on the api/replication-analysis page
 		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-			return response == "[]"
+			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Verify that filtering by keyspace also works in the API as intended
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Equal(t, "[]", resp)
+		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
@@ -197,5 +199,23 @@ func TestAPIEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
+
+		// Also verify that the metric for errant GTIDs is reporting the correct information.
+		_, resp, err = utils.MakeAPICall(t, vtorc, "/debug/vars")
+		require.NoError(t, err)
+		resultMap := make(map[string]any)
+		err = json.Unmarshal([]byte(resp), &resultMap)
+		require.NoError(t, err)
+		errantGTIDMap := reflect.ValueOf(resultMap["ErrantGtidMap"])
+		errantGtidTablets := errantGTIDMap.MapKeys()
+		require.Len(t, errantGtidTablets, 3)
+
+		errantGTIDinReplica := ""
+		for _, tabletKey := range errantGtidTablets {
+			if tabletKey.String() == replica.Alias {
+				errantGTIDinReplica = errantGTIDMap.MapIndex(tabletKey).Interface().(string)
+			}
+		}
+		require.NotEmpty(t, errantGTIDinReplica)
 	})
 }

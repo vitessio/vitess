@@ -107,6 +107,7 @@ var (
 	initialBackup       bool
 	allowFirstBackup    bool
 	restartBeforeBackup bool
+	upgradeSafe         bool
 	// vttablet-like flags
 	initDbNameOverride string
 	initKeyspace       string
@@ -135,6 +136,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&initialBackup, "initial_backup", initialBackup, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	fs.BoolVar(&allowFirstBackup, "allow_first_backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
+	fs.BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	// vttablet-like flags
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
@@ -301,6 +303,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Shard:              initShard,
 		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
 		Stats:              backupstats.BackupStats(),
+		UpgradeSafe:        upgradeSafe,
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -373,7 +376,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	durationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 
-	// Disable redo logging (if we can) before we start replication.
+	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
+	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
+	// loading data into a new MySQL instance. Disabling redo logging speeds up
+	// data loading by avoiding redo log writes and doublewrite buffering.
 	disabledRedoLog := false
 	if disableRedoLog {
 		if err := mysqld.DisableRedoLog(ctx); err != nil {
