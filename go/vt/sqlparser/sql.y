@@ -205,10 +205,10 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Special tokens
 %token <bytes> FOR_SYSTEM_TIME
-%token <bytes> FOR_VERSIONS
+%token <bytes> FOR_VERSION
 
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL VERSIONS
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL VERSION
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
@@ -5710,11 +5710,11 @@ as_of_clause:
 between_times:
   FOR_SYSTEM_TIME BETWEEN value_expression AND value_expression
   {
-    $$ = &AsOf{Start: $3, End: $5}
+    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
   }
 | FOR_SYSTEM_TIME FROM value_expression TO value_expression
   {
-    $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
+    $$ = &AsOf{Start: $3, End: $5}
   }
 | FOR_SYSTEM_TIME CONTAINED IN openb value_expression ',' value_expression closeb
   {
@@ -5722,15 +5722,15 @@ between_times:
   }
 
 between_versions:
-  FOR_VERSIONS BETWEEN value_expression AND value_expression
-  {
-    $$ = &AsOf{Start: $3, End: $5}
-  }
-| FOR_VERSIONS FROM value_expression TO value_expression
+  FOR_VERSION BETWEEN value_expression AND value_expression
   {
     $$ = &AsOf{Start: $3, End: $5, EndInclusive: true}
   }
-| FOR_VERSIONS CONTAINED IN openb value_expression ',' value_expression closeb
+| FOR_VERSION FROM value_expression TO value_expression
+  {
+    $$ = &AsOf{Start: $3, End: $5}
+  }
+| FOR_VERSION CONTAINED IN openb value_expression ',' value_expression closeb
   {
     $$ = &AsOf{Start: $5, End: $7, StartInclusive: true, EndInclusive: true}
   }
@@ -5742,7 +5742,7 @@ all_times:
   }
 
 all_versions:
-  FOR_VERSIONS ALL
+  FOR_VERSION ALL
   {
     $$ = &AsOf{All: true}
   }
@@ -6726,6 +6726,10 @@ function_call_keyword:
 | VALUES openb non_reserved_keyword3 closeb
   {
     $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
+  }
+| VERSION openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | REPEAT openb argument_expression_list closeb
   {

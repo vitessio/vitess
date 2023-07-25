@@ -231,6 +231,7 @@ var keywords = map[string]int{
 	"constraint_name":               CONSTRAINT_NAME,
 	"constraint_schema":             CONSTRAINT_SCHEMA,
 	"contains":                      CONTAINS,
+	"contained":                     CONTAINED,
 	"continue":                      CONTINUE,
 	"convert":                       CONVERT,
 	"count":                         COUNT,
@@ -713,6 +714,7 @@ var keywords = map[string]int{
 	"variables":                     VARIABLES,
 	"variance":                      VARIANCE,
 	"varying":                       VARYING,
+	"version":                       VERSION,
 	"version_token_admin":           VERSION_TOKEN_ADMIN,
 	"view":                          VIEW,
 	"virtual":                       VIRTUAL,
@@ -1049,8 +1051,8 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 			switch token {
 			case SYSTEM_TIME:
 				return FOR_SYSTEM_TIME, append(buffer.Bytes(), append([]byte{' '}, val...)...)
-			case VERSIONS:
-				return FOR_VERSIONS, append(buffer.Bytes(), append([]byte{' '}, val...)...)
+			case VERSION:
+				return FOR_VERSION, append(buffer.Bytes(), append([]byte{' '}, val...)...)
 			default:
 				tkn.digestToken(token, val)
 				return FOR, buffer.Bytes()
