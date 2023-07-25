@@ -376,11 +376,11 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	ts.healthCheck.Close()
 }
 
-func (ts *txThrottlerState) updateHealthCheckCells(topoServer *topo.Server, target *querypb.Target) error {
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+func (ts *txThrottlerState) updateHealthCheckCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) error {
+	fetchCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
-	cells, err := fetchKnownCells(ctx, topoServer)
+	cells, err := fetchKnownCells(fetchCtx, topoServer)
 	if err != nil {
 		return err
 	}
@@ -405,7 +405,7 @@ func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServe
 		case <-ctx.Done():
 			return
 		case <-cellsUpdateTicks:
-			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
+			if err := ts.updateHealthCheckCells(ctx, topoServer, target); err != nil {
 				log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
 			}
 		case th := <-ts.healthCheckChan:
