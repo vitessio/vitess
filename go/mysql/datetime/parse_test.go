@@ -236,6 +236,7 @@ func TestParseDateTime(t *testing.T) {
 		{input: "20221012111213.123456", output: datetime{2022, 10, 12, 11, 12, 13, 123456000}, l: 6},
 		{input: "221012111213.123456", output: datetime{2022, 10, 12, 11, 12, 13, 123456000}, l: 6},
 		{input: "2022101211121321321312", output: datetime{2022, 10, 12, 11, 12, 13, 0}, err: true},
+		{input: "3284004416225113510", output: datetime{}, err: true},
 		{input: "2012-12-31 11:30:45", output: datetime{2012, 12, 31, 11, 30, 45, 0}},
 		{input: "2012^12^31 11+30+45", output: datetime{2012, 12, 31, 11, 30, 45, 0}},
 		{input: "2012/12/31 11*30*45", output: datetime{2012, 12, 31, 11, 30, 45, 0}},
