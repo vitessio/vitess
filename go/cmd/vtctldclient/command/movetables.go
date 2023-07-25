@@ -253,6 +253,13 @@ func bridgeMoveTablesToWorkflow(cmd *cobra.Command, args []string) {
 }
 
 func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
+	}
+
 	cli.FinishedParsing(cmd)
 
 	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
@@ -280,12 +287,6 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
-	switch format {
-	case "text", "json":
-	default:
-		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
-	}
 	var output []byte
 	if format == "json" {
 		output, err = cli.MarshalJSON(resp)
@@ -311,6 +312,13 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 }
 
 func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
+	}
+
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
@@ -324,12 +332,6 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
-	switch format {
-	case "text", "json":
-	default:
-		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
-	}
 	var output []byte
 	if format == "json" {
 		// Sort the inner TabletInfo slice for deterministic output.
@@ -349,6 +351,13 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 }
 
 func commandMoveTablesComplete(cmd *cobra.Command, args []string) error {
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
+	}
+
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MoveTablesCompleteRequest{
@@ -364,12 +373,6 @@ func commandMoveTablesComplete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
-	switch format {
-	case "text", "json":
-	default:
-		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
-	}
 	var output []byte
 	if format == "json" {
 		output, err = cli.MarshalJSONCompact(resp)
@@ -437,6 +440,13 @@ func commandMoveTablesShow(cmd *cobra.Command, args []string) error {
 }
 
 func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
+	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
+	switch format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
+	}
+
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
@@ -454,12 +464,6 @@ func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	format := strings.ToLower(strings.TrimSpace(moveTablesOptions.Format))
-	switch format {
-	case "text", "json":
-	default:
-		return fmt.Errorf("invalid output format, got %s", moveTablesOptions.Format)
-	}
 	var output []byte
 	if format == "json" {
 		output, err = cli.MarshalJSONCompact(resp)
