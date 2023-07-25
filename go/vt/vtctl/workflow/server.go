@@ -1857,6 +1857,10 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 			if err != nil {
 				return nil, err
 			}
+			if sourcesi.PrimaryAlias == nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard %s/%s currently has no primary tablet",
+					bls.Keyspace, bls.Shard)
+			}
 			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.PrimaryAlias)
 			if err != nil {
 				return nil, err
