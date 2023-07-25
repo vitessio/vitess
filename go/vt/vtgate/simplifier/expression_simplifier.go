@@ -247,23 +247,15 @@ func (s *shrinker) fillQueue() bool {
 				// replace ith element with last element, then truncate last element
 				whensCopy[i] = whensCopy[len(whensCopy)-1]
 				whensCopy = whensCopy[:len(whensCopy)-1]
-				s.queue = append(s.queue, &sqlparser.CaseExpr{
-					Expr:  e.Expr,
-					Whens: whensCopy,
-					Else:  e.Else,
-				})
+				s.queue = append(s.queue, sqlparser.NewCaseExpr(e.Expr, whensCopy, e.Else))
 			}
 		}
 
 		if e.Else != nil {
-			klon := sqlparser.CloneRefOfCaseExpr(e)
-			klon.Else = nil
-			s.queue = append(s.queue, klon)
+			s.queue = append(s.queue, sqlparser.NewCaseExpr(e.Expr, e.Whens, nil))
 		}
 		if e.Expr != nil {
-			klon := sqlparser.CloneRefOfCaseExpr(e)
-			klon.Expr = nil
-			s.queue = append(s.queue, klon)
+			s.queue = append(s.queue, sqlparser.NewCaseExpr(nil, e.Whens, e.Else))
 		}
 	default:
 		return false
