@@ -18,6 +18,7 @@ package txthrottler
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -323,7 +324,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 			discovery.DefaultTopologyWatcherRefreshInterval,
 			discovery.DefaultTopoReadConcurrency,
 		)
-    if err != nil {
+		if err != nil {
 			return nil, err
 		}
 		txThrottler.topoWatchers.Add(cell, 1)
