@@ -65,7 +65,7 @@ const (
 	// operation too.
 	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 
-	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
+	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
 	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
@@ -334,8 +334,9 @@ func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) 
 	return sourceShards, targetShards
 }
 
-// isPartialMoveTables returns true if whe workflow is MoveTables,
-// has the same number of shards, is not covering the entire shard range, and has one-to-one shards in source and target
+// isPartialMoveTables returns true if whe workflow is MoveTables, has the same
+// number of shards, is not covering the entire shard range, and has one-to-one
+// shards in source and target.
 func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []string) (bool, error) {
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return false, nil
@@ -353,8 +354,9 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 	return key.KeyRangeEqual(skr, tkr), nil
 }
 
-// addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the
-// Migrate flow. It is called when the Migrate flow is Completed
+// addParticipatingTablesToKeyspace updates the vschema with the new tables that
+// were created as part of the Migrate flow. It is called when the Migrate flow
+// is Completed.
 func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
 	vschema, err := ts.TopoServer().GetVSchema(ctx, keyspace)
 	if err != nil {
@@ -547,7 +549,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		}
 	}
 	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
-		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.TargetKeyspaceName(), strings.Join(cells, ","))
 		log.Errorf("%w", err2)
 		return err2
@@ -565,7 +567,7 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// table -> sourceKeyspace.table
 	// targetKeyspace.table -> sourceKeyspace.table
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
-	// For backward, we redirect to source
+	// For backward, we redirect to source.
 	for _, servedType := range servedTypes {
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
@@ -748,7 +750,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 		return err
 	}
 	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), ""); err != nil {
-		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.TargetKeyspaceName())
+		err2 := vterrors.Wrapf(err, "after changing shard routes, found SrvKeyspace for %s is corrupt", ts.TargetKeyspaceName())
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -757,7 +759,8 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 
 func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, sourceCell string, dbname string) string {
 	// we try to be clever to understand what user intends:
-	// if target's cell is present in cells but not source's cell we replace it with the source's cell
+	// if target's cell is present in cells but not source's cell we replace it
+	// with the source's cell.
 	if ts.optCells != "" && targetCell != sourceCell && strings.Contains(ts.optCells+",", targetCell+",") &&
 		!strings.Contains(ts.optCells+",", sourceCell+",") {
 		ts.optCells = strings.Replace(ts.optCells, targetCell, sourceCell, 1)
@@ -872,7 +875,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
-	// source writes have been stopped, wait for all streams on targets to catch up
+	// Source writes have been stopped, wait for all streams on targets to catch up.
 	if err := ts.ForAllUIDs(func(target *MigrationTarget, uid int32) error {
 		ts.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
@@ -888,7 +891,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 		ts.Logger().Infof("After catchup: position for keyspace:shard: %v:%v reached, uid %d",
 			ts.TargetKeyspaceName(), target.GetShard().ShardName(), uid)
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
-			log.Infof("error marking stopped for cutover on %s, uid %d", target.GetPrimary().AliasString(), uid)
+			log.Infof("Error marking stopped for cutover on %s, uid %d", target.GetPrimary().AliasString(), uid)
 			return err
 		}
 		return nil

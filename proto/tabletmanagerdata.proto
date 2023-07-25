@@ -519,7 +519,7 @@ message RestoreFromBackupResponse {
 message CreateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated binlogdata.BinlogSource binlog_source = 2;
-  // optional parameters.
+  // Optional parameters.
   repeated string cells = 3;
   // TabletTypes is the list of tablet types to use when selecting source tablets.
   repeated topodata.TabletType tablet_types = 4;

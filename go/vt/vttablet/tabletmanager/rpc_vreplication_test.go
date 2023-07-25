@@ -39,30 +39,30 @@ import (
 )
 
 const (
-	insertVReplicaionPrefix = "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
-	getWorkflow             = "select id from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
-	checkForWorkflow        = "select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
-	checkForFrozenWorkflow  = "select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1"
-	checkForJournal         = "/select val from _vt.resharding_journal where id="
-	getWorkflowStatus       = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'"
-	getWorkflowState        = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1"
-	getCopyState            = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
-	getNumCopyStateTable    = "select count(distinct table_name) from _vt.copy_state where vrepl_id=1"
-	getLatestCopyState      = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
-	getAutoIncrementStep    = "select @@session.auto_increment_increment"
-	setSessionTZ            = "set @@session.time_zone = '+00:00'"
-	setNames                = "set names 'binary'"
-	setSQLMode              = "set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')"
-	setPermissiveSQLMode    = "SET @@session.sql_mode='NO_AUTO_VALUE_ON_ZERO'"
-	setStrictSQLMode        = "SET @@session.sql_mode='ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
-	getSQLMode              = "SELECT @@session.sql_mode AS sql_mode"
-	getFKChecks             = "select @@foreign_key_checks;"
-	disableFKChecks         = "set foreign_key_checks=1;"
-	sqlMode                 = "ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
-	getBinlogRowImage       = "select @@binlog_row_image"
-	insertStreamsCreatedLog = "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Stream Created', '', '%s'"
-	getVReplicationRecord   = "select * from _vt.vreplication where id = 1"
-	startWorkflow           = "update _vt.vreplication set state='Running' where db_name='vt_%s' and workflow='%s'"
+	insertVReplicationPrefix = "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
+	getWorkflow              = "select id from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
+	checkForWorkflow         = "select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
+	checkForFrozenWorkflow   = "select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1"
+	checkForJournal          = "/select val from _vt.resharding_journal where id="
+	getWorkflowStatus        = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'"
+	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1"
+	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
+	getNumCopyStateTable     = "select count(distinct table_name) from _vt.copy_state where vrepl_id=1"
+	getLatestCopyState       = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
+	getAutoIncrementStep     = "select @@session.auto_increment_increment"
+	setSessionTZ             = "set @@session.time_zone = '+00:00'"
+	setNames                 = "set names 'binary'"
+	setSQLMode               = "set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')"
+	setPermissiveSQLMode     = "SET @@session.sql_mode='NO_AUTO_VALUE_ON_ZERO'"
+	setStrictSQLMode         = "SET @@session.sql_mode='ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+	getSQLMode               = "SELECT @@session.sql_mode AS sql_mode"
+	getFKChecks              = "select @@foreign_key_checks;"
+	disableFKChecks          = "set foreign_key_checks=1;"
+	sqlMode                  = "ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	getBinlogRowImage        = "select @@binlog_row_image"
+	insertStreamsCreatedLog  = "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Stream Created', '', '%s'"
+	getVReplicationRecord    = "select * from _vt.vreplication where id = 1"
+	startWorkflow            = "update _vt.vreplication set state='Running' where db_name='vt_%s' and workflow='%s'"
 
 	position = "MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97"
 )
@@ -128,7 +128,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				AllTables:      true,
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
-				insertVReplicaionPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 		{
 			name: "all values",
@@ -163,7 +163,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				AutoStart:          true,
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
-				insertVReplicaionPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 	}
 
@@ -247,7 +247,7 @@ func TestMoveTables(t *testing.T) {
 		AutoStart:      true,
 	}
 	insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
-		insertVReplicaionPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
+		insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}", sourceKs, shard)
 
 	tenv.tmc.SetSchema(defaultSchema)

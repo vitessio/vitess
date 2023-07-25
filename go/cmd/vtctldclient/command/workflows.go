@@ -265,6 +265,7 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 		onddl = val
 	}
 
+	// Simulated NULL when no value is provided.
 	tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
 	if cmd.Flags().Lookup("tablet-types-in-order").Changed {
 		if workflowUpdateOptions.TabletTypesInPreferenceOrder {
@@ -358,7 +359,7 @@ func init() {
 	Workflow.MarkPersistentFlagRequired("keyspace")
 	Root.AddCommand(Workflow)
 
-	WorkflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
+	WorkflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to delete (required)")
 	WorkflowDelete.MarkFlagRequired("workflow")
 	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace")
 	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow")

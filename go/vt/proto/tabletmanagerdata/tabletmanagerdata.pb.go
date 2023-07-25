@@ -4785,7 +4785,7 @@ type CreateVReplicationWorkflowRequest struct {
 
 	Workflow     string                     `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
 	BinlogSource []*binlogdata.BinlogSource `protobuf:"bytes,2,rep,name=binlog_source,json=binlogSource,proto3" json:"binlog_source,omitempty"`
-	// optional parameters.
+	// Optional parameters.
 	Cells []string `protobuf:"bytes,3,rep,name=cells,proto3" json:"cells,omitempty"`
 	// TabletTypes is the list of tablet types to use when selecting source tablets.
 	TabletTypes               []topodata.TabletType                  `protobuf:"varint,4,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`

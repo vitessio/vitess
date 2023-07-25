@@ -419,11 +419,12 @@ func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodata
 		return krs[0], nil
 	}
 
-	// happily string sorting of shards also sorts them in the ascending order of key ranges in vitess
+	// Happily string sorting of shards also sorts them in the ascending order of key
+	// ranges in vitess.
 	sort.Strings(sourceShards)
 	sort.Strings(targetShards)
 	getFullKeyRange := func(shards []string) (*topodatapb.KeyRange, error) {
-		// expect sorted shards
+		// Expect sorted shards.
 		kr1, err := getKeyRange(sourceShards[0])
 		if err != nil {
 			return nil, err
@@ -542,7 +543,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	wg.Wait()
 
 	if !ts.keepRoutingRules {
-		//check if table is routable
+		// Check if table is routable.
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
@@ -567,8 +568,8 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 }
 
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a
-// "forward" workflow, this is the workflow name with "_reversed" appended, and
-// for a "reversed" workflow, this is the workflow name with the "_reversed"
+// "forward" workflow, this is the workflow name with "_reverse" appended, and
+// for a "reversed" workflow, this is the workflow name with the "_reverse"
 // suffix removed.
 func ReverseWorkflowName(workflow string) string {
 	if strings.HasSuffix(workflow, reverseSuffix) {
@@ -589,43 +590,6 @@ func encodeString(in string) string {
 
 func getRenameFileName(tableName string) string {
 	return fmt.Sprintf(renameTableTemplate, tableName)
-}
-
-func parseTabletTypesStr(tabletTypesStr string) (hasReplica, hasRdonly, hasPrimary bool, err error) {
-	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
-	if err != nil {
-		return false, false, false, err
-	}
-	for _, tabletType := range tabletTypes {
-		switch tabletType {
-		case topodatapb.TabletType_REPLICA:
-			hasReplica = true
-		case topodatapb.TabletType_RDONLY:
-			hasRdonly = true
-		case topodatapb.TabletType_PRIMARY:
-			hasPrimary = true
-		default:
-			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
-		}
-	}
-	return hasReplica, hasRdonly, hasPrimary, nil
-}
-
-func parseTabletTypesString(tabletTypes []string) (hasReplica, hasRdonly, hasPrimary bool, err error) {
-	for _, tabletType := range tabletTypes {
-		tabletType = strings.ToUpper(tabletType)
-		switch {
-		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_REPLICA)]:
-			hasReplica = true
-		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_RDONLY)]:
-			hasRdonly = true
-		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_PRIMARY)]:
-			hasPrimary = true
-		default:
-			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
-		}
-	}
-	return hasReplica, hasRdonly, hasPrimary, nil
 }
 
 func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonly, hasPrimary bool, err error) {

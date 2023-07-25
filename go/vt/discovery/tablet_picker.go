@@ -457,7 +457,7 @@ func (tp *TabletPicker) incNoTabletFoundStat() {
 	globalTPStats.mu.Lock()
 	defer globalTPStats.mu.Unlock()
 	cells := strings.Join(tp.cells, "_")
-	tabletTypes := topoproto.MakeStringTypeCSV(tp.tabletTypes)
+	tabletTypes := strings.ReplaceAll(topoproto.MakeStringTypeCSV(tp.tabletTypes), ",", "_")
 	labels := []string{cells, tp.keyspace, tp.shard, tabletTypes}
 	globalTPStats.noTabletFoundError.Add(labels, 1)
 }

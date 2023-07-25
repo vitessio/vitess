@@ -100,6 +100,9 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 }
 
 func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
+	if req == nil || req.Workflow == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
+	}
 	res := &sqltypes.Result{}
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
@@ -121,6 +124,9 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	if req == nil || req.Workflow == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
+	}
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),

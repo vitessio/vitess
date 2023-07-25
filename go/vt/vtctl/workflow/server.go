@@ -75,12 +75,12 @@ const (
 	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
 	cannotSwitchFrozen              = "workflow is frozen"
 
-	// number of LOCK TABLES cycles to perform on the sources during SwitchWrites
+	// Number of LOCK TABLES cycles to perform on the sources during SwitchWrites.
 	lockTablesCycles = 2
-	// time to wait between LOCK TABLES cycles on the sources during SwitchWrites
+	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
 
-	// default duration used for lag, timeout, etc
+	// Default duration used for lag, timeout, etc.
 	defaultDuration = 30 * time.Second
 )
 
@@ -855,7 +855,8 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 			}
 			for _, table := range ts.Tables() {
 				rr := globalRules[table]
-				// if a rule exists for the table and points to the target keyspace, writes have been switched
+				// If a rule exists for the table and points to the target keyspace, then
+				// writes have been switched.
 				if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", targetKeyspace, table) {
 					state.WritesSwitched = true
 					break
@@ -865,7 +866,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	} else {
 		state.WorkflowType = TypeReshard
 
-		// we assume a consistent state, so only choose one shard
+		// We assume a consistent state, so only choose one shard.
 		var shard *topo.ShardInfo
 		if reverse {
 			shard = ts.TargetShards()[0]
@@ -946,7 +947,8 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		err          error
 	)
 
-	if req.ExternalClusterName != "" { // When the source is an external cluster mounted using the Mount command
+	// When the source is an external cluster mounted using the Mount command.
+	if req.ExternalClusterName != "" {
 		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.ExternalClusterName)
 		if err != nil {
 			return nil, err
@@ -1330,7 +1332,8 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 	return resp, nil
 }
 
-// GetCopyProgress returns the progress of all tables being copied in the workflow
+// GetCopyProgress returns the progress of all tables being copied in the
+// workflow.
 func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state *State) (*CopyProgress, error) {
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
@@ -1507,8 +1510,9 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	return response, nil
 }
 
+// validateSourceTablesExist validates that tables provided are present
+// in the source keyspace.
 func (s *Server) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
-	// validate that tables provided are present in the source keyspace
 	var missingTables []string
 	for _, table := range tables {
 		if schema.IsInternalOperationTableName(table) {
@@ -1646,7 +1650,8 @@ func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materiali
 	return exists, tablets, err
 }
 
-// deleteWorkflowVDiffData cleans up any potential VDiff related data associated with the workflow on the given tablet
+// deleteWorkflowVDiffData cleans up any potential VDiff related data associated
+// with the workflow on the given tablet.
 func (s *Server) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb.Tablet, workflow string) {
 	sqlDeleteVDiffs := `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
@@ -1702,7 +1707,8 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			}
 			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
 		}
-		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
+		// This will automatically set the value to 1 or the current max value in the
+		// table, whichever is greater.
 		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
 		if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
 			Query:   []byte(sqlResetAutoInc),
@@ -1714,7 +1720,8 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 	}()
 }
 
-// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
+// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
+// is cancelled.
 func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, state, err := s.getWorkflowState(ctx, targetKeyspace, workflow)
 	if err != nil {
@@ -1807,7 +1814,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	log.Infof("Migration ID for workflow %s: %d", workflowName, ts.id)
 	sourceTopo := s.ts
 
-	// Build the sources
+	// Build the sources.
 	for _, target := range targets {
 		for _, bls := range target.Sources {
 			if ts.sourceKeyspace == "" {
@@ -2011,7 +2018,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 	// Check the Serving map for the shard, we don't want to
 	// remove a serving shard if not absolutely sure.
 	if !evenIfServing && len(servingCells) > 0 {
-		return fmt.Errorf("shard %v/%v is still serving, cannot delete it, use even_if_serving flag if needed", keyspace, shard)
+		return fmt.Errorf("shard %v/%v is still serving, cannot delete it, use the even-if-serving flag if needed", keyspace, shard)
 	}
 
 	cells, err := s.ts.GetCellInfoNames(ctx)
@@ -2068,7 +2075,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 		// Now see if we need to DeleteTablet, and if we can, do it.
 		if len(tabletMap) > 0 {
 			if !recursive {
-				return fmt.Errorf("shard %v/%v still has %v tablets in cell %v; use -recursive or remove them manually", keyspace, shard, len(tabletMap), cell)
+				return fmt.Errorf("shard %v/%v still has %v tablets in cell %v; use --recursive or remove them manually", keyspace, shard, len(tabletMap), cell)
 			}
 
 			log.Infof("Deleting all tablets in shard %v/%v cell %v", keyspace, shard, cell)
@@ -2176,7 +2183,7 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, wo
 	return sw.logs(), nil
 }
 
-// SwitchTraffic switches traffic in the direction passed for specified tablet_types
+// WorkflowSwitchTraffic switches traffic in the direction passed for specified tablet types.
 func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
 	var (
 		dryRunResults                     []string
@@ -2325,7 +2332,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
-	// If journals exist notify user and fail
+	// If journals exist notify user and fail.
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil {
 		ts.Logger().Errorf("checkJournals failed: %v", err)
@@ -2581,8 +2588,8 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		}
 	}
 
-	// Ensure that the tablets on both sides are in good shape as we make this same call in the process
-	// and an error will cause us to backout
+	// Ensure that the tablets on both sides are in good shape as we make this same call in the
+	// process and an error will cause us to backout.
 	refreshErrors := strings.Builder{}
 	var m sync.Mutex
 	var wg sync.WaitGroup
@@ -2610,7 +2617,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 	return "", nil
 }
 
-// VReplicationExec executes a query remotely using the DBA pool
+// VReplicationExec executes a query remotely using the DBA pool.
 func (s *Server) VReplicationExec(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	ti, err := s.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
