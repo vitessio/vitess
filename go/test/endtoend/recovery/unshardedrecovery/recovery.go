@@ -186,22 +186,26 @@ func TestMainImpl(m *testing.M) {
 
 // TestRecoveryImpl does following
 // 1. create a shard with primary and replica1 only
-// 	- run InitShardPrimary
-// 	- insert some data
+//   - run InitShardPrimary
+//   - insert some data
+//
 // 2. take a backup
 // 3.create a recovery keyspace after first backup
-// 	- bring up tablet_replica2 in the new keyspace
-// 	- check that new tablet has data from backup1
+//   - bring up tablet_replica2 in the new keyspace
+//   - check that new tablet has data from backup1
+//
 // 4. insert more data on the primary
 // 5. take another backup
 // 6. create a recovery keyspace after second backup
-// 	- bring up tablet_replica3 in the new keyspace
-// 	- check that new tablet has data from backup2
+//   - bring up tablet_replica3 in the new keyspace
+//   - check that new tablet has data from backup2
+//
 // 7. insert more data on the primary
 // 8. take another backup
 // 9. create a recovery keyspace after second backup again
-// 	- bring up tablet_replica4 in the new keyspace
-// 	- check that new tablet has data from backup2 but not backup3
+//   - bring up tablet_replica4 in the new keyspace
+//   - check that new tablet has data from backup2 but not backup3
+//
 // 10. check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
 	defer cluster.PanicHandler(t)
