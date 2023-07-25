@@ -136,7 +136,7 @@ type txThrottler struct {
 
 	// state holds an open transaction throttler state. It is nil
 	// if the TransactionThrottler is closed.
-	state *txThrottlerState
+	state txThrottlerState
 
 	target     *querypb.Target
 	topoServer *topo.Server
@@ -155,6 +155,10 @@ type txThrottlerConfig struct {
 	// returns false.
 	enabled bool
 
+	// if dryRun is true, the txThrottler will run only on monitoring mode, meaning that it will increase counters for
+	// total and actually throttled requests, but it will not actually return that a transaction should be throttled.
+	dryRun bool
+
 	throttlerConfig *throttlerdatapb.Configuration
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for
 	// replication lag.
@@ -164,8 +168,14 @@ type txThrottlerConfig struct {
 	tabletTypes *topoproto.TabletTypeListFlag
 }
 
-// txThrottlerState holds the state of an open TxThrottler object.
-type txThrottlerState struct {
+type txThrottlerState interface {
+	deallocateResources()
+	StatsUpdate(tabletStats *discovery.TabletHealth)
+	throttle() bool
+}
+
+// txThrottlerStateImpl holds the state of an open TxThrottler object.
+type txThrottlerStateImpl struct {
 	config *txThrottlerConfig
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
@@ -193,6 +203,7 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 
 		throttlerConfig = &txThrottlerConfig{
 			enabled:          true,
+			dryRun:           env.Config().TxThrottlerDryRun,
 			tabletTypes:      env.Config().TxThrottlerTabletTypes,
 			throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
 			healthCheckCells: healthCheckCells,
@@ -266,10 +277,10 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 		t.requestsThrottled.Add(1)
 	}
 
-	return result
+	return result && !t.config.dryRun
 }
 
-func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
+func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (txThrottlerState, error) {
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
 
 	t, err := throttlerFactory(
@@ -286,7 +297,7 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		t.Close()
 		return nil, err
 	}
-	result := &txThrottlerState{
+	result := &txThrottlerStateImpl{
 		config:    config,
 		throttler: t,
 	}
@@ -309,7 +320,7 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 	return result, nil
 }
 
-func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerState, cell string) {
+func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerStateImpl, cell string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result.stopHealthCheck = cancel
 	result.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
@@ -326,7 +337,7 @@ func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerCo
 	}(ctx)
 }
 
-func (ts *txThrottlerState) throttle() bool {
+func (ts *txThrottlerStateImpl) throttle() bool {
 	if ts.throttler == nil {
 		log.Error("throttle called after deallocateResources was called")
 		return false
@@ -337,7 +348,7 @@ func (ts *txThrottlerState) throttle() bool {
 	return ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
-func (ts *txThrottlerState) deallocateResources() {
+func (ts *txThrottlerStateImpl) deallocateResources() {
 	// We don't really need to nil out the fields here
 	// as deallocateResources is not expected to be called
 	// more than once, but it doesn't hurt to do so.
@@ -349,14 +360,14 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.healthCheck.Close()
 	ts.healthCheck = nil
 
-	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
+	// After ts.healthCheck is closed txThrottlerStateImpl.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
 	ts.throttler.Close()
 	ts.throttler = nil
 }
 
 // StatsUpdate updates the health of a tablet with the given healthcheck.
-func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
+func (ts *txThrottlerStateImpl) StatsUpdate(tabletStats *discovery.TabletHealth) {
 	if ts.config.tabletTypes == nil {
 		return
 	}
