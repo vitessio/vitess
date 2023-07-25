@@ -168,13 +168,14 @@ func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars 
 	if err != nil {
 		return 0, err
 	}
-	if !resolved.Value().IsIntegral() {
+	value := resolved.Value(vcursor.ConnCollation())
+	if !value.IsIntegral() {
 		return 0, sqltypes.ErrIncompatibleTypeCast
 	}
 
-	count, err := strconv.Atoi(resolved.Value().RawStr())
+	count, err := strconv.Atoi(value.RawStr())
 	if err != nil || count < 0 {
-		return 0, fmt.Errorf("requested limit is out of range: %v", resolved.Value().RawStr())
+		return 0, fmt.Errorf("requested limit is out of range: %v", value.RawStr())
 	}
 	return count, nil
 }

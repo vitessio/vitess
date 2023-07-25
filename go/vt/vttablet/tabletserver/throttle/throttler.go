@@ -80,6 +80,12 @@ func init() {
 func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
 
+	fs.Duration("throttle_threshold", 0, "Replication lag threshold for default lag throttling")
+	fs.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	fs.Float64("throttle_metrics_threshold", 0, "Override default throttle threshold, respective to --throttle_metrics_query")
+	fs.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+	fs.Bool("throttler-config-via-topo", false, "Deprecated, will be removed in v19. Assumed to be 'true'")
+
 	fs.MarkDeprecated("throttle_threshold", "Replication lag threshold for default lag throttling")
 	fs.MarkDeprecated("throttle_metrics_query", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
 	fs.MarkDeprecated("throttle_metrics_threshold", "Override default throttle threshold, respective to --throttle_metrics_query")

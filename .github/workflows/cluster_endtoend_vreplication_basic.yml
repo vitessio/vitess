@@ -124,7 +124,7 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536

@@ -400,7 +400,7 @@ func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 }
 
 // addNeededBindVars adds bind vars that are needed by the plan
-func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
+func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
 	for _, funcName := range bindVarNeeds.NeedFunctionResult {
 		switch funcName {
 		case sqlparser.DBVarName:
@@ -494,7 +494,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				if err != nil {
 					return err
 				}
-				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value())
+				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value(vcursor.collation))
 			}
 		}
 	}
@@ -1224,7 +1224,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 		fields[i] = &querypb.Field{
 			Name:    v,
 			Type:    sqltypes.VarChar,
-			Charset: collations.CollationUtf8ID,
+			Charset: uint32(collations.SystemCollation.Collation),
 			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 		}
 	}
@@ -1307,7 +1307,6 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
-	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
@@ -1325,7 +1324,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
-	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
+	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
 		return nil, err

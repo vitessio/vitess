@@ -2,22 +2,7 @@
   {
     "comment": "No column referenced",
     "query": "select 1 from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user",
       "Instructions": {
@@ -39,22 +24,7 @@
   {
     "comment": "'*' expression for simple route",
     "query": "select user.* from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.* from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.* from `user` where 1 != 1",
-        "Query": "select `user`.* from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.* from user",
       "Instructions": {
@@ -76,22 +46,7 @@
   {
     "comment": "unqualified '*' expression for simple route",
     "query": "select * from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user",
       "Instructions": {
@@ -113,23 +68,7 @@
   {
     "comment": "select with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user`",
-        "QueryTimeout": 1000,
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
       "Instructions": {
@@ -152,30 +91,7 @@
   {
     "comment": "select aggregation with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
-            "QueryTimeout": 1000,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
       "Instructions": {
@@ -205,29 +121,7 @@
   {
     "comment": "select limit with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(10)",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit :__upper_limit",
-            "QueryTimeout": 1000,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
       "Instructions": {
@@ -256,23 +150,7 @@
   {
     "comment": "select limit with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from unsharded where 1 != 1",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
-        "QueryTimeout": 1000,
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
       "Instructions": {
@@ -295,23 +173,7 @@
   {
     "comment": "select with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
-        "ScatterErrorsAsWarnings": true,
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
       "Instructions": {
@@ -334,30 +196,7 @@
   {
     "comment": "select aggregation with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
-            "ScatterErrorsAsWarnings": true,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
       "Instructions": {
@@ -387,30 +226,7 @@
   {
     "comment": "select aggregation with partial scatter directive - added comments to try to confuse the hint extraction",
     "query": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
-            "ScatterErrorsAsWarnings": true,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
       "Instructions": {
@@ -440,29 +256,7 @@
   {
     "comment": "select limit with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(10)",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit :__upper_limit",
-            "ScatterErrorsAsWarnings": true,
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
       "Instructions": {
@@ -491,22 +285,7 @@
   {
     "comment": "qualified '*' expression for simple route",
     "query": "select user.* from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.* from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.* from `user` where 1 != 1",
-        "Query": "select `user`.* from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.* from user",
       "Instructions": {
@@ -528,22 +307,7 @@
   {
     "comment": "fully qualified '*' expression for simple route",
     "query": "select user.user.* from user.user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.user.* from user.user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.* from `user` where 1 != 1",
-        "Query": "select `user`.* from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.user.* from user.user",
       "Instructions": {
@@ -565,22 +329,7 @@
   {
     "comment": "select * from authoritative table",
     "query": "select * from authoritative",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from authoritative",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
-        "Query": "select user_id, col1, col2 from authoritative",
-        "Table": "authoritative"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from authoritative",
       "Instructions": {
@@ -602,22 +351,7 @@
   {
     "comment": "select * from join of authoritative tables",
     "query": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id where 1 != 1",
-        "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id",
-        "Table": "authoritative"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
       "Instructions": {
@@ -639,28 +373,12 @@
   {
     "comment": "test table lookup failure for authoritative code path",
     "query": "select a.* from authoritative",
-    "v3-plan": "VT05004: table 'a' does not exist",
-    "gen4-plan": "Unknown table 'a'"
+    "plan": "Unknown table 'a'"
   },
   {
     "comment": "select * from qualified authoritative table",
     "query": "select a.* from authoritative a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a.* from authoritative a",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1",
-        "Query": "select a.user_id, a.col1, a.col2 from authoritative as a",
-        "Table": "authoritative"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a.* from authoritative a",
       "Instructions": {
@@ -682,22 +400,7 @@
   {
     "comment": "select * from intermixing of authoritative table with non-authoritative results in no expansion",
     "query": "select * from authoritative join user on authoritative.user_id=user.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from authoritative join user on authoritative.user_id=user.id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from authoritative join `user` on authoritative.user_id = `user`.id where 1 != 1",
-        "Query": "select * from authoritative join `user` on authoritative.user_id = `user`.id",
-        "Table": "authoritative, `user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from authoritative join user on authoritative.user_id=user.id",
       "Instructions": {
@@ -720,22 +423,7 @@
   {
     "comment": "select authoritative.* with intermixing still expands",
     "query": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id where 1 != 1",
-        "Query": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id",
-        "Table": "authoritative, `user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
       "Instructions": {
@@ -758,22 +446,7 @@
   {
     "comment": "auto-resolve anonymous columns for simple route",
     "query": "select anon_col from user join user_extra on user.id = user_extra.user_id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select anon_col from user join user_extra on user.id = user_extra.user_id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select anon_col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
-        "Query": "select anon_col from `user` join user_extra on `user`.id = user_extra.user_id",
-        "Table": "`user`, user_extra"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select anon_col from user join user_extra on user.id = user_extra.user_id",
       "Instructions": {
@@ -796,47 +469,12 @@
   {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
-    "v3-plan": "VT03019: column col not found",
-    "gen4-plan": "Column 'col' in field list is ambiguous"
+    "plan": "Column 'col' in field list is ambiguous"
   },
   {
     "comment": "Auto-resolve should work if unique vindex columns are referenced",
     "query": "select id, user_id from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, user_id from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_id from user_extra where 1 != 1",
-            "Query": "select user_id from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, user_id from user join user_extra",
       "Instructions": {
@@ -878,22 +516,7 @@
   {
     "comment": "database calls should be substituted",
     "query": "select database() from dual",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select database() from dual",
-      "Instructions": {
-        "OperatorType": "Projection",
-        "Expressions": [
-          ":__vtdbname as database()"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SingleRow"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select database() from dual",
       "Instructions": {
@@ -915,22 +538,7 @@
   {
     "comment": "last_insert_id for unsharded route",
     "query": "select last_insert_id() as x from main.unsharded",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select last_insert_id() as x from main.unsharded",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select :__lastInsertId as x from unsharded where 1 != 1",
-        "Query": "select :__lastInsertId as x from unsharded",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select last_insert_id() as x from main.unsharded",
       "Instructions": {
@@ -952,22 +560,7 @@
   {
     "comment": "select from dual on unqualified keyspace",
     "query": "select @@session.auto_increment_increment from dual",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select @@session.auto_increment_increment from dual",
       "Instructions": {
@@ -989,26 +582,7 @@
   {
     "comment": "select from pinned table",
     "query": "select * from pin_test",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from pin_test",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from pin_test where 1 != 1",
-        "Query": "select * from pin_test",
-        "Table": "pin_test",
-        "Values": [
-          "VARCHAR(\"\\x80\")"
-        ],
-        "Vindex": "binary"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from pin_test",
       "Instructions": {
@@ -1039,41 +613,7 @@
   {
     "comment": "RHS route referenced",
     "query": "select user_extra.id from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user_extra.id from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user_extra.id from user join user_extra",
       "Instructions": {
@@ -1115,41 +655,7 @@
   {
     "comment": "Both routes referenced",
     "query": "select user.col, user_extra.id from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col, user_extra.id from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id from user join user_extra",
       "Instructions": {
@@ -1191,41 +697,7 @@
   {
     "comment": "Expression with single-route reference",
     "query": "select user.col, user_extra.id + user_extra.col from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.id + user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.id + user_extra.col from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
       "Instructions": {
@@ -1267,41 +739,7 @@
   {
     "comment": "Jumbled references",
     "query": "select user.col, user_extra.id, user.col2 from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0,L:1",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col, `user`.col2 from `user` where 1 != 1",
-            "Query": "select `user`.col, `user`.col2 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
       "Instructions": {
@@ -1343,41 +781,7 @@
   {
     "comment": "Comments",
     "query": "select /* comment */ user.col from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /* comment */ user.col from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select /* comment */ `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select /* comment */ 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /* comment */ user.col from user join user_extra",
       "Instructions": {
@@ -1419,41 +823,7 @@
   {
     "comment": "for update",
     "query": "select user.col from user join user_extra for update",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join user_extra for update",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` for update",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra for update",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra for update",
       "Instructions": {
@@ -1495,44 +865,7 @@
   {
     "comment": "Field query should work for joins select bind vars",
     "query": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "TableName": "`user`_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
-            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
       "Instructions": {
@@ -1577,41 +910,7 @@
   {
     "comment": "Case preservation",
     "query": "select user.Col, user_extra.Id from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.Col, user_extra.Id from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.Col from `user` where 1 != 1",
-            "Query": "select `user`.Col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.Id from user_extra where 1 != 1",
-            "Query": "select user_extra.Id from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.Col, user_extra.Id from user join user_extra",
       "Instructions": {
@@ -1658,22 +957,7 @@
   {
     "comment": "Hex number is not treated as a simple value",
     "query": "select * from user where id = 0x04",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where id = 0x04",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 0x04",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where id = 0x04",
       "Instructions": {
@@ -1699,31 +983,7 @@
   {
     "comment": "sharded limit offset",
     "query": "select user_id from music order by user_id limit 10, 20",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user_id from music order by user_id limit 10, 20",
-      "Instructions": {
-        "OperatorType": "Limit",
-        "Count": "INT64(20)",
-        "Offset": "INT64(10)",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select user_id, weight_string(user_id) from music order by user_id asc limit :__upper_limit",
-            "ResultColumns": 1,
-            "Table": "music"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user_id from music order by user_id limit 10, 20",
       "Instructions": {
@@ -1754,26 +1014,7 @@
   {
     "comment": "Sharding Key Condition in Parenthesis",
     "query": "select * from user where name ='abc' AND (id = 4) limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where `name` = 'abc' and id = 4 limit 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(4)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
       "Instructions": {
@@ -1799,26 +1040,7 @@
   {
     "comment": "Multiple parenthesized expressions",
     "query": "select * from user where (id = 4) AND (name ='abc') limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(4)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
       "Instructions": {
@@ -1844,26 +1066,7 @@
   {
     "comment": "Multiple parenthesized expressions",
     "query": "select * from user where (id = 4 and name ='abc') limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where (id = 4 and name ='abc') limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(4)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 4 and name ='abc') limit 5",
       "Instructions": {
@@ -1889,26 +1092,7 @@
   {
     "comment": "Column Aliasing with Table.Column",
     "query": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
-        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 2",
-        "Table": "`user`",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
       "Instructions": {
@@ -1934,26 +1118,7 @@
   {
     "comment": "Column Aliasing with Column",
     "query": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
-        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
-        "Table": "`user`",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
       "Instructions": {
@@ -1979,26 +1144,7 @@
   {
     "comment": "Booleans and parenthesis",
     "query": "select * from user where (id = 1) AND name = true limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where (id = 1) AND name = true limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 1 and `name` = true limit 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 1) AND name = true limit 5",
       "Instructions": {
@@ -2024,26 +1170,7 @@
   {
     "comment": "Column as boolean-ish",
     "query": "select * from user where (id = 1) AND name limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where (id = 1) AND name limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 1 and `name` limit 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 1) AND name limit 5",
       "Instructions": {
@@ -2069,26 +1196,7 @@
   {
     "comment": "PK as fake boolean, and column as boolean-ish",
     "query": "select * from user where (id = 5) AND name = true limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where (id = 5) AND name = true limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 5 and `name` = true limit 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 5) AND name = true limit 5",
       "Instructions": {
@@ -2114,43 +1222,7 @@
   {
     "comment": "top level subquery in select",
     "query": "select a, (select col from user) from unsharded",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, (select col from user) from unsharded",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 from unsharded",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
       "Instructions": {
@@ -2193,43 +1265,7 @@
   {
     "comment": "sub-expression subquery in select",
     "query": "select a, 1+(select col from user) from unsharded",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select a, 1+(select col from user) from unsharded",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 from unsharded",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
@@ -2272,50 +1308,7 @@
   {
     "comment": "select * from derived table expands specific columns",
     "query": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0,
-          1
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id as id1 from `user` where 1 != 1",
-                "Query": "select `user`.id as id1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select user_extra.id as id2 from user_extra where 1 != 1",
-                "Query": "select user_extra.id as id2 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
       "Instructions": {
@@ -2357,38 +1350,17 @@
   {
     "comment": "duplicate columns not allowed in derived table",
     "query": "select * from (select user.id, user_extra.id from user join user_extra) as t",
-    "v3-plan": "VT12001: unsupported: duplicate column names in subquery: id",
-    "gen4-plan": "Duplicate column name 'id'"
+    "plan": "Duplicate column name 'id'"
   },
   {
     "comment": "non-existent symbol in cross-shard derived table",
     "query": "select t.col from (select user.id from user join user_extra) as t",
-    "v3-plan": "VT03019: column t.col not found",
-    "gen4-plan": "column 't.col' not found"
+    "plan": "column 't.col' not found"
   },
   {
     "comment": "union with the same target shard",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from music where user_id = 1 union select * from user where id = 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
-        "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
-        "Table": "music",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from music where user_id = 1 union select * from user where id = 1",
       "Instructions": {
@@ -2415,26 +1387,7 @@
   {
     "comment": "union with the same target shard last_insert_id",
     "query": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
-        "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
-        "Table": "music",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
       "Instructions": {
@@ -2461,22 +1414,7 @@
   {
     "comment": "unsharded union in derived table",
     "query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
-        "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
       "Instructions": {
@@ -2498,22 +1436,7 @@
   {
     "comment": "unsharded union in subquery",
     "query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select id, `name` from unsharded where 1 != 1",
-        "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
       "Instructions": {
@@ -2535,22 +1458,7 @@
   {
     "comment": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "query": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1",
-        "Query": "select id from unsharded union select id from unsharded_auto order by id asc limit 5",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
       "Instructions": {
@@ -2573,22 +1481,7 @@
   {
     "comment": "unsharded union",
     "query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
-        "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
       "Instructions": {
@@ -2611,22 +1504,7 @@
   {
     "comment": "unsharded nested union",
     "query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1",
-        "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
       "Instructions": {
@@ -2649,22 +1527,7 @@
   {
     "comment": "unsharded nested union with limit",
     "query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded where 1 != 1)",
-        "Query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
       "Instructions": {
@@ -2686,23 +1549,7 @@
   {
     "comment": "routing rules: ensure directives are not lost",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from unsharded as route2 where 1 != 1",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
-        "QueryTimeout": 1000,
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
       "Instructions": {
@@ -2725,22 +1572,7 @@
   {
     "comment": "testing SingleRow Projection",
     "query": "select 42",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42",
-      "Instructions": {
-        "OperatorType": "Projection",
-        "Expressions": [
-          "INT64(42) as 42"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SingleRow"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 42",
       "Instructions": {
@@ -2762,22 +1594,7 @@
   {
     "comment": "don't filter on the vtgate",
     "query": "select 42 from dual where false",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42 from dual where false",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 42 from dual where 1 != 1",
-        "Query": "select 42 from dual where false",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 42 from dual where false",
       "Instructions": {
@@ -2799,22 +1616,7 @@
   {
     "comment": "testing SingleRow Projection with arithmetics",
     "query": "select 42+2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42+2",
-      "Instructions": {
-        "OperatorType": "Projection",
-        "Expressions": [
-          "INT64(44) as 42 + 2"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SingleRow"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 42+2",
       "Instructions": {
@@ -2836,26 +1638,7 @@
   {
     "comment": "sql_calc_found_rows without limit",
     "query": "select sql_calc_found_rows * from music where user_id = 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select sql_calc_found_rows * from music where user_id = 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from music where 1 != 1",
-        "Query": "select * from music where user_id = 1",
-        "Table": "music",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows * from music where user_id = 1",
       "Instructions": {
@@ -2881,51 +1664,7 @@
   {
     "comment": "sql_calc_found_rows with limit",
     "query": "select sql_calc_found_rows * from music limit 100",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select sql_calc_found_rows * from music limit 100",
-      "Instructions": {
-        "OperatorType": "SQL_CALC_FOUND_ROWS",
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(100)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select * from music where 1 != 1",
-                "Query": "select * from music limit :__upper_limit",
-                "Table": "music"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count(0) AS count",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) from music where 1 != 1",
-                "Query": "select count(*) from music",
-                "Table": "music"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows * from music limit 100",
       "Instructions": {
@@ -2976,46 +1715,7 @@
   {
     "comment": "sql_calc_found_rows with SelectEqualUnique plans",
     "query": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
-      "Instructions": {
-        "OperatorType": "SQL_CALC_FOUND_ROWS",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from music where 1 != 1",
-            "Query": "select * from music where user_id = 1 limit 2",
-            "Table": "music",
-            "Values": [
-              "INT64(1)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from music where 1 != 1",
-            "Query": "select count(*) from music where user_id = 1",
-            "Table": "music",
-            "Values": [
-              "INT64(1)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
       "Instructions": {
@@ -3061,53 +1761,7 @@
   {
     "comment": "sql_calc_found_rows with group by and having",
     "query": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
-      "Instructions": {
-        "OperatorType": "SQL_CALC_FOUND_ROWS",
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(2)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
-                "ResultColumns": 2,
-                "Table": "music"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count(0) AS count",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) from (select user_id, count(id) from music where 1 != 1 group by user_id) as t where 1 != 1",
-                "Query": "select count(*) from (select user_id, count(id) from music group by user_id having count(user_id) = 1) as t",
-                "Table": "music"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
       "Instructions": {
@@ -3160,34 +1814,17 @@
   {
     "comment": "sql_calc_found_rows in sub queries",
     "query": "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
-    "v3-plan": "VT03008: incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
-    "gen4-plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
   },
   {
     "comment": "sql_calc_found_rows in derived table",
     "query": "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1",
-    "v3-plan": "VT03008: incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
-    "gen4-plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
   },
   {
     "comment": "select from unsharded keyspace into dumpfile",
     "query": "select * from main.unsharded into Dumpfile 'x.txt'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from main.unsharded into Dumpfile 'x.txt'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from unsharded where 1 != 1",
-        "Query": "select * from unsharded into dumpfile 'x.txt'",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from main.unsharded into Dumpfile 'x.txt'",
       "Instructions": {
@@ -3209,22 +1846,7 @@
   {
     "comment": "select from unsharded keyspace into outfile",
     "query": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from unsharded where 1 != 1",
-        "Query": "select * from unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
       "Instructions": {
@@ -3246,22 +1868,7 @@
   {
     "comment": "select from unsharded keyspace into outfile s3",
     "query": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from unsharded where 1 != 1",
-        "Query": "select * from unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off",
-        "Table": "unsharded"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
       "Instructions": {
@@ -3298,26 +1905,7 @@
   {
     "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "query": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
-        "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
-        "Table": "`user`",
-        "Values": [
-          "INT64(1)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
       "Instructions": {
@@ -3343,41 +1931,7 @@
   {
     "comment": "Add two tables with the same column in a join",
     "query": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,L:1",
-        "TableName": "`user`, user_extra_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t.id, s.id from `user` as t join user_extra as s on t.id = s.user_id where 1 != 1",
-            "Query": "select t.id, s.id from `user` as t join user_extra as s on t.id = s.user_id",
-            "Table": "`user`, user_extra"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select 1 from unsharded",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
       "Instructions": {
@@ -3420,22 +1974,7 @@
   {
     "comment": "((((select 1))))",
     "query": "((((select 1))))",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "((((select 1))))",
-      "Instructions": {
-        "OperatorType": "Projection",
-        "Expressions": [
-          "INT64(1) as 1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SingleRow"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "((((select 1))))",
       "Instructions": {
@@ -3457,41 +1996,7 @@
   {
     "comment": "Merging dual with user",
     "query": "select 42, id from dual, user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, id from dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 42, id from dual, user",
       "Instructions": {
@@ -3514,70 +2019,7 @@
   {
     "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(1)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user` limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
-                "ResultColumns": 1,
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
@@ -3646,76 +2088,7 @@
   {
     "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Subquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq_has_values1",
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Limit",
-                "Count": "INT64(1)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
-                    "Query": "select :__sq1 as a from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
       "Instructions": {
@@ -3796,22 +2169,7 @@
   {
     "comment": "plan test for a natural character set string",
     "query": "select N'string' from dual",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select N'string' from dual",
-      "Instructions": {
-        "OperatorType": "Projection",
-        "Expressions": [
-          "VARCHAR(\"string\") as N'string'"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SingleRow"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select N'string' from dual",
       "Instructions": {
@@ -3833,44 +2191,7 @@
   {
     "comment": "select expression having dependencies on both sides of a join",
     "query": "select user.id * user_id as amount from user, user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.id * user_id as amount from user, user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select :user_id * user_id as amount from user_extra where 1 != 1",
-            "Query": "select :user_id * user_id as amount from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id * user_id as amount from user, user_extra",
       "Instructions": {
@@ -3915,8 +2236,7 @@
   {
     "comment": "correlated subquery in exists clause",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
@@ -3964,8 +2284,7 @@
   {
     "comment": "correlated subquery in exists clause with an order by",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
@@ -4014,8 +2333,7 @@
   {
     "comment": "correlated subquery having dependencies on two tables",
     "query": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
       "Instructions": {
@@ -4079,8 +2397,7 @@
   {
     "comment": "correlated subquery using a column twice",
     "query": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
       "Instructions": {
@@ -4124,32 +2441,12 @@
   {
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
+    "plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
   },
   {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
     "query": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music join `user` on music.user_id = `user`.id where 1 != 1",
-        "Query": "select music.id from music join `user` on music.user_id = `user`.id where music.user_id = 5 and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id)",
-        "Table": "music, `user`",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
       "Instructions": {
@@ -4176,46 +2473,7 @@
   {
     "comment": "union as a derived table",
     "query": "select found from (select id as found from user union all (select id from unsharded)) as t",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id as found from `user` where 1 != 1",
-                "Query": "select id as found from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select id from unsharded where 1 != 1",
-                "Query": "select id from unsharded",
-                "Table": "unsharded"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
       "Instructions": {
@@ -4262,45 +2520,7 @@
   {
     "comment": "use output column containing data from both sides of the join",
     "query": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "user_col": 0,
-          "user_id": 1
-        },
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.col, `user`.id from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.col + :user_col from user_extra where 1 != 1",
-            "Query": "select user_extra.col + :user_col from user_extra where user_extra.id = :user_id",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
       "Instructions": {
@@ -4394,22 +2614,7 @@
   {
     "comment": "select user.id, trim(leading 'x' from user.name) from user",
     "query": "select user.id, trim(leading 'x' from user.name) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.id, trim(leading 'x' from user.name) from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user` where 1 != 1",
-        "Query": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, trim(leading 'x' from user.name) from user",
       "Instructions": {
@@ -4431,22 +2636,7 @@
   {
     "comment": "json utility functions",
     "query": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user` where 1 != 1",
-        "Query": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
       "Instructions": {
@@ -4468,24 +2658,7 @@
   {
     "comment": "dual query with exists clause",
     "query": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "DBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
-        "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
-        "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
       "Instructions": {
@@ -4509,22 +2682,7 @@
   {
     "comment": "json_quote, json_object and json_array",
     "query": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
       "Instructions": {
@@ -4546,51 +2704,7 @@
   {
     "comment": "select (select id from user order by id limit 1) from user_extra",
     "query": "select (select id from user order by id limit 1) from user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select id from user order by id limit 1) from user_extra",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(1)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
-                "ResultColumns": 1,
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
-            "Query": "select :__sq1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
       "Instructions": {
@@ -4641,47 +2755,7 @@
   {
     "comment": "yeah, it does not make sense, but it's valid",
     "query": "select exists(select 1) from user where id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select exists(select 1) from user where id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutExists",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from dual where 1 != 1",
-            "Query": "select 1 from dual limit 1",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select :__sq_has_values1 from `user` where 1 != 1",
-            "Query": "select :__sq_has_values1 from `user` where id = 5",
-            "Table": "`user`",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select exists(select 1) from user where id = 5",
       "Instructions": {
@@ -4708,22 +2782,7 @@
   {
     "comment": "json schema validation functions",
     "query": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual where 1 != 1",
-        "Query": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
       "Instructions": {
@@ -4745,22 +2804,7 @@
   {
     "comment": "json search functions",
     "query": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
-        "Query": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
       "Instructions": {
@@ -4782,22 +2826,7 @@
   {
     "comment": "Json extract and json unquote shorthands",
     "query": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select a -> '$[4]', a ->> '$[3]' from `user` where 1 != 1",
-        "Query": "select a -> '$[4]', a ->> '$[3]' from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
       "Instructions": {
@@ -4819,22 +2848,7 @@
   {
     "comment": "groupe by with non aggregated columns and table alias",
     "query": "select u.id, u.age from user u group by u.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.id, u.age from user u group by u.id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.id, u.age from `user` as u where 1 != 1 group by u.id",
-        "Query": "select u.id, u.age from `user` as u group by u.id",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, u.age from user u group by u.id",
       "Instructions": {
@@ -4856,22 +2870,7 @@
   {
     "comment": "Functions that return JSON value attributes",
     "query": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual where 1 != 1",
-        "Query": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
       "Instructions": {
@@ -4893,22 +2892,7 @@
   {
     "comment": "Json array functions",
     "query": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
-        "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
       "Instructions": {
@@ -4930,22 +2914,7 @@
   {
     "comment": "Json merge functions",
     "query": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual where 1 != 1",
-        "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
       "Instructions": {
@@ -4967,22 +2936,7 @@
   {
     "comment": "JSON modifier functions",
     "query": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual where 1 != 1",
-        "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
       "Instructions": {
@@ -5004,47 +2958,7 @@
   {
     "comment": "Reference with a subquery which can be merged",
     "query": "select exists(select id from user where id = 4)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select exists(select id from user where id = 4)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutExists",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where id = 4 limit 1",
-            "Table": "`user`",
-            "Values": [
-              "INT64(4)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
-            "Query": "select :__sq_has_values1 from dual",
-            "Table": "dual"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select exists(select id from user where id = 4)",
       "Instructions": {
@@ -5071,49 +2985,7 @@
   {
     "comment": "Reference with a subquery which cannot be merged",
     "query": "select exists(select * from user)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select exists(select * from user)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutExists",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(1)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
-            "Query": "select :__sq_has_values1 from dual",
-            "Table": "dual"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select exists(select * from user)",
       "Instructions": {
@@ -5162,22 +3034,7 @@
   {
     "comment": "insert function not requiring any table",
     "query": "select insert('Quadratic', 3, 4, 'What')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select insert('Quadratic', 3, 4, 'What')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select insert('Quadratic', 3, 4, 'What') from dual where 1 != 1",
-        "Query": "select insert('Quadratic', 3, 4, 'What') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select insert('Quadratic', 3, 4, 'What')",
       "Instructions": {
@@ -5199,22 +3056,7 @@
   {
     "comment": "insert function using column names as arguments",
     "query": "select insert(tcol1, id, 3, tcol2) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select insert(tcol1, id, 3, tcol2) from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select insert(tcol1, id, 3, tcol2) from `user` where 1 != 1",
-        "Query": "select insert(tcol1, id, 3, tcol2) from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select insert(tcol1, id, 3, tcol2) from user",
       "Instructions": {
@@ -5236,22 +3078,7 @@
   {
     "comment": "gtid functions",
     "query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
-        "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
       "Instructions": {
@@ -5273,70 +3100,7 @@
   {
     "comment": "Predicate in apply join which is merged",
     "query": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "JoinVars": {
-          "user_extra_user_id": 1
-        },
-        "TableName": "`user`_user_extra_user_metadata",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
-            "JoinVars": {
-              "user_col": 0
-            },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.col from `user` where 1 != 1",
-                "Query": "select `user`.col from `user` where `user`.textcol1 = 'alice@gmail.com'",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
-                "Query": "select user_extra.user_id from user_extra where user_extra.col = :user_col",
-                "Table": "user_extra"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_metadata.user_id from user_metadata where 1 != 1",
-            "Query": "select user_metadata.user_id from user_metadata where user_metadata.user_id = :user_extra_user_id",
-            "Table": "user_metadata",
-            "Values": [
-              ":user_extra_user_id"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
       "Instructions": {
@@ -5382,26 +3146,7 @@
   {
     "comment": "Join across multiple tables, with conditions on different vindexes, but mergeable through join predicates",
     "query": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id from `user` join music_extra on `user`.id = music_extra.user_id join music on music_extra.user_id = music.user_id where 1 != 1",
-        "Query": "select `user`.id from `user` join music_extra on `user`.id = music_extra.user_id join music on music_extra.user_id = music.user_id where `user`.id = 123 and music.id = 456",
-        "Table": "`user`, music_extra, music",
-        "Values": [
-          "INT64(123)"
-        ],
-        "Vindex": "user_index"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
       "Instructions": {
@@ -5429,61 +3174,7 @@
   {
     "comment": "SQL_CALC_FOUND_ROWS with vindex lookup",
     "query": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
-      "Instructions": {
-        "OperatorType": "SQL_CALC_FOUND_ROWS",
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(2)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Equal",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
-                "ResultColumns": 2,
-                "Table": "`user`",
-                "Values": [
-                  "VARCHAR(\"aa\")"
-                ],
-                "Vindex": "name_user_map"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count(0) AS count",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Equal",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) from `user` where 1 != 1",
-                "Query": "select count(*) from `user` where `name` = 'aa'",
-                "Table": "`user`",
-                "Values": [
-                  "VARCHAR(\"aa\")"
-                ],
-                "Vindex": "name_user_map"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
       "Instructions": {
@@ -5594,22 +3285,7 @@
   {
     "comment": "`None` route being merged with another route via join predicate on Vindex columns",
     "query": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "None",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music join `user` on music.user_id = `user`.id where 1 != 1",
-        "Query": "select music.id from music join `user` on music.user_id = `user`.id where music.user_id in (null) and `user`.id = 5",
-        "Table": "music, `user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
       "Instructions": {
@@ -5632,51 +3308,7 @@
   {
     "comment": "Treating single value tuples as `EqualUnique` routes",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "(INT64(5))"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
       "Instructions": {
@@ -5702,51 +3334,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "(INT64(1), INT64(2), INT64(3))"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
       "Instructions": {
@@ -5772,51 +3360,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, with derived table",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from (select music.id from music where 1 != 1) as _inner where 1 != 1",
-            "Query": "select * from (select music.id from music where music.user_id in ::__vals) as _inner",
-            "Table": "music",
-            "Values": [
-              "(INT64(1), INT64(2), INT64(3))"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
       "Instructions": {
@@ -5842,47 +3386,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, with inner scatter query",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.foo = 'bar'",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in ::__vals and :__sq_has_values1 = 1 and music.id in ::__sq1",
-            "Table": "music",
-            "Values": [
-              "(INT64(3), INT64(4), INT64(5))"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
       "Instructions": {
@@ -5908,51 +3412,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "(INT64(1), INT64(2), INT64(3))"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
       "Instructions": {
@@ -5978,47 +3438,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "(INT64(1), INT64(2), INT64(3))"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
-            "Table": "music"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
       "Instructions": {
@@ -6040,47 +3460,7 @@
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "None",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in (null)",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
       "Instructions": {
@@ -6102,43 +3482,7 @@
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as non-routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "None",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in (null)",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
-            "Table": "music"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
       "Instructions": {
@@ -6160,47 +3504,7 @@
   {
     "comment": "Mergeable scatter subquery",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.genre = 'pop'",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
       "Instructions": {
@@ -6222,47 +3526,7 @@
   {
     "comment": "Mergeable scatter subquery with `GROUP BY` on unique vindex column",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1 group by music.id",
-            "Query": "select music.id from music where music.genre = 'pop' group by music.id",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
       "Instructions": {
@@ -6284,8 +3548,7 @@
   {
     "comment": "Unmergeable scatter subquery with `GROUP BY` on-non vindex column",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
-    "v3-plan": "VT12001: unsupported: in scatter query: GROUP BY column must reference column in SELECT list",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
       "Instructions": {
@@ -6342,53 +3605,7 @@
   {
     "comment": "Unmergeable scatter subquery with LIMIT",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "INT64(10)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where music.genre = 'pop' limit :__upper_limit",
-                "Table": "music"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
       "Instructions": {
@@ -6441,51 +3658,7 @@
   {
     "comment": "Mergeable subquery with `MAX` aggregate and grouped by unique vindex",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select max(music.id) from music where 1 != 1 group by music.user_id",
-            "Query": "select max(music.id) from music where music.user_id in ::__vals group by music.user_id",
-            "Table": "music",
-            "Values": [
-              "(INT64(5), INT64(6))"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
       "Instructions": {
@@ -6511,58 +3684,7 @@
   {
     "comment": "Unmergeable subquery with `MAX` aggregate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "max(0)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select max(music.id) from music where 1 != 1",
-                "Query": "select max(music.id) from music where music.user_id in ::__vals",
-                "Table": "music",
-                "Values": [
-                  "(INT64(5), INT64(6))"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
       "Instructions": {
@@ -6620,51 +3742,7 @@
   {
     "comment": "Mergeable subquery with `MAX` aggregate with `EqualUnique` route operator",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select max(music.id) from music where 1 != 1",
-            "Query": "select max(music.id) from music where music.user_id = 5",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
       "Instructions": {
@@ -6715,51 +3793,7 @@
   {
     "comment": "Mergeable subquery with `LIMIT` due to `EqualUnique` route",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select max(music.id) from music where 1 != 1",
-            "Query": "select max(music.id) from music where music.user_id = 5 limit 10",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
       "Instructions": {
@@ -6810,51 +3844,7 @@
   {
     "comment": "Mergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from (select * from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-            "Query": "select * from (select * from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -6880,73 +3870,7 @@
   {
     "comment": "Mergeable subquery with multiple levels of derived statements, using a single value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SimpleProjection",
-                "Columns": [
-                  0
-                ],
-                "Inputs": [
-                  {
-                    "OperatorType": "Limit",
-                    "Count": "INT64(10)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "IN",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select music.id from music where 1 != 1",
-                        "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
-                        "Table": "music",
-                        "Values": [
-                          "(INT64(5))"
-                        ],
-                        "Vindex": "user_index"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -6972,73 +3896,7 @@
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SimpleProjection",
-                "Columns": [
-                  0
-                ],
-                "Inputs": [
-                  {
-                    "OperatorType": "Limit",
-                    "Count": "INT64(10)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "IN",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select music.id from music where 1 != 1",
-                        "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
-                        "Table": "music",
-                        "Values": [
-                          "(INT64(5), INT64(6))"
-                        ],
-                        "Vindex": "user_index"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -7103,69 +3961,7 @@
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SimpleProjection",
-                "Columns": [
-                  0
-                ],
-                "Inputs": [
-                  {
-                    "OperatorType": "Limit",
-                    "Count": "INT64(10)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select music.id from music where 1 != 1",
-                        "Query": "select music.id from music limit :__upper_limit",
-                        "Table": "music"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -7226,47 +4022,7 @@
   {
     "comment": "`None` subquery as top level predicate - outer query changes from `Scatter` to `None` on merge",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "None",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in (null)",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-            "Table": "music",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
       "Instructions": {
@@ -7288,47 +4044,7 @@
   {
     "comment": "`None` subquery as top level predicate - outer query changes from `EqualUnique` to `None` on merge",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "None",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in (null)",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
       "Instructions": {
@@ -7350,43 +4066,7 @@
   {
     "comment": "`None` subquery nested inside `OR` expression - outer query keeps routing information",
     "query": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
-      "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "None",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.user_id in (null)",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
-            "Table": "music"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
       "Instructions": {
@@ -7408,48 +4088,7 @@
   {
     "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "music_id": 0
-        },
-        "TableName": "music_music",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from (select max(id) as maxt from music where 1 != 1) as other where 1 != 1",
-            "Query": "select 1 from (select max(id) as maxt from music where music.user_id = 5) as other where other.maxt = :music_id",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
       "Instructions": {
@@ -7475,22 +4114,7 @@
   {
     "comment": "Joining with a subquery that uses an `EqualUnique` route can be merged",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music join (select id from music where 1 != 1) as other on other.id = music.id where 1 != 1",
-        "Query": "select music.id from music join (select id from music where music.user_id = 5) as other on other.id = music.id",
-        "Table": "music"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
       "Instructions": {
@@ -7516,22 +4140,7 @@
   {
     "comment": "Joining with a subquery that has an `IN` route can be merged",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music join (select id from music where 1 != 1) as other on other.id = music.id where 1 != 1",
-        "Query": "select music.id from music join (select id from music where music.user_id in (5, 6, 7)) as other on other.id = music.id",
-        "Table": "music"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
       "Instructions": {
@@ -7557,8 +4166,7 @@
   {
     "comment": "limit on the vtgate has to be executed on the LHS of a join",
     "query": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
       "Instructions": {
@@ -7613,8 +4221,7 @@
   {
     "comment": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "query": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
-    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
       "Instructions": {
@@ -7686,58 +4293,12 @@
   {
     "comment": "limit on both sides means that we can't evaluate this at all",
     "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": "VT12001: unsupported: JOIN between derived tables"
+    "plan": "VT12001: unsupported: JOIN between derived tables"
   },
   {
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "query": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "other_maxt": 0
-        },
-        "TableName": "music_music",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select other.maxt from (select max(id) as maxt from music where 1 != 1) as other where 1 != 1",
-            "Query": "select other.maxt from (select max(id) as maxt from music where music.user_id = 5) as other",
-            "Table": "music",
-            "Values": [
-              "INT64(5)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where music.id = :other_maxt",
-            "Table": "music",
-            "Values": [
-              ":other_maxt"
-            ],
-            "Vindex": "music_user_map"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
       "Instructions": {
@@ -7763,22 +4324,7 @@
   {
     "comment": "Earlier columns are in scope in subqueries https://github.com/vitessio/vitess/issues/11246",
     "query": "SELECT 1 as x, (SELECT x)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT 1 as x, (SELECT x)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
-        "Query": "select 1 as x, (select x from dual) from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT 1 as x, (SELECT x)",
       "Instructions": {
@@ -7800,22 +4346,7 @@
   {
     "comment": "(OR 1 = 0) doesn't cause unnecessary scatter",
     "query": "select * from user where id = 1 or 1 = 0",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where id = 1 or 1 = 0",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 1 or 1 = 0",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where id = 1 or 1 = 0",
       "Instructions": {
@@ -7841,22 +4372,7 @@
   {
     "comment": "(OR 2 < 1) doesn't cause unnecessary scatter",
     "query": "select * from user where id = 1 or 2 < 1",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from user where id = 1 or 2 < 1",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from `user` where 1 != 1",
-        "Query": "select * from `user` where id = 1 or 2 < 1",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from user where id = 1 or 2 < 1",
       "Instructions": {
@@ -7882,22 +4398,7 @@
   {
     "comment": "query with a derived table and dual table in unsharded keyspace",
     "query": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
-        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
-        "Table": "unsharded_a, dual"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
       "Instructions": {
@@ -7920,8 +4421,7 @@
   {
     "comment": "subquery having join table on clause, using column reference of outer select table",
     "query": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
-    "v3-plan": "VT03019: column u3.id not found",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
       "Instructions": {
@@ -7947,22 +4447,7 @@
   {
     "comment": "allow last_insert_id with argument",
     "query": "select last_insert_id(id) from user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select last_insert_id(id) from user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
-        "Query": "select last_insert_id(id) from `user`",
-        "Table": "`user`"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select last_insert_id(id) from user",
       "Instructions": {
@@ -7984,22 +4469,7 @@
   {
     "comment": "merge subquery using MAX and join into single route",
     "query": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` join music_extra on `user`.id = music_extra.user_id where 1 != 1",
-        "Query": "select 1 from `user` join music_extra on `user`.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = `user`.id)",
-        "Table": "`user`, music_extra"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
       "Instructions": {
@@ -8022,26 +4492,7 @@
   {
     "comment": "Query with non-plannable lookup vindex",
     "query": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Equal",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from user_metadata where 1 != 1",
-        "Query": "select * from user_metadata where user_metadata.non_planable = 'foo'",
-        "Table": "user_metadata",
-        "Values": [
-          "VARCHAR(\"foo\")"
-        ],
-        "Vindex": "non_planable_user_map"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
       "Instructions": {
@@ -8067,52 +4518,7 @@
   {
     "comment": "join query with lookup and join on different vindex column",
     "query": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u_id": 0
-        },
-        "TableName": "`user`_user_metadata",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Equal",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.id from `user` as u where 1 != 1",
-            "Query": "select u.id from `user` as u where u.`name` = 'foo'",
-            "Table": "`user`",
-            "Values": [
-              "VARCHAR(\"foo\")"
-            ],
-            "Vindex": "name_user_map"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_metadata as um where 1 != 1",
-            "Query": "select 1 from user_metadata as um where um.user_id = :u_id",
-            "Table": "user_metadata",
-            "Values": [
-              ":u_id"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
       "Instructions": {
@@ -8164,26 +4570,7 @@
   {
     "comment": "pick email as vindex lookup",
     "query": "select * from customer where email = 'a@mail.com'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from customer where email = 'a@mail.com'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Equal",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from customer where 1 != 1",
-        "Query": "select * from customer where email = 'a@mail.com'",
-        "Table": "customer",
-        "Values": [
-          "VARCHAR(\"a@mail.com\")"
-        ],
-        "Vindex": "unq_lkp_vdx"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from customer where email = 'a@mail.com'",
       "Instructions": {
@@ -8234,26 +4621,7 @@
   {
     "comment": "phone is in backfill vindex - not selected for vindex lookup",
     "query": "select * from customer where phone = 123456",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from customer where phone = 123456",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Equal",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from customer where 1 != 1",
-        "Query": "select * from customer where phone = 123456",
-        "Table": "customer",
-        "Values": [
-          "INT64(123456)"
-        ],
-        "Vindex": "unq_lkp_bf_vdx"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from customer where phone = 123456",
       "Instructions": {
@@ -8275,26 +4643,7 @@
   {
     "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where email = 'a@mail.com' and phone = 123456",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Equal",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from customer where 1 != 1",
-        "Query": "select * from customer where email = 'a@mail.com' and phone = 123456",
-        "Table": "customer",
-        "Values": [
-          "INT64(123456)"
-        ],
-        "Vindex": "unq_lkp_bf_vdx"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
       "Instructions": {
@@ -8345,26 +4694,7 @@
   {
     "comment": "predicate order changed: email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Equal",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from customer where 1 != 1",
-        "Query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
-        "Table": "customer",
-        "Values": [
-          "INT64(123456)"
-        ],
-        "Vindex": "unq_lkp_bf_vdx"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
       "Instructions": {
