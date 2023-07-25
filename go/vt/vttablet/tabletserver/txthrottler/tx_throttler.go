@@ -338,8 +338,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 	ctx, cancel := context.WithCancel(context.Background())
 	state.stopHealthCheck = cancel
 	state.initHealthCheckStream(txThrottler.topoServer, target)
-	hcProcessor := state.healthChecksProcessorFactory(txThrottler.topoServer, target)
-	go hcProcessor(ctx)
+	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
 
 	return state, nil
 }
@@ -377,44 +376,34 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	ts.healthCheck.Close()
 }
 
-func (ts *txThrottlerState) healthChecksProcessorFactory(topoServer *topo.Server, target *querypb.Target) func(ctx context.Context) {
+func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
+	var cellsUpdateTicks <-chan time.Time
 	if ts.cellsFromTopo {
-		return func(ctx context.Context) {
-			cellsUpdateTicker := time.NewTicker(topoCellsRefreshInterval)
-			defer cellsUpdateTicker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-cellsUpdateTicker.C:
-					ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-					defer cancel()
-
-					cells, err := fetchKnownCells(ctx, topoServer)
-					if err != nil {
-						log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
-						continue
-					}
-					if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
-						log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
-						ts.config.healthCheckCells = cells
-						ts.closeHealthCheckStream()
-						ts.initHealthCheckStream(topoServer, target)
-					}
-				case th := <-ts.healthCheckChan:
-					ts.StatsUpdate(th)
-				}
-			}
-		}
+		ticker := time.NewTicker(topoCellsRefreshInterval)
+		cellsUpdateTicks = ticker.C
+		defer ticker.Stop()
 	}
-	return func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case th := <-ts.healthCheckChan:
-				ts.StatsUpdate(th)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-cellsUpdateTicks:
+			fkcCtx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+			defer cancel()
+
+			cells, err := fetchKnownCells(fkcCtx, topoServer)
+			if err != nil {
+				log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
+				continue
 			}
+			if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
+				log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
+				ts.config.healthCheckCells = cells
+				ts.closeHealthCheckStream()
+				ts.initHealthCheckStream(topoServer, target)
+			}
+		case th := <-ts.healthCheckChan:
+			ts.StatsUpdate(th)
 		}
 	}
 }
