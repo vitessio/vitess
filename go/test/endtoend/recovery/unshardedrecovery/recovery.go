@@ -200,6 +200,7 @@ func TestMainImpl(m *testing.M) {
 // 6. create a recovery keyspace after second backup
 //   - bring up tablet_replica3 in the new keyspace
 //   - check that new tablet has data from backup2
+//
 // 7. check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
 	defer cluster.PanicHandler(t)
