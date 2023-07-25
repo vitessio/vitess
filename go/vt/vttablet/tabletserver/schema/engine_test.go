@@ -482,7 +482,7 @@ func TestOpenNoErrorDueToInvalidViews(t *testing.T) {
 	db.AddRejectedQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`bar_view` WHERE 1 != 1", mysql.NewSQLError(mysql.ERWrongFieldWithGroup, mysql.SSClientError, "random error for table bar_view"))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
-	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
 	require.NoError(t, err)
 
