@@ -262,7 +262,7 @@
   {
     "comment": "select func(keyspace_id) from user_index where id = :id",
     "query": "select func(keyspace_id) from user_index where id = :id",
-    "plan": "VT12001: unsupported: expression on results of a vindex function"
+    "plan": "VT12001: unsupported: cannot add 'func(keyspace_id)' expression to a table/vindex"
   },
   {
     "comment": "delete with multi-table targets",

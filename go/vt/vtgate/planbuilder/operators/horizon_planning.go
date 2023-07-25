@@ -131,16 +131,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		}
 	}
 
-	newOp, err := rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
-	if err != nil {
-		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
-			// we encountered a bug. let's try to back out
-			return nil, errHorizonNotPlanned()
-		}
-		return nil, err
-	}
-
-	return newOp, nil
+	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
