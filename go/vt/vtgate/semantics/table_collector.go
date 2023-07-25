@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -106,12 +107,12 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 
 func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 	vindexCols := []vindexes.Column{
-		{Name: sqlparser.NewIdentifierCI("id")},
-		{Name: sqlparser.NewIdentifierCI("keyspace_id")},
-		{Name: sqlparser.NewIdentifierCI("range_start")},
-		{Name: sqlparser.NewIdentifierCI("range_end")},
-		{Name: sqlparser.NewIdentifierCI("hex_keyspace_id")},
-		{Name: sqlparser.NewIdentifierCI("shard")},
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("keyspace_id"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("range_start"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("range_end"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("hex_keyspace_id"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("shard"), Type: querypb.Type_VARBINARY},
 	}
 
 	return &vindexes.Table{

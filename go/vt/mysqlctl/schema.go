@@ -41,24 +41,21 @@ import (
 
 var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 
+type EmptyColumnsErr struct {
+	dbName, tableName, query string
+}
+
+func (e EmptyColumnsErr) Error() string {
+	return fmt.Sprintf("unable to get columns for table %s.%s using query %s", e.dbName, e.tableName, e.query)
+}
+
 // executeSchemaCommands executes some SQL commands. It uses the dba connection parameters, with credentials.
 func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) error {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
-	_, more, err := conn.ExecuteFetchMulti(sql, 0, false)
-	if err != nil {
-		return err
-	}
-	for more {
-		_, more, _, err = conn.ReadQueryResult(0, false)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return mysqld.executeMysqlScript(ctx, params, sql)
 }
 
 func encodeEntityName(name string) string {
@@ -294,6 +291,10 @@ const (
 	GetFieldsQuery = "SELECT %s FROM %s WHERE 1 != 1"
 )
 
+// GetColumnsList returns the column names for a given table/view, using a query generating function.
+// Returned values:
+// - selectColumns: a string of comma delimited qualified names to be used in a SELECT query. e.g. "`id`, `name`, `val`"
+// - err: error
 func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sqltypes.Result, error)) (string, error) {
 	var dbName2 string
 	if dbName == "" {
@@ -307,8 +308,8 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 		return "", err
 	}
 	if qr == nil || len(qr.Rows) == 0 {
-		err = fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
-		log.Errorf("%s", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query))
+		err := &EmptyColumnsErr{dbName: dbName, tableName: tableName, query: query}
+		log.Error(err.Error())
 		return "", err
 	}
 	selectColumns := ""

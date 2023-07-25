@@ -31,7 +31,8 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -104,6 +105,8 @@ type VRepl struct {
 	alterQuery  string
 	tableRows   int64
 
+	analyzeTable bool
+
 	sourceSharedColumns              *vrepl.ColumnList
 	targetSharedColumns              *vrepl.ColumnList
 	droppedSourceNonGeneratedColumns *vrepl.ColumnList
@@ -130,7 +133,7 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string, analyzeTable bool) *VRepl {
 	return &VRepl{
 		workflow:       workflow,
 		keyspace:       keyspace,
@@ -139,6 +142,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		sourceTable:    sourceTable,
 		targetTable:    targetTable,
 		alterQuery:     alterQuery,
+		analyzeTable:   analyzeTable,
 		parser:         vrepl.NewAlterTableParser(),
 		enumToTextMap:  map[string]string{},
 		intToEnumMap:   map[string]bool{},
@@ -224,6 +228,13 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		uniqueKeys = append(uniqueKeys, uniqueKey)
 	}
 	return uniqueKeys, nil
+}
+
+// executeAnalyzeTable runs an ANALYZE TABLE command
+func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, tableName)
+	_, err := conn.ExecuteFetch(parsed.Query, 1, false)
+	return err
 }
 
 // readTableStatus reads table status information
@@ -335,6 +346,11 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 }
 
 func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	if v.analyzeTable {
+		if err := v.executeAnalyzeTable(ctx, conn, v.sourceTable); err != nil {
+			return err
+		}
+	}
 	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTable)
 	if err != nil {
 		return err
@@ -482,20 +498,19 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
-			if !ok {
+			fromCollation := collations.Local().DefaultCollationForCharset(sourceCol.Charset)
+			if fromCollation == nil {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
+			toCollation := collations.Local().DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
-			if targetCol.Type == vrepl.StringColumnType && !ok {
+			if targetCol.Type == vrepl.StringColumnType && toCollation == nil {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
-			if fromEncoding == nil && toEncoding == nil && targetCol.Type != vrepl.JSONColumnType {
-				// Both source and target have trivial charsets
+
+			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type != vrepl.JSONColumnType {
 				sb.WriteString(escapeName(name))
 			} else {
-				// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
 					FromCharset: sourceCol.Charset,
 					ToCharset:   targetCol.Charset,
@@ -516,6 +531,14 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 
 	v.filterQuery = sb.String()
 	return nil
+}
+
+func trivialCharset(c collations.Collation) bool {
+	if c == nil {
+		return true
+	}
+	utf8mb4Charset := charset.Charset_utf8mb4{}
+	return utf8mb4Charset.IsSuperset(c.Charset()) || c.ID() == collations.CollationBinaryID
 }
 
 func (v *VRepl) analyzeBinlogSource(ctx context.Context) {

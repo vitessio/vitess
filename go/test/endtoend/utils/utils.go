@@ -174,6 +174,12 @@ func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Res
 	return conn.ExecuteFetch(query, 1000, true)
 }
 
+// ExecWithRowCount is similar to ExecAllowError with max row count provided.
+func ExecWithRowCount(t testing.TB, conn *mysql.Conn, query string, rowCount int) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, rowCount, true)
+}
+
 // SkipIfBinaryIsBelowVersion skips the given test if the binary's major version is below majorVersion.
 func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	version, err := cluster.GetMajorVersion(binary)

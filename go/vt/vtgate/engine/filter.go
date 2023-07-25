@@ -67,11 +67,8 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 		if err != nil {
 			return nil, err
 		}
-		intEvalResult, err := evalResult.Value().ToInt64()
-		if err != nil {
-			return nil, err
-		}
-		if intEvalResult == 1 {
+
+		if evalResult.ToBoolean() {
 			rows = append(rows, row)
 		}
 	}
@@ -90,7 +87,7 @@ func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 			if err != nil {
 				return err
 			}
-			intEvalResult, err := evalResult.Value().ToInt64()
+			intEvalResult, err := evalResult.Value(vcursor.ConnCollation()).ToInt64()
 			if err != nil {
 				return err
 			}

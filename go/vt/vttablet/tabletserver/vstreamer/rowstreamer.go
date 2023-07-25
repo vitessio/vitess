@@ -150,9 +150,14 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 	ti := &Table{
-		Name:   st.Name,
-		Fields: st.Fields,
+		Name: st.Name,
 	}
+
+	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
+	if err != nil {
+		return err
+	}
+
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
@@ -298,21 +303,18 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		return err
 	}
 
-	// first call the callback with the fields
-	flds, err := conn.Fields()
-	if err != nil {
-		return err
-	}
 	pkfields := make([]*querypb.Field, len(rs.pkColumns))
 	for i, pk := range rs.pkColumns {
 		pkfields[i] = &querypb.Field{
-			Name: flds[pk].Name,
-			Type: flds[pk].Type,
+			Name:    rs.plan.Table.Fields[pk].Name,
+			Type:    rs.plan.Table.Fields[pk].Type,
+			Charset: rs.plan.Table.Fields[pk].Charset,
+			Flags:   rs.plan.Table.Fields[pk].Flags,
 		}
 	}
 
-	charsets := make([]collations.ID, len(flds))
-	for i, fld := range flds {
+	charsets := make([]collations.ID, len(rs.plan.Table.Fields))
+	for i, fld := range rs.plan.Table.Fields {
 		charsets[i] = collations.ID(fld.Charset)
 	}
 

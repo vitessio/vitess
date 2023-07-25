@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -50,13 +51,19 @@ type MysqlctlClient interface {
 	RunMysqlUpgrade(ctx context.Context) error
 
 	// ApplyBinlogFile calls Mysqld.ApplyBinlogFile remotely.
-	ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRestorePosition string) error
+	ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error
+
+	// ReadBinlogFilesTimestamps calls Mysqld.ReadBinlogFilesTimestamps remotely.
+	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 
 	// ReinitConfig calls Mysqld.ReinitConfig remotely.
 	ReinitConfig(ctx context.Context) error
 
 	// RefreshConfig calls Mysqld.RefreshConfig remotely.
 	RefreshConfig(ctx context.Context) error
+
+	// VersionString calls Mysqld.VersionString remotely.
+	VersionString(ctx context.Context) (string, error)
 
 	// Close will terminate the connection. This object won't be used anymore.
 	Close()

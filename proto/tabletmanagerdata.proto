@@ -478,6 +478,9 @@ message BackupRequest {
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 3;
+  // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
+  // so that it's a backup that can be used for an upgrade.
+  bool upgrade_safe = 4;
 }
 
 message BackupResponse {
@@ -492,6 +495,9 @@ message RestoreFromBackupRequest {
   string restore_to_pos = 2;
   // Dry run does not actually performs the restore, but validates the steps and availability of backups
   bool dry_run = 3;
+  // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
+  // RestoreToTimestamp and RestoreToPos are mutually exclusive.
+  vttime.Time restore_to_timestamp = 4;
 }
 
 message RestoreFromBackupResponse {
@@ -553,4 +559,11 @@ message UpdateVRWorkflowRequest {
 
 message UpdateVRWorkflowResponse {
   query.QueryResult result = 1;
+}
+
+message ResetSequencesRequest {
+  repeated string tables = 1;
+}
+
+message ResetSequencesResponse {
 }

@@ -53,9 +53,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 		d.Source = newSrc
 		e := d.QP.GetSimplifiedExpr(col.Expr)
 		exprs = append(exprs, e)
+		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:       offset,
-			Collation: ctx.SemTable.CollationForExpr(e),
+			Type:      typ,
+			Collation: coll,
 		})
 	}
 	for i, e := range exprs {
@@ -110,6 +112,10 @@ func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.A
 
 func (d *Distinct) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return d.Source.GetColumns()
+}
+
+func (d *Distinct) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return d.Source.GetSelectExprs()
 }
 
 func (d *Distinct) ShortDescription() string {

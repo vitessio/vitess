@@ -28,9 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-// TestPartialMoveTables tests partial move tables by moving each
+// TestPartialMoveTablesBasic tests partial move tables by moving each
 // customer shard -- -80,80- -- once a a time to customer2.
-func TestPartialMoveTables(t *testing.T) {
+func TestPartialMoveTablesBasic(t *testing.T) {
 	origDefaultRdonly := defaultRdonly
 	defer func() {
 		defaultRdonly = origDefaultRdonly

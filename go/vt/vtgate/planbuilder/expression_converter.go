@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -63,8 +64,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		// TODO@collations: proper collation for column name
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.TypedCollation{})
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.SystemCollation)
 	}
 	return nil
 }
@@ -87,7 +87,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
 		}
-		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions))
+		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions), sqltypes.Unknown, collations.Unknown)
 		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)
 	}
 	return evalExpr, nil

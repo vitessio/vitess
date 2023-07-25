@@ -65,12 +65,12 @@ func TestDistinct(t *testing.T) {
 		expectedError: "text type with an unknown/unsupported collation cannot be hashed",
 	}, {
 		testName:       "varchar columns with collations",
-		collations:     []collations.ID{collations.ID(0x21)},
+		collations:     []collations.ID{collations.CollationUtf8mb4ID},
 		inputs:         r("myid", "varchar", "monkey", "horse", "Horse", "Monkey", "horses", "MONKEY"),
 		expectedResult: r("myid", "varchar", "monkey", "horse", "horses"),
 	}, {
 		testName:       "mixed columns",
-		collations:     []collations.ID{collations.ID(0x21), collations.Unknown},
+		collations:     []collations.ID{collations.CollationUtf8mb4ID, collations.Unknown},
 		inputs:         r("myid|id", "varchar|int64", "monkey|1", "horse|1", "Horse|1", "Monkey|1", "horses|1", "MONKEY|2"),
 		expectedResult: r("myid|id", "varchar|int64", "monkey|1", "horse|1", "horses|1", "MONKEY|2"),
 	}}
@@ -88,6 +88,7 @@ func TestDistinct(t *testing.T) {
 				}
 				checkCols = append(checkCols, CheckCol{
 					Col:       i,
+					Type:      tc.inputs.Fields[i].Type,
 					Collation: collID,
 				})
 			}
@@ -133,6 +134,7 @@ func TestWeightStringFallBack(t *testing.T) {
 	checkCols := []CheckCol{{
 		Col:       0,
 		WsCol:     &offsetOne,
+		Type:      sqltypes.Unknown,
 		Collation: collations.Unknown,
 	}}
 	input := r("myid|weightstring(myid)",
@@ -158,6 +160,7 @@ func TestWeightStringFallBack(t *testing.T) {
 	utils.MustMatch(t, []CheckCol{{
 		Col:       0,
 		WsCol:     &offsetOne,
+		Type:      sqltypes.Unknown,
 		Collation: collations.Unknown,
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }

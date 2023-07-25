@@ -115,7 +115,7 @@ func (e *evalBytes) Hash(h *vthash.Hasher) {
 }
 
 func (e *evalBytes) isBinary() bool {
-	return e.SQLType() == sqltypes.VarBinary
+	return e.SQLType() == sqltypes.VarBinary || e.SQLType() == sqltypes.Binary || e.SQLType() == sqltypes.Blob
 }
 
 func (e *evalBytes) isHexOrBitLiteral() bool {

@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -54,7 +56,7 @@ func (to *Table) Clone([]ops.Operator) ops.Operator {
 }
 
 // Introduces implements the PhysicalOperator interface
-func (to *Table) Introduces() semantics.TableSet {
+func (to *Table) introducesTableID() semantics.TableSet {
 	return to.QTable.ID
 }
 
@@ -79,6 +81,10 @@ func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(to.Columns, colNameToExpr), nil
 }
 
+func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(to)
+}
+
 func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
 }
@@ -100,7 +106,7 @@ func (to *Table) TablesUsed() []string {
 func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push this expression to a table/vindex: %s", sqlparser.String(e))
+		return 0, vterrors.VT12001(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e)))
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
 	cols := op.GetColNames()

@@ -285,7 +285,9 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 	schemaQueries := map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Int64,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1427325875)},
@@ -293,95 +295,111 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		},
 		"select @@global.sql_mode": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.SystemCollation.Collation),
 			}},
 			Rows: [][]sqltypes.Value{
-				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
+				{sqltypes.NewVarChar("STRICT_TRANS_TABLES")},
 			},
 		},
 		"select @@session.sql_mode as sql_mode": {
 			Fields: []*querypb.Field{{
-				Name: "sql_mode",
-				Type: sqltypes.VarChar,
+				Name:    "sql_mode",
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.SystemCollation.Collation),
 			}},
 			Rows: [][]sqltypes.Value{
-				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
+				{sqltypes.NewVarChar("STRICT_TRANS_TABLES")},
 			},
 		},
 		"select @@autocommit": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Int64,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 			}},
 			Rows: [][]sqltypes.Value{
-				{sqltypes.NewVarBinary("1")},
+				{sqltypes.NewInt64(1)},
 			},
 		},
 		"select @@sql_auto_is_null": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Int64,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 			}},
 			Rows: [][]sqltypes.Value{
-				{sqltypes.NewVarBinary("0")},
+				{sqltypes.NewInt64(0)},
 			},
 		},
 		"set @@session.sql_log_bin = 0": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"create database if not exists `_vt`": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.redo_log_transaction": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.redo_log_statement": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.transaction": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.participant": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.redo_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.redo_statement(\n  dtid varbinary(512),\n  id bigint,\n  statement mediumblob,\n  primary key(dtid, id)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
 
 			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
+				Type:    sqltypes.Uint64,
+				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
@@ -459,15 +477,17 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		var colTypes []*querypb.Field
 		var colValues [][]sqltypes.Value
 		colType := &querypb.Field{
-			Name: "column_type",
-			Type: sqltypes.VarChar,
+			Name:    "column_type",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(collations.Default()),
 		}
 		colTypes = append(colTypes, colType)
 		for _, col := range ddl.GetTableSpec().Columns {
 			colName := strings.ToLower(col.Name.String())
 			rowType := &querypb.Field{
-				Name: colName,
-				Type: col.Type.SQLType(),
+				Name:    colName,
+				Type:    col.Type.SQLType(),
+				Charset: uint32(collations.SystemCollation.Collation),
 			}
 			rowTypes = append(rowTypes, rowType)
 			tEnv.tableColumns[table][colName] = col.Type.SQLType()
@@ -626,9 +646,12 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	rows := make([][]sqltypes.Value, 0, rowCount)
 	for i, col := range colNames {
 		colType := colTypes[i]
+		cs := collations.DefaultCollationForType(colType)
 		fields[i] = &querypb.Field{
-			Name: col,
-			Type: colType,
+			Name:    col,
+			Type:    colType,
+			Charset: uint32(cs),
+			Flags:   mysql.FlagsForColumn(colType, cs),
 		}
 	}
 
