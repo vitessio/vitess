@@ -154,8 +154,9 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			if ta := ct.sourceTablet.Load().(*topodatapb.TabletAlias); ta != nil {
-				result[fmt.Sprintf("%v", ct.id)] = ta.String()
+			ta := ct.sourceTablet.Load()
+			if ta != nil {
+				result[fmt.Sprintf("%v", ct.id)] = ta.(*topodatapb.TabletAlias).String()
 			}
 		}
 		return result
