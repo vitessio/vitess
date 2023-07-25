@@ -242,15 +242,11 @@ func MakeStringTypeUnsortedList(types []topodatapb.TabletType) []string {
 
 // MakeStringTypeCSV returns the tablet types in CSV format.
 func MakeStringTypeCSV(types []topodatapb.TabletType) string {
-	var csv strings.Builder
-	lastIdx := len(types) - 1
+	strs := make([]string, len(types))
 	for i, tt := range types {
-		csv.WriteString(strings.ToLower(tt.String()))
-		if i < lastIdx {
-			csv.WriteString(",")
-		}
+		strs[i] = strings.ToLower(tt.String())
 	}
-	return csv.String()
+	return strings.Join(strs, ",")
 }
 
 // MakeUniqueStringTypeList returns a unique list of strings that match
