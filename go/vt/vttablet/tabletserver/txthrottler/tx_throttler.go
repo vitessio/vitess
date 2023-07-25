@@ -376,6 +376,23 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	ts.healthCheck.Close()
 }
 
+func (ts *txThrottlerState) updateHealthCheckCells(topoServer *topo.Server, target *querypb.Target) error {
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+
+	cells, err := fetchKnownCells(ctx, topoServer)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
+		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
+		ts.config.healthCheckCells = cells
+		ts.closeHealthCheckStream()
+		ts.initHealthCheckStream(topoServer, target)
+	}
+	return nil
+}
+
 func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
 	var cellsUpdateTicks <-chan time.Time
 	if ts.cellsFromTopo {
@@ -388,19 +405,8 @@ func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServe
 		case <-ctx.Done():
 			return
 		case <-cellsUpdateTicks:
-			fkcCtx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-			defer cancel()
-
-			cells, err := fetchKnownCells(fkcCtx, topoServer)
-			if err != nil {
+			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
 				log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
-				continue
-			}
-			if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
-				log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
-				ts.config.healthCheckCells = cells
-				ts.closeHealthCheckStream()
-				ts.initHealthCheckStream(topoServer, target)
 			}
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)

@@ -22,7 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
-	context "context"
+	"context"
 	"testing"
 	"time"
 
