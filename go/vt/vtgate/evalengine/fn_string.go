@@ -431,7 +431,7 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 	col := evalCollation(arg).Collation.Get()
 
-	// the collation of a `COLLATION` expr is hardcoded to `utf8_general_ci`,
+	// the collation of a `COLLATION` expr is hardcoded to `utf8mb3_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
 	return newEvalText([]byte(col.Name()), collationUtf8mb3), nil
 }

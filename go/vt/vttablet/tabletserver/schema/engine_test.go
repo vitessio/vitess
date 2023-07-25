@@ -457,12 +457,12 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 
 	logs := tl.GetAllLogs()
 	logOutput := strings.Join(logs, ":::")
-	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_view")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: test_view")
 	assert.Contains(t, logOutput, "The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
 }
 
-// TestOpenFailedDueToEmptyColumnInView tests that schema engine load should not fail instead should log the failures for empty columns in view
-func TestOpenFailedDueToEmptyColumnInView(t *testing.T) {
+// TestOpenNoErrorDueToInvalidViews tests that schema engine load does not fail instead should log the failures for the views
+func TestOpenNoErrorDueToInvalidViews(t *testing.T) {
 	tl := syslogger.NewTestLogger()
 	defer tl.Close()
 	db := fakesqldb.New(t)
@@ -471,13 +471,18 @@ func TestOpenFailedDueToEmptyColumnInView(t *testing.T) {
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("test_view", true, "VIEW"),
+			mysql.BaseShowTablesRow("foo_view", true, "VIEW"),
+			mysql.BaseShowTablesRow("bar_view", true, "VIEW"),
 		},
 	})
 
 	// adding column query for table_view
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "foo_view"),
 		&sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "bar_view"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), "col1", "col2"))
+	// rejecting the impossible query
+	db.AddRejectedQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`bar_view` WHERE 1 != 1", mysql.NewSQLError(mysql.ERWrongFieldWithGroup, mysql.SSClientError, "random error for table bar_view"))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
@@ -486,8 +491,10 @@ func TestOpenFailedDueToEmptyColumnInView(t *testing.T) {
 
 	logs := tl.GetAllLogs()
 	logOutput := strings.Join(logs, ":::")
-	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the table: test_view")
-	assert.Contains(t, logOutput, "unable to get columns for table fakesqldb.test_view")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: foo_view")
+	assert.Contains(t, logOutput, "unable to get columns for table fakesqldb.foo_view")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: bar_view")
+	assert.Contains(t, logOutput, "random error for table bar_view")
 }
 
 func TestExportVars(t *testing.T) {

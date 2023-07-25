@@ -105,6 +105,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/discovery"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -2042,11 +2043,11 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
+	return commandVReplicationWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
+	return commandVReplicationWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -2064,7 +2065,7 @@ const (
 )
 
 func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
+	return commandVReplicationWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
 }
 
 // getSourceKeyspace expects a keyspace of the form "externalClusterName.keyspaceName" and returns the components
@@ -2076,9 +2077,9 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 	return splits[0], splits[1], nil
 }
 
-// commandVRWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
+// commandVReplicationWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
 // FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
-func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
+func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
 	const defaultWaitTime = time.Duration(30 * time.Second)
@@ -2087,7 +2088,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	const defaultMaxReplicationLagAllowed = defaultWaitTime
 
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
+	tabletTypesStr := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchTraffic and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
 	timeout := subFlags.Duration("timeout", defaultWaitTime, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. --timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). --reverse_replication is only supported for SwitchTraffic.")
@@ -2175,7 +2176,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
 				msg := ""
-				if st.State == "Error" {
+				if st.State == binlogdatapb.VReplicationWorkflowState_Error.String() {
 					msg += fmt.Sprintf(": %s.", st.Message)
 				} else if st.Pos == "" {
 					msg += ". VStream has not started."
@@ -2274,11 +2275,11 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		vrwp.OnDDL = onDDL
 		vrwp.DeferSecondaryKeys = *deferNonPKeys
 		vrwp.Cells = *cells
-		vrwp.TabletTypes = *tabletTypes
+		vrwp.TabletTypes = *tabletTypesStr
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
 		if subFlags.Changed("tablet_types") {
-			vrwp.TabletTypes = *tabletTypes
+			vrwp.TabletTypes = *tabletTypesStr
 		} else {
 			// When no tablet types are specified we are supposed to switch all traffic so
 			// we override the normal default for tablet_types.
@@ -2489,7 +2490,7 @@ func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Source cells to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
+	tabletTypesStr := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2501,7 +2502,16 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 	ms.Cell = *cells
-	ms.TabletTypes = *tabletTypes
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(*tabletTypesStr)
+	if err != nil {
+		return err
+	}
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+	ms.TabletTypes = topoproto.MakeStringTypeCSV(tabletTypes)
+	ms.TabletSelectionPreference = tsp
 	return wr.Materialize(ctx, ms)
 }
 
@@ -2522,7 +2532,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fl
 
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
-	tabletTypes := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source and target")
+	tabletTypesStr := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
@@ -2552,7 +2562,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fl
 		}
 	}()
 
-	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format,
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypesStr, *filteredReplicationWaitTime, *format,
 		*maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
@@ -3674,7 +3684,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of the Workflow action and reports the query and list of tablets on which the operation will be applied")
 	cells := subFlags.StringSlice("cells", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
-	tabletTypes := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
+	tabletTypesStrs := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
 	onDDL := subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -3727,16 +3737,22 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			} else {
 				cells = &textutil.SimulatedNullStringSlice
 			}
+			tabletTypes := make([]topodatapb.TabletType, len(*tabletTypesStrs))
+			inorder := false
 			if subFlags.Lookup("tablet-types").Changed { // Validate the provided value(s)
 				changes = true
-				for i, tabletType := range *tabletTypes {
-					(*tabletTypes)[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err = topoproto.ParseTabletType((*tabletTypes)[i]); err != nil {
+				if len(*tabletTypesStrs) > 0 && strings.HasPrefix((*tabletTypesStrs)[0], discovery.InOrderHint) {
+					(*tabletTypesStrs)[0] = strings.TrimPrefix((*tabletTypesStrs)[0], discovery.InOrderHint)
+					inorder = true
+				}
+				for i, tabletType := range *tabletTypesStrs {
+					tabletTypes[i], err = topoproto.ParseTabletType(tabletType)
+					if err != nil {
 						return err
 					}
 				}
 			} else {
-				tabletTypes = &textutil.SimulatedNullStringSlice
+				tabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
 			}
 			onddl := int32(textutil.SimulatedNullInt) // To signify no value has been provided
 			if subFlags.Lookup("on-ddl").Changed {    // Validate the provided value
@@ -3750,11 +3766,16 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			if !changes {
 				return fmt.Errorf(errWorkflowUpdateWithoutChanges)
 			}
-			rpcReq = &tabletmanagerdatapb.UpdateVRWorkflowRequest{
-				Workflow:    workflow,
-				Cells:       *cells,
-				TabletTypes: *tabletTypes,
-				OnDdl:       binlogdatapb.OnDDLAction(onddl),
+			tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
+			if inorder {
+				tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+			}
+			rpcReq = &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:                  workflow,
+				Cells:                     *cells,
+				TabletTypes:               tabletTypes,
+				TabletSelectionPreference: tsp,
+				OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update currently uses the new RPC path

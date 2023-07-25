@@ -221,7 +221,6 @@ func (vre *Engine) Open(ctx context.Context) {
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
-
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {
 		return err
@@ -685,7 +684,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
-		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
+		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
 			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys)
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
@@ -803,7 +802,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 				return nil
 			}
 
-			if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
+			if qr.Rows[0][1].ToString() == binlogdatapb.VReplicationWorkflowState_Stopped.String() {
 				return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
 			}
 		}
