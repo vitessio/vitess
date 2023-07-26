@@ -72,6 +72,7 @@ func ChooseNewPrimary(
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets    []*topodatapb.Tablet
 		tabletPositions []mysql.Position
+		rec             concurrency.AllErrorRecorder
 	)
 
 	for _, tablet := range tabletMap {
@@ -90,6 +91,7 @@ func ChooseNewPrimary(
 			defer wg.Done()
 			// find and store the positions for the tablet
 			pos, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
+			rec.RecordError(err)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil {
@@ -104,6 +106,10 @@ func ChooseNewPrimary(
 	// return nothing if there are no valid tablets available
 	if len(validTablets) == 0 {
 		return nil, nil
+	}
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
 	}
 
 	// sort the tablets for finding the best primary
