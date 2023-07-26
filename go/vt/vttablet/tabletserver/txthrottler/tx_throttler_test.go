@@ -171,8 +171,6 @@ func TestNewTxThrottler(t *testing.T) {
 		throttler := NewTxThrottler(env, nil)
 		throttlerImpl, _ := throttler.(*txThrottler)
 		assert.NotNil(t, throttlerImpl)
-		assert.NotNil(t, throttlerImpl.config)
-		assert.False(t, throttlerImpl.config.enabled)
 	}
 	{
 		// enabled
@@ -182,8 +180,7 @@ func TestNewTxThrottler(t *testing.T) {
 		throttler := NewTxThrottler(env, nil)
 		throttlerImpl, _ := throttler.(*txThrottler)
 		assert.NotNil(t, throttlerImpl)
-		assert.NotNil(t, throttlerImpl.config)
-		assert.True(t, throttlerImpl.config.enabled)
-		assert.Equal(t, []string{"cell1", "cell2"}, throttlerImpl.config.healthCheckCells)
+		assert.Equal(t, []string{"cell1", "cell2"}, throttlerImpl.healthCheckCells)
+		assert.Nil(t, throttlerImpl.state)
 	}
 }
