@@ -39,6 +39,11 @@ import (
 )
 
 const (
+	// In a local environment and without latency, we have seen that an unbounded concurrency still translates to less than
+	// 20 concurrent MySQL connections. Which is why placing a limit of 20 concurrent goroutines (each mapped to a MySQL connection)
+	// is unlikely to affect optimal environments.
+	// In high latency environments, unbounded concurrency can translate to a very high number of concurrent MySQL connections. This
+	// is an undesirable behavior. We prefer to push back on GetSchema and make it run over longer time, instead.
 	getSchemaConcurrency = 20
 )
 
