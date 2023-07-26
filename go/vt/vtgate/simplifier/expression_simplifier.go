@@ -31,7 +31,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) (smallestKnown sqlparser.Expr)
 	var maxDepth, level int
 	resetTo := func(e sqlparser.Expr) {
 		smallestKnown = e
-		maxDepth = depth(e)
+		maxDepth = sqlparser.GetDepth(e)
 		level = 0
 	}
 	resetTo(in)
@@ -86,23 +86,6 @@ func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, repl
 			replaceF = append(replaceF, cursor.ReplacerF())
 		}
 		lvl++
-		return true
-	}
-	post := func(cursor *sqlparser.Cursor) bool {
-		lvl--
-		return true
-	}
-	sqlparser.Rewrite(e, pre, post)
-	return
-}
-
-func depth(e sqlparser.Expr) (depth int) {
-	lvl := 0
-	pre := func(cursor *sqlparser.Cursor) bool {
-		lvl++
-		if lvl > depth {
-			depth = lvl
-		}
 		return true
 	}
 	post := func(cursor *sqlparser.Cursor) bool {

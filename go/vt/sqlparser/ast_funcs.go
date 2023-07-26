@@ -2503,3 +2503,21 @@ func (ty KillType) ToString() string {
 		return ConnectionStr
 	}
 }
+
+// GetDepth gets the maximum depth of node
+func GetDepth(node SQLNode) (depth int) {
+	lvl := 0
+	pre := func(node, parent SQLNode) bool {
+		lvl++
+		if lvl > depth {
+			depth = lvl
+		}
+		return true
+	}
+	post := func(cursor *Cursor) bool {
+		lvl--
+		return true
+	}
+	SafeRewrite(node, pre, post)
+	return
+}

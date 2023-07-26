@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -81,10 +80,10 @@ func TestAbortExpressionCursor(t *testing.T) {
 }
 
 func TestSimplifyEvalEngineExpr(t *testing.T) {
-	// ast struct for L0         +
-	// L1                +            +
-	// L2             +     +      +     +
-	// L3            1 2   3 4    5 6   7 8
+	// ast struct for L0        +
+	// L1                 +           +
+	// L2              +     +     +     +
+	// L3             1 2   3 4   5 6   7 8
 
 	// L3
 	i1, i2, i3, i4, i5, i6, i7, i8 :=
@@ -126,7 +125,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 		}
 		return toInt64 >= 8
 	})
-	log.Infof("simplest expr to evaluate to >= 8: [%s], started from: [%s]", sqlparser.String(expr), sqlparser.String(p0))
+	fmt.Printf("simplest expr to evaluate to >= 8: [%s], started from: [%s]\n", sqlparser.String(expr), sqlparser.String(p0))
 }
 
 func plus(a, b sqlparser.Expr) sqlparser.Expr {
