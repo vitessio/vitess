@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	utils2 "vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/test/vschemawrapper"
 
 	"github.com/stretchr/testify/require"
 
@@ -35,47 +35,45 @@ import (
 func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 	// t.Skip("Skip CI")
 	query := "select /*vt+ PLANNER=Gen4 */ distinct 'opossum' and count(*) as caggr0, case count('mustang') > -36 when min(18 * -41) then 22 - max(tbl0.sal) else 7 end as caggr1 from emp as tbl0 where case when false then tbl0.ename when 17 then 'gator' else 'mite' end and case false and true when 'worm' then tbl0.job when tbl0.ename then case when true then tbl0.ename when false then 'squirrel' end end"
-	// select /*vt+ PLANNER=Gen4 */ distinct case when min(-0) then 0 else 0 end as caggr1 from emp as tbl0 where false
-	simplified := simplifyResultsMismatchedQuery(t, query)
 
-	var err error
-	t.Helper()
-	t.Run(simplified, func(t *testing.T) {
+	var simplified string
+	t.Run("simplification", func(t *testing.T) {
+		simplified = simplifyResultsMismatchedQuery(t, query)
+	})
+
+	t.Run("final simplified query", func(t *testing.T) {
 		mcmp, closer := start(t)
 		defer closer()
 
-		_, err = mcmp.ExecAllowAndCompareError(simplified)
+		mcmp.ExecAllowAndCompareError(simplified)
 	})
 
+	// select /*vt+ PLANNER=Gen4 */ distinct case when min(-0) then 0 else 0 end as caggr1 from emp as tbl0 where false
 	fmt.Printf("final simplified query: %s\n", simplified)
-	require.ErrorContains(t, err, "mismatched")
 
 }
 
 // TODO: suppress output from comparing intermediate simplified results
 // given a query that errors with results mismatched, simplifyResultsMismatchedQuery returns a simpler version with the same error
 func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
+	t.Helper()
+	mcmp, closer := start(t)
+	defer closer()
+
+	_, err := mcmp.ExecAllowAndCompareError(query)
+	if err == nil {
+		t.Fatalf("query (%s) does not error", query)
+	} else if !strings.Contains(err.Error(), "mismatched") {
+		t.Fatalf("query (%s) does not error with results mismatched\nError: %v", query, err)
+	}
+
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
-
-	var err error
-	t.Helper()
-	t.Run(query, func(t *testing.T) {
-		mcmp, closer := start(t)
-		defer closer()
-
-		_, err = mcmp.ExecAllowAndCompareError(query)
-		if err == nil {
-			t.Fatalf("query (%s) does not error", query)
-		} else if !strings.Contains(err.Error(), "mismatched") {
-			t.Fatalf("query (%s) does not error with results mismatched\nError: %v", query, err)
-		}
-	})
 
 	formal, err := vindexes.LoadFormal("svschema.json")
 	require.NoError(t, err)
 	vSchema := vindexes.BuildVSchema(formal)
-	vSchemaWrapper := &utils2.VSchemaWrapper{
+	vSchemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:       vSchema,
 		Version: planbuilder.Gen4,
 	}
@@ -87,21 +85,14 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 		stmt.(sqlparser.SelectStatement),
 		vSchemaWrapper.CurrentDb(),
 		vSchemaWrapper,
-		func(statement sqlparser.SelectStatement) (sameError bool) {
+		func(statement sqlparser.SelectStatement) bool {
 			q := sqlparser.String(statement)
-			t.Helper()
-			t.Run(q, func(t *testing.T) {
-				mcmp, closer := start(t)
-				defer closer()
-
-				_, newErr := mcmp.ExecAllowAndCompareError(q)
-				if newErr == nil {
-					sameError = false
-				} else {
-					sameError = strings.Contains(newErr.Error(), "mismatched")
-				}
-			})
-			return
+			_, newErr := mcmp.ExecAllowAndCompareError(q)
+			if newErr == nil {
+				return false
+			} else {
+				return strings.Contains(newErr.Error(), "mismatched")
+			}
 		},
 	)
 
