@@ -43,6 +43,7 @@ const (
 	operationFullBackup = iota
 	operationIncrementalBackup
 	operationRestore
+	operationFlushAndPurge
 )
 
 type PITRTestCase struct {
@@ -173,6 +174,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// is only ever a problem in this end-to-end test, not in production.
 				// Also, we gie the replica a chance to catch up.
 				time.Sleep(postWriteSleepDuration)
+				// randomly flush binary logs 0, 1 or 2 times
+				FlushBinaryLogsOnReplica(t, 0, rand.Intn(3))
 				waitForReplica(t, 0)
 				recordRowsPerPosition(t)
 				// configure --incremental-from-pos to either:
@@ -472,6 +475,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 			replicaIndex  int
 			expectError   string
 		}{
+			// The following tests run sequentially and build on top of previous results
 			{
 				name:          "full1",
 				operationType: operationFullBackup,
@@ -485,6 +489,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 				operationType: operationRestore,
 			},
 			{
+				// Shows you can take an incremental restore when full & incremental backups were only ever executed on a different replica
 				name:          "incremental2",
 				operationType: operationIncrementalBackup,
 				replicaIndex:  1,
@@ -495,6 +500,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 				replicaIndex:  1,
 			},
 			{
+				// This incremental backup will use full2 as the base backup
 				name:          "incremental2-after-full2",
 				operationType: operationIncrementalBackup,
 				replicaIndex:  1,
@@ -504,6 +510,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 				operationType: operationRestore,
 				replicaIndex:  1,
 			},
+			// Begin a series of interleaved incremental backups
 			{
 				name:          "incremental-replica1",
 				operationType: operationIncrementalBackup,
@@ -519,6 +526,43 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 			},
 			{
 				name:          "incremental-replica2",
+				operationType: operationIncrementalBackup,
+				replicaIndex:  1,
+			},
+			// Done interleaved backups.
+			{
+				// Lose binary log data
+				name:          "flush and purge 1",
+				operationType: operationFlushAndPurge,
+				replicaIndex:  0,
+			},
+			{
+				// Fail to run incremental backup due to lost data
+				name:          "incremental-replica1 failure",
+				operationType: operationIncrementalBackup,
+				expectError:   "Required entries have been purged",
+			},
+			{
+				// Lose binary log data
+				name:          "flush and purge 2",
+				operationType: operationFlushAndPurge,
+				replicaIndex:  1,
+			},
+			{
+				// Fail to run incremental backup due to lost data
+				name:          "incremental-replica2 failure",
+				operationType: operationIncrementalBackup,
+				replicaIndex:  1,
+				expectError:   "Required entries have been purged",
+			},
+			{
+				// Since we've lost binlog data, incremental backups are no longer possible. The situation can be salvaged by running a full backup
+				name:          "full1 after purge",
+				operationType: operationFullBackup,
+			},
+			{
+				// Show that replica2 incremental backup is able to work based on the above full backup
+				name:          "incremental-replica2 after purge and backup",
 				operationType: operationIncrementalBackup,
 				replicaIndex:  1,
 			},
@@ -536,6 +580,8 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 				insertRowAndWait(t, tc.replicaIndex, tc.name)
 				t.Run("running operation", func(t *testing.T) {
 					switch tc.operationType {
+					case operationFlushAndPurge:
+						FlushAndPurgeBinaryLogsOnReplica(t, tc.replicaIndex)
 					case operationFullBackup:
 						manifest := TestReplicaFullBackup(t, tc.replicaIndex)
 						fullBackupPos := manifest.Position
