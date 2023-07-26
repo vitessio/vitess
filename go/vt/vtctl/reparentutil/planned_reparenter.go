@@ -572,12 +572,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// inserted in the new primary's journal, so we can use it below to check
 	// that all the replicas have attached to new primary successfully.
 	switch {
-	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias == nil:
+	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
 		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
 		needsRefresh = true
-	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias != nil:
+	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
 		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
