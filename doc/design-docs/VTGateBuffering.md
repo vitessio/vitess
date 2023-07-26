@@ -52,8 +52,8 @@ There are two main changes:
   notified when that changes as well.
 * The logic to start buffering needs to look for the "enforce denied tables" error that is thrown by the 
   vttablets when it tries to execute a query on a table being switched.
-* We cannot use the current buffering logic which is at the tablet gateway: meaning the keyspace is
-  already fixed by the planner and cannot be changed in that layer. We need to add a new buffering logic at a higher
+* We cannot use the current query retry logic which is at the tablet gateway: meaning the keyspace is
+  already fixed by the planner and cannot be changed in that layer. We need to add a new retry logic at a higher
   level (the _newExecute_ method) and always replan before retrying a query. This also means that we need to bypass 
   the plan cache while retrying.
 
