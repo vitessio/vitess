@@ -70,27 +70,28 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 			if test(in) {
 				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
 				simplified = true
-				return false
+				// initially return false, but that made the rewriter prematurely abort sometimes
+				return true
 			}
 			cursor.restore()
 		}
 
 		// ok, we seem to need this expression. let's see if we can find a simpler version
-		s := &shrinker{orig: cursor.expr}
-		newExpr := s.Next()
-		for newExpr != nil {
-			cursor.replace(newExpr)
+		newExpr := SimplifyExpr(cursor.expr, func(expr sqlparser.Expr) bool {
+			cursor.replace(expr)
 			if test(in) {
-				log.Errorf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(newExpr))
+				log.Errorf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(expr))
+				cursor.restore()
 				simplified = true
-				return false
+				return true
 			}
-			newExpr = s.Next()
-		}
 
-		// if we get here, we failed to simplify this expression,
-		// so we put back in the original expression
-		cursor.restore()
+			cursor.restore()
+			return false
+		})
+
+		cursor.replace(newExpr)
+		// initially return false, but that made the rewriter prematurely abort sometimes
 		return true
 	})
 

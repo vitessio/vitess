@@ -142,6 +142,10 @@ func (s *shrinker) Next() sqlparser.Expr {
 func (s *shrinker) fillQueue() bool {
 	before := len(s.queue)
 	switch e := s.orig.(type) {
+	case *sqlparser.AndExpr:
+		s.queue = append(s.queue, e.Left, e.Right)
+	case *sqlparser.OrExpr:
+		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.BinaryExpr:
@@ -231,6 +235,28 @@ func (s *shrinker) fillQueue() bool {
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
+	case *sqlparser.CaseExpr:
+		s.queue = append(s.queue, e.Expr, e.Else)
+		for _, when := range e.Whens {
+			s.queue = append(s.queue, when.Cond, when.Val)
+		}
+
+		if len(e.Whens) > 1 {
+			for i := range e.Whens {
+				whensCopy := sqlparser.CloneSliceOfRefOfWhen(e.Whens)
+				// replace ith element with last element, then truncate last element
+				whensCopy[i] = whensCopy[len(whensCopy)-1]
+				whensCopy = whensCopy[:len(whensCopy)-1]
+				s.queue = append(s.queue, sqlparser.NewCaseExpr(e.Expr, whensCopy, e.Else))
+			}
+		}
+
+		if e.Else != nil {
+			s.queue = append(s.queue, sqlparser.NewCaseExpr(e.Expr, e.Whens, nil))
+		}
+		if e.Expr != nil {
+			s.queue = append(s.queue, sqlparser.NewCaseExpr(nil, e.Whens, e.Else))
+		}
 	default:
 		return false
 	}
