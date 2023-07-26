@@ -8795,6 +8795,7 @@ non_reserved_keyword:
 non_reserved_keyword2:
   ATTRIBUTE
 | COMMENT_KEYWORD
+| CONTAINED
 | EXECUTE
 | EXTRACT
 | FAILED_LOGIN_ATTEMPTS
@@ -8811,6 +8812,8 @@ non_reserved_keyword2:
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF
+| VERSION
+| VERSIONS
 | VIEW
 
 // non_reserved_keyword that can't go in non_reserved_keyword or non_reserved_keyword2 for some reason
