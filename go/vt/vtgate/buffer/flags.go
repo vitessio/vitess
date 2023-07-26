@@ -70,9 +70,6 @@ func verifyFlags() error {
 	if bufferSize < 1 {
 		return fmt.Errorf("--buffer_size must be >= 1 (specified value: %d)", bufferSize)
 	}
-	if bufferMinTimeBetweenFailovers < bufferMaxFailoverDuration*time.Duration(2) {
-		return fmt.Errorf("--buffer_min_time_between_failovers should be at least twice the length of --buffer_max_failover_duration: %v vs. %v", bufferMinTimeBetweenFailovers, bufferMaxFailoverDuration)
-	}
 
 	if bufferDrainConcurrency < 1 {
 		return fmt.Errorf("--buffer_drain_concurrency must be >= 1 (specified value: %d)", bufferDrainConcurrency)
