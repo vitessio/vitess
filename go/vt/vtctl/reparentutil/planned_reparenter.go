@@ -518,6 +518,11 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
+	err = pr.verifyAllTabletsReachable(ctx, tabletMap)
+	if err != nil {
+		return err
+	}
+
 	// Check invariants that PlannedReparentShard depends on.
 	if isNoop, err := pr.preflightChecks(ctx, ev, keyspace, shard, tabletMap, &opts); err != nil {
 		return err
@@ -712,4 +717,27 @@ func (pr *PlannedReparenter) reparentTablets(
 	}
 
 	return nil
+}
+
+func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) error {
+	// Create a cancellable context for the entire set of RPCs to verify reachability.
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer verifyCancel()
+
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	for _, info := range tabletMap {
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			_, err := pr.tmc.PrimaryStatus(verifyCtx, tablet)
+			rec.RecordError(err)
+		}(info.Tablet)
+	}
+
+	wg.Wait()
+	return rec.Error()
 }
