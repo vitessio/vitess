@@ -58,13 +58,13 @@ const (
 	TabletPickerTabletOrder_Any TabletPickerTabletOrder = iota
 	// Provided tablet types are expected to be prioritized in the given order.
 	TabletPickerTabletOrder_InOrder
+	InOrderHint = "in_order:"
 )
 
 var (
 	tabletPickerRetryDelay   = 30 * time.Second
 	muTabletPickerRetryDelay sync.Mutex
 	globalTPStats            *tabletPickerStats
-	inOrderHint              = "in_order:"
 
 	tabletPickerCellPreferenceMap = map[string]TabletPickerCellPreference{
 		"preferlocalwithalias": TabletPickerCellPreference_PreferLocalWithAlias,
@@ -457,7 +457,7 @@ func (tp *TabletPicker) incNoTabletFoundStat() {
 	globalTPStats.mu.Lock()
 	defer globalTPStats.mu.Unlock()
 	cells := strings.Join(tp.cells, "_")
-	tabletTypes := strings.Join(topoproto.MakeStringTypeList(tp.tabletTypes), "_")
+	tabletTypes := strings.ReplaceAll(topoproto.MakeStringTypeCSV(tp.tabletTypes), ",", "_")
 	labels := []string{cells, tp.keyspace, tp.shard, tabletTypes}
 	globalTPStats.noTabletFoundError.Add(labels, 1)
 }

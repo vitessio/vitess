@@ -3371,7 +3371,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		timeThrottled:        row.AsInt64("time_throttled", 0),
 		componentThrottled:   row.AsString("component_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
-		state:                row.AsString("state", ""),
+		state:                binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row.AsString("state", "")]),
 		message:              row.AsString("message", ""),
 		rowsCopied:           row.AsInt64("rows_copied", 0),
 		bls:                  &binlogdatapb.BinlogSource{},
@@ -3450,9 +3450,9 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 		return false, s, nil
 	}
 	switch s.state {
-	case binlogplayer.BlpError:
+	case binlogdatapb.VReplicationWorkflowState_Error:
 		return false, s, nil
-	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+	case binlogdatapb.VReplicationWorkflowState_Init, binlogdatapb.VReplicationWorkflowState_Copying, binlogdatapb.VReplicationWorkflowState_Running:
 		return true, s, nil
 	}
 	if strings.Contains(strings.ToLower(s.message), "error") {

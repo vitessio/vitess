@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -451,7 +453,7 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
-func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
+func TestConsistentLookupUpdateBecauseComparableTypes(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 
@@ -475,7 +477,7 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 
 			err = lookup.(Lookup).Update(context.Background(), vc, []sqltypes.Value{literal, literal}, []byte("test"), []sqltypes.Value{literal, literal})
 			require.NoError(t, err)
-			require.NotEmpty(t, vc.log)
+			vc.verifyLog(t, []string{})
 			vc.log = nil
 		})
 	}
@@ -522,6 +524,10 @@ func (vc *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 
 func (vc *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
+}
+
+func (vc *loggingVCursor) ConnCollation() collations.ID {
+	return collations.Default()
 }
 
 type bv struct {

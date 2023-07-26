@@ -153,9 +153,9 @@ func TestCanSwitch(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		{"In Copy Phase", "Copying", 0, 0, regexp.MustCompile(cannotSwitchCopyIncomplete)},
-		{"High Lag", "Running", 6, 5, regexp.MustCompile(strings.ReplaceAll(cannotSwitchHighLag, "%d", "(\\d+)"))},
-		{"Acceptable Lag", "Running", 4, 5, nil},
+		{"In Copy Phase", binlogdatapb.VReplicationWorkflowState_Copying.String(), 0, 0, regexp.MustCompile(cannotSwitchCopyIncomplete)},
+		{"High Lag", binlogdatapb.VReplicationWorkflowState_Running.String(), 6, 5, regexp.MustCompile(strings.ReplaceAll(cannotSwitchHighLag, "%d", "(\\d+)"))},
+		{"Acceptable Lag", binlogdatapb.VReplicationWorkflowState_Running.String(), 4, 5, nil},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

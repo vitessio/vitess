@@ -768,6 +768,18 @@ func TestCompareTime(t *testing.T) {
 			row: []sqltypes.Value{sqltypes.NewTime("02:46:02"), sqltypes.NewTime("10:42:50")},
 		},
 		{
+			name: "time is greater than time",
+			v1:   NewColumn(0, sqltypes.Time, collations.CollationBinaryID), v2: NewColumn(1, sqltypes.Time, collations.CollationBinaryID),
+			out: &T, op: sqlparser.GreaterThanOp,
+			row: []sqltypes.Value{sqltypes.NewTime("101:14:35"), sqltypes.NewTime("13:01:38")},
+		},
+		{
+			name: "time is not greater than time",
+			v1:   NewColumn(0, sqltypes.Time, collations.CollationBinaryID), v2: NewColumn(1, sqltypes.Time, collations.CollationBinaryID),
+			out: &F, op: sqlparser.GreaterThanOp,
+			row: []sqltypes.Value{sqltypes.NewTime("24:46:02"), sqltypes.NewTime("101:42:50")},
+		},
+		{
 			name: "time is less than time",
 			v1:   NewColumn(0, sqltypes.Time, collations.CollationBinaryID), v2: NewColumn(1, sqltypes.Time, collations.CollationBinaryID),
 			out: &T, op: sqlparser.LessThanOp,
@@ -1100,42 +1112,50 @@ func TestNullsafeCompare(t *testing.T) {
 		v1, v2 sqltypes.Value
 		out    int
 		err    error
-	}{{
-		// All nulls.
-		v1:  NULL,
-		v2:  NULL,
-		out: 0,
-	}, {
-		// LHS null.
-		v1:  NULL,
-		v2:  NewInt64(1),
-		out: -1,
-	}, {
-		// RHS null.
-		v1:  NewInt64(1),
-		v2:  NULL,
-		out: 1,
-	}, {
-		// LHS Text
-		v1:  TestValue(sqltypes.VarChar, "abcd"),
-		v2:  TestValue(sqltypes.VarChar, "abcd"),
-		out: 0,
-	}, {
-		// Make sure underlying error is returned for LHS.
-		v1:  TestValue(sqltypes.Float64, "0.0"),
-		v2:  TestValue(sqltypes.VarChar, "  6736380880502626304.000000 aa"),
-		out: -1,
-	}}
+	}{
+		{
+			v1:  NULL,
+			v2:  NULL,
+			out: 0,
+		},
+		{
+			v1:  NULL,
+			v2:  NewInt64(1),
+			out: -1,
+		},
+		{
+			v1:  NewInt64(1),
+			v2:  NULL,
+			out: 1,
+		},
+		{
+			v1:  TestValue(sqltypes.VarChar, "abcd"),
+			v2:  TestValue(sqltypes.VarChar, "abcd"),
+			out: 0,
+		},
+		{
+			v1:  TestValue(sqltypes.Float64, "0.0"),
+			v2:  TestValue(sqltypes.VarChar, "  6736380880502626304.000000 aa"),
+			out: -1,
+		},
+		{
+			v1:  TestValue(sqltypes.Enum, "foo"),
+			v2:  TestValue(sqltypes.Enum, "bar"),
+			out: 1,
+		},
+	}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
-		if tcase.err != nil {
-			require.EqualError(t, err, tcase.err.Error())
-			continue
-		}
-		require.NoError(t, err)
-		if got != tcase.out {
-			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
-		}
+		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
+			got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
+			if tcase.err != nil {
+				require.EqualError(t, err, tcase.err.Error())
+				return
+			}
+			require.NoError(t, err)
+			if got != tcase.out {
+				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
+			}
+		})
 	}
 }
 
@@ -1214,17 +1234,24 @@ func TestNullsafeCompareCollate(t *testing.T) {
 		},
 	}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
+		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
+			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
+			if tcase.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+			if !vterrors.Equals(err, tcase.err) {
+				t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+			}
+			if tcase.err != nil {
+				return
+			}
 
-		if got != tcase.out {
-			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-		}
+			if got != tcase.out {
+				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
+			}
+		})
 	}
 }
 

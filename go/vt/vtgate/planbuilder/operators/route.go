@@ -543,21 +543,22 @@ func createProjection(src ops.Operator) (*Projection, error) {
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
 	removeKeyspaceFromSelectExpr(expr)
 
-	// check if columns is already added.
-	cols, err := r.GetColumns()
-	if err != nil {
-		return nil, 0, err
+	if reuseExisting {
+		// check if columns is already added.
+		cols, err := r.GetColumns()
+		if err != nil {
+			return nil, 0, err
+		}
+		colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr {
+			return e.Expr
+		}
+		if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
+			return r, offset, nil
+		}
 	}
-	colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr {
-		return e.Expr
-	}
-	if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
-		return r, offset, nil
-	}
-
 	// if column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
 	if ok, offset := addColumnToInput(r.Source, expr, addToGroupBy); ok {
