@@ -85,59 +85,56 @@ func TestMustFix(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case count(*) when -41 ^ 10 then -17 when 22 then -52 else 7 end from emp as tbl0, emp as tbl1 where tbl1.job < tbl1.job")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case count(*) when 0 then -0 end from emp as tbl0, emp as tbl1 where 0")
 
 	// results mismatched (maybe derived tables)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (68 - -16) / case false when -45 then 3 when 28 then -43 else -62 end as crandom0 from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ distinct not not false and count(*) from emp as tbl0, emp as tbl1 where tbl1.ename) as tbl1 limit 1")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ 0 as crandom0 from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ distinct count(*) from emp as tbl1 where 0) as tbl1")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case true when 'burro' then 'trout' else 'elf' end < case count(distinct true) when 'bobcat' then 'turkey' else 'penguin' end from dept as tbl0, emp as tbl1 where 'spider'")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct case count(distinct true) when 'b' then 't' end from emp as tbl1 where 's'")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(distinct tbl1.deptno) from dept as tbl0, emp as tbl1 where tbl0.deptno and tbl1.comm in (12, tbl0.deptno, case false when 67 then -17 when -78 then -35 end, -76 >> -68)")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(distinct tbl1.deptno) from dept as tbl0, emp as tbl1")
 
 	// mismatched number of columns
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) + 1 from emp as tbl0 order by count(*) desc")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) + 0 from emp as tbl0 order by count(*) desc")
 
 	// results mismatched (mismatched types)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(2 >> tbl2.mgr), sum(distinct tbl2.empno <=> 15) from emp as tbl0 left join emp as tbl2 on -32")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(0 >> 0), sum(distinct tbl2.empno) from emp as tbl0 left join emp as tbl2 on -32")
 
 	// results mismatched (decimals off by a little; evalengine problem)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(case false when true then tbl1.deptno else -154 / 132 end) as caggr1 from emp as tbl0, dept as tbl1")
-
-	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
 
 	// EOF
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1, tbl1.deptno as crandom0 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
 
 	// results mismatched
 	// limit >= 9 works
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) = sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr1 from dept as tbl0, emp as tbl1 group by tbl1.sal having max(tbl1.comm) != true")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr1 from emp as tbl1 group by tbl1.sal having max(0) != true")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 0 as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(0) <= 0")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0 from dept as tbl0, emp as tbl1 where case when false then tbl0.dname end group by tbl1.comm")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(0) as caggr0 from dept as tbl0, emp as tbl1 where case when false then tbl0.dname end group by tbl1.comm")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 0 as crandom0 from dept as tbl0, emp as tbl1 where 0")
 
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 0 as crandom0 from dept as tbl0, emp as tbl1 where 'o'")
 
 	// similar to previous two
 	// results mismatched
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 'o' as crandom0 from dept as tbl0, emp as tbl1 where 0 having count(*) = count(*)")
 
 	// results mismatched (group by + right join)
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ 0 from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
 
 	// results mismatched (count + right join)
 	// left instead of right works
@@ -164,6 +161,9 @@ func TestKnownFailures(t *testing.T) {
 
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
+
+	// VT13001: [BUG] failed to find the corresponding column
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
 
 	// vitess error: <nil>
 	// mysql error: Operand should contain 1 column(s)
