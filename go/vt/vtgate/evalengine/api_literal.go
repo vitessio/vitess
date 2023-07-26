@@ -194,39 +194,27 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 // NewBindVar returns a bind variable
 func NewBindVar(key string, typ sqltypes.Type, col collations.ID) *BindVariable {
 	return &BindVariable{
-		Key:  key,
-		Type: typ,
-		Collation: collations.TypedCollation{
-			Collation:    col,
-			Coercibility: collations.CoerceCoercible,
-			Repertoire:   collations.RepertoireUnicode,
-		},
+		Key:       key,
+		Type:      typ,
+		Collation: defaultCoercionCollation(col),
 	}
 }
 
 // NewBindVarTuple returns a bind variable containing a tuple
 func NewBindVarTuple(key string, col collations.ID) *BindVariable {
 	return &BindVariable{
-		Key:  key,
-		Type: sqltypes.Tuple,
-		Collation: collations.TypedCollation{
-			Collation:    col,
-			Coercibility: collations.CoerceCoercible,
-			Repertoire:   collations.RepertoireUnicode,
-		},
+		Key:       key,
+		Type:      sqltypes.Tuple,
+		Collation: defaultCoercionCollation(col),
 	}
 }
 
 // NewColumn returns a column expression
 func NewColumn(offset int, typ sqltypes.Type, col collations.ID) *Column {
 	return &Column{
-		Offset: offset,
-		Type:   typ,
-		Collation: collations.TypedCollation{
-			Collation:    col,
-			Coercibility: collations.CoerceImplicit,
-			Repertoire:   collations.RepertoireUnicode,
-		},
+		Offset:    offset,
+		Type:      typ,
+		Collation: defaultCoercionCollation(col),
 	}
 }
 
