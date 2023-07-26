@@ -256,6 +256,28 @@ func TestRecoveryImpl(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
 
+	// check that replica1, used for the backup, has the new value
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		qr, err = replica1.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
+		assert.NoError(t, err)
+		if qr.Rows[0][0].ToString() == "msgx1" {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Error("timeout waiting for new value to be replicated on replica 1")
+			break
+		case <-ticker.C:
+		}
+	}
+
 	// take second backup of value = msgx1
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
