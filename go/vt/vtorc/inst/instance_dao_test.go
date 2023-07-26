@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -381,7 +382,6 @@ func TestReadInstancesByCondition(t *testing.T) {
 
 // TestReadOutdatedInstanceKeys is used to test the functionality of ReadOutdatedInstanceKeys and verify its failure modes and successes.
 func TestReadOutdatedInstanceKeys(t *testing.T) {
-	t.Skipf("Skipping the test until flakiness can be resolved.")
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name              string
@@ -396,7 +396,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			name: "One instance is outdated",
 			sql: []string{
 				"update database_instance set last_checked = now()",
-				"update database_instance set last_checked = time(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = datetime(now(), '-1 hour') where alias = 'zone1-0000000100'",
 			},
 			instancesRequired: []string{"zone1-0000000100"},
 		}, {
@@ -410,7 +410,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			name: "One instance doesn't have myql data and one is outdated",
 			sql: []string{
 				"update database_instance set last_checked = now()",
-				"update database_instance set last_checked = time(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = datetime(now(), '-1 hour') where alias = 'zone1-0000000100'",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
 			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
@@ -427,7 +427,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 		forgetAliases = oldCache
 		config.Config.InstancePollSeconds = oldVal
 	}()
-	config.Config.InstancePollSeconds = 60 * 59
+	config.Config.InstancePollSeconds = 60 * 25
 	forgetAliases = cache.New(time.Minute, time.Minute)
 
 	for _, tt := range tests {
@@ -443,6 +443,19 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			}
 
 			tabletAliases, err := ReadOutdatedInstanceKeys()
+
+			errInDataCollection := db.QueryVTOrcRowsMap(`select alias, 
+last_checked, 
+last_attempted_check, 
+ROUND((JULIANDAY(now()) - JULIANDAY(last_checked)) * 86400) AS difference,
+last_attempted_check <= last_checked as use1,
+last_checked < now() - interval 1500 second as is_outdated1,
+last_checked < now() - interval 3000 second as is_outdated2
+from database_instance`, func(rowMap sqlutils.RowMap) error {
+				log.Errorf("Row in database_instance - %+v", rowMap)
+				return nil
+			})
+			require.NoError(t, errInDataCollection)
 			require.NoError(t, err)
 			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
 		})
