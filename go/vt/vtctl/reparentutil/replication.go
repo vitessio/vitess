@@ -292,6 +292,12 @@ func stopReplicationAndBuildStatusMaps(
 		}
 	}
 
+	// For the tablets that we want to get a response from necessarily, we
+	// get them to set the MustWaitFor boolean as part of the concurrency.Error message
+	// that we send to the waitGroup below.
+	//
+	// numErrorsToWaitFor corresponds to how many such tablets there are. This is the number
+	// of special messages with MustWaitFor set that the call errgroup.Wait will wait for.
 	tabletAliasToWaitFor := ""
 	numErrorsToWaitFor := 0
 	if tabletToWaitFor != nil {
@@ -301,6 +307,10 @@ func stopReplicationAndBuildStatusMaps(
 		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
 			mustWaitFor := tabletAliasToWaitFor == alias
+			// If this is a tablet that we must wait for
+			// we increment numErrorsToWaitFor and pass in this to the
+			// fillStatus function to indicate we must send this with the boolean
+			// MustWaitFor specified.
 			if mustWaitFor {
 				numErrorsToWaitFor++
 			}
