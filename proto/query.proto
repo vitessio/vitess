@@ -922,8 +922,8 @@ message StreamHealthResponse {
   // or if a replica should not be used because the keyspace is being resharded.
   bool serving = 2;
 
-  // tablet_externally_reparented_timestamp can be interpreted as the
-  // last time we knew that this tablet was the PRIMARY of this shard
+  // primary_term_start_timestamp can be interpreted as the
+  // last time we knew that this tablet was promoted to a PRIMARY of this shard
   // (if StreamHealthResponse describes a group of tablets, between
   // two vtgates, only one primary will be present in the group, and
   // this is this primary's value).
@@ -947,8 +947,8 @@ message StreamHealthResponse {
   //    as PRIMARY because it was recorded as the shard's current primary in the
   //    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
   // OR
-  // d) 0 if the vttablet was never a PRIMARY.
-  int64 tablet_externally_reparented_timestamp = 3;
+  // d) 0 if the vttablet is not a PRIMARY.
+  int64 primary_term_start_timestamp = 3;
 
   // realtime_stats contains information about the tablet status.
   // It is only filled in if the information is about a tablet.

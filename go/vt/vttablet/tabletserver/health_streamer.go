@@ -214,9 +214,9 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimes
 
 	hs.state.Target.TabletType = tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		hs.state.TabletExternallyReparentedTimestamp = ptsTimestamp.Unix()
+		hs.state.PrimaryTermStartTimestamp = ptsTimestamp.Unix()
 	} else {
-		hs.state.TabletExternallyReparentedTimestamp = 0
+		hs.state.PrimaryTermStartTimestamp = 0
 	}
 	if err != nil {
 		hs.state.RealtimeStats.HealthError = err.Error()

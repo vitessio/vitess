@@ -39202,8 +39202,8 @@ export namespace query {
         /** StreamHealthResponse serving */
         serving?: (boolean|null);
 
-        /** StreamHealthResponse tablet_externally_reparented_timestamp */
-        tablet_externally_reparented_timestamp?: (number|Long|null);
+        /** StreamHealthResponse primary_term_start_timestamp */
+        primary_term_start_timestamp?: (number|Long|null);
 
         /** StreamHealthResponse realtime_stats */
         realtime_stats?: (query.IRealtimeStats|null);
@@ -39227,8 +39227,8 @@ export namespace query {
         /** StreamHealthResponse serving. */
         public serving: boolean;
 
-        /** StreamHealthResponse tablet_externally_reparented_timestamp. */
-        public tablet_externally_reparented_timestamp: (number|Long);
+        /** StreamHealthResponse primary_term_start_timestamp. */
+        public primary_term_start_timestamp: (number|Long);
 
         /** StreamHealthResponse realtime_stats. */
         public realtime_stats?: (query.IRealtimeStats|null);
