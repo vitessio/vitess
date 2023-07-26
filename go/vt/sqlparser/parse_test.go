@@ -3850,7 +3850,7 @@ BEGIN
 		output: "create definer = `root`@`localhost` trigger forecast_db.before_ai_suggested_task_label_delete " +
 			"before delete on forecast_db.ai_suggested_task_label for each row begin\n" +
 			"if OLD.`delete` != (1) then " +
-			"set @message_text = CONCAT('CANNOT DELETE ai_suggested_task_label IF DELETE FLAG IS NOT SET FOR: ', CAST(OLD.id, CHAR)); " +
+			"set @message_text = CONCAT('CANNOT DELETE ai_suggested_task_label IF DELETE FLAG IS NOT SET FOR: ', CAST(OLD.id as CHAR)); " +
 			"signal sqlstate value '45000' set message_text = @message_text;\n" +
 			"end if;\n" +
 			"insert into forecast_db_events.event_ai_suggested_task_label(`action`, id, created_at, updated_at, created_by, updated_by, company_id, label_id, task_id, `delete`) " +
@@ -4990,7 +4990,7 @@ func TestFunctionCalls(t *testing.T) {
 	testCases := []parseTest{
 		{
 			input:  "select CAST(1 as datetime) from dual",
-			output: "select CAST(1, datetime)",
+			output: "select CAST(1 as datetime)",
 		},
 		{
 			input:  "select LOCALTIMESTAMP from dual",
@@ -4998,11 +4998,11 @@ func TestFunctionCalls(t *testing.T) {
 		},
 		{
 			input: "SELECT CAST(foo AS DOUBLE)",
-			output: "select CAST(foo, DOUBLE)",
+			output: "select CAST(foo as DOUBLE)",
 		},
 		{
 			input: "SELECT CAST(foo AS FLOAT)",
-			output: "select CAST(foo, FLOAT)",
+			output: "select CAST(foo as FLOAT)",
 		},
 	}
 
@@ -5049,7 +5049,6 @@ func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input:  "select cast('abc' as date) from t",
-			output: "select cast('abc', date) from t",
 		}, {
 			input:                      "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
