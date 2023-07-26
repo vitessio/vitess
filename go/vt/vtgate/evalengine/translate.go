@@ -183,14 +183,6 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 	}, nil
 }
 
-func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
-	return collations.TypedCollation{
-		Collation:    id,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireUnicode,
-	}
-}
-
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
 	bvar := NewBindVar(arg.Name, arg.Type, ast.cfg.Collation)
 
