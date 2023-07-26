@@ -29,6 +29,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -44,19 +45,76 @@ var (
 
 	// Workflow is a parent command for Workflow* sub commands.
 	Workflow = &cobra.Command{
-		Use:                   "workflow",
-		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace",
+		Use:   "Workflow --keyspace <keyspace> [command] [command-flags]",
+		Short: "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
+		Long: `Workflow commands: List, Show, Start, Stop, Update, and Delete.
+See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Workflow"},
+		Aliases:               []string{"workflow"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetWorkflows,
+	}
+
+	// WorkflowDelete makes a WorkflowDelete gRPC call to a vtctld.
+	WorkflowDelete = &cobra.Command{
+		Use:                   "delete",
+		Short:                 "Delete a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer delete --workflow commerce2customer`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Delete"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowDelete,
+	}
+
+	// WorkflowList makes a GetWorkflows gRPC call to a vtctld.
+	WorkflowList = &cobra.Command{
+		Use:                   "list",
+		Short:                 "List the VReplication workflows in the given keyspace.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer list`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"List"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowShow,
+	}
+
+	// WorkflowShow makes a GetWorkflows gRPC call to a vtctld.
+	WorkflowShow = &cobra.Command{
+		Use:                   "show",
+		Short:                 "Show the details for a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer show --workflow commerce2customer`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Show"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowShow,
+	}
+
+	// WorkflowStart makes a WorfklowUpdate gRPC call to a vtctld.
+	WorkflowStart = &cobra.Command{
+		Use:                   "start",
+		Short:                 "Start a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer start --workflow commerce2customer`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Start"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowUpdateState,
+	}
+
+	// WorkflowStop makes a WorfklowUpdate gRPC call to a vtctld.
+	WorkflowStop = &cobra.Command{
+		Use:                   "stop",
+		Short:                 "Stop a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer stop --workflow commerce2customer`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Stop"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowUpdateState,
 	}
 
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
-		Short:                 "Update the configuration parameters for a VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer update --workflow=commerce2customer --cells "zone1" --cells "zone2" -c "zone3,zone4" -c "zone5"`,
+		Short:                 "Update the configuration parameters for a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer update --workflow commerce2customer --cells zone1 --cells zone2 -c "zone3,zone4" -c zone5`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Update"},
 		Args:                  cobra.NoArgs,
@@ -70,16 +128,10 @@ var (
 			} else {
 				workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
 			}
-			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
+			if cmd.Flags().Lookup("tablet-types").Changed {
 				changes = true
-				for i, tabletType := range workflowUpdateOptions.TabletTypes {
-					workflowUpdateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err := topoproto.ParseTabletType(workflowUpdateOptions.TabletTypes[i]); err != nil {
-						return err
-					}
-				}
 			} else {
-				workflowUpdateOptions.TabletTypes = textutil.SimulatedNullStringSlice
+				workflowUpdateOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
 			}
 			if cmd.Flags().Lookup("on-ddl").Changed { // Validate the provided value
 				changes = true
@@ -128,13 +180,79 @@ var (
 	workflowOptions = struct {
 		Keyspace string
 	}{}
+	workflowDeleteOptions = struct {
+		Workflow         string
+		KeepData         bool
+		KeepRoutingRules bool
+	}{}
 	workflowUpdateOptions = struct {
-		Workflow    string
-		Cells       []string
-		TabletTypes []string
-		OnDDL       string
+		Workflow                     string
+		Cells                        []string
+		TabletTypes                  []topodatapb.TabletType
+		TabletTypesInPreferenceOrder bool
+		OnDDL                        string
 	}{}
 )
+
+func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.WorkflowDeleteRequest{
+		Keyspace:         workflowOptions.Keyspace,
+		Workflow:         workflowDeleteOptions.Workflow,
+		KeepData:         workflowDeleteOptions.KeepData,
+		KeepRoutingRules: workflowDeleteOptions.KeepRoutingRules,
+	}
+	resp, err := client.WorkflowDelete(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
+	})
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func commandWorkflowShow(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: workflowOptions.Keyspace,
+		Workflow: workflowDeleteOptions.Workflow,
+	}
+	resp, err := client.GetWorkflows(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	var data []byte
+	if strings.ToLower(cmd.Name()) == "list" {
+		// We only want the names
+		Names := make([]string, len(resp.Workflows))
+		for i, wf := range resp.Workflows {
+			Names[i] = wf.Name
+		}
+		data, err = cli.MarshalJSON(Names)
+	} else {
+		data, err = cli.MarshalJSON(resp)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
 
 func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
@@ -147,13 +265,24 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 		onddl = val
 	}
 
+	// Simulated NULL when no value is provided.
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
+	if cmd.Flags().Lookup("tablet-types-in-order").Changed {
+		if workflowUpdateOptions.TabletTypesInPreferenceOrder {
+			tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+		} else {
+			tsp = tabletmanagerdatapb.TabletSelectionPreference_ANY
+		}
+	}
+
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: workflowOptions.Keyspace,
-		TabletRequest: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
-			Workflow:    workflowUpdateOptions.Workflow,
-			Cells:       workflowUpdateOptions.Cells,
-			TabletTypes: workflowUpdateOptions.TabletTypes,
-			OnDdl:       binlogdatapb.OnDDLAction(onddl),
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow:                  workflowUpdateOptions.Workflow,
+			Cells:                     workflowUpdateOptions.Cells,
+			TabletTypes:               workflowUpdateOptions.TabletTypes,
+			TabletSelectionPreference: tsp,
+			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 		},
 	}
 
@@ -164,7 +293,52 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 
 	// Sort the inner TabletInfo slice for deterministic output.
 	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet < resp.Details[j].Tablet
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
+	})
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	var state binlogdatapb.VReplicationWorkflowState
+	switch strings.ToLower(cmd.Name()) {
+	case "start":
+		state = binlogdatapb.VReplicationWorkflowState_Running
+	case "stop":
+		state = binlogdatapb.VReplicationWorkflowState_Stopped
+	default:
+		return fmt.Errorf("invalid workstate: %s", args[0])
+	}
+
+	// The only thing we're updating is the state.
+	req := &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: workflowOptions.Keyspace,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow:    workflowUpdateOptions.Workflow,
+			Cells:       textutil.SimulatedNullStringSlice,
+			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			State:       state,
+		},
+	}
+
+	resp, err := client.WorkflowUpdate(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 	})
 
 	data, err := cli.MarshalJSON(resp)
@@ -184,10 +358,32 @@ func init() {
 	Workflow.PersistentFlags().StringVarP(&workflowOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow (required)")
 	Workflow.MarkPersistentFlagRequired("keyspace")
 	Root.AddCommand(Workflow)
+
+	WorkflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to delete (required)")
+	WorkflowDelete.MarkFlagRequired("workflow")
+	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace")
+	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow")
+	Workflow.AddCommand(WorkflowDelete)
+
+	Workflow.AddCommand(WorkflowList)
+
+	WorkflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required)")
+	WorkflowShow.MarkFlagRequired("workflow")
+	Workflow.AddCommand(WorkflowShow)
+
+	WorkflowStart.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to start (required)")
+	WorkflowStart.MarkFlagRequired("workflow")
+	Workflow.AddCommand(WorkflowStart)
+
+	WorkflowStop.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to stop (required)")
+	WorkflowStop.MarkFlagRequired("workflow")
+	Workflow.AddCommand(WorkflowStop)
+
 	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
 	WorkflowUpdate.MarkFlagRequired("workflow")
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
-	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", nil, "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
+	WorkflowUpdate.Flags().VarP((*topoproto.TabletTypeListFlag)(&workflowUpdateOptions.TabletTypes), "tablet-types", "t", "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
+	WorkflowUpdate.Flags().BoolVar(&workflowUpdateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag")
 	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
 	Workflow.AddCommand(WorkflowUpdate)
 }

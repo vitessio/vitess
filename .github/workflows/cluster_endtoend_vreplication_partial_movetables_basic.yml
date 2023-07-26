@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vreplication_partial_movetables_simple)
+name: Cluster (vreplication_partial_movetables_basic)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_partial_movetables_simple)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_partial_movetables_basic)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vreplication_partial_movetables_simple)
+    name: Run endtoend tests on Cluster (vreplication_partial_movetables_basic)
     runs-on: ubuntu-22.04
 
     steps:
@@ -58,7 +58,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_vreplication_partial_movetables_simple.yml'
+            - '.github/workflows/cluster_endtoend_vreplication_partial_movetables_basic.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -149,7 +149,7 @@ jobs:
         EOF
         
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_partial_movetables_simple | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_partial_movetables_basic | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
