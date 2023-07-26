@@ -19,10 +19,9 @@ package operators
 import (
 	"strings"
 
-	"vitess.io/vitess/go/slice"
-
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -64,13 +63,8 @@ func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return o, nil
 }
 
-func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := o.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	o.Source = newSrc
-	return o, offset, nil
+func (o *Ordering) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return o.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
 
 func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
@@ -91,12 +85,11 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.SimplifiedExpr), true, false)
+		offsets, err := o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(order.SimplifiedExpr)})
 		if err != nil {
 			return err
 		}
-		o.Source = newSrc
-		o.Offset = append(o.Offset, offset)
+		o.Offset = append(o.Offset, offsets[0])
 
 		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
@@ -104,12 +97,11 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true, false)
+		offsets, err = o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(wsExpr)})
 		if err != nil {
 			return err
 		}
-		o.Source = newSrc
-		o.WOffset = append(o.WOffset, offset)
+		o.WOffset = append(o.WOffset, offsets[0])
 	}
 
 	return nil

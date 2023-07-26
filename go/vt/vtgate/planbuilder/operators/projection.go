@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -36,6 +37,7 @@ type (
 	Projection struct {
 		Source ops.Operator
 
+		// TODO: we should replace these two slices with a single slice that contains both items. Keeping these two slices in sync leads to fragile code (systay 2023-07-25)
 		// Columns contain the expressions as viewed from the outside of this operator
 		Columns []*sqlparser.AliasedExpr
 
@@ -85,17 +87,21 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 		Source: src,
 	}
 
-	for _, e := range qp.SelectExprs {
-		ae, err := e.GetAliasedExpr()
-		if err != nil {
-			return nil, err
-		}
-		newSrc, offset, err := p.Source.AddColumn(ctx, ae, true, false)
-		if err != nil {
-			return nil, err
-		}
+	var groupby []bool
+	exprs, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
+		groupby = append(groupby, false)
+		return from.GetAliasedExpr()
+	})
+	if err != nil {
+		return nil, err
+	}
 
-		p.Source = newSrc
+	offsets, err := p.Source.AddColumns(ctx, true, groupby, exprs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range exprs {
+		offset, ae := offsets[i], exprs[i]
 		p.Projections = append(p.Projections, Offset{Expr: ae.Expr, Offset: offset})
 		p.Columns = append(p.Columns, ae)
 	}
@@ -112,17 +118,19 @@ func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool
 	return p.addUnexploredExpr(expr, expr.Expr)
 }
 
+func (p *Projection) addColumnsWithoutPushing(expr []*sqlparser.AliasedExpr, _ []bool) []int {
+	return slice.Map(expr, func(ae *sqlparser.AliasedExpr) int {
+		return p.addUnexploredExpr(ae, ae.Expr)
+	})
+}
+
 func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
 func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	if p.isDerived() {
-		derivedTBL, err := ctx.SemTable.TableInfoFor(*p.TableID)
-		if err != nil {
-			return 0, err
-		}
-		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
+		return -1, nil
 	}
 	if offset, found := canReuseColumn(ctx, p.Columns, expr, extractExpr); found {
 		return offset, nil
@@ -130,33 +138,84 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return -1, nil
 }
 
-func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	offset, err := p.FindCol(ctx, expr.Expr)
-	if err != nil {
-		return nil, 0, err
-	}
-	if offset >= 0 {
-		return p, offset, nil
-	}
+// fetchExpr is used to accumulate all expressions we'll need from the input,
+// and store in which column on the projection we want to store the offset returned
+type fetchExpr struct {
+	expr    sqlparser.Expr
+	colIdx  []int
+	groupBy bool
+}
 
-	ae := sqlparser.CloneRefOfAliasedExpr(expr)
+func (p *Projection) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	offsets := make([]int, len(exprs))
+	var fetch []fetchExpr
+	startOffset := len(p.Columns)
+	for i, ae := range exprs {
+		colIdx := i + startOffset
+		expr := ae.Expr
 
-	if p.TableID != nil {
-		vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
-		if err != nil {
-			return nil, 0, err
+		if reuse {
+			offset, err := p.FindCol(ctx, expr)
+			if err != nil {
+				return nil, err
+			}
+			if offset >= 0 {
+				offsets[i] = offset
+				continue
+			}
 		}
-		ae.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, vt)
+
+		if p.TableID != nil {
+			vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
+			if err != nil {
+				return nil, err
+			}
+			expr = semantics.RewriteDerivedTableExpression(expr, vt)
+		}
+
+		// we add the column here, so we can find the expression in the next iteration of this loop,
+		// but we wait with the actual projection until we have fetched it from the input
+		offsets[i] = len(p.Columns)
+		p.Columns = append(p.Columns, aeWrap(expr))
+		p.Projections = append(p.Projections, nil)
+
+		// even if the receiver of the Projection output does not want to reuse column,
+		// we can reuse columns from this input
+		fIdx := slices.IndexFunc(fetch, func(f fetchExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(expr, f.expr)
+		})
+
+		if fIdx == -1 {
+			// if we are not already asking for this expression, we add it to the list of expressions we'll ask for
+			fIdx = len(fetch)
+			fetch = append(fetch, fetchExpr{
+				expr: expr,
+			})
+		}
+
+		fetch[fIdx].colIdx = append(fetch[fIdx].colIdx, colIdx)
+		fetch[fIdx].groupBy = fetch[fIdx].groupBy || addToGroupBy[i]
 	}
 
-	sourceOp, offset, err := p.Source.AddColumn(ctx, ae, true, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
+	askForExprs := make([]*sqlparser.AliasedExpr, len(fetch))
+	askForGB := make([]bool, len(fetch))
+	for i, f := range fetch {
+		askForExprs[i] = aeWrap(f.expr)
+		askForGB[i] = f.groupBy
 	}
-	p.Source = sourceOp
-	p.Projections = append(p.Projections, Offset{Offset: offset, Expr: ae.Expr})
-	p.Columns = append(p.Columns, expr)
-	return p, len(p.Projections) - 1, nil
+
+	inputOffsets, err := p.Source.AddColumns(ctx, true, askForGB, askForExprs)
+	if err != nil {
+		return nil, err
+	}
+
+	for fIdx, fetched := range fetch {
+		for _, colIdx := range fetched.colIdx {
+			p.Projections[colIdx] = Offset{Offset: inputOffsets[fIdx], Expr: fetched.expr}
+		}
+	}
+
+	return offsets, nil
 }
 
 func (po Offset) GetExpr() sqlparser.Expr               { return po.Expr }
@@ -254,13 +313,13 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *Appl
 		switch col := col.(type) {
 		case Offset:
 			newColumns = append(newColumns, src.Columns[col.Offset])
-			newColumnsAST = append(newColumnsAST, src.ColumnsAST[col.Offset])
+			newColumnsAST = append(newColumnsAST, src.JoinColumns[col.Offset])
 		case UnexploredExpression:
 			if !ctx.SemTable.EqualsExprWithDeps(col.E, p.Columns[idx].Expr) {
 				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
 				return p, rewrite.SameTree, nil
 			}
-			offset := slices.IndexFunc(src.ColumnsAST, func(jc JoinColumn) bool {
+			offset := slices.IndexFunc(src.JoinColumns, func(jc JoinColumn) bool {
 				return ctx.SemTable.EqualsExprWithDeps(jc.Original.Expr, col.E)
 			})
 			if offset < 0 {
@@ -269,13 +328,13 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *Appl
 			if len(src.Columns) > 0 {
 				newColumns = append(newColumns, src.Columns[offset])
 			}
-			newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset])
+			newColumnsAST = append(newColumnsAST, src.JoinColumns[offset])
 		default:
 			return p, rewrite.SameTree, nil
 		}
 	}
 	src.Columns = newColumns
-	src.ColumnsAST = newColumnsAST
+	src.JoinColumns = newColumnsAST
 	return src, rewrite.NewTree("remove projection from before join", src), nil
 }
 

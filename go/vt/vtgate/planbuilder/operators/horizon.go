@@ -149,36 +149,31 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return h, nil
 }
 
-func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	col, ok := expr.Expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+func (h *Horizon) AddColumns(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	if !reuse {
+		return nil, errNoNewColumns
 	}
-
-	identity := func(c *sqlparser.ColName) sqlparser.Expr { return c }
-	if offset, found := canReuseColumn(ctx, h.Columns, col, identity); found {
-		return h, offset, nil
-	}
-
-	i, err := h.findOutputColumn(col)
-	if err != nil {
-		return nil, 0, err
-	}
-	var pos int
-	h.ColumnsOffset, pos = addToIntSlice(h.ColumnsOffset, i)
-
-	h.Columns = append(h.Columns, col)
-	// add it to the source if we were not already passing it through
-	if i <= -1 {
-		// TODO: this does not look correct
-		newSrc, _, err := h.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true, addToGroupBy)
-		if err != nil {
-			return nil, 0, err
+	offsets := make([]int, len(exprs))
+	for i, expr := range exprs {
+		col, ok := expr.Expr.(*sqlparser.ColName)
+		if !ok {
+			return nil, vterrors.VT13001("cannot push non-ColName expression to horizon")
 		}
-		h.Source = newSrc
+		offset, err := h.FindCol(ctx, col)
+		if err != nil {
+			return nil, err
+		}
+
+		if offset < 0 {
+			return nil, errNoNewColumns
+		}
+		offsets[i] = offset
 	}
-	return h, pos, nil
+
+	return offsets, nil
 }
+
+var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")
 
 // canReuseColumn is generic, so it can be used with slices of different types.
 // We don't care about the actual type, as long as we know it's a sqlparser.Expr

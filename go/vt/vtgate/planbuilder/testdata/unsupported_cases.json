@@ -473,6 +473,6 @@
   {
     "comment": "aggregation on top of aggregation not supported",
     "query": "select distinct count(*) from user, (select distinct count(*) from user) X",
-    "plan": "VT12001: unsupported: aggregation on top of aggregation not supported"
+    "plan": "VT12001: unsupported: failed to plan aggregation on: count(*)"
   }
 ]

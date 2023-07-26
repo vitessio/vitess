@@ -19,10 +19,9 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/slice"
-
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -227,6 +226,59 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 	return u, rewrite.NewTree("merged UNIONs", u), nil
 }
 
+func (u *Union) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	offsets := make([]int, len(exprs))
+	cols, err := u.GetColumns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i, ae := range exprs {
+		if reuse {
+			offset, err := u.FindCol(ctx, ae.Expr)
+			if err != nil {
+				return nil, err
+			}
+
+			if offset >= 0 {
+				offsets[i] = offset
+				continue
+			}
+		}
+
+		switch e := ae.Expr.(type) {
+		case *sqlparser.ColName:
+			// here we deal with pure column access on top of the union
+			offset := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
+				return e.Name.EqualString(expr.ColumnName())
+			})
+			if offset == -1 {
+				return nil, vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(e)))
+			}
+			offsets[i] = offset
+		case *sqlparser.WeightStringFuncExpr:
+			wsArg := e.Expr
+			argIdx := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
+				return ctx.SemTable.EqualsExprWithDeps(wsArg, expr.Expr)
+			})
+
+			if argIdx == -1 {
+				return nil, vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg)))
+			}
+
+			outputOffset, err := u.addWeightStringToOffset(ctx, argIdx, addToGroupBy[i])
+			if err != nil {
+				return nil, err
+			}
+
+			offsets[i] = outputOffset
+		default:
+			return nil, vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(ae)))
+		}
+	}
+
+	return offsets, nil
+}
+
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	col, err := u.FindCol(ctx, ae.Expr)
 	if err != nil {
@@ -281,11 +333,11 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 		if !ok {
 			return 0, vterrors.VT09015()
 		}
-		newSrc, thisOffset, err := src.AddColumn(ctx, aeWrap(weightStringFor(ae.Expr)), false, addToGroupBy)
+		offsets, err := src.AddColumns(ctx, false, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{aeWrap(weightStringFor(ae.Expr))})
 		if err != nil {
 			return 0, err
 		}
-
+		thisOffset := offsets[0]
 		// all offsets for the newly added ws need to line up
 		if i == 0 {
 			outputOffset = thisOffset
@@ -294,8 +346,6 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 				return 0, vterrors.VT12001("weight_string offsets did not line up for UNION")
 			}
 		}
-
-		u.Sources[i] = newSrc
 	}
 	return
 }

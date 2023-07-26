@@ -20,11 +20,10 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/slice"
-
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -46,8 +45,8 @@ type ApplyJoin struct {
 	// Before offset planning
 	Predicate sqlparser.Expr
 
-	// ColumnsAST keeps track of what AST expression is represented in the Columns array
-	ColumnsAST []JoinColumn
+	// JoinColumns keeps track of what AST expression is represented in the Columns array
+	JoinColumns []JoinColumn
 
 	// JoinPredicates are join predicates that have been broken up into left hand side and right hand side parts.
 	JoinPredicates []JoinColumn
@@ -96,7 +95,7 @@ func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 		LHS:            inputs[0],
 		RHS:            inputs[1],
 		Columns:        slices.Clone(a.Columns),
-		ColumnsAST:     slices.Clone(a.ColumnsAST),
+		JoinColumns:    slices.Clone(a.JoinColumns),
 		JoinPredicates: slices.Clone(a.JoinPredicates),
 		Vars:           maps.Clone(a.Vars),
 		LeftJoin:       a.LeftJoin,
@@ -163,25 +162,23 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 }
 
 func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	newLHS, offset, err := a.LHS.AddColumn(ctx, e, true, addToGroupBy)
+	offsets, err := a.LHS.AddColumns(ctx, true, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{e})
 	if err != nil {
 		return 0, err
 	}
-	a.LHS = newLHS
-	return offset, nil
+	return offsets[0], nil
 }
 
 func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true, addToGroupBy)
+	offsets, err := a.RHS.AddColumns(ctx, true, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{e})
 	if err != nil {
 		return 0, err
 	}
-	a.RHS = newRHS
-	return offset, nil
+	return offsets[0], nil
 }
 
 func (a *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
+	return slice.Map(a.JoinColumns, joinColumnToAliasedExpr), nil
 }
 
 func (a *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
@@ -229,7 +226,7 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 }
 
 func (a *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	offset, found := canReuseColumn(ctx, a.ColumnsAST, expr, joinColumnToExpr)
+	offset, found := canReuseColumn(ctx, a.JoinColumns, expr, joinColumnToExpr)
 	if !found {
 		return -1, nil
 	}
@@ -241,19 +238,49 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.
 		return a, offset, err
 	}
 
-	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, joinColumnToExpr); found {
+	if offset, found := canReuseColumn(ctx, a.JoinColumns, expr.Expr, joinColumnToExpr); found {
 		return a, offset, nil
 	}
 	col, err := a.getJoinColumnFor(ctx, expr, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
-	a.ColumnsAST = append(a.ColumnsAST, col)
-	return a, len(a.ColumnsAST) - 1, nil
+	a.JoinColumns = append(a.JoinColumns, col)
+	return a, len(a.JoinColumns) - 1, nil
+}
+
+func (a *ApplyJoin) AddColumns(
+	ctx *plancontext.PlanningContext,
+	reuse bool,
+	addToGroupBy []bool,
+	exprs []*sqlparser.AliasedExpr,
+) (offsets []int, err error) {
+	offsets = make([]int, len(exprs))
+	for i, expr := range exprs {
+		if reuse {
+			offset, err := a.FindCol(ctx, expr.Expr)
+			if err != nil {
+				return nil, err
+			}
+			if offset != -1 {
+				offsets[i] = offset
+				continue
+			}
+		}
+
+		col, err := a.getJoinColumnFor(ctx, expr, addToGroupBy[i])
+		if err != nil {
+			return nil, err
+		}
+
+		offsets[i] = len(a.JoinColumns)
+		a.JoinColumns = append(a.JoinColumns, col)
+	}
+	return
 }
 
 func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
-	for _, col := range a.ColumnsAST {
+	for _, col := range a.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for i, lhsExpr := range col.LHSExprs {
 			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), col.GroupBy)
@@ -306,7 +333,7 @@ func (a *ApplyJoin) addOffset(offset int) {
 
 func (a *ApplyJoin) ShortDescription() string {
 	pred := sqlparser.String(a.Predicate)
-	columns := slice.Map(a.ColumnsAST, func(from JoinColumn) string {
+	columns := slice.Map(a.JoinColumns, func(from JoinColumn) string {
 		return sqlparser.String(from.Original)
 	})
 	return fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))

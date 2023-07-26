@@ -543,70 +543,74 @@ func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Proj
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	removeKeyspaceFromSelectExpr(expr)
+func (r *Route) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	offsets := make([]int, len(exprs))
+	notFound := false
+	for idx, expr := range exprs {
+		removeKeyspaceFromSelectExpr(expr)
 
-	if reuseExisting {
-		// check if columns is already added.
-		cols, err := r.GetColumns(ctx)
-		if err != nil {
-			return nil, 0, err
+		if reuse {
+			offset, err := r.FindCol(ctx, expr.Expr)
+			if err != nil {
+				return nil, err
+			}
+			if offset != -1 {
+				offsets[idx] = offset
+				continue
+			}
 		}
-		colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr {
-			return e.Expr
-		}
-		if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
-			return r, offset, nil
-		}
+		notFound = true
 	}
-	// if column is not already present, we check if we can easily find a projection
+
+	if !notFound {
+		// we were able to find all columns, so we don't need to fetch anything else
+		return offsets, nil
+	}
+
+	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	if op, ok, offset := addColumnToInput(ctx, r.Source, expr, addToGroupBy); ok {
+	if op, ok, offset := addMultipleColumnsToInput(ctx, r.Source, reuse, addToGroupBy, exprs); ok {
 		r.Source = op
-		return r, offset, nil
+		return offset, nil
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
 	src, err := createProjection(ctx, r.Source)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	r.Source = src
 
-	// And since we are under the route, we don't need to continue pushing anything further down
-	offset := src.addColumnWithoutPushing(expr, false)
-	if err != nil {
-		return nil, 0, err
-	}
-	return r, offset, nil
+	return src.addColumnsWithoutPushing(exprs, addToGroupBy), nil
 }
 
 type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
+	addColumnsWithoutPushing(expr []*sqlparser.AliasedExpr, addToGroupBy []bool) []int
 	isDerived() bool
 }
 
 // addColumnToInput adds a column to an operator without pushing it down.
 // It will return a bool indicating whether the addition was succesful or not, and an offset to where the column can be found
-func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (ops.Operator, bool, int) {
+func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, expr []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
-		src, added, offset := addColumnToInput(ctx, op.Outer, expr, addToGroupBy)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, expr)
 		if added {
 			op.Outer = src
 		}
 		return op, added, offset
 
 	case *Limit:
-		src, added, offset := addColumnToInput(ctx, op.Source, expr, addToGroupBy)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, expr)
 		if added {
 			op.Source = src
 		}
 		return op, added, offset
 
 	case *Ordering:
-		src, added, offset := addColumnToInput(ctx, op.Source, expr, addToGroupBy)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, expr)
 		if added {
 			op.Source = src
 		}
@@ -616,16 +620,16 @@ func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, e
 		if op.isDerived() {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return op, false, 0
+			return op, false, nil
 		}
-		offset := op.addColumnWithoutPushing(expr, addToGroupBy)
+		offset := op.addColumnsWithoutPushing(expr, addToGroupBy)
 		return op, true, offset
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
 		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
 		unionColumns, err := op.GetColumns(ctx)
 		if err != nil {
-			return nil, false, 0
+			return nil, false, nil
 		}
 		return &Projection{
 			Source:      op,
@@ -633,9 +637,9 @@ func addColumnToInput(ctx *plancontext.PlanningContext, operator ops.Operator, e
 			Projections: nil,
 			TableID:     &tableID,
 			Alias:       "dt",
-		}, true, len(op.unionColumns)
+		}, true, []int{len(op.unionColumns)}
 	default:
-		return op, false, 0
+		return op, false, nil
 	}
 }
 
@@ -712,11 +716,11 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			wrap := aeWrap(weightStringFor(order.SimplifiedExpr))
-			_, offset, err = r.AddColumn(ctx, wrap, true, false)
+			offsets, err := r.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{wrap})
 			if err != nil {
 				return err
 			}
-			o.WOffset = offset
+			o.WOffset = offsets[0]
 		}
 		r.Ordering = append(r.Ordering, o)
 	}
@@ -735,11 +739,11 @@ func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy
 		}
 	}
 
-	_, offset, err := r.AddColumn(ctx, aeWrap(order.Inner.Expr), true, false)
+	offsets, err := r.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(order.Inner.Expr)})
 	if err != nil {
 		return 0, err
 	}
-	return offset, nil
+	return offsets[0], nil
 }
 
 func (r *Route) ShortDescription() string {

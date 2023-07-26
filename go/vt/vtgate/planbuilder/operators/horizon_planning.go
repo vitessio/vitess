@@ -223,7 +223,7 @@ func pushDownProjectionInVindex(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	for _, column := range p.Projections {
 		expr := column.GetExpr()
-		_, _, err := src.AddColumn(ctx, aeWrap(expr), true, false)
+		_, err := src.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(expr)})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -251,7 +251,7 @@ func pushDownProjectionInApplyJoin(
 	}
 	lhs, rhs := &projector{}, &projector{}
 
-	src.ColumnsAST = nil
+	src.JoinColumns = nil
 	for idx := 0; idx < len(p.Projections); idx++ {
 		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Projections[idx], p.Columns[idx])
 		if err != nil {
@@ -294,7 +294,7 @@ func splitProjectionAcrossJoin(
 	expr := in.GetExpr()
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.ColumnsAST, expr, joinColumnToExpr); found {
+	if _, found := canReuseColumn(ctx, join.JoinColumns, expr, joinColumnToExpr); found {
 		return nil
 	}
 
@@ -317,8 +317,8 @@ func splitProjectionAcrossJoin(
 		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
 	}
 
-	// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
-	join.ColumnsAST = append(join.ColumnsAST, col)
+	// Add the new JoinColumn to the ApplyJoin's JoinColumns.
+	join.JoinColumns = append(join.JoinColumns, col)
 	return nil
 }
 

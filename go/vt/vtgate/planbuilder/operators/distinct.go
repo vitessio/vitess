@@ -54,16 +54,15 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	d.Columns = nil
 	var exprs []sqlparser.Expr
 	for _, col := range columns {
-		newSrc, offset, err := d.Source.AddColumn(ctx, col, true, false)
+		offsets, err := d.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{col})
 		if err != nil {
 			return err
 		}
-		d.Source = newSrc
 		e := d.QP.GetSimplifiedExpr(col.Expr)
 		exprs = append(exprs, e)
 		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       offset,
+			Col:       offsets[0],
 			Type:      typ,
 			Collation: coll,
 		})
@@ -72,12 +71,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 		if !ctx.SemTable.NeedsWeightString(e) {
 			continue
 		}
-		newSrc, offset, err := d.Source.AddColumn(ctx, aeWrap(weightStringFor(e)), true, false)
+		offsets, err := d.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(weightStringFor(e))})
 		if err != nil {
 			return err
 		}
-		d.Source = newSrc
-		d.Columns[i].WsCol = &offset
+		d.Columns[i].WsCol = &offsets[0]
 	}
 	return nil
 }
@@ -110,13 +108,8 @@ func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return d, nil
 }
 
-func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := d.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	d.Source = newSrc
-	return d, offset, nil
+func (d *Distinct) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return d.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
 
 func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {

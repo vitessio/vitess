@@ -109,6 +109,10 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr,
 	return nil, 0, vterrors.VT13001("noColumns operators have no column")
 }
 
+func (noColumns) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
+}
+
 func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }

@@ -65,16 +65,8 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("tried to add group by to a table")
-	}
-	offset, err := addColumn(ctx, to, expr.Expr)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return to, offset, nil
+func (to *Table) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
+	return nil, vterrors.VT13001("did not expect this method to be called")
 }
 
 func (to *Table) FindCol(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {

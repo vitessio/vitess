@@ -56,14 +56,10 @@ func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return l, nil
 }
 
-func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := l.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	l.Source = newSrc
-	return l, offset, nil
+func (l *Limit) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return l.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
+
 func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	return l.Source.FindCol(ctx, expr)
 }
