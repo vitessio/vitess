@@ -45331,6 +45331,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest prevent_cross_cell_promotion */
         prevent_cross_cell_promotion?: (boolean|null);
+
+        /** EmergencyReparentShardRequest wait_for_all_tablets */
+        wait_for_all_tablets?: (boolean|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -45359,6 +45362,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest prevent_cross_cell_promotion. */
         public prevent_cross_cell_promotion: boolean;
+
+        /** EmergencyReparentShardRequest wait_for_all_tablets. */
+        public wait_for_all_tablets: boolean;
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.

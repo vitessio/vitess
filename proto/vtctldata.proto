@@ -464,6 +464,9 @@ message EmergencyReparentShardRequest {
   // PreventCrossCellPromotion is used to only promote the new primary from the same cell
   // as the failed primary.
   bool prevent_cross_cell_promotion = 6;
+  // WaitForAllTablets makes ERS wait for a response from all the tablets before proceeding.
+  // Useful when all the tablets are up and reachable.
+  bool wait_for_all_tablets = 7;
 }
 
 message EmergencyReparentShardResponse {
