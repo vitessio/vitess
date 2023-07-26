@@ -17,11 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -78,8 +76,6 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 
 	runWithLoad := true
-	var cancelLoad context.CancelFunc
-	var loadCtx context.Context
 
 	// Now setup the customer2 keyspace so we can do a partial
 	// move tables for one of the two shards: 80-.
@@ -96,14 +92,13 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	err := tstWorkflowExec(t, defaultCellName, wfName, sourceKs, targetKs,
 		"customer,loadtest", workflowActionCreate, "", shard, "")
 	require.NoError(t, err)
-
+	var lg *loadGenerator
 	if runWithLoad { // start load after routing rules are set, otherwise we end up with ambiguous tables
-		loadCtx, cancelLoad = context.WithCancel(context.Background())
-		//defer func() { stopLoad(t, cancelLoad) }()
+		lg = newLoadGenerator(t, vc)
 		go func() {
-			startLoad(t, loadCtx)
+			lg.start()
 		}()
-		time.Sleep(2 * time.Second) // wait for enough records to be inserted by startLoad
+		lg.waitForCount(1000)
 	}
 
 	targetTab1 = vc.getPrimaryTablet(t, targetKs, shard)
@@ -259,7 +254,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	// target side (customer2).
 	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
 
-	stopLoad(t, cancelLoad)
+	lg.stop()
 
 	// Cancel both reverse workflows (as we've done the cutover), which should
 	// clean up both the global routing rules and the shard routing rules.
