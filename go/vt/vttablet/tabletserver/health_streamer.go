@@ -208,13 +208,13 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, err error, serving bool) {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimestamp time.Time, lag time.Duration, err error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
 	hs.state.Target.TabletType = tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		hs.state.TabletExternallyReparentedTimestamp = terTimestamp.Unix()
+		hs.state.TabletExternallyReparentedTimestamp = ptsTimestamp.Unix()
 	} else {
 		hs.state.TabletExternallyReparentedTimestamp = 0
 	}

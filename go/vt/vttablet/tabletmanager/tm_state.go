@@ -264,7 +264,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		return nil
 	}
 
-	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
+	ptsTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -277,7 +277,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		// always return error from 'SetServingType' and 'applyDenyList' to our client. It is up to them to handle it accordingly.
 		// UpdateLock is called from 'ChangeTabletType', 'Open' and 'RefreshFromTopoInfo'. For 'Open' and 'RefreshFromTopoInfo' we don't need
 		// to propagate error to client hence no changes there but we will propagate error from 'ChangeTabletType' to client.
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, false, reason); err != nil {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
 			log.Errorf(errStr)
 			// No need to short circuit. Apply all steps and return error in the end.
@@ -326,7 +326,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 
 	// Open TabletServer last so that it advertises serving after all other services are up.
 	if reason == "" {
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, true, ""); err != nil {
 			errStr := fmt.Sprintf("Cannot start query service: %v", err)
 			log.Errorf(errStr)
 			returnErr = vterrors.Wrapf(err, errStr)
