@@ -162,8 +162,8 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1m",
 			"--throttle_metrics_query", "select 1 from dual",
 			"--throttle_metrics_threshold", "1.5",
-			"--throttle_check_as_check_self", "false",
-			"--throttler-config-via-topo", "true",
+			"--throttle_check_as_check_self=false",
+			"--throttler-config-via-topo=true",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
