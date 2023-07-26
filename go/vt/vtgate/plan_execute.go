@@ -37,7 +37,7 @@ type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bind
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time) bool {
-	timeout := 5 * time.Second
+	timeout := 30 * time.Second
 	pollingInterval := 10 * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	ticker := time.NewTicker(pollingInterval)

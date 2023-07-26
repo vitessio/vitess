@@ -7,7 +7,7 @@ failing queries in the tablet gateway layer in vtgate. When a query fails, the r
 
 To assist in diagnosing the root cause a _KeyspaceEventWatcher_ (aka KEW) was introduced. This runs in a goroutine and
 watches the SrvKeyspace: if there is a change to the keyspace partitions in the topo it is considered that there is a
-resharding in progress.
+resharding operation in progress.
 
 The buffering logic subscribes to the keyspace event watcher.
 

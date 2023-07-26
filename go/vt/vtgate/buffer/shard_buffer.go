@@ -502,13 +502,13 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	switch {
 	case moveTablesSwitched:
 		reason = stopMoveTablesSwitchingTraffic
-		msg = "MoveTables has switched writes"
+		msg = stopMoveTablesSwitchingTrafficMessage
 	case stillServing:
 		reason = stopFailoverEndDetected
-		msg = "a primary promotion has been detected"
+		msg = stopFailoverEndDetectedMessage
 	default:
 		reason = stopShardMissing
-		msg = "the keyspace has been resharded"
+		msg = stopShardMissingMessage
 	}
 	sb.stopBufferingLocked(reason, msg)
 }

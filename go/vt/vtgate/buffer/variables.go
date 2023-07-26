@@ -113,6 +113,10 @@ const (
 	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
 	stopShutdown                    stopReason = "Shutdown"
 	stopMoveTablesSwitchingTraffic  stopReason = "MoveTablesSwitchedTraffic"
+
+	stopMoveTablesSwitchingTrafficMessage = "MoveTables has switched writes"
+	stopFailoverEndDetectedMessage        = "a primary promotion has been detected"
+	stopShardMissingMessage               = "the keyspace has been resharded"
 )
 
 // evictedReason is used in "requestsEvicted" as "Reason" label.

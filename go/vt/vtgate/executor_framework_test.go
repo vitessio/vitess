@@ -176,9 +176,6 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	// FIXME: This sleep seems to fix a lot of tests that are failing due to the change in this PR.
-	// For now keeping the sleep to confirm in CI. We need to replace this by waiting for whatever race this fixes.
-	// time.Sleep(1 * time.Second)
 	return executor, sbc1, sbc2, sbclookup
 }
 

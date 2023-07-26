@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -27,7 +29,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	loadCtx, cancelLoad := context.WithCancel(context.Background())
 	go func() {
