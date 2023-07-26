@@ -160,27 +160,3 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
 }
-
-func TestNewTxThrottler(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, t.Name())
-
-	{
-		// disabled
-		config.EnableTxThrottler = false
-		throttler := NewTxThrottler(env, nil)
-		throttlerImpl, _ := throttler.(*txThrottler)
-		assert.NotNil(t, throttlerImpl)
-	}
-	{
-		// enabled
-		config.EnableTxThrottler = true
-		config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
-		config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
-		throttler := NewTxThrottler(env, nil)
-		throttlerImpl, _ := throttler.(*txThrottler)
-		assert.NotNil(t, throttlerImpl)
-		assert.Equal(t, []string{"cell1", "cell2"}, throttlerImpl.healthCheckCells)
-		assert.Nil(t, throttlerImpl.state)
-	}
-}

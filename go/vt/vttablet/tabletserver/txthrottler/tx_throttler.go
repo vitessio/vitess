@@ -138,10 +138,6 @@ type txThrottler struct {
 	target     *querypb.Target
 	topoServer *topo.Server
 
-	// healthCheckCells stores the cell names in which running vttablets will be monitored for
-	// replication lag.
-	healthCheckCells []string
-
 	// stats
 	throttlerRunning          *stats.Gauge
 	topoWatchers              *stats.GaugesWithSingleLabel
@@ -182,7 +178,6 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	return &txThrottler{
 		env:              env,
 		topoServer:       topoServer,
-		healthCheckCells: env.Config().TxThrottlerHealthCheckCells,
 		throttlerRunning: env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
 		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel("TransactionThrottlerTopoWatchers", "transaction throttler topology watchers", "cell"),
 		healthChecksReadTotal: env.Exporter().NewCountersWithMultiLabels("TransactionThrottlerHealthchecksRead", "transaction throttler healthchecks read",
@@ -281,11 +276,11 @@ func newTxThrottlerState(env tabletenv.Env, txThrottler *txThrottler, target *qu
 		throttler:   t,
 		txThrottler: txThrottler,
 	}
-	createTxThrottlerHealthCheck(txThrottler, state, target.Cell)
+	createTxThrottlerHealthCheck(env, txThrottler.topoServer, state, target.Cell)
 
 	state.topologyWatchers = make(
-		map[string]TopologyWatcherInterface, len(txThrottler.healthCheckCells))
-	for _, cell := range txThrottler.healthCheckCells {
+		map[string]TopologyWatcherInterface, len(env.Config().TxThrottlerHealthCheckCells))
+	for _, cell := range env.Config().TxThrottlerHealthCheckCells {
 		state.topologyWatchers[cell] = topologyWatcherFactory(
 			txThrottler.topoServer,
 			state.healthCheck,
@@ -300,10 +295,10 @@ func newTxThrottlerState(env tabletenv.Env, txThrottler *txThrottler, target *qu
 	return state, nil
 }
 
-func createTxThrottlerHealthCheck(txThrottler *txThrottler, result *txThrottlerState, cell string) {
+func createTxThrottlerHealthCheck(env tabletenv.Env, topoServer *topo.Server, result *txThrottlerState, cell string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result.stopHealthCheck = cancel
-	result.healthCheck = healthCheckFactory(txThrottler.topoServer, cell, txThrottler.healthCheckCells)
+	result.healthCheck = healthCheckFactory(topoServer, cell, env.Config().TxThrottlerHealthCheckCells)
 	ch := result.healthCheck.Subscribe()
 	go func(ctx context.Context) {
 		for {
