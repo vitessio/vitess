@@ -84,7 +84,8 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 
 func TestTabletGatewayShuffleTablets(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
-	tg := NewTabletGateway(context.Background(), hc, nil, "local")
+	ts := &fakeTopoServer{}
+	tg := NewTabletGateway(context.Background(), hc, ts, "local")
 
 	ts1 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell1", "host1"),
@@ -154,7 +155,8 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
-	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
+	ts := &fakeTopoServer{}
+	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
 
 	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	_, err := tg.Execute(context.Background(), target, "query", nil, 1, 0, nil)
@@ -174,7 +176,8 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
-	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
+	ts := &fakeTopoServer{}
+	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
 
 	// no tablet
 	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
@@ -241,7 +244,8 @@ func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *q
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
-	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
+	ts := &fakeTopoServer{}
+	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
 
 	// retry error - no retry
 	sc1 := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)

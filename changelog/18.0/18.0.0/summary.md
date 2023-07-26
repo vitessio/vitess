@@ -53,7 +53,11 @@ Throttler related `vttablet` flags:
 - `--throttle_metrics_query` is deprecated and will be removed in `v19.0`
 - `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
-- `--throttler-config-via-topo` is deprecated after asummed `true` in `v17.0`. It will be removed in a future version.
+- `--throttler-config-via-topo` is deprecated after assumed `true` in `v17.0`. It will be removed in a future version.
+
+Buffering related `vtgate` flags:
+
+- `--buffer_implementation` is deprecated and will be removed in `v19.0`
 
 VTGate flag:
 
