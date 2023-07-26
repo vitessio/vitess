@@ -2,14 +2,7 @@
   {
     "comment": "prepare statement with select",
     "query": "prepare prep from 'select * from user where id = ?'",
-    "v3-plan": {
-      "QueryType": "PREPARE",
-      "Original": "prepare prep from 'select * from user where id = ?'",
-      "Instructions": {
-        "OperatorType": "Rows"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'select * from user where id = ?'",
       "Instructions": {
@@ -51,14 +44,7 @@
   {
     "comment": "prepare statement with user defined variable",
     "query": "prepare prep from @prep_stmt",
-    "v3-plan": {
-      "QueryType": "PREPARE",
-      "Original": "prepare prep from @prep_stmt",
-      "Instructions": {
-        "OperatorType": "Rows"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "PREPARE",
       "Original": "prepare prep from @prep_stmt",
       "Instructions": {
@@ -82,34 +68,7 @@
   {
     "comment": "execute one param statement",
     "query": "execute prep_one_param using @foo",
-    "v3-plan": {
-      "QueryType": "EXECUTE",
-      "Original": "execute prep_one_param using @foo",
-      "Instructions": {
-        "OperatorType": "EXECUTE",
-        "Parameters": [
-          "foo"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where id = :v1",
-            "Table": "`user`",
-            "Values": [
-              ":v1"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "EXECUTE",
       "Original": "execute prep_one_param using @foo",
       "Instructions": {
@@ -143,35 +102,7 @@
   {
     "comment": "execute in param statement",
     "query": "execute prep_in_param using @x, @y",
-    "v3-plan": {
-      "QueryType": "EXECUTE",
-      "Original": "execute prep_in_param using @x, @y",
-      "Instructions": {
-        "OperatorType": "EXECUTE",
-        "Parameters": [
-          "x",
-          "y"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where id in ::__vals",
-            "Table": "`user`",
-            "Values": [
-              "(:v1, :v2)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "EXECUTE",
       "Original": "execute prep_in_param using @x, @y",
       "Instructions": {
@@ -206,28 +137,7 @@
   {
     "comment": "execute no param statement",
     "query": "execute prep_no_param",
-    "v3-plan": {
-      "QueryType": "EXECUTE",
-      "Original": "execute prep_no_param",
-      "Instructions": {
-        "OperatorType": "EXECUTE",
-        "Parameters": null,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "EXECUTE",
       "Original": "execute prep_no_param",
       "Instructions": {
@@ -270,14 +180,7 @@
   {
     "comment": "prepare a dual query",
     "query": "prepare prep_dual from 'select 1+?, 10/?'",
-    "v3-plan": {
-      "QueryType": "PREPARE",
-      "Original": "prepare prep_dual from 'select 1+?, 10/?'",
-      "Instructions": {
-        "OperatorType": "Rows"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "PREPARE",
       "Original": "prepare prep_dual from 'select 1+?, 10/?'",
       "Instructions": {

@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
@@ -257,6 +258,156 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	}
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
+	}
+
+	tme.targetKeyspace = "ks2"
+	return tme
+}
+
+// newTestTablePartialMigrater creates a test tablet migrater
+// specifially for partial or shard by shard migrations.
+// The shards must be the same on the source and target, and we
+// must be moving a subset of them.
+// fmtQuery should be of the form: 'select a, b %s group by a'.
+// The test will Sprintf a from clause and where clause as needed.
+func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shardsToMove []string, fmtQuery string) *testMigraterEnv {
+	require.Greater(t, len(shards), 1, "shard by shard migrations can only be done on sharded keyspaces")
+	tme := &testMigraterEnv{}
+	tme.ts = memorytopo.NewServer("cell1", "cell2")
+	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.wr.sem = semaphore.NewWeighted(1)
+	tme.sourceShards = shards
+	tme.targetShards = shards
+	tme.tmeDB = fakesqldb.New(t)
+	expectVDiffQueries(tme.tmeDB)
+	tabletID := 10
+	for _, shard := range tme.sourceShards {
+		tme.sourcePrimaries = append(tme.sourcePrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks1", shard)))
+		tabletID += 10
+
+		_, sourceKeyRange, err := topo.ValidateShardName(shard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
+	}
+	tpChoiceTablet := tme.sourcePrimaries[0].Tablet
+	tpChoice = &testTabletPickerChoice{
+		keyspace: tpChoiceTablet.Keyspace,
+		shard:    tpChoiceTablet.Shard,
+	}
+	for _, shard := range tme.targetShards {
+		tme.targetPrimaries = append(tme.targetPrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks2", shard)))
+		tabletID += 10
+
+		_, targetKeyRange, err := topo.ValidateShardName(shard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
+	}
+
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "hash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+	err := tme.ts.SaveVSchema(ctx, "ks1", vs)
+	require.NoError(t, err)
+	err = tme.ts.SaveVSchema(ctx, "ks2", vs)
+	require.NoError(t, err)
+	err = tme.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err)
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
+	require.NoError(t, err)
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"}, false)
+	require.NoError(t, err)
+
+	tme.startTablets(t)
+	tme.createDBClients(ctx, t)
+	tme.setPrimaryPositions()
+	now := time.Now().Unix()
+
+	for i, shard := range shards {
+		for _, shardToMove := range shardsToMove {
+			var streamInfoRows []string
+			var streamExtInfoRows []string
+			if shardToMove == shard {
+				bls := &binlogdatapb.BinlogSource{
+					Keyspace: "ks1",
+					Shard:    shard,
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match:  "t1",
+							Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t1 where in_keyrange('%s')", shard)),
+						}, {
+							Match:  "t2",
+							Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t2 where in_keyrange('%s')", shard)),
+						}},
+					},
+				}
+				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", i+1, bls))
+				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||||0", i+1, now, now))
+			}
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
+			tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|message|cell|tablet_types",
+				"int64|varchar|varchar|varchar|varchar"),
+				streamInfoRows...))
+			tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
+				streamExtInfoRows...))
+			tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
+				streamExtInfoRows...))
+		}
+	}
+
+	for i, shard := range shards {
+		for _, shardToMove := range shardsToMove {
+			var streamInfoRows []string
+			if shardToMove == shard {
+				bls := &binlogdatapb.BinlogSource{
+					Keyspace: "ks2",
+					Shard:    shard,
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match:  "t1",
+							Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t1 where in_keyrange('%s')", shard)),
+						}, {
+							Match:  "t2",
+							Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t2 where in_keyrange('%s')", shard)),
+						}},
+					},
+				}
+				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", i+1, bls))
+				tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
+			}
+			tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|message|cell|tablet_types",
+				"int64|varchar|varchar|varchar|varchar"),
+				streamInfoRows...),
+			)
+		}
 	}
 
 	tme.targetKeyspace = "ks2"

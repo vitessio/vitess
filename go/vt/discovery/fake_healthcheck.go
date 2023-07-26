@@ -365,6 +365,18 @@ func (fhc *FakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
 	return res
 }
 
+// BroadcastAll broadcasts all the tablets' healthchecks
+func (fhc *FakeHealthCheck) BroadcastAll() {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	for _, item := range fhc.items {
+		fhc.ch <- simpleCopy(item.ts)
+	}
+}
+
 func simpleCopy(th *TabletHealth) *TabletHealth {
 	return &TabletHealth{
 		Conn:                 th.Conn,

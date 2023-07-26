@@ -51,6 +51,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -153,7 +154,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 
 	tablePKs := []*binlogdatapb.TableLastPK{{
 		TableName: "t1",
-		Lastpk:    getQRFromLastPK([]*query.Field{{Name: "id11", Type: query.Type_INT32}}, []sqltypes.Value{sqltypes.NewInt32(10)}),
+		Lastpk:    getQRFromLastPK([]*query.Field{{Name: "id11", Type: query.Type_INT32, Charset: collations.CollationBinaryID, Flags: uint32(query.MySqlFlag_BINARY_FLAG | query.MySqlFlag_NUM_FLAG)}}, []sqltypes.Value{sqltypes.NewInt32(10)}),
 	}}
 	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "t1"}}, tablePKs, []string{"t1"}, ""})
 
@@ -407,7 +408,7 @@ func getRule(table string) *binlogdatapb.Rule {
 }
 
 func getTablePK(table string, idx int) *binlogdatapb.TableLastPK {
-	fields := []*query.Field{{Name: fmt.Sprintf("id%d1", idx), Type: query.Type_INT32}}
+	fields := []*query.Field{{Name: fmt.Sprintf("id%d1", idx), Type: query.Type_INT32, Charset: collations.CollationBinaryID, Flags: uint32(query.MySqlFlag_BINARY_FLAG | query.MySqlFlag_NUM_FLAG)}}
 
 	lastPK := []sqltypes.Value{sqltypes.NewInt32(0)}
 	return &binlogdatapb.TableLastPK{
@@ -479,7 +480,7 @@ var expectedEvents = []string{
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"880\"}}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"990\"}}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"10100\"}}}",
-	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{fields:{name:\"id11\" type:INT32} rows:{lengths:2 values:\"10\"}}}}",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{fields:{name:\"id11\" type:INT32 charset:63 flags:53251} rows:{lengths:2 values:\"10\"}}}}",
 	"type:COMMIT",
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
@@ -508,7 +509,7 @@ var expectedEvents = []string{
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:3 values:\"9180\"}}}",
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"10200\"}}}",
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"11220\"}}}",
-	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\" lastpk:{fields:{name:\"id21\" type:INT32} rows:{lengths:2 values:\"11\"}}}}",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\" lastpk:{fields:{name:\"id21\" type:INT32 charset:63 flags:53251} rows:{lengths:2 values:\"11\"}}}}",
 	"type:COMMIT",
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\"} completed:true}",
@@ -536,7 +537,7 @@ var expectedEvents = []string{
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"8240\"}}}",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"9270\"}}}",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:2 lengths:3 values:\"10300\"}}}",
-	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t3\" lastpk:{fields:{name:\"id31\" type:INT32} rows:{lengths:2 values:\"10\"}}}}",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t3\" lastpk:{fields:{name:\"id31\" type:INT32 charset:63 flags:53251} rows:{lengths:2 values:\"10\"}}}}",
 	"type:COMMIT",
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t3\"} completed:true}",

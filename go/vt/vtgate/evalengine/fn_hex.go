@@ -17,10 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
-	"encoding/hex"
-	"math/bits"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -45,11 +43,11 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	var encoded []byte
 	switch arg := arg.(type) {
 	case *evalBytes:
-		encoded = hexEncodeBytes(arg.bytes)
+		encoded = hex.EncodeBytes(arg.bytes)
 	case evalNumeric:
-		encoded = hexEncodeUint(uint64(arg.toInt64().i))
+		encoded = hex.EncodeUint(uint64(arg.toInt64().i))
 	default:
-		encoded = hexEncodeBytes(arg.ToRawBytes())
+		encoded = hex.EncodeBytes(arg.ToRawBytes())
 	}
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
 		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
@@ -93,64 +91,6 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	return ctype{Type: t, Col: col}, nil
 }
 
-const hextable = "0123456789ABCDEF"
-
-func hexEncodeBytes(src []byte) []byte {
-	j := 0
-	dst := make([]byte, len(src)*2)
-	for _, v := range src {
-		dst[j] = hextable[v>>4]
-		dst[j+1] = hextable[v&0x0f]
-		j += 2
-	}
-	return dst
-}
-
-func hexEncodeUint(u uint64) []byte {
-	var a [16 + 1]byte
-	i := len(a)
-	shift := uint(bits.TrailingZeros(uint(16))) & 7
-	b := uint64(16)
-	m := uint(16) - 1 // == 1<<shift - 1
-
-	for u >= b {
-		i--
-		a[i] = hextable[uint(u)&m]
-		u >>= shift
-	}
-
-	// u < base
-	i--
-	a[i] = hextable[uint(u)]
-	return a[i:]
-}
-
-func hexDecodeUint(u uint64) []byte {
-	if u == 0 {
-		return []byte{0}
-	}
-	var decoded []byte
-	for u > 0 {
-		c1 := u % 10
-		c2 := u % 100 / 10
-		decoded = append([]byte{byte(c1 + c2<<4)}, decoded...)
-		u /= 100
-	}
-	return decoded
-}
-
-func hexDecodedLen(src []byte) int {
-	return (len(src) + 1) / 2
-}
-
-func hexDecodeBytes(dst, src []byte) bool {
-	if len(src)&1 == 1 {
-		src = append([]byte{'0'}, src...)
-	}
-	_, err := hex.Decode(dst, src)
-	return err == nil
-}
-
 type builtinUnhex struct {
 	CallExpr
 }
@@ -162,14 +102,14 @@ func hexDecodeJSON(j *evalJSON) ([]byte, bool) {
 	case json.TypeNumber:
 		u, ok := j.Uint64()
 		if ok {
-			return hexDecodeUint(u), true
+			return hex.DecodeUint(u), true
 		} else {
 			return nil, false
 		}
 	default:
 		b := j.ToRawBytes()
-		decoded := make([]byte, hexDecodedLen(b))
-		ok := hexDecodeBytes(decoded, b)
+		decoded := make([]byte, hex.DecodedLen(b))
+		ok := hex.DecodeBytes(decoded, b)
 		if !ok {
 			return nil, false
 		}
@@ -189,8 +129,8 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 	var decoded []byte
 	switch arg := arg.(type) {
 	case *evalBytes:
-		decoded = make([]byte, hexDecodedLen(arg.bytes))
-		ok := hexDecodeBytes(decoded, arg.bytes)
+		decoded = make([]byte, hex.DecodedLen(arg.bytes))
+		ok := hex.DecodeBytes(decoded, arg.bytes)
 		if !ok {
 			return nil, nil
 		}
@@ -198,13 +138,13 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 		if arg.i < 0 {
 			return nil, nil
 		}
-		decoded = hexDecodeUint(uint64(arg.i))
+		decoded = hex.DecodeUint(uint64(arg.i))
 	case *evalUint64:
-		decoded = hexDecodeUint(arg.u)
+		decoded = hex.DecodeUint(arg.u)
 	case *evalDecimal:
 		b := arg.ToRawBytes()
-		decoded = make([]byte, hexDecodedLen(b))
-		ok := hexDecodeBytes(decoded, b)
+		decoded = make([]byte, hex.DecodedLen(b))
+		ok := hex.DecodeBytes(decoded, b)
 		if !ok {
 			return nil, nil
 		}
@@ -213,7 +153,7 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 		if f != float64(int64(f)) {
 			return nil, nil
 		}
-		decoded = hexDecodeUint(uint64(arg.f))
+		decoded = hex.DecodeUint(uint64(arg.f))
 	case *evalJSON:
 		var ok bool
 		decoded, ok = hexDecodeJSON(arg)
@@ -222,8 +162,8 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 		}
 	default:
 		b := evalToBinary(arg)
-		decoded = make([]byte, hexDecodedLen(b.bytes))
-		ok := hexDecodeBytes(decoded, b.bytes)
+		decoded = make([]byte, hex.DecodedLen(b.bytes))
+		ok := hex.DecodeBytes(decoded, b.bytes)
 		if !ok {
 			return nil, nil
 		}

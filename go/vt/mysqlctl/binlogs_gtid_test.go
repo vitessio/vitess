@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -581,4 +582,298 @@ func TestFindPITRPath(t *testing.T) {
 			assert.Equal(t, expected, got, "expected: %s, got: %s", expected.String(), got.String())
 		})
 	}
+}
+
+func TestFindPITRToTimePath(t *testing.T) {
+	generatePosition := func(posRange string) mysql.Position {
+		return mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
+	}
+	fullManifest := func(backupPos string, timeStr string) *BackupManifest {
+		_, err := ParseRFC3339(timeStr)
+		require.NoError(t, err)
+		return &BackupManifest{
+			BackupMethod: builtinBackupEngineName,
+			Position:     generatePosition(backupPos),
+			BackupTime:   timeStr,
+			FinishedTime: timeStr,
+		}
+	}
+	incrementalManifest := func(backupPos string, backupFromPos string, firstTimestampStr string, lastTimestampStr string) *BackupManifest {
+		firstTimestamp, err := ParseRFC3339(firstTimestampStr)
+		require.NoError(t, err)
+		lastTimestamp, err := ParseRFC3339(lastTimestampStr)
+		require.NoError(t, err)
+
+		return &BackupManifest{
+			Position:     generatePosition(backupPos),
+			FromPosition: generatePosition(backupFromPos),
+			Incremental:  true,
+			IncrementalDetails: &IncrementalBackupDetails{
+				FirstTimestamp: FormatRFC3339(firstTimestamp),
+				LastTimestamp:  FormatRFC3339(lastTimestamp),
+			},
+		}
+	}
+
+	fullManifests := map[string]*BackupManifest{
+		"1-50":  fullManifest("1-50", "2020-02-02T02:20:20.000000Z"),
+		"1-5":   fullManifest("1-5", "2020-02-02T02:01:20.000000Z"),
+		"1-80":  fullManifest("1-80", "2020-02-02T03:31:00.000000Z"),
+		"1-70":  fullManifest("1-70", "2020-02-02T03:10:01.000000Z"),
+		"1-70b": fullManifest("1-70", "2020-02-02T03:10:11.000000Z"),
+	}
+	fullBackups := []*BackupManifest{
+		fullManifests["1-50"],
+		fullManifests["1-5"],
+		fullManifests["1-80"],
+		fullManifests["1-70"],
+		fullManifests["1-70b"],
+	}
+	incrementalManifests := map[string]*BackupManifest{
+		"1-34:1-5":  incrementalManifest("1-34", "1-5", "2020-02-02T02:01:44.000000Z", "2020-02-02T02:17:00.000000Z"),
+		"1-38:1-34": incrementalManifest("1-38", "1-34", "2020-02-02T02:17:05.000000Z", "2020-02-02T02:18:00.000000Z"),
+		"1-52:1-35": incrementalManifest("1-52", "1-35", "2020-02-02T02:17:59.000000Z", "2020-02-02T02:22:00.000000Z"),
+		"1-60:1-50": incrementalManifest("1-60", "1-50", "2020-02-02T02:20:21.000000Z", "2020-02-02T02:47:20.000000Z"),
+		"1-70:1-60": incrementalManifest("1-70", "1-60", "2020-02-02T02:47:20.000000Z", "2020-02-02T03:10:00.700000Z"),
+		"1-82:1-70": incrementalManifest("1-82", "1-70", "2020-02-02T03:10:11.000000Z", "2020-02-02T03:39:09.000000Z"),
+		"1-92:1-79": incrementalManifest("1-92", "1-79", "2020-02-02T03:37:07.000000Z", "2020-02-02T04:04:04.000000Z"),
+		"1-95:1-89": incrementalManifest("1-95", "1-89", "2020-02-02T03:59:05.000000Z", "2020-02-02T04:15:00.000000Z"),
+	}
+	incrementalBackups := []*BackupManifest{
+		incrementalManifests["1-34:1-5"],
+		incrementalManifests["1-38:1-34"],
+		incrementalManifests["1-52:1-35"],
+		incrementalManifests["1-60:1-50"],
+		incrementalManifests["1-70:1-60"],
+		incrementalManifests["1-82:1-70"],
+		incrementalManifests["1-92:1-79"],
+		incrementalManifests["1-95:1-89"],
+	}
+	incrementalBackupName := func(manifest *BackupManifest) string {
+		for k, v := range incrementalManifests {
+			if v == manifest {
+				return k
+			}
+		}
+		return "unknown"
+	}
+	tt := []struct {
+		name                       string
+		restoreToTimestamp         string
+		purgedGTID                 string
+		incrementalBackups         []*BackupManifest
+		expectFullManifest         *BackupManifest
+		expectIncrementalManifests []*BackupManifest
+		expectError                string
+	}{
+		{
+			name:                       "full is enough",
+			restoreToTimestamp:         "2020-02-02T02:01:20.000000Z",
+			expectFullManifest:         fullManifests["1-5"],
+			expectIncrementalManifests: []*BackupManifest{},
+		},
+		{
+			name:                       "full is still enough",
+			restoreToTimestamp:         "2020-02-02T02:01:41.000000Z",
+			expectFullManifest:         fullManifests["1-5"],
+			expectIncrementalManifests: []*BackupManifest{},
+		},
+		{
+			name:               "full is just not enough",
+			restoreToTimestamp: "2020-02-02T02:01:44.000000Z",
+			expectFullManifest: fullManifests["1-5"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-34:1-5"],
+			},
+		},
+		{
+			name:               "just one",
+			restoreToTimestamp: "2020-02-02T02:20:21.000000Z",
+			expectFullManifest: fullManifests["1-50"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-52:1-35"],
+			},
+		},
+		{
+			name:               "two",
+			restoreToTimestamp: "2020-02-02T02:23:23.000000Z",
+			expectFullManifest: fullManifests["1-50"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-52:1-35"],
+				incrementalManifests["1-60:1-50"],
+			},
+		},
+		{
+			name:               "three",
+			restoreToTimestamp: "2020-02-02T02:55:55.000000Z",
+			expectFullManifest: fullManifests["1-50"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-52:1-35"],
+				incrementalManifests["1-60:1-50"],
+				incrementalManifests["1-70:1-60"],
+			},
+		},
+		{
+			name:               "still three",
+			restoreToTimestamp: "2020-02-02T03:10:00.600000Z",
+			expectFullManifest: fullManifests["1-50"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-52:1-35"],
+				incrementalManifests["1-60:1-50"],
+				incrementalManifests["1-70:1-60"],
+			},
+		},
+		{
+			name:               "and still three",
+			restoreToTimestamp: "2020-02-02T03:10:00.700000Z",
+			expectFullManifest: fullManifests["1-50"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-52:1-35"],
+				incrementalManifests["1-60:1-50"],
+				incrementalManifests["1-70:1-60"],
+			},
+		},
+		{
+			name:               "and still three, exceeding binlog last timestamp",
+			restoreToTimestamp: "2020-02-02T03:10:00.800000Z",
+			expectFullManifest: fullManifests["1-50"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-52:1-35"],
+				incrementalManifests["1-60:1-50"],
+				incrementalManifests["1-70:1-60"],
+			},
+		},
+		{
+			name:                       "next backup 1-70",
+			restoreToTimestamp:         "2020-02-02T03:10:01.000000Z",
+			expectFullManifest:         fullManifests["1-70"],
+			expectIncrementalManifests: []*BackupManifest{},
+		},
+		{
+			name:               "next backup 1-70 with one binlog",
+			restoreToTimestamp: "2020-02-02T03:10:13.000000Z",
+			expectFullManifest: fullManifests["1-70"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-82:1-70"],
+			},
+		},
+		{
+			name:               "next backup 1-70b, included first binlog",
+			restoreToTimestamp: "2020-02-02T03:10:11.000000Z",
+			expectFullManifest: fullManifests["1-70b"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-82:1-70"],
+			},
+		},
+		{
+			name:               "next backup 1-70b, still included first binlog",
+			restoreToTimestamp: "2020-02-02T03:20:11.000000Z",
+			expectFullManifest: fullManifests["1-70b"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-82:1-70"],
+			},
+		},
+		{
+			name:               "1-80 and two binlogs",
+			restoreToTimestamp: "2020-02-02T04:00:00.000000Z",
+			expectFullManifest: fullManifests["1-80"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-82:1-70"],
+				incrementalManifests["1-92:1-79"],
+			},
+		},
+		{
+			name:               "1-80 and all remaining binlogs",
+			restoreToTimestamp: "2020-02-02T04:10:00.000000Z",
+			expectFullManifest: fullManifests["1-80"],
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifests["1-82:1-70"],
+				incrementalManifests["1-92:1-79"],
+				incrementalManifests["1-95:1-89"],
+			},
+		},
+		{
+			name:               "no incremental backup reaches this timestamp",
+			restoreToTimestamp: "2020-02-02T07:07:07.000000Z",
+			expectError:        "no path found",
+		},
+		{
+			name:               "sooner than any full backup",
+			restoreToTimestamp: "2020-02-02T01:59:59.000000Z",
+			expectError:        "no full backup",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.incrementalBackups == nil {
+				tc.incrementalBackups = incrementalBackups
+			}
+			for i := range fullBackups {
+				var err error
+				fullBackup := fullBackups[i]
+				fullBackup.PurgedPosition, err = mysql.ParsePosition(mysql.Mysql56FlavorID, tc.purgedGTID)
+				require.NoError(t, err)
+				defer func() {
+					fullBackup.PurgedPosition = mysql.Position{}
+				}()
+			}
+			var manifests []*BackupManifest
+			manifests = append(manifests, fullBackups...)
+			manifests = append(manifests, tc.incrementalBackups...)
+
+			restoreToTime, err := ParseRFC3339(tc.restoreToTimestamp)
+			require.NoError(t, err)
+			require.False(t, restoreToTime.IsZero())
+
+			path, err := FindPITRToTimePath(restoreToTime, manifests)
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectError)
+				return
+			}
+			require.NoError(t, err)
+			require.NotEmpty(t, path)
+			// the path always consists of one full backup and zero or more incremental backups
+			fullBackup := path[0]
+			require.False(t, fullBackup.Incremental)
+			for _, manifest := range path[1:] {
+				require.True(t, manifest.Incremental)
+			}
+			assert.Equal(t, tc.expectFullManifest.Position.GTIDSet, fullBackup.Position.GTIDSet)
+			if tc.expectIncrementalManifests == nil {
+				tc.expectIncrementalManifests = []*BackupManifest{}
+			}
+			expected := BackupManifestPath(tc.expectIncrementalManifests)
+			got := BackupManifestPath(path[1:])
+			gotNames := []string{}
+			for _, manifest := range got {
+				gotNames = append(gotNames, incrementalBackupName(manifest))
+			}
+			assert.Equal(t, expected, got, "got names: %v", gotNames)
+		})
+	}
+	t.Run("iterate all valid timestamps", func(t *testing.T) {
+		var manifests []*BackupManifest
+		manifests = append(manifests, fullBackups...)
+		manifests = append(manifests, incrementalBackups...)
+
+		firstTimestamp, err := ParseRFC3339(fullManifests["1-5"].BackupTime)
+		require.NoError(t, err)
+		lastTimestamp, err := ParseRFC3339(incrementalManifests["1-95:1-89"].IncrementalDetails.LastTimestamp)
+		require.NoError(t, err)
+
+		for restoreToTime := firstTimestamp; !restoreToTime.After(lastTimestamp); restoreToTime = restoreToTime.Add(10 * time.Second) {
+			testName := fmt.Sprintf("restore to %v", restoreToTime)
+			t.Run(testName, func(t *testing.T) {
+				path, err := FindPITRToTimePath(restoreToTime, manifests)
+				require.NoError(t, err)
+				require.NotEmpty(t, path)
+				fullBackup := path[0]
+				require.False(t, fullBackup.Incremental)
+				for _, manifest := range path[1:] {
+					require.True(t, manifest.Incremental)
+				}
+			})
+		}
+	})
 }

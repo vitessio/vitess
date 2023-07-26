@@ -43,17 +43,24 @@ type MysqlctldProcess struct {
 	process            *exec.Cmd
 	exit               chan error
 	InitMysql          bool
+	SocketFile         string
 	exitSignalReceived bool
 }
 
 // InitDb executes mysqlctld command to add cell info
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
-	tmpProcess := exec.Command(
-		mysqlctld.Binary,
+	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
+	}
+	if mysqlctld.SocketFile != "" {
+		args = append(args, "--socket_file", mysqlctld.SocketFile)
+	}
+	tmpProcess := exec.Command(
+		mysqlctld.Binary,
+		args...,
 	)
 	return tmpProcess.Run()
 }
@@ -64,11 +71,17 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		return fmt.Errorf("process is already running")
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
-	tempProcess := exec.Command(
-		mysqlctld.Binary,
+	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+	}
+	if mysqlctld.SocketFile != "" {
+		args = append(args, "--socket_file", mysqlctld.SocketFile)
+	}
+	tempProcess := exec.Command(
+		mysqlctld.Binary,
+		args...,
 	)
 
 	tempProcess.Args = append(tempProcess.Args, mysqlctld.ExtraArgs...)

@@ -146,7 +146,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
-		v := local.Value()
+		v := local.Value(collations.Default())
 		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID

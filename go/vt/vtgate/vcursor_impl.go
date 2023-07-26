@@ -342,13 +342,7 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	var keyspaces = make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
-	for _, ks := range vc.vschema.Keyspaces {
-		keyspaces = append(keyspaces, ks.Keyspace)
-	}
-	sort.Slice(keyspaces, func(i, j int) bool {
-		return keyspaces[i].Name < keyspaces[j].Name
-	})
+	keyspaces := vc.getSortedServingKeyspaces()
 
 	// Look for any sharded keyspace if present, otherwise take the first keyspace,
 	// sorted alphabetically
@@ -360,18 +354,38 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// getSortedServingKeyspaces gets the sorted serving keyspaces
+func (vc *vcursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
+	var keyspaces []*vindexes.Keyspace
+
+	if vc.resolver != nil && vc.resolver.GetGateway() != nil {
+		keyspaceNames := vc.resolver.GetGateway().GetServingKeyspaces()
+		for _, ksName := range keyspaceNames {
+			ks, exists := vc.vschema.Keyspaces[ksName]
+			if exists {
+				keyspaces = append(keyspaces, ks.Keyspace)
+			}
+		}
+	}
+
+	if len(keyspaces) == 0 {
+		for _, ks := range vc.vschema.Keyspaces {
+			keyspaces = append(keyspaces, ks.Keyspace)
+		}
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+	return keyspaces
+}
+
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	kss := vc.vschema.Keyspaces
-	keys := make([]string, 0, len(kss))
-	for ks := range kss {
-		keys = append(keys, ks)
-	}
-	sort.Strings(keys)
+	keyspaces := vc.getSortedServingKeyspaces()
 
-	return kss[keys[0]].Keyspace, nil
+	return keyspaces[0], nil
 }
 
 // SysVarSetEnabled implements the ContextVSchema interface

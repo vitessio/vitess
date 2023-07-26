@@ -704,6 +704,15 @@ func (v *Value) MarshalTime() string {
 	return ""
 }
 
+func (v *Value) marshalFloat(dst []byte) []byte {
+	f, _ := v.Float64()
+	buf := format.FormatFloat(f)
+	if bytes.IndexByte(buf, '.') == -1 && bytes.IndexByte(buf, 'e') == -1 {
+		buf = append(buf, '.', '0')
+	}
+	return append(dst, buf...)
+}
+
 // MarshalTo appends marshaled v to dst and returns the result.
 func (v *Value) MarshalTo(dst []byte) []byte {
 	switch v.t {
@@ -744,12 +753,7 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 		return dst
 	case TypeNumber:
 		if v.NumberType() == NumberTypeFloat {
-			f, _ := v.Float64()
-			buf := format.FormatFloat(f)
-			if bytes.IndexByte(buf, '.') == -1 && bytes.IndexByte(buf, 'e') == -1 {
-				buf = append(buf, '.', '0')
-			}
-			return append(dst, buf...)
+			return v.marshalFloat(dst)
 		}
 		return append(dst, v.s...)
 	case TypeBoolean:

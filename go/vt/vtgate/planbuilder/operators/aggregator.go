@@ -42,7 +42,9 @@ type (
 		Grouping     []GroupBy
 		Aggregations []Aggr
 
-		// We support a single distinct aggregation per aggregator. It is stored here
+		// We support a single distinct aggregation per aggregator. It is stored here.
+		// When planning the ordering that the OrderedAggregate will require,
+		// this needs to be the last ORDER BY expression
 		DistinctExpr sqlparser.Expr
 
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
@@ -354,7 +356,7 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 			if _, srcIsAlsoAggr := a.Source.(*Aggregator); srcIsAlsoAggr {
 				return 0, vterrors.VT12001("aggregation on top of aggregation not supported")
 			}
-			return -1, vterrors.VT13001(fmt.Sprintf("aggregation column on wrong index: want: %d, got: %d", colIdx, offset))
+			return -1, vterrors.VT12001(fmt.Sprintf("failed to plan aggregation on: %s", sqlparser.String(aggr.Original)))
 		}
 
 		a.Source = newSrc

@@ -34,7 +34,7 @@ type HashCode = uint64
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type) (HashCode, error) {
-	e, err := valueToEvalCast(v, coerceType)
+	e, err := valueToEvalCast(v, coerceType, collation)
 	if err != nil {
 		return 0, err
 	}
@@ -93,10 +93,10 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			f = float64(uval)
 		case v.IsFloat() || v.IsDecimal():
 			f, err = v.ToFloat64()
-		case v.IsQuoted():
+		case v.IsText(), v.IsBinary():
 			f, _ = fastparse.ParseFloat64(v.RawStr())
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
 		}
 		if err != nil {
 			return err
@@ -107,10 +107,12 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 	case sqltypes.IsSigned(coerceTo):
 		var i int64
 		var err error
+		var neg bool
 
 		switch {
 		case v.IsSigned():
 			i, err = v.ToInt64()
+			neg = i < 0
 		case v.IsUnsigned():
 			var uval uint64
 			uval, err = v.ToUint64()
@@ -122,7 +124,8 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 				return ErrHashCoercionIsNotExact
 			}
 			i = int64(fval)
-		case v.IsQuoted():
+			neg = i < 0
+		case v.IsText(), v.IsBinary():
 			i, err = fastparse.ParseInt64(v.RawStr(), 10)
 			if err != nil {
 				fval, _ := fastparse.ParseFloat64(v.RawStr())
@@ -131,13 +134,14 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 				}
 				i, err = int64(fval), nil
 			}
+			neg = i < 0
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
 		}
 		if err != nil {
 			return err
 		}
-		if i < 0 {
+		if neg {
 			hash.Write16(hashPrefixIntegralNegative)
 		} else {
 			hash.Write16(hashPrefixIntegralPositive)
@@ -147,11 +151,12 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 	case sqltypes.IsUnsigned(coerceTo):
 		var u uint64
 		var err error
-
+		var neg bool
 		switch {
 		case v.IsSigned():
 			var ival int64
 			ival, err = v.ToInt64()
+			neg = ival < 0
 			u = uint64(ival)
 		case v.IsUnsigned():
 			u, err = v.ToUint64()
@@ -161,23 +166,29 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			if fval != math.Trunc(fval) || fval < 0 {
 				return ErrHashCoercionIsNotExact
 			}
+			neg = fval < 0
 			u = uint64(fval)
-		case v.IsQuoted():
+		case v.IsText(), v.IsBinary():
 			u, err = fastparse.ParseUint64(v.RawStr(), 10)
 			if err != nil {
 				fval, _ := fastparse.ParseFloat64(v.RawStr())
 				if fval != math.Trunc(fval) || fval < 0 {
 					return ErrHashCoercionIsNotExact
 				}
+				neg = fval < 0
 				u, err = uint64(fval), nil
 			}
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
 		}
 		if err != nil {
 			return err
 		}
-		hash.Write16(hashPrefixIntegralPositive)
+		if neg {
+			hash.Write16(hashPrefixIntegralNegative)
+		} else {
+			hash.Write16(hashPrefixIntegralPositive)
+		}
 		hash.Write64(u)
 
 	case sqltypes.IsBinary(coerceTo):
@@ -211,13 +222,30 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
 		}
 		hash.Write16(hashPrefixDecimal)
 		dec.Hash(hash)
-
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
+		return nullsafeHashcode128Default(hash, v, collation, coerceTo)
 	}
 	return nil
+}
+
+func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type) error {
+	// Slow path to handle all other types. This uses the generic
+	// logic for value casting to ensure we match MySQL here.
+	e, err := valueToEvalCast(v, coerceTo, collation)
+	if err != nil {
+		return err
+	}
+	switch e := e.(type) {
+	case nil:
+		hash.Write16(hashPrefixNil)
+		return nil
+	case hashable:
+		e.Hash(hash)
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", coerceTo)
 }

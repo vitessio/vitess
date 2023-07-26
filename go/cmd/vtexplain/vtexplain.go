@@ -63,7 +63,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&replicationMode, "replication-mode", replicationMode, "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	fs.BoolVar(&normalize, "normalize", normalize, "Whether to enable vtgate normalization")
 	fs.StringVar(&dbName, "dbname", dbName, "Optional database target to override normal routing")
-	fs.StringVar(&plannerVersionStr, "planner-version", plannerVersionStr, "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner")
+	fs.StringVar(&plannerVersionStr, "planner-version", plannerVersionStr, "Sets the default planner to use. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 	fs.IntVar(&numShards, "shards", numShards, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
 	fs.StringVar(&executionMode, "execution-mode", executionMode, "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
 	fs.StringVar(&outputMode, "output-mode", outputMode, "Output in human-friendly text or json")
@@ -113,8 +113,8 @@ func main() {
 
 func parseAndRun() error {
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerVersionStr)
-	if plannerVersionStr != "" && plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
-		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4 or an empty value to use the default planner", plannerVersionStr)
+	if plannerVersionStr != "" && plannerVersion != querypb.ExecuteOptions_Gen4 {
+		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid value is Gen4 or an empty value to use the default planner", plannerVersionStr)
 	}
 
 	sql, err := getFileParam(sqlFlag, sqlFileFlag, "sql", true)

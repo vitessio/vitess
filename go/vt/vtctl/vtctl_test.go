@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -138,7 +139,7 @@ Dry run: Skipping update of VSchema`,
 }
 
 // TestMoveTables tests the the MoveTables client command
-// via the commandVRWorkflow() cmd handler.
+// via the commandVReplicationWorkflow() cmd handler.
 // This currently only tests the Progress action (which is
 // a parent of the Show action) but it can be used to test
 // other actions as well.
@@ -348,7 +349,7 @@ func TestMoveTables(t *testing.T) {
 			subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 			expectGlobalResults()
 			tt.expectResults()
-			err := commandVRWorkflow(ctx, env.wr, subFlags, tt.args, tt.workflowType)
+			err := commandVReplicationWorkflow(ctx, env.wr, subFlags, tt.args, tt.workflowType)
 			require.NoError(t, err)
 			if strings.HasPrefix(tt.want, "/") {
 				require.Regexp(t, tt.want[1:], env.cmdlog.String())
@@ -357,6 +358,112 @@ func TestMoveTables(t *testing.T) {
 			}
 			env.cmdlog.Clear()
 			env.tmc.clearResults()
+		})
+	}
+}
+
+func TestGenerateOnlineDDLQuery(t *testing.T) {
+	tcases := []struct {
+		cmd          string
+		arg          string
+		allSupported bool
+		expectError  bool
+		expectQuery  string
+	}{
+		{
+			"launch",
+			"all",
+			true,
+			false,
+			"alter vitess_migration launch all",
+		},
+		{
+			"launch-all",
+			"",
+			true,
+			false,
+			"alter vitess_migration launch all",
+		},
+		{
+			"launch",
+			"718169cc_1fea_11ee_82b1_0a43f95f28a3",
+			true,
+			false,
+			"alter vitess_migration '718169cc_1fea_11ee_82b1_0a43f95f28a3' launch",
+		},
+		{
+			"cancel",
+			"718169cc_1fea_11ee_82b1_0a43f95f28a3",
+			true,
+			false,
+			"alter vitess_migration '718169cc_1fea_11ee_82b1_0a43f95f28a3' cancel",
+		},
+		{
+			"unthrottle",
+			"718169cc_1fea_11ee_82b1_0a43f95f28a3",
+			true,
+			false,
+			"alter vitess_migration '718169cc_1fea_11ee_82b1_0a43f95f28a3' unthrottle",
+		},
+		{
+			"unthrottle",
+			"",
+			true,
+			true,
+			"",
+		},
+		{
+			"unthrottle-all",
+			"all",
+			true,
+			true,
+			"",
+		},
+		{
+			"unthrottle-all",
+			"718169cc_1fea_11ee_82b1_0a43f95f28a3",
+			true,
+			true,
+			"",
+		},
+		{
+			"retry",
+			"718169cc_1fea_11ee_82b1_0a43f95f28a3",
+			false,
+			false,
+			"alter vitess_migration '718169cc_1fea_11ee_82b1_0a43f95f28a3' retry",
+		},
+		{
+			"retry-all",
+			"718169cc_1fea_11ee_82b1_0a43f95f28a3",
+			false,
+			true,
+			"",
+		},
+		{
+			"retry-all",
+			"",
+			false,
+			true,
+			"",
+		},
+		{
+			"retry",
+			"all",
+			false,
+			true,
+			"",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%s %s", tcase.cmd, tcase.arg), func(t *testing.T) {
+			query, err := generateOnlineDDLQuery(tcase.cmd, tcase.arg, tcase.allSupported)
+			if tcase.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tcase.expectQuery, query)
+			}
 		})
 	}
 }
