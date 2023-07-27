@@ -2,6 +2,8 @@
 
 ### Table of Contents
 
+- **[Known Issues](#known-issues)**
+  - [Schema-initialization stuck on semi-sync ACKs while upgrading to v17.0.0](#schema-init-upgrade)
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
@@ -36,6 +38,17 @@
     - [Deprecated Stats](#deprecated-stats)
     - [Deprecated `vtgr`](#deprecated-vtgr)
     - [Deprecated `k8stopo`](#deprecated-k8stopo)
+
+
+## <a id="known-issues"/>Known Issues
+### <a id="schema-init-upgrade"/>Schema-initialization stuck on semi-sync ACKs while upgrading to `v17.0.0`
+
+During upgrades from `<= v16.x.x` to `v17.0.0`, as part of `PromoteReplica` call, the schema-init realizes that there are schema diffs to apply and ends up writing to the database if [semi-sync](https://vitess.io/docs/17.0/reference/features/mysql-replication/#semi-sync) is enabled, all of these writes get blocked indefinitely.
+Eventually, `PromoteReplica` fails, and this fails the entire PRS call.
+
+A fix for this issue was merged on `release-17.0` in [PR#13441](https://github.com/vitessio/vitess/pull/13411), read the [corresponding bug report to learn more](https://github.com/vitessio/vitess/issues/13426).
+
+This issue is addressed in the `>= v17.0.1` patch releases.
 
 
 ## <a id="major-changes"/>Major Changes
