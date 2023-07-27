@@ -23,6 +23,7 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -88,7 +89,7 @@ func (ic *IdentifierCache) Get(keyspace string) (string, error) {
 			return "", err
 		}
 		if sdbname == "" {
-			sdbname = DefaultName
+			sdbname = dbname.DefaultName
 		}
 
 		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))

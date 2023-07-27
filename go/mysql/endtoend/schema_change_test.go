@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -42,9 +42,9 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	clearQuery := sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query
-	insertQuery := sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query
-	detectQuery := sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query
+	clearQuery := sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, dbname.GetIdentifier()).Query
+	insertQuery := sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, dbname.GetIdentifier()).Query
+	detectQuery := sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, dbname.GetIdentifier()).Query
 
 	tests := []struct {
 		name    string

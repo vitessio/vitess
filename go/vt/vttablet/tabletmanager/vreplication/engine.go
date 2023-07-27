@@ -38,7 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -376,7 +376,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetIdentifier()), 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", dbname.GetIdentifier()), 1); err != nil {
 		return nil, err
 	}
 

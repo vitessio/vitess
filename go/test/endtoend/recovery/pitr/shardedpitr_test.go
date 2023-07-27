@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 )
 
 var (
@@ -304,8 +304,8 @@ func performResharding(t *testing.T) {
 	require.NoError(t, err)
 
 	waitTimeout := 30 * time.Second
-	shard0Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, sidecardb.DefaultName, waitTimeout)
-	shard1Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, sidecardb.DefaultName, waitTimeout)
+	shard0Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, dbname.DefaultName, waitTimeout)
+	shard1Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, dbname.DefaultName, waitTimeout)
 
 	waitForNoWorkflowLag(t, clusterInstance, "ks.reshardWorkflow")
 

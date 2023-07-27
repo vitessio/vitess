@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 		// For upgrade/downgrade tests.
 		if vtgateVer < 17 || vttabletVer < 17 {
 			// Then only the default sidecarDBName is supported.
-			sidecarDBName = sidecardb.DefaultName
+			sidecarDBName = dbname.DefaultName
 		}
 
 		// Start topo server

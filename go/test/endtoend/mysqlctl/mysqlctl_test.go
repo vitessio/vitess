@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 )
 
 var (
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecardb.DefaultName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, dbname.DefaultName); err != nil {
 			return 1
 		}
 

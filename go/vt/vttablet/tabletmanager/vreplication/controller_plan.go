@@ -19,7 +19,7 @@ package vreplication
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -85,7 +85,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != dbname.GetName() && tableName.Qualifier.String() != dbname.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
@@ -154,7 +154,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != dbname.GetName() && tableName.Qualifier.String() != dbname.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
@@ -177,7 +177,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, upd.Where)
+	buf1.Myprintf("select id from %s.%s%v", dbname.GetIdentifier(), vreplicationTableName, upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -211,7 +211,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != dbname.GetName() && tableName.Qualifier.String() != dbname.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
@@ -235,7 +235,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, del.Where)
+	buf1.Myprintf("select id from %s.%s%v", dbname.GetIdentifier(), vreplicationTableName, del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -257,10 +257,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
-	buf3.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), copyStateTableName, copyStateWhere)
+	buf3.Myprintf("delete from %s.%s%v", dbname.GetIdentifier(), copyStateTableName, copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
-	buf4.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), postCopyActionTableName, copyStateWhere)
+	buf4.Myprintf("delete from %s.%s%v", dbname.GetIdentifier(), postCopyActionTableName, copyStateWhere)
 
 	return &controllerPlan{
 		opcode:            deleteQuery,
@@ -285,7 +285,7 @@ func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != dbname.GetName() && tableName.Qualifier.String() != dbname.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {

@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -339,7 +339,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
-		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
+		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, dbname.GetIdentifier()).Query)
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
@@ -438,7 +438,7 @@ func (throttler *Throttler) Open() error {
 	// The query needs to be dynamically built because the sidecar database name
 	// is not known when the TabletServer is created, which in turn creates the
 	// Throttler.
-	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
+	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, dbname.GetIdentifier()).Query) // default
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)

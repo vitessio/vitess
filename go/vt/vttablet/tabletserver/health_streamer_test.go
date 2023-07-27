@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -227,8 +227,8 @@ func TestReloadSchema(t *testing.T) {
 			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 			configs := config.DB
 
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, dbname.GetIdentifier()).Query+".*", &sqltypes.Result{})
+			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, dbname.GetIdentifier()).Query+".*", &sqltypes.Result{})
 			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"UNIX_TIMESTAMP(now())",
@@ -339,8 +339,8 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, dbname.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, dbname.GetIdentifier()).Query+".*", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP(now())",

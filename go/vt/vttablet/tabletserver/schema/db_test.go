@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
@@ -134,7 +134,7 @@ func TestGetChangedViewNames(t *testing.T) {
 	require.NoError(t, err)
 
 	// Success
-	query := fmt.Sprintf(detectViewChange, sidecardb.GetIdentifier())
+	query := fmt.Sprintf(detectViewChange, dbname.GetIdentifier())
 	db.AddQuery(query, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("table_name", "varchar"),
 		"lead",
@@ -331,7 +331,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 		},
 	}
 
-	query := fmt.Sprintf(readTableCreateTimes, sidecardb.GetIdentifier())
+	query := fmt.Sprintf(readTableCreateTimes, dbname.GetIdentifier())
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)

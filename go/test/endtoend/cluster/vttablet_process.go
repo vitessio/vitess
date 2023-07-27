@@ -38,7 +38,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -519,7 +519,7 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
 	if sidecarDBName == "" {
-		sidecarDBName = sidecardb.DefaultName
+		sidecarDBName = dbname.DefaultName
 	}
 	// Escape it if/as needed
 	ics := sqlparser.NewIdentifierCS(sidecarDBName)

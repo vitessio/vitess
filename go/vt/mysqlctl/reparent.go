@@ -21,15 +21,15 @@ This file contains the reparenting methods for mysqlctl.
 */
 
 import (
+	"context"
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
 )
 
 // GenerateInitialBinlogEntry is used to create a binlog entry when
@@ -50,7 +50,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 	}
 	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%d, '%s', '%s', '%s')", sidecardb.GetIdentifier(),
+		"VALUES (%d, '%s', '%s', '%s')", dbname.GetIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr).Query
 }
 
@@ -58,7 +58,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
 	return sqlparser.BuildParsedQuery("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%d",
-		sidecardb.GetIdentifier(), timeCreatedNS).Query
+		dbname.GetIdentifier(), timeCreatedNS).Query
 }
 
 // WaitForReparentJournal will wait until the context is done for

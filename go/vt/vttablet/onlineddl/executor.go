@@ -55,7 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -292,7 +292,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	defer conn.Recycle()
 
 	// Replace any provided sidecar DB qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	uq, err := sqlparser.ReplaceTableQualifiers(query, dbname.DefaultName, dbname.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +327,7 @@ func (e *Executor) Open() error {
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 
-	if sidecardb.GetName() != sidecardb.DefaultName {
+	if dbname.GetName() != dbname.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
 	} else {
 		e.execQuery = e.executeQuery

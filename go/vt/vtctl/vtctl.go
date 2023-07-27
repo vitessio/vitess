@@ -98,6 +98,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
@@ -119,7 +120,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -1819,7 +1819,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
 	durabilityPolicy := subFlags.String("durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
-	sidecarDBName := subFlags.String("sidecar-db-name", sidecardb.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
+	sidecarDBName := subFlags.String("sidecar-db-name", dbname.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

@@ -31,7 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -365,7 +365,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	// fully initialize and perform certain operations (e.g.
 	// OnlineDDL or VReplication workflows) if they are using a
 	// different sidecar database name.
-	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
+	ksi := topodatapb.Keyspace{SidecarDbName: dbname.GetName()}
 	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}

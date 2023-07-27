@@ -26,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
@@ -355,7 +355,7 @@ func TestMoveTables(t *testing.T) {
 	_, err := ws.MoveTablesCreate(ctx, req)
 	require.NoError(t, err)
 
-	tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+	tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", dbname.DefaultName), &sqltypes.Result{}, nil)
 	_, err = ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:                 req.TargetKeyspace,
 		Workflow:                 req.Workflow,
@@ -391,7 +391,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	tablet := tenv.addTablet(tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecardb.DefaultName, ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, dbname.DefaultName, ":wf")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
 	}
@@ -500,9 +500,9 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			tt.request.State = binlogdatapb.VReplicationWorkflowState_Stopped
 
 			// These are the same for each RPC call.
-			tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+			tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", dbname.DefaultName), &sqltypes.Result{}, nil)
 			tenv.vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
-			tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+			tenv.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", dbname.DefaultName), &sqltypes.Result{}, nil)
 			tenv.vrdbClient.ExpectRequest(idQuery, idRes, nil)
 
 			// This is our expected query, which will also short circuit

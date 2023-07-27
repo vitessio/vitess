@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -55,7 +55,7 @@ type dbClientImplWithSidecarDBReplacement struct {
 
 // NewDBClient creates a DBClient instance
 func NewDBClient(params dbconfigs.Connector) DBClient {
-	if sidecardb.GetName() != sidecardb.DefaultName {
+	if dbname.GetName() != dbname.DefaultName {
 		return &dbClientImplWithSidecarDBReplacement{
 			dbClientImpl{dbConfig: params},
 		}
@@ -141,7 +141,7 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	uq, err := sqlparser.ReplaceTableQualifiers(query, dbname.DefaultName, dbname.GetName())
 	if err != nil {
 		return nil, err
 	}
