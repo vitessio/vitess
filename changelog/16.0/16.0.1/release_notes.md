@@ -4,13 +4,12 @@
 
 ### Schema-initialization stuck on semi-sync ACKs while upgrading to `v16.0.1`
 
-During upgrades from `v15.x.x` to `v16.0.1`, as part of `PromoteReplica` call, the schema-init realizes that there are schema diffs to apply and ends up writing to the database.
-The issue is that if semi-sync is enabled, all of these writes get blocked indefinitely.
+During upgrades from `<= v15.x.x` to `v16.0.1`, as part of `PromoteReplica` call, the schema-init realizes that there are schema diffs to apply and ends up writing to the database if [semi-sync](https://vitess.io/docs/16.0/reference/features/mysql-replication/#semi-sync) is enabled, all of these writes get blocked indefinitely.
 Eventually, `PromoteReplica` fails, and this fails the entire PRS call.
 
 A fix for this issue was merged on `release-16.0` in [PR#13441](https://github.com/vitessio/vitess/pull/13441), read the [corresponding bug report to learn more](https://github.com/vitessio/vitess/issues/13426).
 
-This issue will be addressed in the `v16.0.3` patch release.
+This issue is fixed  in `v16.0.3` and later patch releases.
 
 ## Major Changes
 
