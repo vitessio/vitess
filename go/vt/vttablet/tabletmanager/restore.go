@@ -176,6 +176,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, logutil.ProtoToTime(request.BackupTime))
 	}
 
+	startTime := logutil.ProtoToTime(request.BackupTime)
+	if startTime.IsZero() {
+		startTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
+	}
+
 	params := mysqlctl.RestoreParams{
 		Cnf:                 tm.Cnf,
 		Mysqld:              tm.MysqlDaemon,
@@ -186,7 +191,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DbName:              topoproto.TabletDbName(tablet),
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
-		StartTime:           logutil.ProtoToTime(request.BackupTime),
+		StartTime:           startTime,
 		DryRun:              request.DryRun,
 	}
 	if request.RestoreToPos != "" {
