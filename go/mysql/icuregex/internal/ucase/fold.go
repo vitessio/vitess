@@ -83,7 +83,7 @@ func FoldRunes(str []rune) []rune {
   - U+0130 has no simple case folding (simple-case-folds to itself).
 */
 func Fold(c rune) rune {
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	if !hasException(props) {
 		if isUpperOrTitle(props) {
 			c += getDelta(props)
@@ -130,7 +130,7 @@ func Fold(c rune) rune {
 
 func FullFolding(c rune) (rune, []uint16) {
 	result := c
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 
 	if !hasException(props) {
 		if isUpperOrTitle(props) {
@@ -222,7 +222,7 @@ func getDelta(props uint16) rune {
 }
 
 func getExceptions(props uint16) []uint16 {
-	return ucase.exceptions[props>>4:]
+	return exceptions()[props>>4:]
 }
 
 func hasSlot(flags uint16, idx int32) bool {
