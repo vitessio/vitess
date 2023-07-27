@@ -48,7 +48,7 @@ type VSchemaManager struct {
 
 // SchemaInfo is an interface to schema tracker.
 type SchemaInfo interface {
-	Tables(ks string) map[string][]vindexes.Column
+	Tables(ks string) map[string]*vindexes.TableInfo
 	Views(ks string) map[string]sqlparser.SelectStatement
 }
 
@@ -199,14 +199,14 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 				ks.Tables[tblName] = &vindexes.Table{
 					Name:                    sqlparser.NewIdentifierCS(tblName),
 					Keyspace:                ks.Keyspace,
-					Columns:                 columns,
+					Columns:                 columns.Columns,
 					ColumnListAuthoritative: true,
 				}
 				continue
 			}
 			if !vTbl.ColumnListAuthoritative {
 				// if we found the matching table and the vschema view of it is not authoritative, then we just update the columns of the table
-				vTbl.Columns = columns
+				vTbl.Columns = columns.Columns
 				vTbl.ColumnListAuthoritative = true
 			}
 		}

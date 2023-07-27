@@ -111,6 +111,10 @@ type Table struct {
 	// Source is a keyspace-qualified table name that points to the source of a
 	// reference table. Only applicable for tables with Type set to "reference".
 	Source *Source `json:"source,omitempty"`
+
+	// // Parent and Child Foreign key constraints for this table.
+	// ParentFKs []ForeignKeyConstraint
+	// ChildFKs  []ForeignKeyConstraint
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -130,6 +134,20 @@ type ColumnVindex struct {
 	cost     int
 	partial  bool
 	backfill bool
+}
+
+type ForeignKeyConstraint struct {
+	Table             *Table
+	Columns           sqlparser.Columns
+	ReferencedColumns sqlparser.Columns
+	Match             sqlparser.MatchAction
+	OnDelete          sqlparser.ReferenceAction
+	OnUpdate          sqlparser.ReferenceAction
+}
+
+type TableInfo struct {
+	Columns     []Column
+	ForeignKeys []*sqlparser.ForeignKeyDefinition
 }
 
 // IsUnique is used to tell whether the ColumnVindex
