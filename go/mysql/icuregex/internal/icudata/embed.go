@@ -80,17 +80,17 @@ var Nfkc []byte
 // case folding.
 // This is used for property checks of characters about composition.
 //
-//go:embed nfkc_cf.nrm
-var NfkcCf []byte
+//Unused: go:embed nfkc_cf.nrm
+//var NfkcCf []byte
 
 // BrkChar is used for matching against character break
 // characters in regular expressions.
 //
-//go:embed char.brk
-var BrkChar []byte
+//Unused: go:embed char.brk
+//var BrkChar []byte
 
 // BrkWord is used for matching against word break
 // characters in regular expressions.
 //
-//go:embed word.brk
-var BrkWord []byte
+//Unused: go:embed word.brk
+///var BrkWord []byte

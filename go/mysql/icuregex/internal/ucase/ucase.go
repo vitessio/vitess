@@ -22,19 +22,8 @@ limitations under the License.
 package ucase
 
 import (
-	"errors"
-
-	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
-	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
 	"vitess.io/vitess/go/mysql/icuregex/internal/utf16"
-	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
-
-var ucase struct {
-	trie       *utrie.UTrie2
-	exceptions []uint16
-	unfold     []uint16
-}
 
 const (
 	ixIndexTop      = 0
@@ -46,68 +35,13 @@ const (
 	ixTop           = 16
 )
 
-func readData(bytes *udata.Bytes) error {
-	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.DataFormat[0] == 0x63 &&
-			info.DataFormat[1] == 0x41 &&
-			info.DataFormat[2] == 0x53 &&
-			info.DataFormat[3] == 0x45 &&
-			info.FormatVersion[0] == 4
-	})
-	if err != nil {
-		return err
-	}
-
-	count := int32(bytes.Uint32())
-	if count < ixTop {
-		return errors.New("indexes[0] too small in ucase.icu")
-	}
-
-	indexes := make([]int32, count)
-	indexes[0] = count
-
-	for i := int32(1); i < count; i++ {
-		indexes[i] = int32(bytes.Uint32())
-	}
-
-	ucase.trie, err = utrie.UTrie2FromBytes(bytes)
-	if err != nil {
-		return err
-	}
-
-	expectedTrieLength := indexes[ixTrieSize]
-	trieLength := ucase.trie.SerializedLength()
-
-	if trieLength > expectedTrieLength {
-		return errors.New("ucase.icu: not enough bytes for the trie")
-	}
-
-	bytes.Skip(expectedTrieLength - trieLength)
-
-	if n := indexes[ixExcLength]; n > 0 {
-		ucase.exceptions = bytes.Uint16Slice(n)
-	}
-	if n := indexes[ixUnfoldLength]; n > 0 {
-		ucase.unfold = bytes.Uint16Slice(n)
-	}
-
-	return nil
-}
-
-func init() {
-	b := udata.NewBytes(icudata.UCase)
-	if err := readData(b); err != nil {
-		panic(err)
-	}
-}
-
 type propertySet interface {
 	AddRune(ch rune)
 }
 
 func AddPropertyStarts(sa propertySet) {
 	/* add the start code point of each same-value range of the trie */
-	ucase.trie.Enum(nil, func(start, _ rune, _ uint32) bool {
+	trie().Enum(nil, func(start, _ rune, _ uint32) bool {
 		sa.AddRune(start)
 		return true
 	})
@@ -162,7 +96,7 @@ func AddCaseClosure(c rune, sa propertySet) {
 		break
 	}
 
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	if !hasException(props) {
 		if getPropsType(props) != None {
 			/* add the one simple case mapping, no matter what type it is */
@@ -267,7 +201,7 @@ func IsSoftDotted(c rune) bool {
 
 /** @return UCASE_NO_DOT, UCASE_SOFT_DOTTED, UCASE_ABOVE, UCASE_OTHER_ACCENT */
 func getDotType(c rune) int32 {
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	if !hasException(props) {
 		return int32(props & dotMask)
 	}
@@ -276,7 +210,7 @@ func getDotType(c rune) int32 {
 }
 
 func IsCaseSensitive(c rune) bool {
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	if !hasException(props) {
 		return (props & sensitive) != 0
 	}
@@ -287,7 +221,7 @@ func IsCaseSensitive(c rune) bool {
 func ToFullLower(c rune) rune {
 	// The sign of the result has meaning, input must be non-negative so that it can be returned as is.
 	result := c
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	if !hasException(props) {
 		if isUpperOrTitle(props) {
 			result = c + getDelta(props)
@@ -340,7 +274,7 @@ func ToFullTitle(c rune) rune {
 
 func toUpperOrTitle(c rune, upperNotTitle bool) rune {
 	result := c
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	if !hasException(props) {
 		if getPropsType(props) == Lower {
 			result = c + getDelta(props)
@@ -400,7 +334,7 @@ func toUpperOrTitle(c rune, upperNotTitle bool) rune {
 }
 
 func GetTypeOrIgnorable(c rune) int32 {
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	return int32(props & 7)
 }
 
@@ -416,7 +350,7 @@ const (
 const typeMask = 3
 
 func GetType(c rune) Type {
-	props := ucase.trie.Get16(c)
+	props := trie().Get16(c)
 	return getPropsType(props)
 }
 
