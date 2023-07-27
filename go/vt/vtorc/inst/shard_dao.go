@@ -43,7 +43,7 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 			primary_alias, primary_timestamp
 		from
 			vitess_shard
-		where keyspace = ? and shard=?
+		where keyspace=? and shard=?
 		`
 	args := sqlutils.Args(keyspaceName, shardName)
 	shardFound := false

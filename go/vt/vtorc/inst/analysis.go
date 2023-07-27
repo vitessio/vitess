@@ -102,8 +102,8 @@ type ReplicationAnalysis struct {
 	AnalyzedInstanceRegion       string
 	AnalyzedKeyspace             string
 	AnalyzedShard                string
-	// ShardPrimaryTimestamp is the primary term start time stored in the shard record.
-	ShardPrimaryTimestamp                     string
+	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
+	ShardPrimaryTermTimestamp                 string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool
