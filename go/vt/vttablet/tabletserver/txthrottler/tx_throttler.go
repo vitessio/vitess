@@ -72,7 +72,7 @@ type TxThrottler interface {
 	InitDBConfig(target *querypb.Target)
 	Open() (err error)
 	Close()
-	Throttle(priority int) (result bool)
+	Throttle(priority int, workload string) (result bool)
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -146,8 +146,8 @@ type txThrottler struct {
 	topoWatchers              *stats.GaugesWithSingleLabel
 	healthChecksReadTotal     *stats.CountersWithMultiLabels
 	healthChecksRecordedTotal *stats.CountersWithMultiLabels
-	requestsTotal             *stats.Counter
-	requestsThrottled         *stats.Counter
+	requestsTotal             *stats.CountersWithSingleLabel
+	requestsThrottled         *stats.CountersWithSingleLabel
 }
 
 // txThrottlerConfig holds the parameters that need to be
@@ -219,8 +219,8 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 			[]string{"cell", "DbType"}),
 		healthChecksRecordedTotal: env.Exporter().NewCountersWithMultiLabels("TransactionThrottlerHealthchecksRecorded", "transaction throttler healthchecks recorded",
 			[]string{"cell", "DbType"}),
-		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
-		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
+		requestsTotal:     env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerRequests", "transaction throttler requests", "workload"),
+		requestsThrottled: env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerThrottled", "transaction throttler requests throttled", "workload"),
 	}
 }
 
@@ -263,7 +263,7 @@ func (t *txThrottler) Close() {
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
 // successfully.
-func (t *txThrottler) Throttle(priority int) (result bool) {
+func (t *txThrottler) Throttle(priority int, workload string) (result bool) {
 	if !t.config.enabled {
 		return false
 	}
@@ -275,9 +275,9 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 	// are less likely to be throttled.
 	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
 
-	t.requestsTotal.Add(1)
+	t.requestsTotal.Add(workload, 1)
 	if result {
-		t.requestsThrottled.Add(1)
+		t.requestsThrottled.Add(workload, 1)
 	}
 
 	return result
