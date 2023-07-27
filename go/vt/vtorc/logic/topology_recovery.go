@@ -42,6 +42,7 @@ type RecoveryType string
 const (
 	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
+	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
 	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
 	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
 	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
@@ -79,6 +80,7 @@ const (
 	noRecoveryFunc recoveryFunction = iota
 	recoverGenericProblemFunc
 	recoverDeadPrimaryFunc
+	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
 	recoverLockedSemiSyncPrimaryFunc
 	electNewPrimaryFunc
@@ -202,9 +204,9 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Replicati
 	return true, topologyRecovery, nil
 }
 
-// recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
-// Returns true when action was taken.
-func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+// runEmergencyReparentOp runs a recovery for which we have to run ERS. Here waitForAllTablets is a boolean telling ERS whether it should wait for all the tablets
+// or is it okay to skip 1.
+func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, recoveryName string, waitForAllTablets bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	if !analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery {
 		return false, nil, nil
 	}
@@ -217,10 +219,10 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnal
 
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, true, true)
 	if topologyRecovery == nil {
-		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadPrimary.", analysisEntry.AnalyzedInstanceAlias))
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %v.", analysisEntry.AnalyzedInstanceAlias, recoveryName))
 		return false, nil, err
 	}
-	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	log.Infof("Analysis: %v, %v %+v", analysisEntry.Analysis, recoveryName, analysisEntry.AnalyzedInstanceAlias)
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
@@ -248,6 +250,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnal
 			IgnoreReplicas:            nil,
 			WaitReplicasTimeout:       time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
 			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
+			WaitAllTablets:            waitForAllTablets,
 		},
 	)
 	if err != nil {
@@ -257,16 +260,27 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnal
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(topoproto.TabletAliasString(ev.NewPrimary.Alias))
 	}
-	postErsCompletion(topologyRecovery, analysisEntry, promotedReplica)
+	postErsCompletion(topologyRecovery, analysisEntry, recoveryName, promotedReplica)
 	return true, topologyRecovery, err
 }
 
-func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
+// recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
+// Returns true when action was taken.
+func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverDeadPrimary", false)
+}
+
+// recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
+func recoverPrimaryTabletDeleted(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	return runEmergencyReparentOp(ctx, analysisEntry, "PrimaryTabletDeleted", true)
+}
+
+func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.ReplicationAnalysis, recoveryName string, promotedReplica *inst.Instance) {
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.InstanceAlias)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
-		_ = inst.AuditOperation("recover-dead-primary", analysisEntry.AnalyzedInstanceAlias, message)
-		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: successfully promoted %+v", promotedReplica.InstanceAlias))
+		_ = inst.AuditOperation(recoveryName, analysisEntry.AnalyzedInstanceAlias, message)
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v: successfully promoted %+v", recoveryName, promotedReplica.InstanceAlias))
 	}
 }
 
@@ -380,6 +394,15 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 			return recoverGenericProblemFunc
 		}
 		return recoverDeadPrimaryFunc
+	case inst.PrimaryTabletDeleted:
+		// If ERS is disabled, we have no way of repairing the cluster.
+		if !config.ERSEnabled() {
+			return noRecoveryFunc
+		}
+		if isInEmergencyOperationGracefulPeriod(tabletAlias) {
+			return recoverGenericProblemFunc
+		}
+		return recoverPrimaryTabletDeletedFunc
 	case inst.PrimaryHasPrimary:
 		return recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
@@ -424,6 +447,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return false
 	case recoverDeadPrimaryFunc:
 		return true
+	case recoverPrimaryTabletDeletedFunc:
+		return true
 	case recoverPrimaryHasPrimaryFunc:
 		return true
 	case recoverLockedSemiSyncPrimaryFunc:
@@ -450,6 +475,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return checkAndRecoverGenericProblem
 	case recoverDeadPrimaryFunc:
 		return recoverDeadPrimary
+	case recoverPrimaryTabletDeletedFunc:
+		return recoverPrimaryTabletDeleted
 	case recoverPrimaryHasPrimaryFunc:
 		return recoverPrimaryHasPrimary
 	case recoverLockedSemiSyncPrimaryFunc:
@@ -475,6 +502,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return CheckAndRecoverGenericProblemRecoveryName
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
+	case recoverPrimaryTabletDeletedFunc:
+		return RecoverPrimaryTabletDeletedRecoveryName
 	case recoverPrimaryHasPrimaryFunc:
 		return RecoverPrimaryHasPrimaryRecoveryName
 	case recoverLockedSemiSyncPrimaryFunc:
@@ -493,7 +522,7 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 // isClusterWideRecovery returns whether the given recovery is a cluster-wide recovery or not
 func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case recoverDeadPrimaryFunc, electNewPrimaryFunc:
+	case recoverDeadPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
 		return true
 	default:
 		return false
@@ -590,10 +619,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
 		log.Errorf("executeCheckAndRecoverFunction: Proceeding with %v recovery on %v validation after acquiring shard lock.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-		// The first step we have to do is refresh the keyspace information
+		// The first step we have to do is refresh the keyspace and shard information
 		// This is required to know if the durability policies have changed or not
-		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore
-		err := RefreshKeyspace(analysisEntry.AnalyzedKeyspace)
+		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore.
+		// Similarly, a new primary could have been elected in the mean-time that can cause
+		// a change in the recovery we run.
+		err = RefreshKeyspaceAndShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 		if err != nil {
 			return err
 		}
