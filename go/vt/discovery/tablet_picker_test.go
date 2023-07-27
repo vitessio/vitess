@@ -22,10 +22,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestPickPrimary(t *testing.T) {
@@ -479,6 +480,45 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
 }
 
+// TestPickFallbackType tests that when providing a list of tablet types to
+// pick from, with the list in preference order, that when the primary/first
+// type has no available healthy serving tablets that we select a healthy
+// serving tablet from the secondary/second type.
+func TestPickFallbackType(t *testing.T) {
+	cells := []string{"cell1", "cell2"}
+	localCell := cells[0]
+	tabletTypes := "replica,primary"
+	options := TabletPickerOptions{
+		TabletOrder: "InOrder",
+	}
+	te := newPickerTestEnv(t, cells)
+
+	// This one should be selected even though it's the secondary type
+	// as it is healthy and serving.
+	primaryTablet := addTablet(te, 100, topodatapb.TabletType_PRIMARY, localCell, true, true)
+	defer deleteTablet(t, te, primaryTablet)
+
+	// Replica tablet should not be selected as it is unhealthy.
+	replicaTablet := addTablet(te, 200, topodatapb.TabletType_REPLICA, localCell, false, false)
+	defer deleteTablet(t, te, replicaTablet)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryTablet.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
+	require.NoError(t, err)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel2()
+	tablet, err := tp.PickForStreaming(ctx2)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(primaryTablet, tablet), "Pick: %v, want %v", tablet, primaryTablet)
+}
+
 type pickerTestEnv struct {
 	t        *testing.T
 	keyspace string
@@ -527,17 +567,20 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell
 	err := te.topoServ.CreateTablet(context.Background(), tablet)
 	require.NoError(te.t, err)
 
-	if healthy {
-		_ = createFixedHealthConn(tablet, &querypb.StreamHealthResponse{
-			Serving: serving,
-			Target: &querypb.Target{
-				Keyspace:   te.keyspace,
-				Shard:      te.shard,
-				TabletType: tabletType,
-			},
-			RealtimeStats: &querypb.RealtimeStats{HealthError: ""},
-		})
+	shr := &querypb.StreamHealthResponse{
+		Serving: serving,
+		Target: &querypb.Target{
+			Keyspace:   te.keyspace,
+			Shard:      te.shard,
+			TabletType: tabletType,
+		},
+		RealtimeStats: &querypb.RealtimeStats{HealthError: "tablet is unhealthy"},
 	}
+	if healthy {
+		shr.RealtimeStats.HealthError = ""
+	}
+
+	_ = createFixedHealthConn(tablet, shr)
 
 	return tablet
 }
