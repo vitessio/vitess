@@ -507,6 +507,7 @@ func (c *Cluster) EmergencyFailoverShard(ctx context.Context, req *vtctldatapb.E
 	span.Annotate("new_primary", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("ignore_replicas", strings.Join(topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice(), ","))
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
+	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
 
 	if d, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout); ok && err == nil {
 		span.Annotate("wait_replicas_timeout", d.String())
