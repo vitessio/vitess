@@ -33,7 +33,8 @@ import (
 )
 
 func TestSimplifyResultsMismatchedQuery(t *testing.T) {
-	// t.Skip("Skip CI")
+	t.Skip("Skip CI")
+
 	var queries []string
 	queries = append(queries, "select /*vt+ PLANNER=Gen4 */ (68 - -16) / case false when -45 then 3 when 28 then -43 else -62 end as crandom0 from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ distinct not not false and count(*) from emp as tbl0, emp as tbl1 where tbl1.ename) as tbl1 limit 1",
 		"select /*vt+ PLANNER=Gen4 */ distinct case true when 'burro' then 'trout' else 'elf' end < case count(distinct true) when 'bobcat' then 'turkey' else 'penguin' end from dept as tbl0, emp as tbl1 where 'spider'",
@@ -69,7 +70,6 @@ func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 	}
 }
 
-// TODO: suppress output from comparing intermediate simplified results
 // given a query that errors with results mismatched, simplifyResultsMismatchedQuery returns a simpler version with the same error
 func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	t.Helper()

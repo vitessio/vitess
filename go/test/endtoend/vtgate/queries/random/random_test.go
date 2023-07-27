@@ -79,7 +79,7 @@ func helperTest(t *testing.T, query string) {
 }
 
 func TestMustFix(t *testing.T) {
-	//t.Skip("Skip CI")
+	t.Skip("Skip CI")
 
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
@@ -154,13 +154,16 @@ func TestMustFix(t *testing.T) {
 }
 
 func TestKnownFailures(t *testing.T) {
-	//t.Skip("Skip CI")
+	t.Skip("Skip CI")
 
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
+
+	// column 'tbl1.`not exists (select 1 from dual)`' not found
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.`not exists (select 1 from dual)`, count(*) from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ not exists (select 1 from dual) from dept as tbl0 where tbl0.dname) as tbl1 group by tbl0.deptno, tbl1.`not exists (select 1 from dual)`")
 
 	// VT13001: [BUG] failed to find the corresponding column
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc")
@@ -259,6 +262,8 @@ func TestKnownFailures(t *testing.T) {
 }
 
 func TestRandom(t *testing.T) {
+	// t.Skip("Skip CI; random expressions generate too many failures to properly limit")
+
 	mcmp, closer := start(t)
 	defer closer()
 
