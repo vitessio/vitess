@@ -45,6 +45,11 @@ func TestWatchConfig(t *testing.T) {
 			return err
 		}
 
+		// In order to guarantee viper's watcher detects exactly one config
+		// change, we perform a write specific to the platform we're executing
+		// on.
+		//
+		// Consequently, this test only supports linux and macos for now.
 		return atomicWrite(tmp.Name(), data)
 	}
 	writeRandomConfig := func(tmp *os.File) error {

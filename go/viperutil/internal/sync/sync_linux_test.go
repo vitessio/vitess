@@ -18,6 +18,12 @@ package sync_test
 
 import "os"
 
+// atomicWrite overwrites a file in such a way as to produce exactly one
+// filesystem event of the type CREATE or WRITE (which are tracked by viper)
+// without producing any REMOVE events.
+//
+// At time of writing, this produces the following on x86_64 linux:
+// CREATE.
 func atomicWrite(path string, data []byte) error {
 	stat, err := os.Stat(path)
 	if err != nil {
