@@ -6,6 +6,7 @@
   - [MySQL & Xtrabackup known issue](#mysql-xtrabackup-ddl)
   - [VTTablet Restore Metrics](#vttablet-restore-metrics)
   - [Schema-initialization stuck on semi-sync ACKs while upgrading to v16.0.0](#schema-init-upgrade)
+  - [Broken downgrade from v17.x.x when init_db.sql turned on by default](#init-db-sql-turned-on)
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
@@ -116,6 +117,12 @@ Eventually, `PromoteReplica` fails, and this fails the entire PRS call.
 A fix for this issue was merged on `release-16.0` in [PR#13441](https://github.com/vitessio/vitess/pull/13441), read the [corresponding bug report to learn more](https://github.com/vitessio/vitess/issues/13426).
 
 This issue is fixed  in `v16.0.3` and later patch releases.
+
+### <a id="init-db-sql-turned-on"/>Broken downgrade from v17.x.x when init_db.sql turned on by default
+
+In `v17.x.x` `super_read_only` is turned on by default meaning that downgrading from `v17` to `v16.0.0` breaks due to `init_db.sql` needing write access.
+
+This issue is fixed in `>= v16.0.3` thanks to [PR #13525](https://github.com/vitessio/vitess/pull/13525).
 
 ## <a id="major-changes"/>Major Changes
 
