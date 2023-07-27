@@ -79,7 +79,7 @@ services:
       - SCHEMA_FILES=test_keyspace_schema_file.sql
       - POST_LOAD_FILE=
       - EXTERNAL_DB=0
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     volumes:
       - .:/script
   schemaload_unsharded_keyspace:
@@ -103,7 +103,7 @@ services:
       - SCHEMA_FILES=unsharded_keyspace_schema_file.sql
       - POST_LOAD_FILE=
       - EXTERNAL_DB=0
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     volumes:
       - .:/script
   set_keyspace_durability_policy_test_keyspace:
@@ -117,7 +117,7 @@ services:
     environment:
       - GRPC_PORT=15999
       - KEYSPACES=test_keyspace
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     volumes:
       - .:/script
   set_keyspace_durability_policy_unsharded_keyspace:
@@ -130,7 +130,7 @@ services:
     environment:
       - GRPC_PORT=15999
       - KEYSPACES=unsharded_keyspace
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     volumes:
       - .:/script
   vreplication:
@@ -144,7 +144,7 @@ services:
       - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
         --topo_global_root vitess/global
       - EXTERNAL_DB=0
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     volumes:
       - .:/script
   vtctld:
@@ -159,7 +159,7 @@ services:
     depends_on:
       external_db_host:
         condition: service_healthy
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15000:8080
       - "15999"
@@ -176,7 +176,7 @@ services:
       ''grpc-vtgateservice'' --normalize_queries=true '
     depends_on:
       - vtctld
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15099:8080
       - "15999"
@@ -199,7 +199,7 @@ services:
       - EXTERNAL_DB=0
       - DB_USER=
       - DB_PASS=
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 13000:8080
     volumes:
@@ -234,7 +234,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15101:8080
       - "15999"
@@ -271,7 +271,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15102:8080
       - "15999"
@@ -308,7 +308,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15201:8080
       - "15999"
@@ -345,7 +345,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15202:8080
       - "15999"
@@ -382,7 +382,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:v17.0.0
+    image: vitess/lite:v17.0.1
     ports:
       - 15301:8080
       - "15999"
