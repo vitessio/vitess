@@ -189,13 +189,14 @@ type txThrottlerState struct {
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
-	throttleMu      sync.Mutex
-	throttler       ThrottlerInterface
-	stopHealthCheck context.CancelFunc
+	throttleMu       sync.Mutex
+	throttler        ThrottlerInterface
+	stopHealthCheck  context.CancelFunc
+	topologyWatchers map[string]TopologyWatcherInterface
 
 	healthCheck      discovery.HealthCheck
 	healthCheckChan  chan *discovery.TabletHealth
-	topologyWatchers map[string]TopologyWatcherInterface
+	healthCheckCells []string
 	cellsFromTopo    bool
 }
 
@@ -219,9 +220,9 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 
 		throttlerConfig = &txThrottlerConfig{
 			enabled:             true,
+			healthCheckCells:    healthCheckCells,
 			tabletTypes:         tabletTypes,
 			throttlerConfig:     env.Config().TxThrottlerConfig.Get(),
-			healthCheckCells:    healthCheckCells,
 			topoRefreshInterval: env.Config().TxThrottlerTopoRefreshInterval,
 		}
 
@@ -319,16 +320,17 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 		return nil, err
 	}
 	state := &txThrottlerState{
-		config:      config,
-		throttler:   t,
-		txThrottler: txThrottler,
+		config:           config,
+		healthCheckCells: config.healthCheckCells,
+		throttler:        t,
+		txThrottler:      txThrottler,
 	}
 
 	// get cells from topo if none defined in tabletenv config
-	if len(config.healthCheckCells) == 0 {
+	if len(state.healthCheckCells) == 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
-		config.healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
+		state.healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
 		state.cellsFromTopo = true
 	}
 
@@ -378,9 +380,9 @@ func (ts *txThrottlerState) updateHealthCheckCells(ctx context.Context, topoServ
 	defer cancel()
 
 	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
-	if !reflect.DeepEqual(knownCells, ts.config.healthCheckCells) {
+	if !reflect.DeepEqual(knownCells, ts.healthCheckCells) {
 		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
-		ts.config.healthCheckCells = knownCells
+		ts.healthCheckCells = knownCells
 		ts.closeHealthCheckStream()
 		ts.initHealthCheckStream(topoServer, target)
 	}
