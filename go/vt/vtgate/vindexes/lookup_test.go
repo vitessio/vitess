@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -111,6 +112,10 @@ func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariab
 		return &sqltypes.Result{}, nil
 	}
 	panic("unexpected")
+}
+
+func (vc *vcursor) ConnCollation() collations.ID {
+	return collations.Default()
 }
 
 func lookupCreateVindexTestCase(

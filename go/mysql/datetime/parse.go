@@ -321,7 +321,7 @@ func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
 	if i == 0 {
 		return dt, true
 	}
-	if t == 0 || d == 0 {
+	if d == 0 {
 		return dt, false
 	}
 	dt.Time, ok = ParseTimeInt64(t)

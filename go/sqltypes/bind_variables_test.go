@@ -329,7 +329,7 @@ func TestValidateBindVarables(t *testing.T) {
 				Value: []byte("a"),
 			},
 		},
-		err: `v: strconv.ParseInt: parsing "a": invalid syntax`,
+		err: `v: cannot parse int64 from "a"`,
 	}, {
 		in: map[string]*querypb.BindVariable{
 			"v": {
@@ -340,7 +340,7 @@ func TestValidateBindVarables(t *testing.T) {
 				}},
 			},
 		},
-		err: `v: strconv.ParseInt: parsing "a": invalid syntax`,
+		err: `v: cannot parse int64 from "a"`,
 	}}
 	for _, tcase := range tcases {
 		err := ValidateBindVariables(tcase.in)
@@ -500,31 +500,31 @@ func TestValidateBindVariable(t *testing.T) {
 			Type:  querypb.Type_INT64,
 			Value: []byte(InvalidNeg),
 		},
-		err: "out of range",
+		err: `cannot parse int64 from "-9223372036854775809": overflow`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
 			Value: []byte(InvalidPos),
 		},
-		err: "out of range",
+		err: `cannot parse int64 from "18446744073709551616": overflow`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_UINT64,
 			Value: []byte("-1"),
 		},
-		err: "invalid syntax",
+		err: `cannot parse uint64 from "-1"`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_UINT64,
 			Value: []byte(InvalidPos),
 		},
-		err: "out of range",
+		err: `cannot parse uint64 from "18446744073709551616": overflow`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_FLOAT64,
 			Value: []byte("a"),
 		},
-		err: "invalid syntax",
+		err: `unparsed tail left after parsing float64 from "a"`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_EXPRESSION,

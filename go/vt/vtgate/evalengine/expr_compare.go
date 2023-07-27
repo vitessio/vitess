@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -233,6 +235,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		return compareJSON(left, right)
 	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
+	case lt == rt && fallbackBinary(lt):
+		return bytes.Compare(left.ToRawBytes(), right.ToRawBytes()), nil
 	default:
 		// Quoting MySQL Docs:
 		//
@@ -245,6 +249,18 @@ func evalCompare(left, right eval) (comp int, err error) {
 		rf, _ := evalToFloat(right)
 		return compareNumeric(lf, rf)
 	}
+}
+
+// fallbackBinary compares two values of the same type using the fallback binary comparison.
+// This is for types we don't yet properly support otherwise but do end up being used
+// for comparisons, for example when using vdiff.
+// TODO: Clean this up as we add more properly supported types and comparisons.
+func fallbackBinary(t sqltypes.Type) bool {
+	switch t {
+	case sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry:
+		return true
+	}
+	return false
 }
 
 func evalCompareTuplesNullSafe(left, right []eval) (bool, error) {

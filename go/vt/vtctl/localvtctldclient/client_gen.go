@@ -346,6 +346,16 @@ func (client *localVtctldClient) InitShardPrimary(ctx context.Context, in *vtctl
 	return client.s.InitShardPrimary(ctx, in)
 }
 
+// MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	return client.s.MoveTablesComplete(ctx, in)
+}
+
+// MoveTablesCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	return client.s.MoveTablesCreate(ctx, in)
+}
+
 // PingTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) PingTablet(ctx context.Context, in *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
 	return client.s.PingTablet(ctx, in)
@@ -585,6 +595,21 @@ func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in
 // ValidateVersionShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldatapb.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionShardResponse, error) {
 	return client.s.ValidateVersionShard(ctx, in)
+}
+
+// WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldatapb.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowDeleteResponse, error) {
+	return client.s.WorkflowDelete(ctx, in)
+}
+
+// WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowStatus(ctx context.Context, in *vtctldatapb.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	return client.s.WorkflowStatus(ctx, in)
+}
+
+// WorkflowSwitchTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowSwitchTraffic(ctx context.Context, in *vtctldatapb.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	return client.s.WorkflowSwitchTraffic(ctx, in)
 }
 
 // WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.

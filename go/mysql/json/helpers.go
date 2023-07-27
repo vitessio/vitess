@@ -18,6 +18,8 @@ package json
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -25,7 +27,7 @@ const hashPrefixJSON = 0xCCBB
 
 func (v *Value) Hash(h *vthash.Hasher) {
 	h.Write16(hashPrefixJSON)
-	_, _ = h.Write(v.ToRawBytes())
+	_, _ = h.Write(v.WeightString(nil))
 }
 
 func (v *Value) ToRawBytes() []byte {
@@ -79,6 +81,28 @@ func NewTime(raw string) *Value {
 
 func NewOpaqueValue(raw string) *Value {
 	return &Value{s: raw, t: TypeOpaque}
+}
+
+func NewFromSQL(v sqltypes.Value) (*Value, error) {
+	switch {
+	case v.Type() == sqltypes.TypeJSON:
+		var p Parser
+		return p.ParseBytes(v.Raw())
+	case v.IsSigned():
+		return NewNumber(v.RawStr(), NumberTypeSigned), nil
+	case v.IsUnsigned():
+		return NewNumber(v.RawStr(), NumberTypeUnsigned), nil
+	case v.IsDecimal():
+		return NewNumber(v.RawStr(), NumberTypeDecimal), nil
+	case v.IsFloat():
+		return NewNumber(v.RawStr(), NumberTypeFloat), nil
+	case v.IsText():
+		return NewString(v.RawStr()), nil
+	case v.IsBinary():
+		return NewBlob(v.RawStr()), nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot coerce %v as a JSON type", v)
+	}
 }
 
 func (v *Value) Depth() int {

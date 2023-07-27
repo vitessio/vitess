@@ -35,15 +35,15 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // VReplStream represents a row in _vt.vreplication table
@@ -57,7 +57,7 @@ type VReplStream struct {
 	timeThrottled        int64
 	componentThrottled   string
 	transactionTimestamp int64
-	state                string
+	state                binlogdatapb.VReplicationWorkflowState
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
@@ -76,7 +76,7 @@ func (v *VReplStream) livenessTimeIndicator() int64 {
 // isRunning() returns true when the workflow is actively running
 func (v *VReplStream) isRunning() bool {
 	switch v.state {
-	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+	case binlogdatapb.VReplicationWorkflowState_Init, binlogdatapb.VReplicationWorkflowState_Copying, binlogdatapb.VReplicationWorkflowState_Running:
 		return true
 	}
 	return false
@@ -85,7 +85,7 @@ func (v *VReplStream) isRunning() bool {
 // hasError() returns true when the workflow has failed and will not retry
 func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
-	case v.state == binlogplayer.BlpError:
+	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
 		return true, errors.New(v.message)
 	case strings.Contains(strings.ToLower(v.message), "error"):
 		return false, errors.New(v.message)
@@ -589,7 +589,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
-	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
+	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
 		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
 
