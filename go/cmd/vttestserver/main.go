@@ -223,6 +223,7 @@ func parseFlags() (env vttest.Environment, err error) {
 	})
 
 	servenv.ParseFlags("vttestserver")
+	servenv.Init()
 
 	if basePort != 0 {
 		if config.DataDir == "" {
