@@ -51,18 +51,20 @@ func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, q
 }
 
 // RestoreTablet performs a PITR restore.
-func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string) {
+func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string, restoreTime time.Time) {
 	tablet.ValidateTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
 
 	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("GetKeyspace", restoreKSName)
 
+	if restoreTime.IsZero() {
+		restoreTime = time.Now().UTC()
+	}
+
 	if err != nil {
-		tm := time.Now().UTC()
-		tm.Format(time.RFC3339)
 		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--",
 			"--keyspace_type=SNAPSHOT", "--base_keyspace="+keyspaceName,
-			"--snapshot_time", tm.Format(time.RFC3339), restoreKSName)
+			"--snapshot_time", restoreTime.Format(time.RFC3339), restoreKSName)
 		require.Nil(t, err)
 	}
 
