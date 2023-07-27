@@ -262,11 +262,70 @@ func TestViewsTracking(t *testing.T) {
 	testTracker(t, schemaDefResult, testcases)
 }
 
+// TestTableInfoRetrieval tests that the tracker is able to retrieve required information from ddl statement.
+func TestTableInfoRetrieval(t *testing.T) {
+	schemaDefResult := []map[string]string{{
+		"my_tbl": "CREATE TABLE `my_tbl` (" +
+			"`id` bigint NOT NULL AUTO_INCREMENT," +
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
+			"`email` varbinary(100) DEFAULT NULL," +
+			"PRIMARY KEY (`id`)," +
+			"KEY `id` (`id`,`name`)) " +
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+	}, {
+		// initial load of view - kept empty
+	}, {
+		"my_child_tbl": "CREATE TABLE `my_child_tbl` (" +
+			"`id` bigint NOT NULL AUTO_INCREMENT," +
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
+			"`code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL," +
+			"`my_id` bigint DEFAULT NULL," +
+			"PRIMARY KEY (`id`)," +
+			"KEY `my_id` (`my_id`,`name`)," +
+			"CONSTRAINT `my_child_tbl_ibfk_1` FOREIGN KEY (`my_id`, `name`) REFERENCES `my_tbl` (`id`, `name`) ON DELETE CASCADE) " +
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+	}}
+
+	testcases := []testCases{{
+		testName: "initial table load",
+		expTbl: map[string][]vindexes.Column{
+			"my_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+			},
+		},
+	}, {
+		testName: "new tables",
+		updTbl:   []string{"my_child_tbl"},
+		expTbl: map[string][]vindexes.Column{
+			"my_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+			},
+			"my_child_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
+				{Name: sqlparser.NewIdentifierCI("code"), Type: querypb.Type_VARCHAR, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("my_id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+			},
+		},
+		expFk: map[string]string{
+			"my_tbl":       "",
+			"my_child_tbl": "foreign key (my_id, `name`) references my_tbl (id, `name`) on delete cascade",
+		},
+	}}
+
+	testTracker(t, schemaDefResult, testcases)
+}
+
 type testCases struct {
 	testName string
 
 	updTbl []string
 	expTbl map[string][]vindexes.Column
+	expFk  map[string]string
 
 	updView []string
 	expView map[string]string
@@ -308,8 +367,15 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 			require.Equal(t, true, keyspacePresent)
 
 			for k, v := range tcase.expTbl {
-				utils.MustMatch(t, v, tracker.GetColumns(keyspace, k), "mismatch for table: ", k)
+				utils.MustMatch(t, v, tracker.GetColumns(keyspace, k), "mismatch columns for table: ", k)
+				if len(tcase.expFk[k]) > 0 {
+					fks := tracker.GetForeignKeys(keyspace, k)
+					for _, fk := range fks {
+						utils.MustMatch(t, tcase.expFk[k], sqlparser.String(fk), "mismatch foreign keys for table: ", k)
+					}
+				}
 			}
+
 			for k, v := range tcase.expView {
 				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
 			}

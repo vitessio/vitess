@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -201,6 +202,15 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	return tblInfo.Columns
 }
 
+// GetForeignKeys returns the foreign keys for table in the given keyspace.
+func (t *Tracker) GetForeignKeys(ks string, tbl string) []*sqlparser.ForeignKeyDefinition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.ForeignKeys
+}
+
 // Tables returns a map with the columns for all known tables in the keyspace
 func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 	t.mu.Lock()
@@ -280,21 +290,6 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	}
 }
 
-func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {
-	if tblSpec.Constraints == nil {
-		return nil
-	}
-	var fks []*sqlparser.ForeignKeyDefinition
-	for _, constraint := range tblSpec.Constraints {
-		fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition)
-		if !ok {
-			continue
-		}
-		fks = append(fks, fkDef)
-	}
-	return fks
-}
-
 func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	tblCollation := getTableCollation(tblSpec)
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
@@ -310,11 +305,19 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	return cols
 }
 
-func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
-	if column.Type.Options == nil || column.Type.Options.Collate == "" {
-		return defaultCollation
+func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {
+	if tblSpec.Constraints == nil {
+		return nil
 	}
-	return column.Type.Options.Collate
+	var fks []*sqlparser.ForeignKeyDefinition
+	for _, constraint := range tblSpec.Constraints {
+		fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		fks = append(fks, fkDef)
+	}
+	return fks
 }
 
 func getTableCollation(tblSpec *sqlparser.TableSpec) string {
@@ -323,11 +326,18 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 	}
 	collate := sqlparser.KeywordString(sqlparser.COLLATE)
 	for _, option := range tblSpec.Options {
-		if option.Name == collate {
+		if strings.EqualFold(option.Name, collate) {
 			return option.String
 		}
 	}
 	return ""
+}
+
+func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
+	if column.Type.Options == nil || column.Type.Options.Collate == "" {
+		return defaultCollation
+	}
+	return column.Type.Options.Collate
 }
 
 func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {

@@ -111,10 +111,6 @@ type Table struct {
 	// Source is a keyspace-qualified table name that points to the source of a
 	// reference table. Only applicable for tables with Type set to "reference".
 	Source *Source `json:"source,omitempty"`
-
-	// // Parent and Child Foreign key constraints for this table.
-	// ParentFKs []ForeignKeyConstraint
-	// ChildFKs  []ForeignKeyConstraint
 }
 
 // Keyspace contains the keyspcae info for each Table.
