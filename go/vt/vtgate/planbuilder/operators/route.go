@@ -796,7 +796,7 @@ func createRouteFromVSchemaTable(
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
 		// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
 		// Otherwise, we ignore this vindex for selection.
-		if lu, isLu := columnVindex.Vindex.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
+		if columnVindex.IsBackfilling() {
 			continue
 		}
 
