@@ -15865,6 +15865,9 @@ export namespace topodata {
 
         /** ThrottledAppRule expires_at */
         expires_at?: (vttime.ITime|null);
+
+        /** ThrottledAppRule exempt */
+        exempt?: (boolean|null);
     }
 
     /** Represents a ThrottledAppRule. */
@@ -15884,6 +15887,9 @@ export namespace topodata {
 
         /** ThrottledAppRule expires_at. */
         public expires_at?: (vttime.ITime|null);
+
+        /** ThrottledAppRule exempt. */
+        public exempt: boolean;
 
         /**
          * Creates a new ThrottledAppRule instance using the specified properties.
