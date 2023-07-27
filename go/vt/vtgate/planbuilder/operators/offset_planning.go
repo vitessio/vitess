@@ -162,7 +162,7 @@ func pullDistinctFromUNION(root ops.Operator) (ops.Operator, error) {
 
 func getVisitor(
 	ctx *plancontext.PlanningContext,
-	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error),
+	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error),
 	found func(sqlparser.Expr, int),
 	notFound func(sqlparser.Expr) error,
 ) func(node, parent sqlparser.SQLNode) bool {
@@ -176,7 +176,7 @@ func getVisitor(
 			return true
 		}
 		var offset int
-		offset, err = findCol(ctx, e)
+		offset, err = findCol(ctx, e, false)
 		if err != nil {
 			return false
 		}

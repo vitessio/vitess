@@ -112,8 +112,8 @@ func (d *Distinct) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addT
 	return d.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
 
-func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return d.Source.FindCol(ctx, expr)
+func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return d.Source.FindCol(ctx, expr, underRoute)
 }
 
 func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {

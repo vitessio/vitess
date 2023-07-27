@@ -124,7 +124,7 @@ func (a *Aggregator) isDerived() bool {
 	return a.TableID != nil
 }
 
-func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
 	if a.isDerived() {
 		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
 		if err != nil {
@@ -200,7 +200,7 @@ func (a *Aggregator) AddColumns(ctx *plancontext.PlanningContext, reuse bool, ad
 }
 
 func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset, err := a.FindCol(ctx, expr.Expr)
+	offset, err := a.FindCol(ctx, expr.Expr, false)
 	if err != nil {
 		return 0, err
 	}
@@ -354,6 +354,7 @@ func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
 }
 
 func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) error {
+	a.Source = &Projection{Source: a.Source}
 	// we need to keep things in the column order, so we can't iterate over the aggregations or groupings
 	for colIdx := range a.Columns {
 		idx, err := a.addIfGroupingColumn(ctx, colIdx)

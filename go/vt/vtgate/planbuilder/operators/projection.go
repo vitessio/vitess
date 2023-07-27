@@ -128,13 +128,13 @@ func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
-func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	if p.isDerived() {
-		return -1, nil
+func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	if !(underRoute && p.isDerived()) {
+		if offset, found := canReuseColumn(ctx, p.Columns, expr, extractExpr); found {
+			return offset, nil
+		}
 	}
-	if offset, found := canReuseColumn(ctx, p.Columns, expr, extractExpr); found {
-		return offset, nil
-	}
+
 	return -1, nil
 }
 
@@ -154,8 +154,16 @@ func (p *Projection) AddColumns(ctx *plancontext.PlanningContext, reuse bool, ad
 		colIdx := i + startOffset
 		expr := ae.Expr
 
+		if p.TableID != nil {
+			vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
+			if err != nil {
+				return nil, err
+			}
+			expr = semantics.RewriteDerivedTableExpression(expr, vt)
+		}
+
 		if reuse {
-			offset, err := p.FindCol(ctx, expr)
+			offset, err := p.FindCol(ctx, expr, false)
 			if err != nil {
 				return nil, err
 			}
@@ -163,14 +171,6 @@ func (p *Projection) AddColumns(ctx *plancontext.PlanningContext, reuse bool, ad
 				offsets[i] = offset
 				continue
 			}
-		}
-
-		if p.TableID != nil {
-			vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
-			if err != nil {
-				return nil, err
-			}
-			expr = semantics.RewriteDerivedTableExpression(expr, vt)
 		}
 
 		// we add the column here, so we can find the expression in the next iteration of this loop,
@@ -297,6 +297,21 @@ func (p *Projection) ShortDescription() string {
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+	if !p.isDerived() {
+		// for projections that are not derived tables, we can check if it is safe to remove or not
+		needed := false
+		for i, projection := range p.Projections {
+			e, ok := projection.(Offset)
+			if !ok || e.Offset != i {
+				needed = true
+				break
+			}
+		}
+		if !needed {
+			return p.Source, rewrite.NewTree("removed projection only passing through the input", p), nil
+		}
+	}
+
 	switch src := p.Source.(type) {
 	case *Route:
 		return p.compactWithRoute(ctx, src)

@@ -225,7 +225,7 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	return
 }
 
-func (a *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (a *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
 	offset, found := canReuseColumn(ctx, a.JoinColumns, expr, joinColumnToExpr)
 	if !found {
 		return -1, nil
@@ -234,7 +234,7 @@ func (a *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 }
 
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if offset, err := a.FindCol(ctx, expr.Expr); err != nil || offset != -1 {
+	if offset, err := a.FindCol(ctx, expr.Expr, false); err != nil || offset != -1 {
 		return a, offset, err
 	}
 
@@ -258,7 +258,7 @@ func (a *ApplyJoin) AddColumns(
 	offsets = make([]int, len(exprs))
 	for i, expr := range exprs {
 		if reuse {
-			offset, err := a.FindCol(ctx, expr.Expr)
+			offset, err := a.FindCol(ctx, expr.Expr, false)
 			if err != nil {
 				return nil, err
 			}

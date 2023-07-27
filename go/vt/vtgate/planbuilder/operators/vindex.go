@@ -70,7 +70,7 @@ func (v *Vindex) AddColumns(ctx *plancontext.PlanningContext, reuse bool, groupB
 		}
 
 		if reuse {
-			offset, err := v.FindCol(ctx, ae.Expr)
+			offset, err := v.FindCol(ctx, ae.Expr, true)
 			if err != nil {
 				return nil, err
 			}
@@ -98,7 +98,7 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 	}
 }
 
-func (v *Vindex) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (v *Vindex) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	for idx, col := range v.Columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col) {
 			return idx, nil

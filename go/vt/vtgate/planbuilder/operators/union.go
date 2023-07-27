@@ -234,7 +234,7 @@ func (u *Union) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGr
 	}
 	for i, ae := range exprs {
 		if reuse {
-			offset, err := u.FindCol(ctx, ae.Expr)
+			offset, err := u.FindCol(ctx, ae.Expr, false)
 			if err != nil {
 				return nil, err
 			}
@@ -280,7 +280,7 @@ func (u *Union) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGr
 }
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	col, err := u.FindCol(ctx, ae.Expr)
+	col, err := u.FindCol(ctx, ae.Expr, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -350,7 +350,7 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 	return
 }
 
-func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	columns, err := u.GetColumns(ctx)
 	if err != nil {
 		return 0, err

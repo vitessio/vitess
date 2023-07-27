@@ -69,7 +69,7 @@ func (to *Table) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlpa
 	return nil, vterrors.VT13001("did not expect this method to be called")
 }
 
-func (to *Table) FindCol(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	colToFind, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return -1, nil

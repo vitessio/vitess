@@ -60,8 +60,8 @@ func (l *Limit) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGr
 	return l.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
 
-func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return l.Source.FindCol(ctx, expr)
+func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return l.Source.FindCol(ctx, expr, underRoute)
 }
 
 func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
