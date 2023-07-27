@@ -164,15 +164,13 @@ func TestEnabledThrottler(t *testing.T) {
 func TestFetchKnownCells(t *testing.T) {
 	{
 		ts := memorytopo.NewServer("cell1", "cell2")
-		cells, err := fetchKnownCells(context.Background(), ts)
-		assert.Nil(t, err)
+		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
 		assert.Equal(t, []string{"cell1", "cell2"}, cells)
 	}
 	{
 		ts := memorytopo.NewServer()
-		cells, err := fetchKnownCells(context.Background(), ts)
-		assert.NotNil(t, err)
-		assert.Zero(t, cells)
+		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		assert.Equal(t, []string{"cell1"}, cells)
 	}
 }
 

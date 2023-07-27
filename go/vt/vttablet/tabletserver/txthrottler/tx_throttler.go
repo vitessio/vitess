@@ -32,13 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // These vars store the functions used to create the topo server, healthcheck,
@@ -49,11 +47,9 @@ type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.Healt
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
 var (
-	healthCheckFactory       healthCheckFactoryFunc
-	topologyWatcherFactory   topologyWatcherFactoryFunc
-	throttlerFactory         throttlerFactoryFunc
-	topoCellsRefreshInterval = time.Minute
-	ErrFoundNoCells          = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "found no cells")
+	healthCheckFactory     healthCheckFactoryFunc
+	topologyWatcherFactory topologyWatcherFactoryFunc
+	throttlerFactory       throttlerFactoryFunc
 )
 
 func resetTxThrottlerFactories() {
@@ -106,14 +102,15 @@ type TopologyWatcherInterface interface {
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
 
-// fetchKnownCells gathers a list of known cells from the topology. An ErrFoundNoCells
-// error is returned if the GetKnownCells call to topoServer returns no cells.
-func fetchKnownCells(ctx context.Context, topoServer *topo.Server) ([]string, error) {
+// fetchKnownCells gathers a list of known cells from the topology. On error,
+// the cell of the local tablet will be used and an error is logged.
+func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) []string {
 	cells, err := topoServer.GetKnownCells(ctx)
-	if err == nil && len(cells) == 0 {
-		err = ErrFoundNoCells
+	if err != nil {
+		log.Errorf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err)
+		cells = []string{target.Cell}
 	}
-	return cells, err
+	return cells
 }
 
 // txThrottler implements TxThrottle for throttling transactions based on replication lag.
@@ -180,6 +177,9 @@ type txThrottlerConfig struct {
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
+
+	// rate to refresh topo for cells
+	topoRefreshInterval time.Duration
 }
 
 // txThrottlerState holds the state of an open TxThrottler object.
@@ -218,10 +218,11 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		}
 
 		throttlerConfig = &txThrottlerConfig{
-			enabled:          true,
-			tabletTypes:      tabletTypes,
-			throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
-			healthCheckCells: healthCheckCells,
+			enabled:             true,
+			tabletTypes:         tabletTypes,
+			throttlerConfig:     env.Config().TxThrottlerConfig.Get(),
+			healthCheckCells:    healthCheckCells,
+			topoRefreshInterval: env.Config().TxThrottlerTopoRefreshInterval,
 		}
 
 		defer log.Infof("Initialized transaction throttler with config: %+v", throttlerConfig)
@@ -327,11 +328,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 	if len(config.healthCheckCells) == 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
-		var err error
-		if config.healthCheckCells, err = fetchKnownCells(ctx, txThrottler.topoServer); err != nil {
-			log.Errorf("txThrottler: failed to open throttler: %+v", err)
-			return nil, err
-		}
+		config.healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
 		state.cellsFromTopo = true
 	}
 
@@ -376,27 +373,23 @@ func (ts *txThrottlerState) closeHealthCheckStream() {
 	ts.healthCheck.Close()
 }
 
-func (ts *txThrottlerState) updateHealthCheckCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) error {
+func (ts *txThrottlerState) updateHealthCheckCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
 	fetchCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
-	cells, err := fetchKnownCells(fetchCtx, topoServer)
-	if err != nil {
-		return err
-	}
-	if !reflect.DeepEqual(cells, ts.config.healthCheckCells) {
+	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
+	if !reflect.DeepEqual(knownCells, ts.config.healthCheckCells) {
 		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
-		ts.config.healthCheckCells = cells
+		ts.config.healthCheckCells = knownCells
 		ts.closeHealthCheckStream()
 		ts.initHealthCheckStream(topoServer, target)
 	}
-	return nil
 }
 
 func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
 	var cellsUpdateTicks <-chan time.Time
 	if ts.cellsFromTopo {
-		ticker := time.NewTicker(topoCellsRefreshInterval)
+		ticker := time.NewTicker(ts.config.topoRefreshInterval)
 		cellsUpdateTicks = ticker.C
 		defer ticker.Stop()
 	}
@@ -405,9 +398,7 @@ func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServe
 		case <-ctx.Done():
 			return
 		case <-cellsUpdateTicks:
-			if err := ts.updateHealthCheckCells(ctx, topoServer, target); err != nil {
-				log.Errorf("txThrottler: failed to fetch cells from topo: %+v", err)
-			}
+			ts.updateHealthCheckCells(ctx, topoServer, target)
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)
 		}
