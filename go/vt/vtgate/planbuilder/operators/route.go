@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -795,6 +794,12 @@ func createRouteFromVSchemaTable(
 	}
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
+		// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
+		// Otherwise, we ignore this vindex for selection.
+		if columnVindex.IsBackfilling() {
+			continue
+		}
+
 		plan.VindexPreds = append(plan.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
 	}
 

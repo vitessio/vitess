@@ -24,17 +24,15 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/sqlescape"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // TabletTypeSuffix maps the tablet type to its suffix string.
@@ -128,6 +126,7 @@ type ColumnVindex struct {
 	isUnique bool
 	cost     int
 	partial  bool
+	backfill bool
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -146,6 +145,11 @@ func (c *ColumnVindex) Cost() int {
 // IsPartialVindex is used to let planner and engine know that this is a composite vindex missing one or more columns
 func (c *ColumnVindex) IsPartialVindex() bool {
 	return c.partial
+}
+
+// IsBackfilling returns true if the vindex is in the process of backfilling the rows.
+func (c *ColumnVindex) IsBackfilling() bool {
+	return c.backfill
 }
 
 // Column describes a column.
@@ -558,6 +562,10 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 					columns = append(columns, sqlparser.NewIdentifierCI(indCol))
 				}
 			}
+			backfill := false
+			if lkpBackfill, ok := vindex.(LookupBackfill); ok {
+				backfill = lkpBackfill.IsBackfilling()
+			}
 			columnVindex := &ColumnVindex{
 				Columns:  columns,
 				Type:     vindexInfo.Type,
@@ -566,6 +574,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				Vindex:   vindex,
 				isUnique: vindex.IsUnique(),
 				cost:     vindex.Cost(),
+				backfill: backfill,
 			}
 			if i == 0 {
 				// Perform Primary vindex check.
@@ -618,13 +627,14 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				columnSubset := columns[:i]
 				cost++
 				columnVindex = &ColumnVindex{
-					Columns: columnSubset,
-					Type:    vindexInfo.Type,
-					Name:    ind.Name,
-					Owned:   owned,
-					Vindex:  vindex,
-					cost:    cost,
-					partial: true,
+					Columns:  columnSubset,
+					Type:     vindexInfo.Type,
+					Name:     ind.Name,
+					Owned:    owned,
+					Vindex:   vindex,
+					cost:     cost,
+					partial:  true,
+					backfill: backfill,
 				}
 				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			}
