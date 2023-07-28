@@ -93,7 +93,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col coll
 	case sqltypes.IsText(coerceTo):
 		coll := col.Get()
 		if coll == nil {
-			panic("cannot hash unsupported collation")
+			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
 		b := v.Raw()
 		if length != 0 {
@@ -160,7 +160,7 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 		}
 		coll := e.col.Collation.Get()
 		if coll == nil {
-			panic("cannot hash unsupported collation")
+			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
 		b := e.bytes
 		if length != 0 {
