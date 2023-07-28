@@ -103,7 +103,6 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 }
 
 func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) (res sqlparser.SelectStatement) {
-
 	if union, ok := in.(*sqlparser.Union); ok {
 		// the root object is an UNION
 		if test(sqlparser.CloneSelectStatement(union.Left)) {
@@ -136,7 +135,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 			cursor.Replace(node.Right)
 			clone = sqlparser.CloneSelectStatement(in)
 			if test(clone) {
-				log.Errorf("replaced UNION with its right child")
+				log.Errorf("replaced UNION with its right child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Right))
 				simplified = true
 				return true
 			}
@@ -147,11 +146,12 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 
 	sqlparser.SafeRewrite(in, alwaysVisit, up)
 
-	if !simplified {
-		// we found no simplifications
-		return nil
+	if simplified {
+
+		return in
 	}
-	return in
+	// we found no simplifications
+	return nil
 }
 
 func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
@@ -166,7 +166,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, 
 			return clone
 		}
 	}
-
+	// we found no simplifications
 	return nil
 }
 
@@ -182,7 +182,11 @@ func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.Sche
 
 func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
 	simplified := false
-	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
+	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+		return true
+	}
+
+	up := func(cursor *sqlparser.Cursor) bool {
 		se, ok := cursor.Node().(*sqlparser.StarExpr)
 		if !ok {
 			return true
@@ -193,15 +197,19 @@ func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectSt
 		if test(in) {
 			log.Errorf("replaced star with literal")
 			simplified = true
-			return false
+			return true
 		}
 		cursor.Replace(se)
 
 		return true
-	}, nil)
+	}
+
+	sqlparser.SafeRewrite(in, alwaysVisit, up)
+
 	if simplified {
 		return in
 	}
+	// we found no simplifications
 	return nil
 }
 
