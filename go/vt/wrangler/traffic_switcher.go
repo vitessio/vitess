@@ -1982,8 +1982,13 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 	if len(sequencesByUsingTable) == 0 { // Nothing to do
 		return nil, nil
 	}
-
 	log.Errorf("DEBUG: sequences: %+v", sequencesByUsingTable)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
 	// Now we need to locate the backing sequence tables which will
 	// be in another unsharded keyspace.
@@ -2016,6 +2021,11 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 				// TODO: get and set this properly in order to deal with db_name_overrides
 				sm.backingTableDBName = "vt_" + keyspace
 			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 		}
 	}
 	// Now we need to make sure we found all of the backing sequence tables.
@@ -2077,6 +2087,11 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 		if err != nil {
 			return err
 		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		// Sort the values to find the max value across all shards.
 		sort.Slice(shardResults, func(i, j int) bool {
 			return shardResults[i] < shardResults[j]
@@ -2121,6 +2136,11 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset sequence cache for table %s on shard %s.%s using tablet %s: %v",
 				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
 	}
 
