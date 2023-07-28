@@ -215,6 +215,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 
 	simplified := false
 	shouldKeepExpr := func(expr sqlparser.Expr) bool {
+		// why do we keep if the expr contains an aggregation?
 		return !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
 	}
 	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
@@ -228,7 +229,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		case *sqlparser.Select:
 			simplified = removeTableinSelect(node, searchedTS, semTable, simplified)
 		case *sqlparser.Where:
-			simplified = removeTableinWhere(node, searchedTS, semTable, simplified)
+			simplified = removeTableinWhere(node, shouldKeepExpr, simplified)
 		case sqlparser.SelectExprs:
 			simplified = removeTableinSelectExprs(node, cursor, shouldKeepExpr, simplified)
 		case sqlparser.GroupBy:
@@ -285,11 +286,11 @@ func removeTableinSelect(node *sqlparser.Select, searchedTS semantics.TableSet, 
 	return simplified
 }
 
-func removeTableinWhere(node *sqlparser.Where, searchedTS semantics.TableSet, semTable *semantics.SemTable, simplified bool) bool {
+func removeTableinWhere(node *sqlparser.Where, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
 	exprs := sqlparser.SplitAndExpression(nil, node.Expr)
 	var newPredicate sqlparser.Expr
 	for _, expr := range exprs {
-		if !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) {
+		if shouldKeepExpr(expr) {
 			newPredicate = sqlparser.AndExpressions(newPredicate, expr)
 		} else {
 			simplified = true

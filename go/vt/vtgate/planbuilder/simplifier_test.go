@@ -37,7 +37,7 @@ import (
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
 // It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyBuggyQuery(t *testing.T) {
-	query := "(select id from unsharded, unsharded_auto union select id from unsharded_auto) union (select id from user union select name from unsharded)"
+	query := "(select id from unsharded, unsharded_auto group by count(unsharded.predef1) union select id from unsharded_auto) union (select id from user union select name from unsharded)"
 	// select 0 from unsharded union select 0 from `user` union select 0 from unsharded
 	// select 0 from unsharded union (select 0 from `user` union select 0 from unsharded)
 	vschema := &vschemaWrapper{
