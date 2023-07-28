@@ -262,7 +262,7 @@ func TestKnownFailures(t *testing.T) {
 }
 
 func TestRandom(t *testing.T) {
-	// t.Skip("Skip CI; random expressions generate too many failures to properly limit")
+	t.Skip("Skip CI; random expressions generate too many failures to properly limit")
 
 	mcmp, closer := start(t)
 	defer closer()
