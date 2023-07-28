@@ -531,6 +531,16 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		defer targetUnlock(&err)
 	}
 
+	// Find out if the target is using any sequence tables for auto_increment
+	// value generation. If so, then we'll need to ensure that they are
+	// initialized properly before allowing new writes on the target.
+	sequenceMetadata, err := ts.getSequenceMetadata(ctx)
+	if err != nil {
+		werr := vterrors.Wrapf(err, "getSequenceMetadata failed")
+		ts.Logger().Error(werr)
+		return 0, nil, werr
+	}
+
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
@@ -632,11 +642,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		ts.Logger().Errorf("createJournals failed: %v", err)
 		return 0, nil, err
 	}
-	// Initialize any target sequences before allowing new writes.
-	if err := ts.initializeTargetSequenceTables(ctx); err != nil {
-		werr := vterrors.Wrapf(err, "initializeTargetSequenceTables failed")
-		ts.Logger().Error(werr)
-		return 0, nil, werr
+	// Initialize any target sequences, if there are any, before allowing new writes.
+	if len(sequenceMetadata) > 0 {
+		if err := ts.initializeTargetSequenceTables(ctx, sequenceMetadata); err != nil {
+			werr := vterrors.Wrapf(err, "initializeTargetSequenceTables failed")
+			ts.Logger().Error(werr)
+			return 0, nil, werr
+		}
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		ts.Logger().Errorf("allowTargetWrites failed: %v", err)
@@ -1930,15 +1942,19 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 	return sequenceFound, nil
 }
 
-func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context) error {
+// getSequenceMetadata returns a map of sequence metadata keyed by the
+// backing sequence table name. If the target keyspace has no tables
+// defined that use sequences for auto_increment generation then a nil
+// map will be returned.
+func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]*sequenceMetadata, error) {
 	log.Error("DEBUG: initializeTargetSequenceTables")
 	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
 	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
 			ts.targetKeyspace, err)
 	}
 	if vschema == nil || vschema.Tables == nil || len(vschema.Tables) == 0 { // Nothing to do
-		return nil
+		return nil, nil
 	}
 
 	// We maintain two maps of the same sequence metadata so
@@ -1964,7 +1980,7 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context) e
 		}
 	}
 	if len(sequencesByUsingTable) == 0 { // Nothing to do
-		return nil
+		return nil, nil
 	}
 
 	log.Errorf("DEBUG: sequences: %+v", sequencesByUsingTable)
@@ -1973,13 +1989,13 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context) e
 	// be in another unsharded keyspace.
 	keyspaces, err := ts.TopoServer().GetKeyspaces(ctx)
 	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
 	}
 	log.Errorf("DEBUG: keyspaces: %+v", keyspaces)
 	for _, keyspace := range keyspaces {
 		vschema, err = ts.TopoServer().GetVSchema(ctx, keyspace)
 		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
 				keyspace, err)
 		}
 		if vschema == nil || vschema.Sharded || vschema.Tables == nil || len(vschema.Tables) == 0 {
@@ -2005,12 +2021,25 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context) e
 	// Now we need to make sure we found all of the backing sequence tables.
 	for _, sm := range sequencesByUsingTable {
 		if sm.backingTableKeyspace == "" {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence tables metadata: %+v",
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence tables metadata: %+v",
 				sequencesByUsingTable)
 		}
 	}
 	log.Errorf("DEBUG: sequence backing tables: %+v", sequencesByBackingTable)
 
+	return sequencesByBackingTable, nil
+}
+
+// initializeTargetSequenceTables initializes the backing sequence tables
+// using a map keyed by the backing sequence table name.
+//
+// The backing tables must have already been created. This function will
+// then ensure that the next value is set to a value greater than any
+// currently stored in the using table on the target keyspace. If the
+// backing table is updated to a new higher value then it will also tell
+// the primary tablet serving the sequence to refresh/reset its cache to
+// be sure that it does not provide a value that is less than the current max.
+func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	// Now we need to initialize the backing sequence tables so that
 	// the next values they generate are greater than those that
 	// currently exist in the using table on the target keyspace.
@@ -2021,7 +2050,7 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context) e
 		// a higher value.
 		shardResults := make([]int64, 0, len(ts.TargetShards()))
 		srMu := sync.Mutex{}
-		err = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
 				sqlescape.EscapeID(sequenceMetadata.usingTableDefinition.AutoIncrement.Column),
 				sqlescape.EscapeID(sequenceMetadata.usingTableDBName),
