@@ -72,7 +72,7 @@ type Controller interface {
 	// RegisterQueryRuleSource adds a query rule source
 	RegisterQueryRuleSource(ruleSource string)
 
-	// RegisterQueryRuleSource removes a query rule source
+	// UnRegisterQueryRuleSource removes a query rule source
 	UnRegisterQueryRuleSource(ruleSource string)
 
 	// SetQueryRules sets the query rules for this QueryService

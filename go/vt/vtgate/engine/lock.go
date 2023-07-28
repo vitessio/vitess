@@ -97,7 +97,7 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 			if err != nil {
 				return nil, err
 			}
-			lName = er.Value().ToString()
+			lName = er.Value(vcursor.ConnCollation()).ToString()
 		}
 		qr, err := lf.execLock(ctx, vcursor, bindVars, rss[0])
 		if err != nil {

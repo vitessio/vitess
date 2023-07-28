@@ -73,7 +73,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	errch := make(chan error, 1)
 	go func() {
 		startPos := mysql.EncodePosition(uvs.pos)
-		vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, "", uvs.filter, uvs.getVSchema(), uvs.send2, "catchup", uvs.vse)
+		vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, "", uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send2, "catchup", uvs.vse)
 		uvs.setVs(vs)
 		errch <- vs.Stream()
 		uvs.setVs(nil)
@@ -255,10 +255,24 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 				log.Infof("sendFieldEvent returned error %v", err)
 				return err
 			}
+			// sendFieldEvent() sends a BEGIN event first.
+			uvs.inTransaction = true
 		}
+
 		if len(rows.Rows) == 0 {
 			log.V(2).Infof("0 rows returned for table %s", tableName)
 			return nil
+		}
+
+		// We are about to send ROW events, so we need to ensure
+		// that we do so within a transaction. The COMMIT event
+		// will be sent in sendEventsForRows() below.
+		if !uvs.inTransaction {
+			evs := []*binlogdatapb.VEvent{{
+				Type: binlogdatapb.VEventType_BEGIN,
+			}}
+			uvs.send(evs)
+			uvs.inTransaction = true
 		}
 
 		newLastPK = sqltypes.CustomProto3ToResult(uvs.pkfields, &querypb.QueryResult{
@@ -271,6 +285,8 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			log.Infof("sendEventsForRows returned error %v", err)
 			return err
 		}
+		// sendEventsForRows() sends a COMMIT event last.
+		uvs.inTransaction = false
 
 		uvs.setCopyState(tableName, qrLastPK)
 		log.V(2).Infof("NewLastPK: %v", qrLastPK)
@@ -302,7 +318,7 @@ func (uvs *uvstreamer) fastForward(stopPos string) error {
 	}()
 	log.Infof("starting fastForward from %s upto pos %s", mysql.EncodePosition(uvs.pos), stopPos)
 	uvs.stopPos, _ = mysql.DecodePosition(stopPos)
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), "", uvs.filter, uvs.getVSchema(), uvs.send2, "fastforward", uvs.vse)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), "", uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send2, "fastforward", uvs.vse)
 	uvs.setVs(vs)
 	return vs.Stream()
 }

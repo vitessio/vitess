@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -233,6 +235,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		return compareJSON(left, right)
 	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
+	case lt == rt && fallbackBinary(lt):
+		return bytes.Compare(left.ToRawBytes(), right.ToRawBytes()), nil
 	default:
 		// Quoting MySQL Docs:
 		//
@@ -245,6 +249,18 @@ func evalCompare(left, right eval) (comp int, err error) {
 		rf, _ := evalToFloat(right)
 		return compareNumeric(lf, rf)
 	}
+}
+
+// fallbackBinary compares two values of the same type using the fallback binary comparison.
+// This is for types we don't yet properly support otherwise but do end up being used
+// for comparisons, for example when using vdiff.
+// TODO: Clean this up as we add more properly supported types and comparisons.
+func fallbackBinary(t sqltypes.Type) bool {
+	switch t {
+	case sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry:
+		return true
+	}
+	return false
 }
 
 func evalCompareTuplesNullSafe(left, right []eval) (bool, error) {
@@ -558,7 +574,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var col collations.ID
+	var col collations.TypedCollation
 	left, right, col, err = mergeAndCoerceCollations(left, right)
 	if err != nil {
 		return nil, err
@@ -567,11 +583,11 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	var matched bool
 	switch {
 	case typeIsTextual(left.SQLType()) && typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col)
+		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col.Collation)
 	case typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col)
+		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col.Collation)
 	case typeIsTextual(left.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col)
+		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col.Collation)
 	default:
 		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
 	}
@@ -650,5 +666,5 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }

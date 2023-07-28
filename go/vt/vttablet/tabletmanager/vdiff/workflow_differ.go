@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/schema"
 
@@ -63,7 +64,38 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // by MySQL on each side then we'll have the same number of extras on
 // both sides. If that's the case, then let's see if the extra rows on
 // both sides are actually different.
-func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) {
+func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) error {
+	if dr.MismatchedRows == 0 {
+		// Get the VSchema on the target and source keyspaces. We can then use this
+		// for handling additional edge cases, such as adjusting results for reference
+		// tables when the shard count is different between the source and target as
+		// then there will be a extra rows reported on the side with more shards.
+		srcvschema, err := wd.ct.ts.GetVSchema(wd.ct.vde.ctx, wd.ct.sourceKeyspace)
+		if err != nil {
+			return err
+		}
+		tgtvschema, err := wd.ct.ts.GetVSchema(wd.ct.vde.ctx, wd.ct.vde.thisTablet.Keyspace)
+		if err != nil {
+			return err
+		}
+		svt, sok := srcvschema.Tables[dr.TableName]
+		tvt, tok := tgtvschema.Tables[dr.TableName]
+		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference && dr.ExtraRowsSource%dr.MatchingRows == 0 {
+			// We have a reference table with no mismatched rows and the number of
+			// extra rows on the source is a multiple of the matching rows. This
+			// means that there's no actual diff.
+			dr.ExtraRowsSource = 0
+			dr.ExtraRowsSourceDiffs = nil
+		}
+		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference && dr.ExtraRowsTarget%dr.MatchingRows == 0 {
+			// We have a reference table with no mismatched rows and the number of
+			// extra rows on the target is a multiple of the matching rows. This
+			// means that there's no actual diff.
+			dr.ExtraRowsTarget = 0
+			dr.ExtraRowsTargetDiffs = nil
+		}
+	}
+
 	if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
 		for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
 			foundMatch := false
@@ -97,6 +129,8 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 	if len(dr.ExtraRowsTargetDiffs) > maxVDiffReportSampleRows {
 		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxVDiffReportSampleRows-1]
 	}
+
+	return nil
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
@@ -121,7 +155,10 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
-		wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
+		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare); err != nil {
+			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
+			return vterrors.Wrap(err, "failed to reconcile extra rows")
+		}
 	}
 
 	if dr.MismatchedRows > 0 || dr.ExtraRowsTarget > 0 || dr.ExtraRowsSource > 0 {
@@ -168,7 +205,13 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+			sqltypes.Int64BindVariable(wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
 		qr, err := dbClient.ExecuteFetch(query, 1)
 		if err != nil {
 			return err
@@ -198,7 +241,10 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 }
 
 func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	query := fmt.Sprintf(sqlGetIncompleteTables, wd.ct.id)
+	query, err := sqlparser.ParseAndBind(sqlGetIncompleteTables, sqltypes.Int64BindVariable(wd.ct.id))
+	if err != nil {
+		return err
+	}
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -268,7 +314,13 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 
 // getTableLastPK gets the lastPK protobuf message for a given vdiff table.
 func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
-	query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(wd.ct.id),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return nil, err
+	}
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return nil, err
@@ -295,7 +347,10 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 	for tableName := range wd.tableDiffers {
 		// Update the table statistics for each table if requested.
 		if wd.opts.CoreOptions.UpdateTableStats {
-			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, wd.ct.vde.dbName, tableName)
+			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable,
+				wd.ct.vde.dbName,
+				tableName,
+			)
 			log.Infof("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query)
 			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
 				return err
@@ -307,8 +362,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 			tableIn.WriteByte(',')
 		}
 	}
-	query := fmt.Sprintf(sqlGetAllTableRows, encodeString(wd.ct.vde.dbName), tableIn.String())
-	isqr, err := dbClient.ExecuteFetch(query, -1)
+	query := sqlparser.BuildParsedQuery(sqlGetAllTableRows,
+		encodeString(wd.ct.vde.dbName),
+		tableIn.String(),
+	)
+	isqr, err := dbClient.ExecuteFetch(query.Query, -1)
 	if err != nil {
 		return err
 	}
@@ -316,13 +374,26 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		tableName, _ := row.ToString("table_name")
 		tableRows, _ := row.ToInt64("table_rows")
 
-		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+			sqltypes.Int64BindVariable(wd.ct.id),
+			sqltypes.StringBindVariable(tableName),
+		)
+		if err != nil {
+			return err
+		}
 		qr, err := dbClient.ExecuteFetch(query, -1)
 		if err != nil {
 			return err
 		}
 		if len(qr.Rows) == 0 {
-			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(tableName), tableRows)
+			query, err = sqlparser.ParseAndBind(sqlNewVDiffTable,
+				sqltypes.Int64BindVariable(wd.ct.id),
+				sqltypes.StringBindVariable(tableName),
+				sqltypes.Int64BindVariable(tableRows),
+			)
+			if err != nil {
+				return err
+			}
 		} else if len(qr.Rows) == 1 {
 			query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
 				sqltypes.Int64BindVariable(tableRows),

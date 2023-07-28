@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
@@ -116,21 +115,18 @@ func Init() (*Env, error) {
 		// MySQL and Percona are equivalent for the tests
 		te.DBType = string(mysqlctl.FlavorMySQL)
 	}
-	dbVersionStr := te.Mysqld.GetVersionString()
-	dbVersionStrParts := strings.Split(dbVersionStr, ".")
-	var err error
-	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[0])
+	dbVersionStr, err := te.Mysqld.GetVersionString(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("could not parse database major version from '%s': %v", dbVersionStr, err)
+		return nil, fmt.Errorf("could not get server version: %w", err)
 	}
-	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[1])
+	_, version, err := mysqlctl.ParseVersionString(dbVersionStr)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse database minor version from '%s': %v", dbVersionStr, err)
+		return nil, fmt.Errorf("could not parse server version %q: %w", dbVersionStr, err)
 	}
-	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[2])
-	if err != nil {
-		return nil, fmt.Errorf("could not parse database patch version from '%s': %v", dbVersionStr, err)
-	}
+
+	te.DBMajorVersion = version.Major
+	te.DBMinorVersion = version.Minor
+	te.DBPatchVersion = version.Patch
 
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
@@ -189,4 +185,28 @@ func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
 		adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
 	}
 	return adjusted
+}
+
+// ServerCapability is used to define capabilities for which we want to optionally run tests
+// if the underlying mysql server supports them.
+type ServerCapability int32
+
+const (
+	ServerCapabilityInvisibleColumn              ServerCapability = 1
+	ServerCapabilityGeneratedInvisiblePrimaryKey ServerCapability = 2
+)
+
+// HasCapability returns true if the server has the given capability.
+// Used to skip tests that require a certain version of MySQL.
+func (te *Env) HasCapability(cap ServerCapability) bool {
+	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
+		return false
+	}
+	switch cap {
+	case ServerCapabilityInvisibleColumn:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 23
+	case ServerCapabilityGeneratedInvisiblePrimaryKey:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 30
+	}
+	return false
 }

@@ -44,12 +44,12 @@ func (hp *horizonPlanning) pushAggregation(
 	err error) {
 	pushed = true
 	switch plan := plan.(type) {
-	case *routeGen4:
+	case *route:
 		output = plan
 		groupingOffsets, outputAggrsOffset, _, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
 		return
 
-	case *joinGen4:
+	case *join:
 		output = plan
 		groupingOffsets, outputAggrsOffset, err = hp.pushAggrOnJoin(ctx, plan, grouping, aggregations)
 		return
@@ -69,7 +69,7 @@ func (hp *horizonPlanning) pushAggregation(
 		pushed = false
 
 		for _, grp := range grouping {
-			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
+			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.SimplifiedExpr, plan.input)
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -112,7 +112,7 @@ func (hp *horizonPlanning) pushAggregation(
 
 func pushAggrOnRoute(
 	ctx *plancontext.PlanningContext,
-	plan *routeGen4,
+	plan *route,
 	aggregations []operators.Aggr,
 	grouping []operators.GroupBy,
 	ignoreOutputOrder bool,
@@ -166,8 +166,8 @@ func pushAggrOnRoute(
 			pos = newOffset(groupingCols[idx])
 		}
 
-		if expr.WeightStrExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
-			wsExpr := weightStringFor(expr.WeightStrExpr)
+		if expr.SimplifiedExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
+			wsExpr := weightStringFor(expr.SimplifiedExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
 				return nil, nil, nil, err
@@ -184,7 +184,7 @@ func pushAggrOnRoute(
 
 func pushAggrsAndGroupingInOrder(
 	ctx *plancontext.PlanningContext,
-	plan *routeGen4,
+	plan *route,
 	it *sortedIterator,
 	sel *sqlparser.Select,
 	vtgateAggregation [][]offsets,
@@ -228,12 +228,8 @@ func addAggregationToSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Sel
 
 func countStarAggr() *operators.Aggr {
 	f := &sqlparser.CountStar{}
-
-	return &operators.Aggr{
-		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   popcode.AggregateCountStar,
-		Alias:    "count(*)",
-	}
+	aggr := operators.NewAggr(popcode.AggregateCountStar, f, &sqlparser.AliasedExpr{Expr: f}, "count(*)")
+	return &aggr
 }
 
 /*
@@ -250,7 +246,7 @@ vtgate level, we can offload most of the work to MySQL, and at the vtgate just s
 */
 func (hp *horizonPlanning) pushAggrOnJoin(
 	ctx *plancontext.PlanningContext,
-	join *joinGen4,
+	join *join,
 	grouping []operators.GroupBy,
 	aggregations []operators.Aggr,
 ) ([]offsets, [][]offsets, error) {
@@ -287,7 +283,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			return nil, nil, err
 		}
 		l = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
-		rhsGrouping = append(rhsGrouping, operators.GroupBy{Inner: l})
+		rhsGrouping = append(rhsGrouping, operators.NewGroupBy(l, nil, nil))
 	}
 
 	// Next we push the aggregations to both sides
@@ -429,14 +425,14 @@ func isMinOrMax(in popcode.AggregateOpcode) bool {
 	}
 }
 
-func isRandom(in popcode.AggregateOpcode) bool {
-	return in == popcode.AggregateRandom
+func isAnyValue(in popcode.AggregateOpcode) bool {
+	return in == popcode.AggregateAnyValue
 }
 
 func splitAggregationsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregations []operators.Aggr,
-	join *joinGen4,
+	join *join,
 ) ([]*operators.Aggr, []*operators.Aggr, error) {
 	var lhsAggrs, rhsAggrs []*operators.Aggr
 	for _, aggr := range aggregations {
@@ -448,7 +444,7 @@ func splitAggregationsToLeftAndRight(
 			deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 			var other *operators.Aggr
 			// if we are sending down min/max/random, we don't have to multiply the results with anything
-			if !isMinOrMax(aggr.OpCode) && !isRandom(aggr.OpCode) {
+			if !isMinOrMax(aggr.OpCode) && !isAnyValue(aggr.OpCode) {
 				other = countStarAggr()
 			}
 			switch {
@@ -468,7 +464,7 @@ func splitAggregationsToLeftAndRight(
 
 func splitGroupingsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
-	join *joinGen4,
+	join *join,
 	grouping, lhsGrouping []operators.GroupBy,
 ) ([]operators.GroupBy, []operators.GroupBy, []int, error) {
 	var rhsGrouping []operators.GroupBy

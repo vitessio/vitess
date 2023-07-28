@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -87,7 +89,7 @@ type Config struct {
 	Charset string
 
 	// PlannerVersion is the planner version to use for the vtgate.
-	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
+	// Choose between Gen4, Gen4Greedy and Gen4Left2Right
 	PlannerVersion string
 
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
@@ -286,6 +288,32 @@ func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
 	return connParams
 }
 
+// SimulateMySQLHang simulates a scenario where the backend MySQL stops all data from flowing through.
+// Please ensure to `defer db.StopSimulateMySQLHang()` after calling this method.
+func (db *LocalCluster) SimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.AddTimeoutToxic()
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
+// PauseSimulateMySQLHang pauses the MySQL hang simulation to allow queries to go through.
+// This is useful when you want to allow new queries to go through, but keep the existing ones hanging.
+func (db *LocalCluster) PauseSimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.UpdateTimeoutToxicity(0)
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
+// StopSimulateMySQLHang stops the MySQL hang simulation to allow queries to go through.
+func (db *LocalCluster) StopSimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.RemoveTimeoutToxic()
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
 // Setup brings up the self-contained Vitess cluster by spinning up
 // MySQL and Vitess instances. The spawned processes will be running
 // until the TearDown() method is called.
@@ -463,28 +491,26 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 			}
 		}
 
-		glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
-		for _, filepath := range glob {
-			cmds, err := LoadSQLFile(filepath, schemaDir)
-			if err != nil {
-				return err
-			}
-
-			// One single vschema migration per file
-			if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
-				if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+		if shouldRunDatabaseMigrations {
+			glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
+			for _, filepath := range glob {
+				cmds, err := LoadSQLFile(filepath, schemaDir)
+				if err != nil {
 					return err
 				}
-				continue
-			}
 
-			if !shouldRunDatabaseMigrations {
-				continue
-			}
+				// One single vschema migration per file
+				if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
+					if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+						return err
+					}
+					continue
+				}
 
-			for _, dbname := range db.shardNames(kpb) {
-				if err := db.Execute(cmds, dbname); err != nil {
-					return err
+				for _, dbname := range db.shardNames(kpb) {
+					if err := db.Execute(cmds, dbname); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -733,4 +759,29 @@ func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	}
 
 	return sql, nil
+}
+
+func (db *LocalCluster) VTProcess() *VtProcess {
+	return db.vt
+}
+
+// ReadVSchema reads the vschema from the vtgate endpoint for it and returns
+// a pointer to the interface. To read this vschema, the caller must convert it to a map
+func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", "127.0.0.1", vt.Port))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var results interface{}
+	err = json.Unmarshal(res, &results)
+	if err != nil {
+		return nil, err
+	}
+	return &results, nil
 }

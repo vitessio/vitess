@@ -20,20 +20,17 @@ import (
 	"bytes"
 	"io"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type (
@@ -49,21 +46,22 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
 		case *Join:
 			return optimizeJoin(ctx, op)
-		case *Derived:
-			return optimizeDerived(ctx, op)
+		case *Horizon:
+			if op.TableId != nil {
+				return pushDownDerived(ctx, op)
+			}
 		case *SubQuery:
 			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
-			return optimizeFilter(op)
-		default:
-			return operator, rewrite.SameTree, nil
+			return pushDownFilter(op)
 		}
+		return operator, rewrite.SameTree, nil
 	})
 
 	if err != nil {
@@ -73,18 +71,16 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	return compact(ctx, op)
 }
 
-func optimizeFilter(op *Filter) (ops.Operator, rewrite.ApplyResult, error) {
-	if route, ok := op.Source.(*Route); ok {
-		// let's push the filter into the route
-		op.Source = route.Source
-		route.Source = op
-		return route, rewrite.NewTree, nil
+func pushDownFilter(op *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+	// TODO: once all horizon planning has been moved to the operators, we can remove this method
+	if _, ok := op.Source.(*Route); ok {
+		return rewrite.Swap(op, op.Source, "push filter into Route")
 	}
 
 	return op, rewrite.SameTree, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.ApplyResult, error) {
+func pushDownDerived(ctx *plancontext.PlanningContext, op *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
 		return op, rewrite.SameTree, nil
@@ -95,22 +91,15 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operato
 		return op, rewrite.SameTree, nil
 	}
 
-	op.Source = innerRoute.Source
-	innerRoute.Source = op
-
-	return innerRoute, rewrite.NewTree, nil
+	return rewrite.Swap(op, op.Source, "push derived under route")
 }
 
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.ApplyResult, error) {
-	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
-	if err != nil {
-		return nil, false, err
-	}
-	return join, rewrite.NewTree, nil
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, *rewrite.ApplyResult, error) {
+	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.ApplyResult, err error) {
-	changed = rewrite.NewTree
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed *rewrite.ApplyResult, err error) {
+
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
 		result, err = leftToRightSolve(ctx, op)
@@ -125,6 +114,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
 	}
 
+	changed = rewrite.NewTree("solved query graph", result)
 	return
 }
 
@@ -171,7 +161,7 @@ func buildVindexTableForDML(
 		return nil, nil, vterrors.VT09002(dmlType)
 	}
 
-	// we are dealing with an explicitly targeted UPDATE
+	// we are dealing with an explicitly targeted DML
 	routing := &TargetedRouting{
 		keyspace:          vindexTable.Keyspace,
 		TargetDestination: dest,
@@ -252,7 +242,7 @@ func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (ops.Ope
 			continue
 		}
 		joinPredicates := qg.GetPredicates(TableID(acc), TableID(plan))
-		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
+		acc, _, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
 			return nil, err
 		}
@@ -386,7 +376,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs ops.Op
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
+	join, _, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
 	if err != nil {
 		return nil, err
 	}
@@ -400,9 +390,9 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 	required := false
 
 	_ = rewrite.Visit(op, func(current ops.Operator) error {
-		derived, isDerived := current.(*Derived)
+		horizon, isHorizon := current.(*Horizon)
 
-		if isDerived && !derived.IsMergeable(ctx) {
+		if isHorizon && horizon.IsDerived() && !horizon.IsMergeable(ctx) {
 			required = true
 			return io.EOF
 		}
@@ -413,30 +403,38 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 	return required
 }
 
-func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, error) {
+func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, *rewrite.ApplyResult, error) {
 	newPlan, err := Merge(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if newPlan != nil {
-		return newPlan, nil
+		return newPlan, rewrite.NewTree("merge routes into single operator", newPlan), nil
 	}
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, vterrors.VT12001("LEFT JOIN with derived tables")
+			return nil, nil, vterrors.VT12001("LEFT JOIN with derived tables")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, vterrors.VT12001("JOIN between derived tables")
+			return nil, nil, vterrors.VT12001("JOIN between derived tables")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
-		return pushJoinPredicates(ctx, joinPredicates, join)
+		newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
+		if err != nil {
+			return nil, nil, err
+		}
+		return newOp, rewrite.NewTree("merge routes, but switch sides", newOp), nil
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
-	return pushJoinPredicates(ctx, joinPredicates, join)
+	newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
+	if err != nil {
+		return nil, nil, err
+	}
+	return newOp, rewrite.NewTree("logical join to applyJoin ", newOp), nil
 }
 
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
@@ -503,11 +501,11 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a ops.Operator, exp sqlp
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = rewrite.Visit(a, func(rel ops.Operator) error {
-			to, isTableOp := rel.(TableIDIntroducer)
+			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return nil
 			}
-			id := to.Introduces()
+			id := to.introducesTableID()
 			if deps.IsSolvedBy(id) {
 				tableInfo, err := ctx.SemTable.TableInfoFor(id)
 				if err != nil {

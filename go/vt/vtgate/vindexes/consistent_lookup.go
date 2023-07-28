@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -35,40 +34,55 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const (
+	consistentLookupParamWriteOnly = "write_only"
+)
+
 var (
-	_ SingleColumn   = (*ConsistentLookupUnique)(nil)
-	_ Lookup         = (*ConsistentLookupUnique)(nil)
-	_ WantOwnerInfo  = (*ConsistentLookupUnique)(nil)
-	_ LookupPlanable = (*ConsistentLookupUnique)(nil)
-	_ SingleColumn   = (*ConsistentLookup)(nil)
-	_ Lookup         = (*ConsistentLookup)(nil)
-	_ WantOwnerInfo  = (*ConsistentLookup)(nil)
-	_ LookupPlanable = (*ConsistentLookup)(nil)
+	_ SingleColumn    = (*ConsistentLookupUnique)(nil)
+	_ Lookup          = (*ConsistentLookupUnique)(nil)
+	_ WantOwnerInfo   = (*ConsistentLookupUnique)(nil)
+	_ LookupPlanable  = (*ConsistentLookupUnique)(nil)
+	_ ParamValidating = (*ConsistentLookupUnique)(nil)
+	_ SingleColumn    = (*ConsistentLookup)(nil)
+	_ Lookup          = (*ConsistentLookup)(nil)
+	_ WantOwnerInfo   = (*ConsistentLookup)(nil)
+	_ LookupPlanable  = (*ConsistentLookup)(nil)
+	_ ParamValidating = (*ConsistentLookup)(nil)
+
+	consistentLookupParams = append(
+		append(make([]string, 0), lookupInternalParams...),
+		consistentLookupParamWriteOnly,
+	)
 )
 
 func init() {
-	Register("consistent_lookup", NewConsistentLookup)
-	Register("consistent_lookup_unique", NewConsistentLookupUnique)
+	Register("consistent_lookup", newConsistentLookup)
+	Register("consistent_lookup_unique", newConsistentLookupUnique)
 }
 
 // ConsistentLookup is a non-unique lookup vindex that can stay
 // consistent with respect to its owner table.
 type ConsistentLookup struct {
 	*clCommon
+	unknownParams []string
 }
 
-// NewConsistentLookup creates a ConsistentLookup vindex.
+// newConsistentLookup creates a ConsistentLookup vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func NewConsistentLookup(name string, m map[string]string) (Vindex, error) {
+func newConsistentLookup(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
 		return nil, err
 	}
-	return &ConsistentLookup{clCommon: clc}, nil
+	return &ConsistentLookup{
+		clCommon:      clc,
+		unknownParams: FindUnknownParams(m, consistentLookupParams),
+	}, nil
 }
 
 // Cost returns the cost of this vindex as 20.
@@ -152,6 +166,11 @@ func (lu *ConsistentLookup) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
+// UnknownParams implements the ParamValidating interface.
+func (lu *ConsistentLookup) UnknownParams() []string {
+	return lu.unknownParams
+}
+
 //====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
@@ -159,20 +178,24 @@ func (lu *ConsistentLookup) AutoCommitEnabled() bool {
 // Unique and a Lookup.
 type ConsistentLookupUnique struct {
 	*clCommon
+	unknownParams []string
 }
 
-// NewConsistentLookupUnique creates a ConsistentLookupUnique vindex.
+// newConsistentLookupUnique creates a ConsistentLookupUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func NewConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
+func newConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
 		return nil, err
 	}
-	return &ConsistentLookupUnique{clCommon: clc}, nil
+	return &ConsistentLookupUnique{
+		clCommon:      clc,
+		unknownParams: FindUnknownParams(m, consistentLookupParams),
+	}, nil
 }
 
 // Cost returns the cost of this vindex as 10.
@@ -271,7 +294,7 @@ type clCommon struct {
 func newCLCommon(name string, m map[string]string) (*clCommon, error) {
 	lu := &clCommon{name: name}
 	var err error
-	lu.writeOnly, err = boolFromMap(m, "write_only")
+	lu.writeOnly, err = boolFromMap(m, consistentLookupParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -389,8 +412,7 @@ func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [
 func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		// TODO(king-11) make collation aware
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], collations.Unknown)
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.ConnCollation())
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false
@@ -469,4 +491,9 @@ func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
 // IsBackfilling implements the LookupBackfill interface
 func (lu *ConsistentLookupUnique) IsBackfilling() bool {
 	return lu.writeOnly
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (lu *ConsistentLookupUnique) UnknownParams() []string {
+	return lu.unknownParams
 }

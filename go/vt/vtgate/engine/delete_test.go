@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -64,7 +65,7 @@ func TestDeleteUnsharded(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -89,14 +90,14 @@ func TestDeleteEqual(t *testing.T) {
 	})
 
 	// Failure case
-	expr := evalengine.NewBindVar("aa")
+	expr := evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
 func TestDeleteEqualMultiCol(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -121,14 +122,14 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	})
 
 	// Failure case
-	expr := evalengine.NewBindVar("aa")
+	expr := evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
 func TestDeleteEqualNoRoute(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -160,7 +161,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 
 func TestDeleteEqualNoScatter(t *testing.T) {
 	t.Skip("planner does not produces this plan anymore")
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table":      "lkp",
 		"from":       "from",
 		"to":         "toc",
@@ -555,7 +556,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 }
 
 func TestDeleteEqualSubshard(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{

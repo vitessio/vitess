@@ -123,7 +123,7 @@ func TestParseMysql56GTIDSetInvalid(t *testing.T) {
 
 	for _, input := range table {
 		_, err := ParseMysql56GTIDSet(input)
-		assert.Error(t, err, "parseMysql56GTIDSet(%#v) expected error, got none", err)
+		assert.Error(t, err, "ParseMysql56GTIDSet(%#v) expected error, got none", err)
 	}
 }
 

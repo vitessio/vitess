@@ -85,23 +85,6 @@ func minmax(v1, v2 sqltypes.Value, min bool, collation collations.ID) (sqltypes.
 	return v2, nil
 }
 
-// isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(typ sqltypes.Type, collationID collations.ID) bool {
-	if sqltypes.IsBinary(typ) {
-		return true
-	}
-	if sqltypes.IsText(typ) {
-		return collationID == collations.CollationBinaryID
-	}
-	switch typ {
-	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum,
-		sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit, sqltypes.Geometry:
-		return true
-	default:
-		return false
-	}
-}
-
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
 // NULL is the lowest value. If any value is
 // numeric, then a numeric comparison is performed after
@@ -122,52 +105,99 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		return 1, nil
 	}
 
-	if isByteComparable(v1.Type(), collationID) && isByteComparable(v2.Type(), collationID) {
-		return bytes.Compare(v1.Raw(), v2.Raw()), nil
+	// We have a fast path here for the case where both values are
+	// the same type, and it's one of the basic types we can compare
+	// directly. This is a common case for equality checks.
+	if v1.Type() == v2.Type() {
+		switch {
+		case sqltypes.IsSigned(v1.Type()):
+			i1, err := v1.ToInt64()
+			if err != nil {
+				return 0, err
+			}
+			i2, err := v2.ToInt64()
+			if err != nil {
+				return 0, err
+			}
+			switch {
+			case i1 < i2:
+				return -1, nil
+			case i1 > i2:
+				return 1, nil
+			default:
+				return 0, nil
+			}
+		case sqltypes.IsUnsigned(v1.Type()):
+			u1, err := v1.ToUint64()
+			if err != nil {
+				return 0, err
+			}
+			u2, err := v2.ToUint64()
+			if err != nil {
+				return 0, err
+			}
+			switch {
+			case u1 < u2:
+				return -1, nil
+			case u1 > u2:
+				return 1, nil
+			default:
+				return 0, nil
+			}
+		case sqltypes.IsBinary(v1.Type()), v1.Type() == sqltypes.Date,
+			v1.Type() == sqltypes.Datetime, v1.Type() == sqltypes.Timestamp:
+			// We can't optimize for Time here, since Time is not sortable
+			// based on the raw bytes. This is because of cases like
+			// '24:00:00' and '101:00:00' which are both valid times and
+			// order wrong based on the raw bytes.
+			return bytes.Compare(v1.Raw(), v2.Raw()), nil
+		case sqltypes.IsText(v1.Type()):
+			if collationID == collations.CollationBinaryID {
+				return bytes.Compare(v1.Raw(), v2.Raw()), nil
+			}
+			coll := collationID.Get()
+			if coll == nil {
+				return 0, UnsupportedCollationError{ID: collationID}
+			}
+			result := coll.Collate(v1.Raw(), v2.Raw(), false)
+			switch {
+			case result < 0:
+				return -1, nil
+			case result > 0:
+				return 1, nil
+			default:
+				return 0, nil
+			}
+		}
 	}
 
-	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
+	v1eval, err := valueToEval(v1, collations.TypedCollation{
+		Collation:    collationID,
+		Coercibility: collations.CoerceImplicit,
+		Repertoire:   collations.RepertoireUnicode,
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	switch {
-	case sqltypes.IsText(typ):
-		collation := collationID.Get()
-		if collation == nil {
-			return 0, UnsupportedCollationError{ID: collationID}
-		}
-
-		v1Bytes, err := v1.ToBytes()
-		if err != nil {
-			return 0, err
-		}
-		v2Bytes, err := v2.ToBytes()
-		if err != nil {
-			return 0, err
-		}
-
-		switch result := collation.Collate(v1Bytes, v2Bytes, false); {
-		case result < 0:
-			return -1, nil
-		case result > 0:
-			return 1, nil
-		default:
-			return 0, nil
-		}
-
-	case sqltypes.IsNumber(typ):
-		v1cast, err := valueToEvalCast(v1, typ)
-		if err != nil {
-			return 0, err
-		}
-		v2cast, err := valueToEvalCast(v2, typ)
-		if err != nil {
-			return 0, err
-		}
-		return compareNumeric(v1cast, v2cast)
-
-	default:
-		return 0, UnsupportedComparisonError{Type1: v1.Type(), Type2: v2.Type()}
+	v2eval, err := valueToEval(v2, collations.TypedCollation{
+		Collation:    collationID,
+		Coercibility: collations.CoerceImplicit,
+		Repertoire:   collations.RepertoireUnicode,
+	})
+	if err != nil {
+		return 0, err
 	}
+
+	out, err := evalCompare(v1eval, v2eval)
+	if err != nil {
+		return 0, err
+	}
+	if out == 0 {
+		return 0, nil
+	}
+	if out > 0 {
+		return 1, nil
+	}
+	return -1, nil
 }

@@ -21,12 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func TestInsertGenerator(t *testing.T) {
-	ig := NewInsertGenerator(binlogplayer.BlpStopped, "a")
+	ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "a")
 	ig.now = 111
 	ig.AddRow("b", &binlogdatapb.BinlogSource{Keyspace: "c"}, "d", "e", "f", binlogdatapb.VReplicationWorkflowType_Materialize, binlogdatapb.VReplicationWorkflowSubType_None, false)
 	want := `insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values ` +

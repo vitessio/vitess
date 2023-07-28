@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -117,6 +119,9 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
+	// StopReplicationError error is used by StopReplication
+	StopReplicationError error
+
 	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
 	// in it, then the function returns nil, else the function returns an error
 	WaitPrimaryPositions []mysql.Position
@@ -158,9 +163,6 @@ type FakeMysqlDaemon struct {
 	// FetchSuperQueryResults is used by FetchSuperQuery
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
-	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
-	BinlogPlayerEnabled atomic.Bool
-
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_master_enabled.
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_slave_enabled.
@@ -169,6 +171,9 @@ type FakeMysqlDaemon struct {
 	// TimeoutHook is a func that can be called at the beginning of any method to fake a timeout.
 	// all a test needs to do is make it { return context.DeadlineExceeded }
 	TimeoutHook func() error
+
+	// Version is the version that will be returned by GetVersionString.
+	Version string
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -179,6 +184,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		db:              db,
 		Running:         true,
 		IOThreadRunning: true,
+		Version:         "8.0.32",
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0, 0)
@@ -224,8 +230,18 @@ func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMys
 }
 
 // RunMysqlUpgrade is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
+func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
 	return nil
+}
+
+// ApplyBinlogFile is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
+	return nil
+}
+
+// ReadBinlogFilesTimestamps is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
+	return nil, nil
 }
 
 // ReinitConfig is part of the MysqlDaemon interface
@@ -414,6 +430,9 @@ func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos 
 
 // StopReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
+	if fmd.StopReplicationError != nil {
+		return fmd.StopReplicationError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 	})
@@ -455,11 +474,12 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if stopReplicationBefore {
 		cmds = append(cmds, "STOP SLAVE")
 	}
-	cmds = append(cmds, "RESET SLAVE ALL")
 	cmds = append(cmds, "FAKE SET MASTER")
 	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")
 	}
+	fmd.CurrentSourceHost = host
+	fmd.CurrentSourcePort = port
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
 
@@ -532,23 +552,15 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
 
-	qr, ok := fmd.FetchSuperQueryMap[query]
-	if !ok {
-		return nil, fmt.Errorf("unexpected query: %v", query)
+	if qr, ok := fmd.FetchSuperQueryMap[query]; ok {
+		return qr, nil
 	}
-	return qr, nil
-}
-
-// EnableBinlogPlayback is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Store(true)
-	return nil
-}
-
-// DisableBinlogPlayback disable playback of binlog events
-func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Store(false)
-	return nil
+	for k, qr := range fmd.FetchSuperQueryMap {
+		if ok, _ := regexp.MatchString(k, query); ok {
+			return qr, nil
+		}
+	}
+	return nil, fmt.Errorf("unexpected query: %v", query)
 }
 
 // Close is part of the MysqlDaemon interface
@@ -667,6 +679,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncClients() uint32 {
 	return 0
 }
 
+// SemiSyncExtensionLoaded is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded() (bool, error) {
+	return true, nil
+}
+
 // SemiSyncSettings is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
 	return 10000000, 1
@@ -678,12 +695,12 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	return fmd.SemiSyncReplicaEnabled, nil
 }
 
-// GetVersionString is part of the MysqlDeamon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString() string {
-	return ""
+// GetVersionString is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
+	return fmd.Version, nil
 }
 
-// GetVersionComment is part of the MysqlDeamon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
-	return ""
+// GetVersionComment is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
+	return "", nil
 }

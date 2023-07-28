@@ -35,11 +35,12 @@ type (
 	Distinct struct {
 		Source    Primitive
 		CheckCols []CheckCol
-		Truncate  bool
+		Truncate  int
 	}
 	CheckCol struct {
 		Col       int
 		WsCol     *int
+		Type      sqltypes.Type
 		Collation collations.ID
 	}
 	probeTable struct {
@@ -189,8 +190,8 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 			result.Rows = append(result.Rows, row)
 		}
 	}
-	if d.Truncate {
-		return result.Truncate(len(d.CheckCols)), nil
+	if d.Truncate > 0 {
+		return result.Truncate(d.Truncate), nil
 	}
 	return result, err
 }
@@ -260,8 +261,8 @@ func (d *Distinct) description() PrimitiveDescription {
 		other["Collations"] = colls
 	}
 
-	if d.Truncate {
-		other["ResultColumns"] = len(d.CheckCols)
+	if d.Truncate > 0 {
+		other["ResultColumns"] = d.Truncate
 	}
 	return PrimitiveDescription{
 		Other:        other,
@@ -274,15 +275,15 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 	return CheckCol{
 		Col:       *cc.WsCol,
 		WsCol:     nil,
+		Type:      sqltypes.VarBinary,
 		Collation: collations.CollationBinaryID,
 	}
 }
 
 func (cc CheckCol) String() string {
-	coll := cc.Collation.Get()
 	var collation string
-	if coll != nil {
-		collation = ": " + coll.Name()
+	if sqltypes.IsText(cc.Type) && cc.Collation != collations.Unknown {
+		collation = ": " + cc.Collation.Get().Name()
 	}
 
 	var column string

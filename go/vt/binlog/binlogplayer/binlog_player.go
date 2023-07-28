@@ -42,10 +42,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -58,17 +59,6 @@ var (
 	BlplQuery = "Query"
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
-
-	// VReplicationInit is for the Init state.
-	VReplicationInit = "Init"
-	// VReplicationCopying is for the Copying state.
-	VReplicationCopying = "Copying"
-	// BlpRunning is for the Running state.
-	BlpRunning = "Running"
-	// BlpStopped is for the Stopped state.
-	BlpStopped = "Stopped"
-	// BlpError is for the Error state.
-	BlpError = "Error"
 )
 
 // Stats is the internal stats of a player. It is a different
@@ -231,12 +221,12 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 // If an error is encountered, it updates the vreplication state to "Error".
 // If a stop position was specified, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
-	if err := blp.setVReplicationState(BlpRunning, ""); err != nil {
+	if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Running, ""); err != nil {
 		log.Errorf("Error writing Running state: %v", err)
 	}
 
 	if err := blp.applyEvents(ctx); err != nil {
-		if err := blp.setVReplicationState(BlpError, err.Error()); err != nil {
+		if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); err != nil {
 			log.Errorf("Error writing stop state: %v", err)
 		}
 		return err
@@ -291,14 +281,14 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		case blp.position.Equal(blp.stopPosition):
 			msg := fmt.Sprintf("not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
 			log.Info(msg)
-			if err := blp.setVReplicationState(BlpStopped, msg); err != nil {
+			if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Stopped, msg); err != nil {
 				log.Errorf("Error writing stop state: %v", err)
 			}
 			return nil
 		case blp.position.AtLeast(blp.stopPosition):
 			msg := fmt.Sprintf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
 			log.Error(msg)
-			if err := blp.setVReplicationState(BlpStopped, msg); err != nil {
+			if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Stopped, msg); err != nil {
 				log.Errorf("Error writing stop state: %v", err)
 			}
 			// Don't return an error. Otherwise, it will keep retrying.
@@ -398,7 +388,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 					if blp.position.AtLeast(blp.stopPosition) {
 						msg := "Reached stopping position, done playing logs"
 						log.Info(msg)
-						if err := blp.setVReplicationState(BlpStopped, msg); err != nil {
+						if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Stopped, msg); err != nil {
 							log.Errorf("Error writing stop state: %v", err)
 						}
 						return nil
@@ -513,15 +503,15 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	return nil
 }
 
-func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
+func (blp *BinlogPlayer) setVReplicationState(state binlogdatapb.VReplicationWorkflowState, message string) error {
 	if message != "" {
 		blp.blplStats.History.Add(&StatsHistoryRecord{
 			Time:    time.Now(),
 			Message: message,
 		})
 	}
-	blp.blplStats.State.Store(state)
-	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(MessageTruncate(message)), blp.uid)
+	blp.blplStats.State.Store(state.String())
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state.String(), encodeString(MessageTruncate(message)), blp.uid)
 	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -534,7 +524,7 @@ type VRSettings struct {
 	StopPos            mysql.Position
 	MaxTPS             int64
 	MaxReplicationLag  int64
-	State              string
+	State              binlogdatapb.VReplicationWorkflowState
 	WorkflowType       binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	WorkflowName       string
@@ -557,7 +547,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 
 	maxTPS, err := vrRow.ToInt64("max_tps")
 	if err != nil {
-		return VRSettings{}, fmt.Errorf("failed to parse max_tps column2: %v", err)
+		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
 	maxReplicationLag, err := vrRow.ToInt64("max_replication_lag")
 	if err != nil {
@@ -588,7 +578,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 		StopPos:            stopPos,
 		MaxTPS:             maxTPS,
 		MaxReplicationLag:  maxReplicationLag,
-		State:              vrRow.AsString("state", ""),
+		State:              binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[vrRow.AsString("state", "")]),
 		WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
 		WorkflowName:       vrRow.AsString("workflow", ""),
 		WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
@@ -604,17 +594,17 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
-		timeUpdated, BlpRunning, encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
+		timeUpdated, binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
-func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string, dbName string,
+func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position string, state binlogdatapb.VReplicationWorkflowState, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
-		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName),
+		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state.String(), encodeString(dbName),
 		workflowType, workflowSubType)
 }
 
@@ -658,21 +648,21 @@ func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentTh
 func StartVReplication(uid int32) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', stop_pos=NULL where id=%v",
-		BlpRunning, uid)
+		binlogdatapb.VReplicationWorkflowState_Running.String(), uid)
 }
 
 // StartVReplicationUntil returns a statement to start the replication with a stop position.
 func StartVReplicationUntil(uid int32, pos string) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', stop_pos=%v where id=%v",
-		BlpRunning, encodeString(pos), uid)
+		binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(pos), uid)
 }
 
 // StopVReplication returns a statement to stop the replication.
 func StopVReplication(uid int32, message string) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', message=%v where id=%v",
-		BlpStopped, encodeString(MessageTruncate(message)), uid)
+		binlogdatapb.VReplicationWorkflowState_Stopped.String(), encodeString(MessageTruncate(message)), uid)
 }
 
 // DeleteVReplication returns a statement to delete the replication.

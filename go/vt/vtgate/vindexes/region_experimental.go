@@ -22,18 +22,29 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
+const (
+	regionExperimentalParamRegionBytes = "region_bytes"
+)
+
 var (
-	_ MultiColumn = (*RegionExperimental)(nil)
+	_ MultiColumn     = (*RegionExperimental)(nil)
+	_ ParamValidating = (*RegionExperimental)(nil)
+
+	regionExperimentalParams = []string{
+		regionExperimentalParamRegionBytes,
+	}
 )
 
 func init() {
-	Register("region_experimental", NewRegionExperimental)
+	Register("region_experimental", newRegionExperimental)
 }
 
 // RegionExperimental is a multi-column unique vindex. The first column is prefixed
@@ -41,17 +52,18 @@ func init() {
 // RegionExperimental can be used for geo-partitioning because the first column can denote a region,
 // and its value will dictate the shard for that region.
 type RegionExperimental struct {
-	name        string
-	regionBytes int
+	name          string
+	regionBytes   int
+	unknownParams []string
 }
 
-// NewRegionExperimental creates a RegionExperimental vindex.
+// newRegionExperimental creates a RegionExperimental vindex.
 // The supplied map requires all the fields of "consistent_lookup_unique".
 // Additionally, it requires a region_bytes argument whose value can be "1", or "2".
-func NewRegionExperimental(name string, m map[string]string) (Vindex, error) {
-	rbs, ok := m["region_bytes"]
+func newRegionExperimental(name string, m map[string]string) (Vindex, error) {
+	rbs, ok := m[regionExperimentalParamRegionBytes]
 	if !ok {
-		return nil, fmt.Errorf("region_experimental missing region_bytes param")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, fmt.Sprintf("region_experimental missing %s param", regionExperimentalParamRegionBytes))
 	}
 	var rb int
 	switch rbs {
@@ -60,11 +72,12 @@ func NewRegionExperimental(name string, m map[string]string) (Vindex, error) {
 	case "2":
 		rb = 2
 	default:
-		return nil, fmt.Errorf("region_bits must be 1 or 2: %v", rbs)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: %v", rbs)
 	}
 	return &RegionExperimental{
-		name:        name,
-		regionBytes: rb,
+		name:          name,
+		regionBytes:   rb,
+		unknownParams: FindUnknownParams(m, regionExperimentalParams),
 	}, nil
 }
 
@@ -144,4 +157,9 @@ func (ge *RegionExperimental) Verify(ctx context.Context, vcursor VCursor, rowsC
 
 func (ge *RegionExperimental) PartialVindex() bool {
 	return true
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (ge *RegionExperimental) UnknownParams() []string {
+	return ge.unknownParams
 }

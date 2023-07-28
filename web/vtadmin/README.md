@@ -2,9 +2,8 @@
 
 ## Prerequisites
 
-- [node](https://nodejs.org) >= 16.19.0 LTS
-	- _Note_: If you are using Node >= 17.x.y, you may see errors like `Error: error:0308010C:digital envelope routines::unsupported` when running `npm run build`. This is due to node dropping support for older versions of `openssl`. A workaround was added in [nodejs/node#40455](https://github.com/nodejs/node/issues/40455), allowing you to `export NODE_OPTIONS="--openssl-legacy-provider"` before running `npm run build`.
-- npm >= 8.1.0 (comes with node)
+- [node](https://nodejs.org) >= 18.16.0 LTS
+- npm >= 9.7.1 (comes with node)
 
 ## Available scripts
 

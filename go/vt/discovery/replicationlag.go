@@ -23,15 +23,44 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
+	configKey = viperutil.KeyPrefixFunc("discovery")
 	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
-	lowReplicationLag             time.Duration
-	highReplicationLagMinServing  time.Duration
-	minNumTablets                 int
-	legacyReplicationLagAlgorithm bool
+	lowReplicationLag = viperutil.Configure(
+		configKey("low_replication_lag"),
+		viperutil.Options[time.Duration]{
+			FlagName: "discovery_low_replication_lag",
+			Default:  30 * time.Second,
+			Dynamic:  true,
+		},
+	)
+	highReplicationLagMinServing = viperutil.Configure(
+		configKey("high_replication_lag"),
+		viperutil.Options[time.Duration]{
+			FlagName: "discovery_high_replication_lag_minimum_serving",
+			Default:  2 * time.Hour,
+			Dynamic:  true,
+		},
+	)
+	minNumTablets = viperutil.Configure(
+		configKey("min_number_serving_vttablets"),
+		viperutil.Options[int]{
+			FlagName: "min_number_serving_vttablets",
+			Default:  2,
+			Dynamic:  true,
+		},
+	)
+	legacyReplicationLagAlgorithm = viperutil.Configure(
+		configKey("legacy_replication_lag_algorithm"),
+		viperutil.Options[bool]{
+			FlagName: "legacy_replication_lag_algorithm",
+			Default:  true,
+		},
+	)
 )
 
 func init() {
@@ -39,52 +68,59 @@ func init() {
 }
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&lowReplicationLag, "discovery_low_replication_lag", 30*time.Second, "Threshold below which replication lag is considered low enough to be healthy.")
-	fs.DurationVar(&highReplicationLagMinServing, "discovery_high_replication_lag_minimum_serving", 2*time.Hour, "Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag.")
-	fs.IntVar(&minNumTablets, "min_number_serving_vttablets", 2, "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
-	fs.BoolVar(&legacyReplicationLagAlgorithm, "legacy_replication_lag_algorithm", true, "Use the legacy algorithm when selecting vttablets for serving.")
+	fs.Duration("discovery_low_replication_lag", lowReplicationLag.Default(), "Threshold below which replication lag is considered low enough to be healthy.")
+	fs.Duration("discovery_high_replication_lag_minimum_serving", highReplicationLagMinServing.Default(), "Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag.")
+	fs.Int("min_number_serving_vttablets", minNumTablets.Default(), "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
+	fs.Bool("legacy_replication_lag_algorithm", legacyReplicationLagAlgorithm.Default(), "Use the legacy algorithm when selecting vttablets for serving.")
+
+	viperutil.BindFlags(fs,
+		lowReplicationLag,
+		highReplicationLagMinServing,
+		minNumTablets,
+		legacyReplicationLagAlgorithm,
+	)
 }
 
 // GetLowReplicationLag getter for use by debugenv
 func GetLowReplicationLag() time.Duration {
-	return lowReplicationLag
+	return lowReplicationLag.Get()
 }
 
 // SetLowReplicationLag setter for use by debugenv
 func SetLowReplicationLag(lag time.Duration) {
-	lowReplicationLag = lag
+	lowReplicationLag.Set(lag)
 }
 
 // GetHighReplicationLagMinServing getter for use by debugenv
 func GetHighReplicationLagMinServing() time.Duration {
-	return highReplicationLagMinServing
+	return highReplicationLagMinServing.Get()
 }
 
 // SetHighReplicationLagMinServing setter for use by debugenv
 func SetHighReplicationLagMinServing(lag time.Duration) {
-	highReplicationLagMinServing = lag
+	highReplicationLagMinServing.Set(lag)
 }
 
 // GetMinNumTablets getter for use by debugenv
 func GetMinNumTablets() int {
-	return minNumTablets
+	return minNumTablets.Get()
 }
 
 // SetMinNumTablets setter for use by debugenv
 func SetMinNumTablets(numTablets int) {
-	minNumTablets = numTablets
+	minNumTablets.Set(numTablets)
 }
 
 // IsReplicationLagHigh verifies that the given LegacytabletHealth refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
 func IsReplicationLagHigh(tabletHealth *TabletHealth) bool {
-	return float64(tabletHealth.Stats.ReplicationLagSeconds) > lowReplicationLag.Seconds()
+	return float64(tabletHealth.Stats.ReplicationLagSeconds) > lowReplicationLag.Get().Seconds()
 }
 
 // IsReplicationLagVeryHigh verifies that the given LegacytabletHealth refers to a tablet with very high
 // replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
 func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
-	return float64(tabletHealth.Stats.ReplicationLagSeconds) > highReplicationLagMinServing.Seconds()
+	return float64(tabletHealth.Stats.ReplicationLagSeconds) > highReplicationLagMinServing.Get().Seconds()
 }
 
 // FilterStatsByReplicationLag filters the list of TabletHealth by TabletHealth.Stats.ReplicationLagSeconds.
@@ -113,13 +149,13 @@ func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
 //   - degraded_threshold: this is only used by vttablet for display. It should match
 //     discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
 func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHealth {
-	if !legacyReplicationLagAlgorithm {
+	if !legacyReplicationLagAlgorithm.Get() {
 		return filterStatsByLag(tabletHealthList)
 	}
 	res := filterStatsByLagWithLegacyAlgorithm(tabletHealthList)
 	// run the filter again if exactly one tablet is removed,
 	// and we have spare tablets.
-	if len(res) > minNumTablets && len(res) == len(tabletHealthList)-1 {
+	if len(res) > minNumTablets.Get() && len(res) == len(tabletHealthList)-1 {
 		res = filterStatsByLagWithLegacyAlgorithm(res)
 	}
 	return res
@@ -145,7 +181,7 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// Pick those with low replication lag, but at least minNumTablets tablets regardless.
 	res := make([]*TabletHealth, 0, len(list))
 	for i := 0; i < len(list); i++ {
-		if !IsReplicationLagHigh(list[i].ts) || i < minNumTablets {
+		if !IsReplicationLagHigh(list[i].ts) || i < minNumTablets.Get() {
 			res = append(res, list[i].ts)
 		}
 	}
@@ -186,7 +222,7 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 			res = append(res, ts)
 		}
 	}
-	if len(res) >= minNumTablets {
+	if len(res) >= minNumTablets.Get() {
 		return res
 	}
 	// return at least minNumTablets tablets to avoid over loading,
@@ -219,8 +255,8 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 	sort.Sort(byReplag(snapshots))
 
 	// Pick the first minNumTablets tablets.
-	res = make([]*TabletHealth, 0, minNumTablets)
-	for i := 0; i < min(minNumTablets, len(snapshots)); i++ {
+	res = make([]*TabletHealth, 0, minNumTablets.Get())
+	for i := 0; i < min(minNumTablets.Get(), len(snapshots)); i++ {
 		res = append(res, snapshots[i].ts)
 	}
 	return res

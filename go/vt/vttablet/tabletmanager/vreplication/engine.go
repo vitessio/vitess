@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -51,9 +52,7 @@ const (
 	copyStateTableName         = "copy_state"
 	postCopyActionTableName    = "post_copy_action"
 
-	maxRows                      = 10000
-	throttlerVReplicationAppName = "vreplication"
-	throttlerOnlineDDLAppName    = "online-ddl"
+	maxRows = 10000
 )
 
 const (
@@ -136,7 +135,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
 		ec:              newExternalConnector(config.ExternalConnections),
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerVReplicationAppName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
 	}
 
 	return vre
@@ -222,7 +221,6 @@ func (vre *Engine) Open(ctx context.Context) {
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
-
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {
 		return err
@@ -319,7 +317,6 @@ func (vre *Engine) Close() {
 	// Wait for long-running functions to exit.
 	vre.wg.Wait()
 
-	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
 
 	vre.updateStats()
@@ -687,7 +684,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
-		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
+		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
 			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys)
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
@@ -793,7 +790,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
 
-		// When err is not nil then we got a retryable error and will loop again
+		// When err is not nil then we got a retryable error and will loop again.
 		if err == nil {
 			current, dcerr := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
 			if dcerr != nil {
@@ -805,7 +802,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 				return nil
 			}
 
-			if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
+			if qr.Rows[0][1].ToString() == binlogdatapb.VReplicationWorkflowState_Stopped.String() {
 				return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
 			}
 		}

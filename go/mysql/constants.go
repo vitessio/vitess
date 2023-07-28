@@ -20,10 +20,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/encoding/simplifiedchinese"
-
 	"vitess.io/vitess/go/mysql/binlog"
 )
 
@@ -554,6 +550,7 @@ const (
 	ERIllegalValueForType          = ErrorCode(1367)
 	ERDataTooLong                  = ErrorCode(1406)
 	ErrWrongValueForType           = ErrorCode(1411)
+	ERNoSuchUser                   = ErrorCode(1449)
 	ERForbidSchemaChange           = ErrorCode(1450)
 	ERWrongValue                   = ErrorCode(1525)
 	ERDataOutOfRange               = ErrorCode(1690)
@@ -564,6 +561,31 @@ const (
 	ERInvalidCastToJSON            = ErrorCode(3147)
 	ERJSONValueTooBig              = ErrorCode(3150)
 	ERJSONDocumentTooDeep          = ErrorCode(3157)
+
+	ERRegexpStringNotTerminated = ErrorCode(3684)
+	ERRegexpBufferOverflow      = ErrorCode(3684)
+	ERRegexpIllegalArgument     = ErrorCode(3685)
+	ERRegexpIndexOutOfBounds    = ErrorCode(3686)
+	ERRegexpInternal            = ErrorCode(3687)
+	ERRegexpRuleSyntax          = ErrorCode(3688)
+	ERRegexpBadEscapeSequence   = ErrorCode(3689)
+	ERRegexpUnimplemented       = ErrorCode(3690)
+	ERRegexpMismatchParen       = ErrorCode(3691)
+	ERRegexpBadInterval         = ErrorCode(3692)
+	ERRRegexpMaxLtMin           = ErrorCode(3693)
+	ERRegexpInvalidBackRef      = ErrorCode(3694)
+	ERRegexpLookBehindLimit     = ErrorCode(3695)
+	ERRegexpMissingCloseBracket = ErrorCode(3696)
+	ERRegexpInvalidRange        = ErrorCode(3697)
+	ERRegexpStackOverflow       = ErrorCode(3698)
+	ERRegexpTimeOut             = ErrorCode(3699)
+	ERRegexpPatternTooBig       = ErrorCode(3700)
+	ERRegexpInvalidCaptureGroup = ErrorCode(3887)
+	ERRegexpInvalidFlag         = ErrorCode(3900)
+
+	ERCharacterSetMismatch = ErrorCode(3995)
+
+	ERWrongParametersToNativeFct = ErrorCode(1583)
 
 	// max execution time exceeded
 	ERQueryTimeout = ErrorCode(3024)
@@ -633,33 +655,6 @@ const (
 	// SSQueryInterrupted is ER_QUERY_INTERRUPTED;
 	SSQueryInterrupted = "70100"
 )
-
-// CharacterSetEncoding maps a charset name to a golang encoder.
-// golang does not support encoders for all MySQL charsets.
-// A charset not in this map is unsupported.
-// A trivial encoding (e.g. utf8) has a `nil` encoder
-var CharacterSetEncoding = map[string]encoding.Encoding{
-	"cp850":   charmap.CodePage850,
-	"koi8r":   charmap.KOI8R,
-	"latin1":  charmap.Windows1252,
-	"latin2":  charmap.ISO8859_2,
-	"ascii":   nil,
-	"hebrew":  charmap.ISO8859_8,
-	"greek":   charmap.ISO8859_7,
-	"cp1250":  charmap.Windows1250,
-	"gbk":     simplifiedchinese.GBK,
-	"latin5":  charmap.ISO8859_9,
-	"utf8":    nil,
-	"utf8mb3": nil,
-	"cp866":   charmap.CodePage866,
-	"cp852":   charmap.CodePage852,
-	"latin7":  charmap.ISO8859_13,
-	"utf8mb4": nil,
-	"cp1251":  charmap.Windows1251,
-	"cp1256":  charmap.Windows1256,
-	"cp1257":  charmap.Windows1257,
-	"binary":  nil,
-}
 
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.

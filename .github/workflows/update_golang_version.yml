@@ -5,18 +5,23 @@ on:
     - cron: "0 0 * * *" # Runs every day at midnight UTC
   workflow_dispatch:
 
+permissions: read-all
+
 jobs:
   update_golang_version:
+    permissions:
+      contents: write
+      pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-16.0, release-15.0, release-14.0 ]
+        branch: [ main, release-17.0, release-16.0, release-15.0, release-14.0 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.3
+          go-version: 1.20.5
 
       - name: Check out code
         uses: actions/checkout@v3
@@ -24,6 +29,8 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Detect new version and update codebase
+        env:
+          GH_TOKEN: ${{ github.token }}
         id: detect-and-update
         run: |
           old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
@@ -46,11 +53,12 @@ jobs:
           echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
 
           # Check if the PR already exists, if it does then do not create new PR.
-          gh pr list -S "is:open [${{ matrix.branch }}] Upgrade the Golang version to go${go_version}" | grep "OPEN"
-          if [ $? -eq 0 ]; then
+          gh pr list -S "is:open [${{ matrix.branch }}] Upgrade the Golang version to go${go_version}" > out.txt 2>&1 | true
+          if [ -s out.txt ]; then
+            rm -f out.txt
             exit 0
           fi
-
+          rm -f out.txt
           echo "create-pr=true" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request

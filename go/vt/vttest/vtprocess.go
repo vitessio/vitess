@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -219,7 +220,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--mycnf_server_id", "1",
 		"--mycnf_socket_file", socket,
 		"--normalize_queries",
-		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
@@ -242,6 +242,9 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema_dir", args.SchemaDir}...)
+	}
+	if args.PersistentMode && args.DataDir != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
 	if args.TransactionMode != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)

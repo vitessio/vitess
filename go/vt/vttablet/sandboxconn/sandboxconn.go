@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -44,6 +45,9 @@ type SandboxConn struct {
 
 	// These errors work for all functions.
 	MustFailCodes map[vtrpcpb.Code]int
+
+	// ServingKeyspaces is a list of serving keyspaces
+	ServingKeyspaces []string
 
 	// These errors are triggered only for specific functions.
 	// For now these are just for the 2PC functions.
@@ -414,9 +418,9 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// StreamHealth is not implemented.
+// StreamHealth always mocks a "healthy" result.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return fmt.Errorf("not implemented in test")
+	return nil
 }
 
 // ExpectVStreamStartPos makes the conn verify that that the next vstream request has the right startPos.
@@ -507,6 +511,11 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 // QueryServiceByAlias is part of the Gateway interface.
 func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
+}
+
+// GetServingKeyspaces returns list of serving keyspaces.
+func (sbc *SandboxConn) GetServingKeyspaces() []string {
+	return sbc.ServingKeyspaces
 }
 
 // HandlePanic is part of the QueryService interface.
@@ -678,8 +687,10 @@ func getSingleRowResult() *sqltypes.Result {
 	fields := SingleRowResult.Fields
 	for _, field := range fields {
 		singleRowResult.Fields = append(singleRowResult.Fields, &querypb.Field{
-			Name: field.Name,
-			Type: field.Type,
+			Name:    field.Name,
+			Type:    field.Type,
+			Charset: field.Charset,
+			Flags:   field.Flags,
 		})
 	}
 
@@ -689,8 +700,8 @@ func getSingleRowResult() *sqltypes.Result {
 // SingleRowResult is returned when there is no pre-stored result.
 var SingleRowResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
-		{Name: "id", Type: sqltypes.Int32},
-		{Name: "value", Type: sqltypes.VarChar},
+		{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+		{Name: "value", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
 	},
 	InsertID: 0,
 	Rows: [][]sqltypes.Value{{
@@ -703,8 +714,8 @@ var SingleRowResult = &sqltypes.Result{
 // StreamRowResult is SingleRowResult with RowsAffected set to 0.
 var StreamRowResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
-		{Name: "id", Type: sqltypes.Int32},
-		{Name: "value", Type: sqltypes.VarChar},
+		{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+		{Name: "value", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
 	},
 	Rows: [][]sqltypes.Value{{
 		sqltypes.NewInt32(1),

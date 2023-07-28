@@ -33,16 +33,46 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
+const (
 	readLockExclusive = "exclusive"
 	readLockShared    = "shared"
 	readLockNone      = "none"
 	readLockDefault   = readLockExclusive
 
+	lookupCommonParamAutocommit           = "autocommit"
+	lookupCommonParamMultiShardAutocommit = "multi_shard_autocommit"
+
+	lookupInternalParamTable       = "table"
+	lookupInternalParamFrom        = "from"
+	lookupInternalParamTo          = "to"
+	lookupInternalParamIgnoreNulls = "ignore_nulls"
+	lookupInternalParamBatchLookup = "batch_lookup"
+	lookupInternalParamReadLock    = "read_lock"
+)
+
+var (
 	readLockExprs = map[string]string{
 		readLockExclusive: "for update",
 		readLockShared:    "lock in share mode",
 		readLockNone:      "",
+	}
+
+	// lookupCommonParams are used only by lookup_* vindexes.
+	lookupCommonParams = append(
+		append(make([]string, 0), lookupInternalParams...),
+		lookupCommonParamAutocommit,
+		lookupCommonParamMultiShardAutocommit,
+	)
+
+	// lookupInternalParams are used by both lookup_* vindexes and the newer
+	// consistent_lookup_* vindexes.
+	lookupInternalParams = []string{
+		lookupInternalParamTable,
+		lookupInternalParamFrom,
+		lookupInternalParamTo,
+		lookupInternalParamIgnoreNulls,
+		lookupInternalParamBatchLookup,
+		lookupInternalParamReadLock,
 	}
 )
 
@@ -61,26 +91,26 @@ type lookupInternal struct {
 }
 
 func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {
-	lkp.Table = lookupQueryParams["table"]
-	lkp.To = lookupQueryParams["to"]
+	lkp.Table = lookupQueryParams[lookupInternalParamTable]
+	lkp.To = lookupQueryParams[lookupInternalParamTo]
 	var fromColumns []string
-	for _, from := range strings.Split(lookupQueryParams["from"], ",") {
+	for _, from := range strings.Split(lookupQueryParams[lookupInternalParamFrom], ",") {
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
 	lkp.FromColumns = fromColumns
 
 	var err error
-	lkp.IgnoreNulls, err = boolFromMap(lookupQueryParams, "ignore_nulls")
+	lkp.IgnoreNulls, err = boolFromMap(lookupQueryParams, lookupInternalParamIgnoreNulls)
 	if err != nil {
 		return err
 	}
-	lkp.BatchLookup, err = boolFromMap(lookupQueryParams, "batch_lookup")
+	lkp.BatchLookup, err = boolFromMap(lookupQueryParams, lookupInternalParamBatchLookup)
 	if err != nil {
 		return err
 	}
-	if readLock, ok := lookupQueryParams["read_lock"]; ok {
+	if readLock, ok := lookupQueryParams[lookupInternalParamReadLock]; ok {
 		if _, valid := readLockExprs[readLock]; !valid {
-			return fmt.Errorf("invalid read_lock value: %s", readLock)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid %s value: %s", lookupInternalParamReadLock, readLock)
 		}
 		lkp.ReadLock = readLock
 	}
@@ -399,10 +429,10 @@ type commonConfig struct {
 func parseCommonConfig(m map[string]string) (*commonConfig, error) {
 	var c commonConfig
 	var err error
-	if c.autocommit, err = boolFromMap(m, "autocommit"); err != nil {
+	if c.autocommit, err = boolFromMap(m, lookupCommonParamAutocommit); err != nil {
 		return nil, err
 	}
-	if c.multiShardAutocommit, err = boolFromMap(m, "multi_shard_autocommit"); err != nil {
+	if c.multiShardAutocommit, err = boolFromMap(m, lookupCommonParamMultiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return &c, nil

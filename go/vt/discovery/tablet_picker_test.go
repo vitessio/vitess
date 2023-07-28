@@ -1,12 +1,9 @@
 /*
 Copyright 2019 The Vitess Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,174 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-func TestPickSimple(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
-	require.NoError(t, err)
-
-	tablet, err := tp.PickForStreaming(context.Background())
-	require.NoError(t, err)
-	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
-}
-
-func TestPickFromTwoHealthy(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(t, te, want2)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
-	require.NoError(t, err)
-
-	// In 20 attempts, both tablet types must be picked at least once.
-	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(context.Background())
-		require.NoError(t, err)
-		if proto.Equal(tablet, want1) {
-			picked1 = true
-		}
-		if proto.Equal(tablet, want2) {
-			picked2 = true
-		}
-	}
-	assert.True(t, picked1)
-	assert.True(t, picked2)
-}
-
-func TestPickInOrder1(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(t, te, want2)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:replica,rdonly")
-	require.NoError(t, err)
-
-	// In 20 attempts, we always pick the first healthy tablet in order
-	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(context.Background())
-		require.NoError(t, err)
-		if proto.Equal(tablet, want1) {
-			picked1 = true
-		}
-		if proto.Equal(tablet, want2) {
-			picked2 = true
-		}
-	}
-	assert.True(t, picked1)
-	assert.False(t, picked2)
-}
-
-func TestPickInOrder2(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(t, te, want2)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:rdonly,replica")
-	require.NoError(t, err)
-
-	// In 20 attempts, we always pick the first healthy tablet in order
-	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(context.Background())
-		require.NoError(t, err)
-		if proto.Equal(tablet, want1) {
-			picked1 = true
-		}
-		if proto.Equal(tablet, want2) {
-			picked2 = true
-		}
-	}
-	assert.False(t, picked1)
-	assert.True(t, picked2)
-}
-
-func TestPickInOrderMultipleInGroup(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(t, te, want2)
-	want3 := addTablet(te, 102, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(t, te, want3)
-	want4 := addTablet(te, 103, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(t, te, want4)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:rdonly,replica")
-	require.NoError(t, err)
-
-	// In 40 attempts, we pick each of the three RDONLY, but never the REPLICA
-	var picked1, picked2, picked3, picked4 bool
-	for i := 0; i < 40; i++ {
-		tablet, err := tp.PickForStreaming(context.Background())
-		require.NoError(t, err)
-		if proto.Equal(tablet, want1) {
-			picked1 = true
-		}
-		if proto.Equal(tablet, want2) {
-			picked2 = true
-		}
-		if proto.Equal(tablet, want3) {
-			picked3 = true
-		}
-		if proto.Equal(tablet, want4) {
-			picked4 = true
-		}
-	}
-	assert.False(t, picked1)
-	assert.True(t, picked2)
-	assert.True(t, picked3)
-	assert.True(t, picked4)
-}
-
-func TestPickRespectsTabletType(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want)
-	dont := addTablet(te, 101, topodatapb.TabletType_PRIMARY, "cell", true, true)
-	defer deleteTablet(t, te, dont)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
-	require.NoError(t, err)
-
-	// In 20 attempts, primary tablet must be never picked
-	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, tablet)
-		require.True(t, proto.Equal(tablet, want), "picked wrong tablet type")
-	}
-}
-
-func TestPickMultiCell(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-	tablet, err := tp.PickForStreaming(ctx)
-	require.NoError(t, err)
-	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
-}
 
 func TestPickPrimary(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
@@ -206,7 +41,7 @@ func TestPickPrimary(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "primary")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -216,38 +51,278 @@ func TestPickPrimary(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
-func TestPickFromOtherCell(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(t, te, want)
+func TestPickLocalPreferences(t *testing.T) {
+	type tablet struct {
+		id   uint32
+		typ  topodatapb.TabletType
+		cell string
+	}
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
-	require.NoError(t, err)
+	type testCase struct {
+		name string
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-	tablet, err := tp.PickForStreaming(ctx)
-	require.NoError(t, err)
-	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+		//inputs
+		tablets       []tablet
+		envCells      []string
+		inCells       []string
+		localCell     string
+		inTabletTypes string
+		options       TabletPickerOptions
+
+		//expected
+		tpCells     []string
+		wantTablets []uint32
+	}
+
+	tcases := []testCase{
+		{
+			name: "pick simple",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "pick from two healthy",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "replica,rdonly",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{100, 101},
+		}, {
+			name: "pick in order replica",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "in_order:replica,rdonly",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "pick in order rdonly",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "in_order:rdonly,replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{101},
+		}, {
+			name: "pick in order multiple in group",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "cell"},
+				{102, topodatapb.TabletType_RDONLY, "cell"},
+				{103, topodatapb.TabletType_RDONLY, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "in_order:rdonly,replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{101, 102, 103},
+		}, {
+			// Same test as above, except the in order preference is passed via the new TabletPickerOptions param.
+			// This will replace the above test when we deprecate the "in_order" hint in the tabletTypeStr
+			name: "pick in order multiple in group with new picker option",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "cell"},
+				{102, topodatapb.TabletType_RDONLY, "cell"},
+				{103, topodatapb.TabletType_RDONLY, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "rdonly,replica",
+			options:       TabletPickerOptions{TabletOrder: "InOrder"},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{101, 102, 103},
+		}, {
+			name: "picker respects tablet type",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_PRIMARY, "cell"},
+			},
+			envCells:      []string{"cell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "replica,rdonly",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "pick multi cell",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell", "otherCell"},
+			localCell:     "cell",
+			inTabletTypes: "replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "otherCell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "pick from other cell",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "otherCell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell", "otherCell"},
+			localCell:     "cell",
+			inTabletTypes: "replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "otherCell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "don't pick from other cell",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_REPLICA, "otherCell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell"},
+			localCell:     "cell",
+			inTabletTypes: "replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "multi cell two tablets, local preference default",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_REPLICA, "otherCell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell", "otherCell"},
+			localCell:     "cell",
+			inTabletTypes: "replica",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "otherCell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "multi cell two tablets, only specified cells",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_REPLICA, "otherCell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell", "otherCell"},
+			localCell:     "cell",
+			inTabletTypes: "replica",
+			options:       TabletPickerOptions{CellPreference: "OnlySpecified"},
+			tpCells:       []string{"cell", "otherCell"},
+			wantTablets:   []uint32{100, 101},
+		}, {
+			name: "multi cell two tablet types, local preference default",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "otherCell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell", "otherCell"},
+			localCell:     "cell",
+			inTabletTypes: "replica,rdonly",
+			options:       TabletPickerOptions{},
+			tpCells:       []string{"cell", "otherCell", "cella"},
+			wantTablets:   []uint32{100},
+		}, {
+			name: "multi cell two tablet types, only specified cells",
+			tablets: []tablet{
+				{100, topodatapb.TabletType_REPLICA, "cell"},
+				{101, topodatapb.TabletType_RDONLY, "otherCell"},
+			},
+			envCells:      []string{"cell", "otherCell"},
+			inCells:       []string{"cell", "otherCell"},
+			localCell:     "cell",
+			inTabletTypes: "replica,rdonly",
+			options:       TabletPickerOptions{CellPreference: "OnlySpecified"},
+			tpCells:       []string{"cell", "otherCell"},
+			wantTablets:   []uint32{100, 101},
+		},
+	}
+
+	ctx := context.Background()
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			te := newPickerTestEnv(t, tcase.envCells)
+			var testTablets []*topodatapb.Tablet
+			for _, tab := range tcase.tablets {
+				testTablets = append(testTablets, addTablet(te, int(tab.id), tab.typ, tab.cell, true, true))
+			}
+			defer func() {
+				for _, tab := range testTablets {
+					deleteTablet(t, te, tab)
+				}
+			}()
+			tp, err := NewTabletPicker(context.Background(), te.topoServ, tcase.inCells, tcase.localCell, te.keyspace, te.shard, tcase.inTabletTypes, tcase.options)
+			require.NoError(t, err)
+			require.Equal(t, tp.localCellInfo.localCell, tcase.localCell)
+			require.ElementsMatch(t, tp.cells, tcase.tpCells)
+
+			var selectedTablets []uint32
+			selectedTabletMap := make(map[uint32]bool)
+			for i := 0; i < 40; i++ {
+				tab, err := tp.PickForStreaming(ctx)
+				require.NoError(t, err)
+				selectedTabletMap[tab.Alias.Uid] = true
+			}
+			for uid := range selectedTabletMap {
+				selectedTablets = append(selectedTablets, uid)
+			}
+			require.ElementsMatch(t, selectedTablets, tcase.wantTablets)
+		})
+	}
 }
 
-func TestDontPickFromOtherCell(t *testing.T) {
+func TestPickCellPreferenceLocalCell(t *testing.T) {
+	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want1)
+
+	// Local cell preference is default
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	require.NoError(t, err)
+
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel1()
+	tablet, err := tp.PickForStreaming(ctx1)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want1, tablet), "Pick: %v, want %v", tablet, want1)
+
+	// create a tablet in the other cell
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"cell"}, te.keyspace, te.shard, "replica")
-	require.NoError(t, err)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel2()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	// In 20 attempts, only want1 must be picked because TabletPicker.cells = "cell"
+	// In 20 attempts, only tablet in "cell" will be picked because we give local cell priority by default
 	var picked1, picked2 bool
 	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(ctx)
+		tablet, err := tp.PickForStreaming(ctx2)
 		require.NoError(t, err)
 		if proto.Equal(tablet, want1) {
 			picked1 = true
@@ -260,71 +335,29 @@ func TestDontPickFromOtherCell(t *testing.T) {
 	assert.False(t, picked2)
 }
 
-func TestPickMultiCellTwoTablets(t *testing.T) {
+func TestPickCellPreferenceLocalAlias(t *testing.T) {
+	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(t, te, want2)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
+	// create a tablet in the other cell, it should be picked
+	want := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	defer deleteTablet(t, te, want)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-
-	// In 20 attempts, both tablet types must be picked at least once.
-	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(ctx)
-		require.NoError(t, err)
-		if proto.Equal(tablet, want1) {
-			picked1 = true
-		}
-		if proto.Equal(tablet, want2) {
-			picked2 = true
-		}
-	}
-	assert.True(t, picked1)
-	assert.True(t, picked2)
-}
-
-func TestPickMultiCellTwoTabletTypes(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "otherCell", true, true)
-	defer deleteTablet(t, te, want2)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	tablet, err := tp.PickForStreaming(ctx)
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	// In 20 attempts, both tablet types must be picked at least once.
-	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(ctx)
-		require.NoError(t, err)
-		if proto.Equal(tablet, want1) {
-			picked1 = true
-		}
-		if proto.Equal(tablet, want2) {
-			picked2 = true
-		}
-	}
-	assert.True(t, picked1)
-	assert.True(t, picked2)
+	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
-func TestPickUsingCellAlias(t *testing.T) {
+func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want1)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
 	require.NoError(t, err)
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -348,7 +381,8 @@ func TestPickUsingCellAlias(t *testing.T) {
 	ctx3, cancel3 := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel3()
 
-	// In 20 attempts, both tablet types must be picked at least once.
+	// In 20 attempts each of the tablets should get picked at least once.
+	// Local cell is not given preference
 	var picked1, picked2 bool
 	for i := 0; i < 20; i++ {
 		tablet, err := tp.PickForStreaming(ctx3)
@@ -366,7 +400,7 @@ func TestPickUsingCellAlias(t *testing.T) {
 
 func TestTabletAppearsDuringSleep(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	delay := GetTabletPickerRetryDelay()
@@ -392,12 +426,12 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
 }
 
-func TestPickError(t *testing.T) {
+func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	_, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "badtype")
+	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {
@@ -416,7 +450,73 @@ func TestPickError(t *testing.T) {
 	defer cancel()
 	_, err = tp.PickForStreaming(ctx)
 	require.EqualError(t, err, "context has expired")
+	// if local preference is selected, tp cells include's the local cell's alias
+	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"], int64(0))
+}
+
+func TestPickErrorOnlySpecified(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell"})
+
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
+	require.NoError(t, err)
+	delay := GetTabletPickerRetryDelay()
+	defer func() {
+		SetTabletPickerRetryDelay(delay)
+	}()
+	SetTabletPickerRetryDelay(11 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	// no tablets
+	_, err = tp.PickForStreaming(ctx)
+	require.EqualError(t, err, "context has expired")
+	// no tablets of the correct type
+	defer deleteTablet(t, te, addTablet(te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
+	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err = tp.PickForStreaming(ctx)
+	require.EqualError(t, err, "context has expired")
+
 	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
+}
+
+// TestPickFallbackType tests that when providing a list of tablet types to
+// pick from, with the list in preference order, that when the primary/first
+// type has no available healthy serving tablets that we select a healthy
+// serving tablet from the secondary/second type.
+func TestPickFallbackType(t *testing.T) {
+	cells := []string{"cell1", "cell2"}
+	localCell := cells[0]
+	tabletTypes := "replica,primary"
+	options := TabletPickerOptions{
+		TabletOrder: "InOrder",
+	}
+	te := newPickerTestEnv(t, cells)
+
+	// This one should be selected even though it's the secondary type
+	// as it is healthy and serving.
+	primaryTablet := addTablet(te, 100, topodatapb.TabletType_PRIMARY, localCell, true, true)
+	defer deleteTablet(t, te, primaryTablet)
+
+	// Replica tablet should not be selected as it is unhealthy.
+	replicaTablet := addTablet(te, 200, topodatapb.TabletType_REPLICA, localCell, false, false)
+	defer deleteTablet(t, te, replicaTablet)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryTablet.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
+	require.NoError(t, err)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel2()
+	tablet, err := tp.PickForStreaming(ctx2)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(primaryTablet, tablet), "Pick: %v, want %v", tablet, primaryTablet)
 }
 
 type pickerTestEnv struct {
@@ -467,17 +567,20 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell
 	err := te.topoServ.CreateTablet(context.Background(), tablet)
 	require.NoError(te.t, err)
 
-	if healthy {
-		_ = createFixedHealthConn(tablet, &querypb.StreamHealthResponse{
-			Serving: serving,
-			Target: &querypb.Target{
-				Keyspace:   te.keyspace,
-				Shard:      te.shard,
-				TabletType: tabletType,
-			},
-			RealtimeStats: &querypb.RealtimeStats{HealthError: ""},
-		})
+	shr := &querypb.StreamHealthResponse{
+		Serving: serving,
+		Target: &querypb.Target{
+			Keyspace:   te.keyspace,
+			Shard:      te.shard,
+			TabletType: tabletType,
+		},
+		RealtimeStats: &querypb.RealtimeStats{HealthError: "tablet is unhealthy"},
 	}
+	if healthy {
+		shr.RealtimeStats.HealthError = ""
+	}
+
+	_ = createFixedHealthConn(tablet, shr)
 
 	return tablet
 }

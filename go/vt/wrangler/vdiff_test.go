@@ -400,14 +400,11 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			pkCols:           []int{0},
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
-				Aggregates: []*engine.AggregateParams{{
-					Opcode: opcode.AggregateSum,
-					Col:    2,
-				}, {
-					Opcode: opcode.AggregateSum,
-					Col:    3,
-				}},
-				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
+				Aggregates: []*engine.AggregateParams{
+					engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
+					engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
+				},
+				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1, Type: sqltypes.Unknown}},
 				Input:       newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),

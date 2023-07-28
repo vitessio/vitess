@@ -22,36 +22,28 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
-	// V3 is also the default planner
-	V3 = querypb.ExecuteOptions_V3
 	// Gen4 uses the default Gen4 planner, which is the greedy planner
 	Gen4 = querypb.ExecuteOptions_Gen4
 	// Gen4GreedyOnly uses only the faster greedy planner
 	Gen4GreedyOnly = querypb.ExecuteOptions_Gen4Greedy
-	// Gen4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
+	// Gen4Left2Right joins table in the order they are listed in the FROM-clause
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
-	// Gen4WithFallback first attempts to use the Gen4 planner, and if that fails, uses the V3 planner instead
-	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
-	// Gen4CompareV3 executes queries on both Gen4 and V3 to compare their results.
-	Gen4CompareV3 = querypb.ExecuteOptions_Gen4CompareV3
 )
 
 var (
-	plannerVersions = []plancontext.PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
+	plannerVersions = []plancontext.PlannerVersion{Gen4, Gen4GreedyOnly, Gen4Left2Right}
 )
 
 type (
@@ -73,24 +65,6 @@ func newPlanResult(prim engine.Primitive, tablesUsed ...string) *planResult {
 
 func singleTable(ks, tbl string) string {
 	return fmt.Sprintf("%s.%s", ks, tbl)
-}
-
-func tablesFromSemantics(semTable *semantics.SemTable) []string {
-	tables := make(map[string]any, len(semTable.Tables))
-	for _, info := range semTable.Tables {
-		vindexTable := info.GetVindexTable()
-		if vindexTable == nil {
-			continue
-		}
-		tables[vindexTable.String()] = nil
-	}
-
-	names := make([]string, 0, len(tables))
-	for tbl := range tables {
-		names = append(names, tbl)
-	}
-	sort.Strings(names)
-	return names
 }
 
 // TestBuilder builds a plan for a query based on the specified vschema.
@@ -132,54 +106,20 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) stmtPlanner, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
-	planner, ok := getPlannerFromQuery(stmt)
-	if !ok {
+func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
+	planner, found := getPlannerFromQueryHint(stmt)
+	if !found {
 		// if the query doesn't specify the planner, we check what the configuration is
 		planner = vschema.Planner()
 	}
 	switch planner {
-	case Gen4CompareV3:
-		return gen4CompareV3Planner(query), nil
-	case Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner(query, planner), nil
-	case Gen4WithFallback:
-		fp := &fallbackPlanner{
-			primary:  gen4Planner(query, querypb.ExecuteOptions_Gen4),
-			fallback: v3planner(query),
-		}
-		return fp.plan, nil
-	case V3:
-		return v3planner(query), nil
+	case Gen4Left2Right, Gen4GreedyOnly, Gen4:
 	default:
 		// default is gen4 plan
-		return gen4Planner(query, Gen4), nil
+		log.Infof("Using Gen4 planner instead of %s", planner.String())
+		planner = Gen4
 	}
-}
-
-// getPlannerFromQuery chooses the planner to use based on the query
-// The default planner can be overridden using /*vt+ PLANNER=gen4 */
-// We will also fall back on the gen4 planner if we encounter outer join,
-// since there are known problems with the v3 planner and outer joins
-func getPlannerFromQuery(stmt sqlparser.Statement) (version plancontext.PlannerVersion, found bool) {
-	version, found = getPlannerFromQueryHint(stmt)
-	if found {
-		return
-	}
-
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		join, ok := node.(*sqlparser.JoinTableExpr)
-		if ok {
-			if join.Join == sqlparser.LeftJoinType || join.Join == sqlparser.RightJoinType {
-				version = querypb.ExecuteOptions_Gen4
-				found = true
-				return false, nil
-			}
-		}
-		return true, nil
-	}, stmt)
-
-	return
+	return gen4Planner(query, planner), nil
 }
 
 func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersion, bool) {
@@ -206,27 +146,31 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Insert:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Update:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Union:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
 		}
@@ -259,7 +203,9 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		return buildLoadPlan(query, vschema)
 	case sqlparser.DBDDLStatement:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
+		*sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release,
+		*sqlparser.Kill:
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	case *sqlparser.Show:
@@ -371,13 +317,20 @@ func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planRe
 }
 
 func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
-	dest, keyspace, _, err := vschema.TargetDestination("")
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
+	}
+
+	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
 	}
+
+	dest := vschema.Destination()
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
+
 	tc := &tableCollector{}
 	for _, tbl := range stmt.TableNames {
 		tc.addASTTable(keyspace.Name, tbl)
@@ -393,6 +346,9 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
+	}
 	tc := &tableCollector{}
 	type sendDest struct {
 		ks   *vindexes.Keyspace
@@ -408,20 +364,18 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	var keys []sendDest
 	for i, tab := range stmt.TableNames {
 		var ksTab *vindexes.Keyspace
-		var table *vindexes.Table
-		var err error
 
-		table, _, _, _, _, err = vschema.FindTableOrVindex(tab)
+		tbl, _, _, _, _, err := vschema.FindTableOrVindex(tab)
 		if err != nil {
 			return nil, err
 		}
-		if table == nil {
+		if tbl == nil {
 			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
 		}
-		tc.addTable(table.Keyspace.Name, table.Name.String())
-		ksTab = table.Keyspace
+		tc.addTable(tbl.Keyspace.Name, tbl.Name.String())
+		ksTab = tbl.Keyspace
 		stmt.TableNames[i] = sqlparser.TableName{
-			Name: table.Name,
+			Name: tbl.Name,
 		}
 
 		key := sendDest{ksTab, dest}

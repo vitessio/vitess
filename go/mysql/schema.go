@@ -53,24 +53,6 @@ GROUP BY table_name, column_name, ordinal_position, character_set_name, collatio
 HAVING COUNT(*) = 1
 `
 
-	// DetectSchemaChangeOnlyBaseTable query detects if there is any schema change from previous copy excluding view tables.
-	DetectSchemaChangeOnlyBaseTable = `
-SELECT DISTINCT table_name
-FROM (
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM information_schema.columns
-	WHERE table_schema = database() and table_name in (select table_name from information_schema.tables where table_schema = database() and table_type = 'BASE TABLE')
-
-	UNION ALL
-
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM %s.schemacopy
-	WHERE table_schema = database()
-) _inner
-GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-HAVING COUNT(*) = 1
-`
-
 	// ClearSchemaCopy query clears the schemacopy table.
 	ClearSchemaCopy = `delete from %s.schemacopy where table_schema = database()`
 
@@ -80,61 +62,8 @@ select table_schema, table_name, column_name, ordinal_position, character_set_na
 from information_schema.columns
 where table_schema = database()`
 
-	// fetchColumns are the columns we fetch
-	fetchColumns = "table_name, column_name, data_type, collation_name"
-
-	// FetchUpdatedTables queries fetches all information about updated tables
-	FetchUpdatedTables = `select  ` + fetchColumns + `
-from %s.schemacopy
-where table_schema = database() and
-	table_name in ::tableNames
-order by table_name, ordinal_position`
-
-	// FetchTables queries fetches all information about tables
-	FetchTables = `select ` + fetchColumns + `
-from %s.schemacopy
-where table_schema = database()
-order by table_name, ordinal_position`
-
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
-
-	// DetectViewChange query detects if there is any view change from previous copy.
-	DetectViewChange = `
-SELECT distinct table_name
-FROM (
-	SELECT table_name, view_definition
-	FROM information_schema.views
-	WHERE table_schema = database()
-
-	UNION ALL
-
-	SELECT table_name, view_definition
-	FROM %s.views
-	WHERE table_schema = database()
-) _inner
-GROUP BY table_name, view_definition
-HAVING COUNT(*) = 1
-`
-	// FetchViewDefinition retrieves view definition from information_schema.views table.
-	FetchViewDefinition = `select table_name, view_definition from information_schema.views
-where table_schema = database() and table_name in ::tableNames`
-
-	// FetchCreateStatement retrieves create statement.
-	FetchCreateStatement = `show create table %s`
-
-	// DeleteFromViewsTable removes the views from the table.
-	DeleteFromViewsTable = `delete from %s.views where table_schema = database() and table_name in ::tableNames`
-
-	// InsertIntoViewsTable using information_schema.views.
-	InsertIntoViewsTable = `insert %s.views(table_schema, table_name, create_statement, view_definition)
-values (database(), :table_name, :create_statement, :view_definition)`
-
-	// FetchUpdatedViews queries fetches information about updated views
-	FetchUpdatedViews = `select table_name, create_statement from %s.views where table_schema = database() and table_name in ::viewnames`
-
-	// FetchViews queries fetches all views
-	FetchViews = `select table_name, create_statement from %s.views where table_schema = database()`
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
@@ -148,7 +77,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_NAME",
 	ColumnLength: 192,
-	Charset:      collations.CollationUtf8ID,
+	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "t.table_type",
@@ -158,7 +87,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_TYPE",
 	ColumnLength: 192,
-	Charset:      collations.CollationUtf8ID,
+	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "unix_timestamp(t.create_time)",
@@ -174,7 +103,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_COMMENT",
 	ColumnLength: 6144,
-	Charset:      collations.CollationUtf8ID,
+	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "i.file_size",

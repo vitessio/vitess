@@ -49,10 +49,17 @@ func (cached *Binary) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
@@ -61,10 +68,17 @@ func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *CFC) CachedSize(alloc bool) int64 {
@@ -126,10 +140,17 @@ func (cached *ConsistentLookup) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(8)
+		size += int64(32)
 	}
 	// field clCommon *vitess.io/vitess/go/vt/vtgate/vindexes.clCommon
 	size += cached.clCommon.CachedSize(true)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *ConsistentLookupUnique) CachedSize(alloc bool) int64 {
@@ -138,10 +159,17 @@ func (cached *ConsistentLookupUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(8)
+		size += int64(32)
 	}
 	// field clCommon *vitess.io/vitess/go/vt/vtgate/vindexes.clCommon
 	size += cached.clCommon.CachedSize(true)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *Hash) CachedSize(alloc bool) int64 {
@@ -150,10 +178,17 @@ func (cached *Hash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *Keyspace) CachedSize(alloc bool) int64 {
@@ -174,12 +209,19 @@ func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
@@ -188,12 +230,19 @@ func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
@@ -202,12 +251,19 @@ func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
@@ -216,12 +272,19 @@ func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
@@ -230,12 +293,19 @@ func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *LookupUnique) CachedSize(alloc bool) int64 {
@@ -244,12 +314,19 @@ func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 
@@ -299,10 +376,17 @@ func (cached *Null) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *Numeric) CachedSize(alloc bool) int64 {
@@ -311,10 +395,17 @@ func (cached *Numeric) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 
@@ -325,7 +416,7 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -344,6 +435,13 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
 		}
 	}
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
@@ -352,10 +450,17 @@ func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 
@@ -366,7 +471,7 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(64)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -384,6 +489,13 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
 	}
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *ReverseBits) CachedSize(alloc bool) int64 {
@@ -392,10 +504,17 @@ func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *Source) CachedSize(alloc bool) int64 {
@@ -485,37 +604,20 @@ func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *UnicodeLooseXXHash) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(16)
-	}
-	// field name string
-	size += hack.RuntimeAllocSize(int64(len(cached.name)))
-	return size
-}
-func (cached *XXHash) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(16)
-	}
-	// field name string
-	size += hack.RuntimeAllocSize(int64(len(cached.name)))
-	return size
-}
-func (cached *cfcCommon) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -525,9 +627,54 @@ func (cached *cfcCommon) CachedSize(alloc bool) int64 {
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	return size
+}
+func (cached *XXHash) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	return size
+}
+func (cached *cfcCommon) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field offsets []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.offsets)) * int64(8))
+	}
+	// field unknownParams []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownParams)) * int64(16))
+		for _, elem := range cached.unknownParams {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
 	}
 	return size
 }

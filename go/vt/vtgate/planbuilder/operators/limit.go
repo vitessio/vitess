@@ -56,8 +56,8 @@ func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return l, nil
 }
 
-func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	newSrc, offset, err := l.Source.AddColumn(ctx, expr)
+func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := l.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -69,22 +69,12 @@ func (l *Limit) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return l.Source.GetColumns()
 }
 
-func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
-	return l.Source.GetOrdering()
+func (l *Limit) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return l.Source.GetSelectExprs()
 }
 
-func (l *Limit) Description() ops.OpDescription {
-	other := map[string]any{}
-	if l.AST.Offset != nil {
-		other["Offset"] = sqlparser.String(l.AST.Offset)
-	}
-	if l.AST.Rowcount != nil {
-		other["RowCount"] = sqlparser.String(l.AST.Rowcount)
-	}
-	return ops.OpDescription{
-		OperatorType: "Limit",
-		Other:        other,
-	}
+func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
+	return l.Source.GetOrdering()
 }
 
 func (l *Limit) ShortDescription() string {

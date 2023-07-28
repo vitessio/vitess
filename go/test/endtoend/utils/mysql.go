@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -154,24 +155,27 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sqltypes.Result, compareColumns bool) {
+func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumns bool) error {
 	if vtQr == nil && mysqlQr == nil {
-		return
+		return nil
 	}
 	if vtQr == nil {
 		t.Error("Vitess result is 'nil' while MySQL's is not.")
-		return
+		return errors.New("Vitess result is 'nil' while MySQL's is not.\n")
 	}
 	if mysqlQr == nil {
 		t.Error("MySQL result is 'nil' while Vitess' is not.")
-		return
+		return errors.New("MySQL result is 'nil' while Vitess' is not.\n")
 	}
+
+	var errStr string
 	if compareColumns {
 		vtColCount := len(vtQr.Fields)
 		myColCount := len(mysqlQr.Fields)
 		if vtColCount > 0 && myColCount > 0 {
 			if vtColCount != myColCount {
 				t.Errorf("column count does not match: %d vs %d", vtColCount, myColCount)
+				errStr += fmt.Sprintf("column count does not match: %d vs %d\n", vtColCount, myColCount)
 			}
 
 			var vtCols []string
@@ -180,26 +184,27 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sql
 				vtCols = append(vtCols, vtField.Name)
 				myCols = append(myCols, mysqlQr.Fields[i].Name)
 			}
-			assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced")
+			if !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
+				errStr += "column names do not match - the expected values are what mysql produced\n"
+				errStr += fmt.Sprintf("Not equal: \nexpected: %v\nactual: %v\n", myCols, vtCols)
+			}
 		}
 	}
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		t.Error(err)
-		return
+		return err
 	}
 	orderBy := false
 	if selStmt, isSelStmt := stmt.(sqlparser.SelectStatement); isSelStmt {
 		orderBy = selStmt.GetOrderBy() != nil
 	}
 
-	if orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
-		return
-	} else if sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
-		return
+	if (orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr})) || sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
+		return nil
 	}
 
-	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
+	errStr += "Query (" + query + ") results mismatched.\nVitess Results:\n"
 	for _, row := range vtQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
@@ -207,7 +212,12 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sql
 	for _, row := range mysqlQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
+	if vtConn != nil {
+		qr := Exec(t, vtConn, fmt.Sprintf("vexplain plan %s", query))
+		errStr += fmt.Sprintf("query plan: \n%s\n", qr.Rows[0][0].ToString())
+	}
 	t.Error(errStr)
+	return errors.New(errStr)
 }
 
 func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {

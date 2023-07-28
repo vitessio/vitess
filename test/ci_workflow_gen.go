@@ -76,6 +76,7 @@ var (
 		"18",
 		"xb_backup",
 		"backup_pitr",
+		"backup_pitr_xtrabackup",
 		"21",
 		"22",
 		"mysql_server_vault",
@@ -91,9 +92,7 @@ var (
 		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_scheduler",
-		"tabletmanager_throttler",
 		"tabletmanager_throttler_topo",
-		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
 		"vtgate_concurrentdml",
@@ -120,6 +119,8 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
+		"vreplication_partial_movetables_basic",
+		"vreplication_partial_movetables_sequences",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
@@ -131,6 +132,7 @@ var (
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
 		"xb_recovery",
+		"backup_pitr_xtrabackup",
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
@@ -168,6 +170,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
 	case clusterName == "backup_pitr":
+		return allMySQLVersions
+	case clusterName == "backup_pitr_xtrabackup":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions

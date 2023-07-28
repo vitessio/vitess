@@ -75,11 +75,15 @@ func (r *ReservedVars) ReserveAll(names ...string) bool {
 // with the same name already exists, it'll be suffixed with a numberic identifier
 // to make it unique.
 func (r *ReservedVars) ReserveColName(col *ColName) string {
-	compliantName := col.CompliantName()
-	if r.fast && strings.HasPrefix(compliantName, r.prefix) {
-		compliantName = "_" + compliantName
+	reserveName := col.CompliantName()
+	if r.fast && strings.HasPrefix(reserveName, r.prefix) {
+		reserveName = "_" + reserveName
 	}
 
+	return r.ReserveVariable(reserveName)
+}
+
+func (r *ReservedVars) ReserveVariable(compliantName string) string {
 	joinVar := []byte(compliantName)
 	baseLen := len(joinVar)
 	i := int64(1)
@@ -360,6 +364,8 @@ func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
 		er.rewriteShowBasic(node)
 	case *ExistsExpr:
 		er.existsRewrite(cursor, node)
+	case DistinctableAggr:
+		er.rewriteDistinctableAggr(cursor, node)
 	}
 	return true
 }
@@ -677,6 +683,18 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		&AliasedExpr{Expr: NewIntLiteral("1")},
 	}
 	sel.GroupBy = nil
+}
+
+// rewriteDistinctableAggr removed Distinct from Max and Min Aggregations as it does not impact the result. But, makes the plan simpler.
+func (er *astRewriter) rewriteDistinctableAggr(cursor *Cursor, node DistinctableAggr) {
+	if !node.IsDistinct() {
+		return
+	}
+	switch aggr := node.(type) {
+	case *Max, *Min:
+		aggr.SetDistinct(false)
+		er.bindVars.NoteRewrite()
+	}
 }
 
 func bindVarExpression(name string) Expr {

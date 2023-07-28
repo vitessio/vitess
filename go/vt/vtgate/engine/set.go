@@ -194,7 +194,7 @@ func (u *UserDefinedVariable) Execute(ctx context.Context, vcursor VCursor, env 
 	if err != nil {
 		return err
 	}
-	return vcursor.Session().SetUDV(u.Name, value.Value())
+	return vcursor.Session().SetUDV(u.Name, value.Value(vcursor.ConnCollation()))
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)
@@ -459,13 +459,13 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		noop := func(context.Context, bool) error { return nil }
 		err = svss.setBoolSysVar(ctx, env, noop)
 	case sysvars.SQLSelectLimit.Name:
-		intValue, err := svss.evalAsInt64(env)
+		intValue, err := svss.evalAsInt64(env, vcursor)
 		if err != nil {
 			return err
 		}
 		vcursor.Session().SetSQLSelectLimit(intValue) // nolint:errcheck
 	case sysvars.TransactionMode.Name:
-		str, err := svss.evalAsString(env)
+		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
 			return err
 		}
@@ -475,7 +475,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		}
 		vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
 	case sysvars.Workload.Name:
-		str, err := svss.evalAsString(env)
+		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
 			return err
 		}
@@ -485,7 +485,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		}
 		vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
 	case sysvars.DDLStrategy.Name:
-		str, err := svss.evalAsString(env)
+		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
 			return err
 		}
@@ -494,7 +494,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		}
 		vcursor.Session().SetDDLStrategy(str)
 	case sysvars.QueryTimeout.Name:
-		queryTimeout, err := svss.evalAsInt64(env)
+		queryTimeout, err := svss.evalAsInt64(env, vcursor)
 		if err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 	case sysvars.SessionEnableSystemSettings.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionEnableSystemSettings)
 	case sysvars.Charset.Name, sysvars.Names.Name:
-		str, err := svss.evalAsString(env)
+		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
 			return err
 		}
@@ -514,19 +514,19 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", str)
 		}
 	case sysvars.ReadAfterWriteGTID.Name:
-		str, err := svss.evalAsString(env)
+		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
 			return err
 		}
 		vcursor.Session().SetReadAfterWriteGTID(str)
 	case sysvars.ReadAfterWriteTimeOut.Name:
-		val, err := svss.evalAsFloat(env)
+		val, err := svss.evalAsFloat(env, vcursor)
 		if err != nil {
 			return err
 		}
 		vcursor.Session().SetReadAfterWriteTimeout(val)
 	case sysvars.SessionTrackGTIDs.Name:
-		str, err := svss.evalAsString(env)
+		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
 			return err
 		}
@@ -545,15 +545,15 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 	return err
 }
 
-func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv) (int64, error) {
+func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv, vcursor VCursor) (int64, error) {
 	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return 0, err
 	}
 
-	v := value.Value()
+	v := value.Value(vcursor.ConnCollation())
 	if !v.IsIntegral() {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, v.Type().String())
 	}
 	intValue, err := v.ToInt64()
 	if err != nil {
@@ -562,28 +562,28 @@ func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv) (int64, e
 	return intValue, nil
 }
 
-func (svss *SysVarSetAware) evalAsFloat(env *evalengine.ExpressionEnv) (float64, error) {
+func (svss *SysVarSetAware) evalAsFloat(env *evalengine.ExpressionEnv, vcursor VCursor) (float64, error) {
 	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return 0, err
 	}
 
-	v := value.Value()
+	v := value.Value(vcursor.ConnCollation())
 	floatValue, err := v.ToFloat64()
 	if err != nil {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, v.Type().String())
 	}
 	return floatValue, nil
 }
 
-func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv) (string, error) {
+func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv, vcursor VCursor) (string, error) {
 	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return "", err
 	}
-	v := value.Value()
+	v := value.Value(vcursor.ConnCollation())
 	if !v.IsText() && !v.IsBinary() {
-		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, v.Type().String())
 	}
 
 	return v.ToString(), nil

@@ -25,7 +25,7 @@ import (
 )
 
 // AggregatedDiscoveryMetrics contains aggregated metrics for instance discovery.
-// Called from api/discovery-metrics-aggregated/:seconds
+// Called from api/discovery-metrics-aggregated?seconds=xxx
 type AggregatedDiscoveryMetrics struct {
 	FirstSeen                       time.Time // timestamp of the first data seen
 	LastSeen                        time.Time // timestamp of the last data seen
@@ -34,6 +34,7 @@ type AggregatedDiscoveryMetrics struct {
 	CountDistinctFailedInstanceKeys int       // number of distinct Instances which failed
 	FailedDiscoveries               uint64    // number of failed discoveries
 	SuccessfulDiscoveries           uint64    // number of successful discoveries
+	InstancePollSecondsExceeded     uint64    // number of times discoverInstance exceeded InstancePollSeconds
 	MeanTotalSeconds                float64
 	MeanBackendSeconds              float64
 	MeanInstanceSeconds             float64
@@ -75,17 +76,18 @@ func aggregate(results []collection.Metric) AggregatedDiscoveryMetrics {
 	type hostKey string
 	type timerKey string
 	const (
-		FailedDiscoveries     counterKey = "FailedDiscoveries"
-		Discoveries                      = "Discoveries"
-		InstanceKeys          hostKey    = "InstanceKeys"
-		OkInstanceKeys                   = "OkInstanceKeys"
-		FailedInstanceKeys               = "FailedInstanceKeys"
-		TotalSeconds          timerKey   = "TotalSeconds"
-		BackendSeconds                   = "BackendSeconds"
-		InstanceSeconds                  = "InstanceSeconds"
-		FailedTotalSeconds               = "FailedTotalSeconds"
-		FailedBackendSeconds             = "FailedBackendSeconds"
-		FailedInstanceSeconds            = "FailedInstanceSeconds"
+		FailedDiscoveries           counterKey = "FailedDiscoveries"
+		Discoveries                            = "Discoveries"
+		InstancePollSecondsExceeded            = "instancePollSecondsExceeded"
+		InstanceKeys                hostKey    = "InstanceKeys"
+		OkInstanceKeys                         = "OkInstanceKeys"
+		FailedInstanceKeys                     = "FailedInstanceKeys"
+		TotalSeconds                timerKey   = "TotalSeconds"
+		BackendSeconds                         = "BackendSeconds"
+		InstanceSeconds                        = "InstanceSeconds"
+		FailedTotalSeconds                     = "FailedTotalSeconds"
+		FailedBackendSeconds                   = "FailedBackendSeconds"
+		FailedInstanceSeconds                  = "FailedInstanceSeconds"
 	)
 
 	counters := make(map[counterKey]uint64)         // map of string based counters
@@ -93,7 +95,7 @@ func aggregate(results []collection.Metric) AggregatedDiscoveryMetrics {
 	timings := make(map[timerKey]stats.Float64Data) // map of string based float64 values
 
 	// initialise counters
-	for _, v := range []counterKey{FailedDiscoveries, Discoveries} {
+	for _, v := range []counterKey{FailedDiscoveries, Discoveries, InstancePollSecondsExceeded} {
 		counters[v] = 0
 	}
 	// initialise names
@@ -119,18 +121,18 @@ func aggregate(results []collection.Metric) AggregatedDiscoveryMetrics {
 
 		// different names
 		x := names[InstanceKeys]
-		x[v.InstanceKey.String()] = 1 // Value doesn't matter
+		x[v.TabletAlias] = 1 // Value doesn't matter
 		names[InstanceKeys] = x
 
 		if v.Err == nil {
 			// ok names
 			x := names[OkInstanceKeys]
-			x[v.InstanceKey.String()] = 1 // Value doesn't matter
+			x[v.TabletAlias] = 1 // Value doesn't matter
 			names[OkInstanceKeys] = x
 		} else {
 			// failed names
 			x := names[FailedInstanceKeys]
-			x[v.InstanceKey.String()] = 1 // Value doesn't matter
+			x[v.TabletAlias] = 1 // Value doesn't matter
 			names[FailedInstanceKeys] = x
 		}
 
@@ -139,6 +141,8 @@ func aggregate(results []collection.Metric) AggregatedDiscoveryMetrics {
 		if v.Err != nil {
 			counters[FailedDiscoveries]++
 		}
+
+		counters[InstancePollSecondsExceeded] += v.InstancePollSecondsDurationCount
 
 		// All timings
 		timings[TotalSeconds] = append(timings[TotalSeconds], v.TotalLatency.Seconds())
@@ -161,6 +165,7 @@ func aggregate(results []collection.Metric) AggregatedDiscoveryMetrics {
 		CountDistinctFailedInstanceKeys: len(names[FailedInstanceKeys]),
 		FailedDiscoveries:               counters[FailedDiscoveries],
 		SuccessfulDiscoveries:           counters[Discoveries],
+		InstancePollSecondsExceeded:     counters[InstancePollSecondsExceeded],
 		MeanTotalSeconds:                mean(timings[TotalSeconds]),
 		MeanBackendSeconds:              mean(timings[BackendSeconds]),
 		MeanInstanceSeconds:             mean(timings[InstanceSeconds]),

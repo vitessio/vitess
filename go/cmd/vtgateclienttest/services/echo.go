@@ -18,13 +18,13 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 
-	"context"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -78,13 +78,13 @@ func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	// The first two returned fields are always a field with a MySQL NULL value,
 	// and another field with a zero-length string.
 	// Client tests can use this to check that they correctly distinguish the two.
-	qr.Fields = append(qr.Fields, &querypb.Field{Name: "null", Type: sqltypes.VarBinary})
+	qr.Fields = append(qr.Fields, &querypb.Field{Name: "null", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)})
 	row = append(row, sqltypes.NULL)
-	qr.Fields = append(qr.Fields, &querypb.Field{Name: "emptyString", Type: sqltypes.VarBinary})
+	qr.Fields = append(qr.Fields, &querypb.Field{Name: "emptyString", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)})
 	row = append(row, sqltypes.NewVarBinary(""))
 
 	for k, v := range vals {
-		qr.Fields = append(qr.Fields, &querypb.Field{Name: k, Type: sqltypes.VarBinary})
+		qr.Fields = append(qr.Fields, &querypb.Field{Name: k, Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)})
 
 		val := reflect.ValueOf(v)
 		if val.Kind() == reflect.Map {
@@ -98,7 +98,7 @@ func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *echoClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		return session, echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -107,10 +107,10 @@ func (c *echoClient) Execute(ctx context.Context, session *vtgatepb.Session, sql
 			"session":  session,
 		}), nil
 	}
-	return c.fallbackClient.Execute(ctx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		callback(echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -118,9 +118,9 @@ func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Sessio
 			"bindVars": bindVariables,
 			"session":  session,
 		}))
-		return nil
+		return session, nil
 	}
-	return c.fallbackClient.StreamExecute(ctx, session, sql, bindVariables, callback)
+	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
 }
 
 func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {

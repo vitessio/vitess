@@ -566,6 +566,7 @@ func TestSmallerTimeout(t *testing.T) {
 
 func TestTabletServerReserveConnection(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -629,6 +630,7 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 
 func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1419,44 +1421,158 @@ func TestHandleExecUnknownError(t *testing.T) {
 	panic("unknown exec error")
 }
 
+// TestHandlePanicAndSendLogStatsMessageTruncation tests that when an error truncation
+// length is set and a panic occurs, the code in handlePanicAndSendLogStats will
+// truncate the error text in logs, but will not truncate the error text in the
+// error value.
+func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
+	tl := newTestLogger()
+	defer tl.Close()
+	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
+	longBv := map[string]*querypb.BindVariable{
+		"bv1": sqltypes.Int64BindVariable(1111111111),
+		"bv2": sqltypes.Int64BindVariable(2222222222),
+		"bv3": sqltypes.Int64BindVariable(3333333333),
+		"bv4": sqltypes.Int64BindVariable(4444444444),
+	}
+	origTruncateErrLen := sqlparser.GetTruncateErrLen()
+	sqlparser.SetTruncateErrLen(32)
+	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
+
+	defer func() {
+		err := logStats.Error
+		want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), want)
+		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
+		gotWhatWeWant := false
+		for _, log := range tl.getLogs() {
+			if strings.HasPrefix(log, want) {
+				gotWhatWeWant = true
+				break
+			}
+		}
+		assert.True(t, gotWhatWeWant)
+	}()
+
+	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
+	panic("panic from TestHandlePanicAndSendLogStatsMessageTruncation")
+}
+
+func TestQueryAsString(t *testing.T) {
+	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
+	longBv := map[string]*querypb.BindVariable{
+		"bv1": sqltypes.Int64BindVariable(1111111111),
+		"bv2": sqltypes.Int64BindVariable(2222222222),
+		"bv3": sqltypes.Int64BindVariable(3333333333),
+		"bv4": sqltypes.Int64BindVariable(4444444444),
+	}
+	origTruncateErrLen := sqlparser.GetTruncateErrLen()
+	sqlparser.SetTruncateErrLen(32)
+	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
+
+	query := queryAsString(longSql, longBv, true, true)
+	want := "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {[REDACTED]}"
+	assert.Equal(t, want, query)
+
+	query = queryAsString(longSql, longBv, true, false)
+	want = "Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {[REDACTED]}"
+	assert.Equal(t, want, query)
+
+	query = queryAsString(longSql, longBv, false, true)
+	want = "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
+	assert.Equal(t, want, query)
+
+	query = queryAsString(longSql, longBv, false, false)
+	want = "Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
+	assert.Equal(t, want, query)
+}
+
 type testLogger struct {
-	logs        []string
+	logsMu sync.Mutex
+	logs   []string
+
 	savedInfof  func(format string, args ...any)
+	savedInfo   func(args ...any)
 	savedErrorf func(format string, args ...any)
+	savedError  func(args ...any)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
 		savedInfof:  log.Infof,
+		savedInfo:   log.Info,
 		savedErrorf: log.Errorf,
+		savedError:  log.Error,
 	}
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	log.Infof = tl.recordInfof
+	log.Info = tl.recordInfo
 	log.Errorf = tl.recordErrorf
+	log.Error = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	log.Infof = tl.savedInfof
+	log.Info = tl.savedInfo
 	log.Errorf = tl.savedErrorf
+	log.Error = tl.savedError
 }
 
 func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfof(msg)
 }
 
+func (tl *testLogger) recordInfo(args ...any) {
+	msg := fmt.Sprint(args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
+	tl.logs = append(tl.logs, msg)
+	tl.savedInfo(msg)
+}
+
 func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)
 }
 
+func (tl *testLogger) recordError(args ...any) {
+	msg := fmt.Sprint(args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
+	tl.logs = append(tl.logs, msg)
+	tl.savedError(msg)
+}
+
 func (tl *testLogger) getLog(i int) string {
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	if i < len(tl.logs) {
 		return tl.logs[i]
 	}
 	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
+}
+
+func (tl *testLogger) getLogs() []string {
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
+	return tl.logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
@@ -1632,6 +1748,28 @@ func TestSanitizeMessagesNoBindVars(t *testing.T) {
 	want = "Sql: \"\", BindVars: {}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log '%s', want '%s'", tl.getLog(0), want)
+	}
+}
+
+func TestTruncateErrorLen(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TruncateErrorLen = 32
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+	err := tsv.convertAndLogError(
+		ctx,
+		"select 42 from dual",
+		nil,
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Looooooooooooooooooooooooooooooooong error"),
+		nil,
+	)
+	want := "Looooooooooooooooooo [TRUNCATED]"
+	require.Error(t, err)
+	assert.Equal(t, err.Error(), want)
+	want = "Sql: \"select 42 from dual\", BindVars: {}"
+	if !strings.Contains(tl.getLog(0), want) {
+		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
 	}
 }
 
@@ -1843,6 +1981,7 @@ func TestConfigChanges(t *testing.T) {
 
 func TestReserveBeginExecute(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -1867,6 +2006,7 @@ func TestReserveBeginExecute(t *testing.T) {
 
 func TestReserveExecute_WithoutTx(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1889,6 +2029,7 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 
 func TestReserveExecute_WithTx(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -1948,6 +2089,7 @@ func TestRelease(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			db, tsv := setupTabletServerTest(t, "")
+			tsv.config.EnableSettingsPool = false
 			defer tsv.StopService()
 			defer db.Close()
 			db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -1990,6 +2132,7 @@ func TestRelease(t *testing.T) {
 
 func TestReserveStats(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2156,6 +2299,7 @@ func setDBName(db *fakesqldb.DB, tsv *TabletServer, s string) {
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	tsv.config.EnableSettingsPool = false
 	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()

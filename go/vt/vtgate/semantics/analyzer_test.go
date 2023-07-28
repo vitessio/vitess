@@ -1186,7 +1186,7 @@ func TestScopingWVindexTables(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			hash, _ := vindexes.NewHash("user_index", nil)
+			hash, _ := vindexes.CreateVindex("hash", "user_index", nil)
 			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
@@ -1422,6 +1422,13 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 			tables:    nil,
 		}, {
 			query:     "select 1 from t as A, t as B",
+			unsharded: ks1,
+			tables: []*vindexes.Table{
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+			},
+		}, {
+			query:     "insert into t select * from t",
 			unsharded: ks1,
 			tables: []*vindexes.Table{
 				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},

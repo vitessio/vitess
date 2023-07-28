@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools generate_ci_workflows
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools generate_ci_workflows generate-flag-testdata
 
 all: build
 
@@ -91,6 +91,10 @@ endif
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
+ifndef NOVTADMINBUILD
+	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
+	PREFIX="" ./web/vtadmin/build.sh
+endif
 
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
@@ -269,7 +273,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=17
+BOOTSTRAP_VERSION=19
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -375,68 +379,10 @@ tools:
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh
-
-install_k8s-code-generator: tools/tools.go go.mod
-	go install k8s.io/code-generator/cmd/deepcopy-gen
-	go install k8s.io/code-generator/cmd/client-gen
-	go install k8s.io/code-generator/cmd/lister-gen
-	go install k8s.io/code-generator/cmd/informer-gen
-
-DEEPCOPY_GEN=$(VTROOTBIN)/deepcopy-gen
-CLIENT_GEN=$(VTROOTBIN)/client-gen
-LISTER_GEN=$(VTROOTBIN)/lister-gen
-INFORMER_GEN=$(VTROOTBIN)/informer-gen
-
-GEN_BASE_DIR ?= vitess.io/vitess/go/vt/topo/k8stopo
-
-client_go_gen: install_k8s-code-generator
-	echo $$(date): Regenerating client-go code
-	# Delete and re-generate the deepcopy types
-	find $(VTROOT)/go/vt/topo/k8stopo/apis/topo/v1beta1 -name "zz_generated.deepcopy.go" -delete
-
-	# We output to ./ and then copy over the generated files to the appropriate path
-	# This is done so we don't have rely on the repository being cloned to `$GOPATH/src/vitess.io/vitess`
-
-	$(DEEPCOPY_GEN) -o ./ \
-	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
-	-O zz_generated.deepcopy \
-	--bounding-dirs $(GEN_BASE_DIR)/apis \
-	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
-
-	# Delete existing code
-	rm -rf go/vt/topo/k8stopo/client
-
-	# Generate clientset
-	$(CLIENT_GEN) -o ./ \
-	--clientset-name versioned \
-	--input-base $(GEN_BASE_DIR)/apis \
-	--input 'topo/v1beta1' \
-	--output-package $(GEN_BASE_DIR)/client/clientset \
-	--fake-clientset=true \
-	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
-
-	# Generate listers
-	$(LISTER_GEN) -o ./ \
-	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
-	--output-package $(GEN_BASE_DIR)/client/listers \
-	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
-
-	# Generate informers
-	$(INFORMER_GEN) -o ./ \
-	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
-	--output-package $(GEN_BASE_DIR)/client/informers \
-	--versioned-clientset-package $(GEN_BASE_DIR)/client/clientset/versioned \
-	--listers-package $(GEN_BASE_DIR)/client/listers \
-	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
-
-	# Move and cleanup
-	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
-	mv vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go
-	rm -rf vitess.io/vitess/go/vt/topo/k8stopo/
 
 vtadmin_web_install:
 	cd web/vtadmin && npm install
@@ -457,8 +403,8 @@ vtadmin_authz_testgen:
 generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
-release-notes:
-	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
+generate-flag-testdata:
+	./tools/generate_flag_testdata.sh
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh

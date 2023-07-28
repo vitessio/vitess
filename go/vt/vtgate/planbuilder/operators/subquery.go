@@ -111,7 +111,7 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 	}
 	subq := &SubQuery{}
 	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := createLogicalOperatorFromAST(ctx, sq.Subquery.Select)
+		opInner, err := translateQueryToOp(ctx, sq.Subquery.Select)
 		if err != nil {
 			return nil, err
 		}
@@ -125,18 +125,6 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 		})
 	}
 	return subq, nil
-}
-
-func (s *SubQuery) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "SubQuery",
-	}
-}
-
-func (s *SubQueryInner) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "SubQueryInner",
-	}
 }
 
 func (s *SubQuery) ShortDescription() string {

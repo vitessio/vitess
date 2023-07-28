@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -311,17 +312,17 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 }
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
-func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string, expectFind bool) {
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) {
 	query := "show vitess_throttled_apps"
 	r := VtgateExecQuery(t, vtParams, query, "")
 
 	found := false
 	for _, row := range r.Named().Rows {
-		if row.AsString("app", "") == appName {
+		if throttlerApp.Equals(row.AsString("app", "")) {
 			found = true
 		}
 	}
-	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
+	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", throttlerApp, found)
 }
 
 // WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp

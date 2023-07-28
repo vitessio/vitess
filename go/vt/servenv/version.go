@@ -19,4 +19,4 @@ limitations under the License.
 
 package servenv
 
-const versionName = "17.0.0-SNAPSHOT"
+const versionName = "18.0.0-SNAPSHOT"

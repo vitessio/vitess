@@ -368,6 +368,102 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `UNHEX('f')`,
 			result:     `VARBINARY("\x0f")`,
 		},
+		{
+			expression: `STRCMP(1234, '12_4')`,
+			result:     `INT64(-1)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, 0)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 1, 0)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `INTERVAL(0, 1, 0, 0)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, -1, 0, 0)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 1, 1, 1)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, -1, -1, -1)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, 1)`,
+			result:     `INT64(2)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, -1)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, NULL, 0, 0)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(NULL, 0, 0, 0)`,
+			result:     `INT64(-1)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, NULL)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, NULL, 1, 1)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 2, NULL, 1, 1)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `INTERVAL(0, 2, -1, NULL, -1, 1)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, 2, NULL, NULL, -1, 1)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, NULL, NULL, NULL, -1, 1)`,
+			result:     `INT64(4)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, -1, NULL, 1)`,
+			result:     `INT64(4)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, -1, NULL, NULL, 1)`,
+			result:     `INT64(5)`,
+		},
+		{
+			expression: `REGEXP_REPLACE(1234, 12, 6, 1)`,
+			result:     `TEXT("634")`,
+		},
+		{
+			expression: `_latin1 0xFF`,
+			result:     `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `TRIM(_latin1 0xA078A0 FROM _utf8mb4 0xC2A078C2A0)`,
+			result:     `VARCHAR("")`,
+		},
+		{
+			expression: `CONCAT_WS("😊😂🤢", date '2000-01-01', _latin1 0xFF)`,
+			result:     `VARCHAR("2000-01-01😊😂🤢ÿ")`,
+		},
+		{
+			expression: `concat('test', _latin1 0xff)`,
+			result:     `VARCHAR("testÿ")`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -390,10 +486,6 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if cfg.CompilerErr != nil {
-				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
-			}
-
 			env := evalengine.EmptyExpressionEnv()
 			env.Row = tc.values
 
@@ -405,6 +497,10 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
 
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
+			}
+
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := 0; i < 8; i++ {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
@@ -414,6 +510,87 @@ func TestCompilerSingle(t *testing.T) {
 
 				if res.String() != tc.result {
 					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				}
+			}
+		})
+	}
+}
+
+func TestBindVarLiteral(t *testing.T) {
+	var testCases = []struct {
+		expression string
+		bindType   func(expr sqlparser.Expr)
+		bindVar    *querypb.BindVariable
+		result     string
+	}{
+		{
+			expression: `_latin1 :vtg1 /* HEXNUM */`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexNum
+			},
+			bindVar: sqltypes.HexNumBindVariable([]byte("0xFF")),
+			result:  `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `cast(:vtg1 /* HEXVAL */ as char character set latin1)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.CastExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexVal
+			},
+			bindVar: sqltypes.HexValBindVariable([]byte("0'FF'")),
+			result:  `VARCHAR("ÿ")`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := sqlparser.ParseExpr(tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc.bindType(expr)
+
+			fields := evalengine.FieldResolver(makeFields(nil))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Optimization:  evalengine.OptimizationLevelCompilerDebug,
+			}
+
+			converted, err := evalengine.Translate(expr, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result := `VARCHAR("ÿ")`
+
+			env := evalengine.EmptyExpressionEnv()
+			env.BindVars = map[string]*querypb.BindVariable{
+				"vtg1": tc.bindVar,
+			}
+
+			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if expected.String() != result {
+				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), result)
+			}
+
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
+			}
+
+			// re-run the same evaluation multiple times to ensure results are always consistent
+			for i := 0; i < 8; i++ {
+				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if res.String() != result {
+					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
 				}
 			}
 		})
