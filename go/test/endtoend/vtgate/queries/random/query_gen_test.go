@@ -28,9 +28,6 @@ import (
 
 // TestSeed makes sure that the seed is deterministic
 func TestSeed(t *testing.T) {
-	sel, err := sqlparser.Parse("select 1 < any (select empno from emp)")
-	fmt.Println(sel, err)
-
 	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
 		{tableExpr: sqlparser.NewTableName("emp")},

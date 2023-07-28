@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -82,8 +83,7 @@ func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string
 	return plan, stmt, nil
 }
 
-func (vw *VSchemaWrapper) ClearPrepareData(lowered string) {
-}
+func (vw *VSchemaWrapper) ClearPrepareData(string) {}
 
 func (vw *VSchemaWrapper) StorePrepareData(string, *vtgatepb.PrepareData) {}
 
