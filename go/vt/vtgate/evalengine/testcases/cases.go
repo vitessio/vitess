@@ -829,10 +829,24 @@ func BitwiseOperators(yield Query) {
 func WeightString(yield Query) {
 	var inputs = []string{
 		`'foobar'`, `_latin1 'foobar'`,
-		`'foobar' as char(12)`, `'foobar' as binary(12)`,
+		`'foobar' as char(12)`, `'foobar' as char(3)`, `'foobar' as binary(12)`, `'foobar' as binary(3)`,
+		`'foobar' collate utf8mb4_bin as char(12)`, `'foobar' collate utf8mb4_bin as char(3)`,
+		`'foobar' collate binary as char(12)`, `'foobar' collate binary as char(3)`,
 		`_latin1 'foobar' as char(12)`, `_latin1 'foobar' as binary(12)`,
+		`_binary 'foobar' as char(12)`, `_binary 'foobar' as binary(12)`,
+		`1`, `-1`, `9223372036854775807`, `18446744073709551615`, `-9223372036854775808`,
+		`1 as char(1)`, `-1 as char(1)`, `9223372036854775807 as char(1)`, `18446744073709551615 as char(1)`, `-9223372036854775808 as char(1)`,
+		`1 as char(32)`, `-1 as char(32)`, `9223372036854775807 as char(32)`, `18446744073709551615 as char(32)`, `-9223372036854775808 as char(32)`,
+		`1 as binary(1)`, `-1 as binary(1)`, `9223372036854775807 as binary(1)`, `18446744073709551615 as binary(1)`, `-9223372036854775808 as binary(1)`,
+		`1 as binary(32)`, `-1 as binary(32)`, `9223372036854775807 as binary(32)`, `18446744073709551615 as binary(32)`, `-9223372036854775808 as binary(32)`,
 		`1234.0`, `12340e0`,
 		`0x1234`, `0x1234 as char(12)`, `0x1234 as char(2)`,
+		`date'2000-01-01'`, `date'2000-01-01' as char(12)`, `date'2000-01-01' as char(2)`, `date'2000-01-01' as binary(12)`, `date'2000-01-01' as binary(2)`,
+		`timestamp'2000-01-01 11:22:33'`, `timestamp'2000-01-01 11:22:33' as char(12)`, `timestamp'2000-01-01 11:22:33' as char(2)`, `timestamp'2000-01-01 11:22:33' as binary(12)`, `timestamp'2000-01-01 11:22:33' as binary(2)`,
+		`timestamp'2000-01-01 11:22:33.123456'`, `timestamp'2000-01-01 11:22:33.123456' as char(12)`, `timestamp'2000-01-01 11:22:33.123456' as char(2)`, `timestamp'2000-01-01 11:22:33.123456' as binary(12)`, `timestamp'2000-01-01 11:22:33.123456' as binary(2)`,
+		`time'-11:22:33'`, `time'-11:22:33' as char(12)`, `time'-11:22:33' as char(2)`, `time'-11:22:33' as binary(12)`, `time'-11:22:33' as binary(2)`,
+		`time'11:22:33'`, `time'11:22:33' as char(12)`, `time'11:22:33' as char(2)`, `time'11:22:33' as binary(12)`, `time'11:22:33' as binary(2)`,
+		`time'101:22:33'`, `time'101:22:33' as char(12)`, `time'101:22:33' as char(2)`, `time'101:22:33' as binary(12)`, `time'101:22:33' as binary(2)`,
 	}
 
 	for _, i := range inputs {
