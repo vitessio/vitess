@@ -111,6 +111,9 @@ type Table struct {
 	// Source is a keyspace-qualified table name that points to the source of a
 	// reference table. Only applicable for tables with Type set to "reference".
 	Source *Source `json:"source,omitempty"`
+
+	ChildForeignKeys  []ChildFKInfo  `json:"child_foreign_keys,omitempty"`
+	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -132,13 +135,38 @@ type ColumnVindex struct {
 	backfill bool
 }
 
-type ForeignKeyConstraint struct {
-	Table             *Table
-	Columns           sqlparser.Columns
-	ReferencedColumns sqlparser.Columns
-	Match             sqlparser.MatchAction
-	OnDelete          sqlparser.ReferenceAction
-	OnUpdate          sqlparser.ReferenceAction
+type ParentFKInfo struct {
+	Table         *Table
+	ParentColumns sqlparser.Columns
+	ChildColumns  sqlparser.Columns
+}
+
+func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ParentFKInfo {
+	return ParentFKInfo{
+		Table:         parentTbl,
+		ChildColumns:  fkDef.Source,
+		ParentColumns: fkDef.ReferenceDefinition.ReferencedColumns,
+	}
+}
+
+type ChildFKInfo struct {
+	Table         *Table
+	ChildColumns  sqlparser.Columns
+	ParentColumns sqlparser.Columns
+	Match         sqlparser.MatchAction
+	OnDelete      sqlparser.ReferenceAction
+	OnUpdate      sqlparser.ReferenceAction
+}
+
+func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
+	return ChildFKInfo{
+		Table:         childTbl,
+		ChildColumns:  fkDef.Source,
+		ParentColumns: fkDef.ReferenceDefinition.ReferencedColumns,
+		Match:         fkDef.ReferenceDefinition.Match,
+		OnDelete:      fkDef.ReferenceDefinition.OnDelete,
+		OnUpdate:      fkDef.ReferenceDefinition.OnUpdate,
+	}
 }
 
 type TableInfo struct {
@@ -1159,6 +1187,10 @@ func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) 
 		return ks, nil
 	}
 	return keyspace, nil
+}
+
+func (vschema *VSchema) SetForeignKeyChecks(name string, tbl *Table, keys []*sqlparser.ForeignKeyDefinition) {
+
 }
 
 // ByCost provides the interface needed for ColumnVindexes to
