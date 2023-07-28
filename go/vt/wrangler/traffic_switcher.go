@@ -1961,10 +1961,6 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 		return nil, nil
 	}
 
-	// We maintain two maps of the same sequence metadata so
-	// that we have fast lookups for both the using table and
-	// the backing sequence table.
-	sequencesByUsingTable := make(map[string]*sequenceMetadata)
 	sequencesByBackingTable := make(map[string]*sequenceMetadata)
 	for _, table := range ts.Tables() {
 		vs, ok := vschema.Tables[table]
@@ -1973,25 +1969,47 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 		}
 		if vs.AutoIncrement != nil && vs.AutoIncrement.Sequence != "" {
 			sm := &sequenceMetadata{
+				backingTableName:     vs.AutoIncrement.Sequence,
 				usingTableName:       table,
 				usingTableDefinition: vs,
-				backingTableName:     vs.AutoIncrement.Sequence,
 				// TODO: get and set this properly to deal with db_name_overrides
 				usingTableDBName: "vt_" + ts.targetKeyspace,
 			}
-			sequencesByUsingTable[table] = sm
-			sequencesByBackingTable[vs.AutoIncrement.Sequence] = sm
+			// If the sequence table is fully qualified in the vschema then
+			// we don't need to find it later.
+			if strings.Contains(vs.AutoIncrement.Sequence, ".") {
+				parts := strings.Split(vs.AutoIncrement.Sequence, ".")
+				if len(parts) != 2 {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s", vs.AutoIncrement.Sequence)
+				}
+				sm.backingTableName = parts[1]
+				sm.backingTableKeyspace = parts[0]
+			}
+			sequencesByBackingTable[sm.backingTableName] = sm
 		}
 	}
-	if len(sequencesByUsingTable) == 0 { // Nothing to do
+	if len(sequencesByBackingTable) == 0 { // Nothing to do
 		return nil, nil
 	}
-	log.Errorf("DEBUG: sequences: %+v", sequencesByUsingTable)
+	log.Errorf("DEBUG: sequences: %+v", sequencesByBackingTable)
 
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
+	}
+
+	// If all of the sequence tables were defined using qualified table
+	// names in the vschema, then we don't need to look for them.
+	mustSearch := false
+	for _, sm := range sequencesByBackingTable {
+		if sm.backingTableKeyspace == "" {
+			mustSearch = true
+			break
+		}
+	}
+	if !mustSearch {
+		return sequencesByBackingTable, nil
 	}
 
 	// Now we need to locate the backing sequence tables which will
@@ -2001,6 +2019,8 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
 	}
 	log.Errorf("DEBUG: keyspaces: %+v", keyspaces)
+	tableCount := len(sequencesByBackingTable)
+	tablesFound := 0
 	for _, keyspace := range keyspaces {
 		vschema, err = ts.TopoServer().GetVSchema(ctx, keyspace)
 		if err != nil {
@@ -2014,16 +2034,20 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 			sm := sequencesByBackingTable[tableName]
 			if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
 				sm != nil && tableName == sm.backingTableName {
+				tablesFound++
 				// If the sequence backing table is being moved then we do not
 				// want to initialize it.
 				if keyspace == ts.targetKeyspace {
 					delete(sequencesByBackingTable, tableName)
-					delete(sequencesByUsingTable, tableName)
 					continue
 				}
 				sm.backingTableKeyspace = keyspace
 				// TODO: get and set this properly in order to deal with db_name_overrides
 				sm.backingTableDBName = "vt_" + keyspace
+				if tablesFound == tableCount {
+					log.Errorf("DEBUG: sequence backing tables found: %+v", sequencesByBackingTable)
+					return sequencesByBackingTable, nil
+				}
 			}
 		}
 		select {
@@ -2032,16 +2056,8 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 		default:
 		}
 	}
-	// Now we need to make sure we found all of the backing sequence tables.
-	for _, sm := range sequencesByUsingTable {
-		if sm.backingTableKeyspace == "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence tables metadata: %+v",
-				sequencesByUsingTable)
-		}
-	}
-	log.Errorf("DEBUG: sequence backing tables: %+v", sequencesByBackingTable)
-
-	return sequencesByBackingTable, nil
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence tables metadata: %+v",
+		sequencesByBackingTable)
 }
 
 // initializeTargetSequenceTables initializes the backing sequence tables
