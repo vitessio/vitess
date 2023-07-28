@@ -534,11 +534,15 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	// Find out if the target is using any sequence tables for auto_increment
 	// value generation. If so, then we'll need to ensure that they are
 	// initialized properly before allowing new writes on the target.
-	sequenceMetadata, err := ts.getSequenceMetadata(ctx)
-	if err != nil {
-		werr := vterrors.Wrapf(err, "getSequenceMetadata failed")
-		ts.Logger().Error(werr)
-		return 0, nil, werr
+	sequenceMetadata := make(map[string]*sequenceMetadata)
+	// For sharded to sharded migrations the sequence must already be setup.
+	if ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil && ts.SourceKeyspaceSchema().Keyspace.Sharded {
+		sequenceMetadata, err = ts.getSequenceMetadata(ctx)
+		if err != nil {
+			werr := vterrors.Wrapf(err, "getSequenceMetadata failed")
+			ts.Logger().Error(werr)
+			return 0, nil, werr
+		}
 	}
 
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
