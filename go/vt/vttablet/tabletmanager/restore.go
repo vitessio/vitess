@@ -195,6 +195,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, backupTime)
 	}
 
+	if backupTime.IsZero() {
+		backupTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
+	}
+
 	params := mysqlctl.RestoreParams{
 		Cnf:                 tm.Cnf,
 		Mysqld:              tm.MysqlDaemon,
