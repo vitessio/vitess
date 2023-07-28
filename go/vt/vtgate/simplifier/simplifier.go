@@ -224,95 +224,132 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 	up := func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.JoinTableExpr:
-			lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
-			if ok {
-				ts := semTable.TableSetFor(lft)
-				if searchedTS == ts {
-					cursor.Replace(node.RightExpr)
-					simplified = true
-				}
-			}
-			rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
-			if ok {
-				ts := semTable.TableSetFor(rgt)
-				if searchedTS == ts {
-					cursor.Replace(node.LeftExpr)
-					simplified = true
-				}
-			}
+			simplified = removeTableinJoinTableExpr(node, searchedTS, semTable, cursor, simplified)
 		case *sqlparser.Select:
-			if len(node.From) == 1 {
-				_, notJoin := node.From[0].(*sqlparser.AliasedTableExpr)
-				if notJoin {
-					return true
-				}
-			}
-			for i, tbl := range node.From {
-				lft, ok := tbl.(*sqlparser.AliasedTableExpr)
-				if ok {
-					ts := semTable.TableSetFor(lft)
-					if searchedTS == ts {
-						node.From = append(node.From[:i], node.From[i+1:]...)
-						simplified = true
-					}
-				}
-			}
+			simplified = removeTableinSelect(node, searchedTS, semTable, simplified)
 		case *sqlparser.Where:
-			exprs := sqlparser.SplitAndExpression(nil, node.Expr)
-			var newPredicate sqlparser.Expr
-			for _, expr := range exprs {
-				if !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) {
-					newPredicate = sqlparser.AndExpressions(newPredicate, expr)
-				} else {
-					simplified = true
-				}
-			}
-			node.Expr = newPredicate
+			simplified = removeTableinWhere(node, searchedTS, semTable, simplified)
 		case sqlparser.SelectExprs:
-			_, isSel := cursor.Parent().(*sqlparser.Select)
-			if !isSel {
-				return true
-			}
-
-			var newExprs sqlparser.SelectExprs
-			for _, ae := range node {
-				expr, ok := ae.(*sqlparser.AliasedExpr)
-				if !ok {
-					newExprs = append(newExprs, ae)
-					continue
-				}
-				if shouldKeepExpr(expr.Expr) {
-					newExprs = append(newExprs, ae)
-				} else {
-					simplified = true
-				}
-			}
-			cursor.Replace(newExprs)
+			simplified = removeTableinSelectExprs(node, cursor, shouldKeepExpr, simplified)
 		case sqlparser.GroupBy:
-			var newExprs sqlparser.GroupBy
-			for _, expr := range node {
-				if shouldKeepExpr(expr) {
-					newExprs = append(newExprs, expr)
-				} else {
-					simplified = true
-				}
-			}
-			cursor.Replace(newExprs)
+			simplified = removeTableinGroupBy(node, cursor, shouldKeepExpr, simplified)
 		case sqlparser.OrderBy:
-			var newExprs sqlparser.OrderBy
-			for _, expr := range node {
-				if shouldKeepExpr(expr.Expr) {
-					newExprs = append(newExprs, expr)
-				} else {
-					simplified = true
-				}
-			}
-
-			cursor.Replace(newExprs)
+			simplified = removeTableinOrderBy(node, cursor, shouldKeepExpr, simplified)
 		}
 		return true
 	}
+
 	sqlparser.SafeRewrite(clone, alwaysVisit, up)
+	return simplified
+}
+
+func removeTableinJoinTableExpr(node *sqlparser.JoinTableExpr, searchedTS semantics.TableSet, semTable *semantics.SemTable, cursor *sqlparser.Cursor, simplified bool) bool {
+	lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
+	if ok {
+		ts := semTable.TableSetFor(lft)
+		if searchedTS == ts {
+			cursor.Replace(node.RightExpr)
+			simplified = true
+		}
+	}
+	rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
+	if ok {
+		ts := semTable.TableSetFor(rgt)
+		if searchedTS == ts {
+			cursor.Replace(node.LeftExpr)
+			simplified = true
+		}
+	}
+
+	return simplified
+}
+
+func removeTableinSelect(node *sqlparser.Select, searchedTS semantics.TableSet, semTable *semantics.SemTable, simplified bool) bool {
+	if len(node.From) == 1 {
+		_, notJoin := node.From[0].(*sqlparser.AliasedTableExpr)
+		if notJoin {
+			return simplified
+		}
+	}
+	for i, tbl := range node.From {
+		lft, ok := tbl.(*sqlparser.AliasedTableExpr)
+		if ok {
+			ts := semTable.TableSetFor(lft)
+			if searchedTS == ts {
+				node.From = append(node.From[:i], node.From[i+1:]...)
+				simplified = true
+			}
+		}
+	}
+
+	return simplified
+}
+
+func removeTableinWhere(node *sqlparser.Where, searchedTS semantics.TableSet, semTable *semantics.SemTable, simplified bool) bool {
+	exprs := sqlparser.SplitAndExpression(nil, node.Expr)
+	var newPredicate sqlparser.Expr
+	for _, expr := range exprs {
+		if !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) {
+			newPredicate = sqlparser.AndExpressions(newPredicate, expr)
+		} else {
+			simplified = true
+		}
+	}
+	node.Expr = newPredicate
+
+	return simplified
+}
+
+func removeTableinSelectExprs(node sqlparser.SelectExprs, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
+	_, isSel := cursor.Parent().(*sqlparser.Select)
+	if !isSel {
+		return simplified
+	}
+
+	var newExprs sqlparser.SelectExprs
+	for _, ae := range node {
+		expr, ok := ae.(*sqlparser.AliasedExpr)
+		if !ok {
+			newExprs = append(newExprs, ae)
+			continue
+		}
+		if shouldKeepExpr(expr.Expr) {
+			newExprs = append(newExprs, ae)
+		} else {
+			simplified = true
+		}
+	}
+	cursor.Replace(newExprs)
+
+	return simplified
+}
+
+func removeTableinGroupBy(node sqlparser.GroupBy, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
+	var newExprs sqlparser.GroupBy
+	for _, expr := range node {
+		if shouldKeepExpr(expr) {
+			newExprs = append(newExprs, expr)
+		} else {
+			simplified = true
+		}
+	}
+	cursor.Replace(newExprs)
+
+	return simplified
+}
+
+func removeTableinOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
+	var newExprs sqlparser.OrderBy
+	for _, expr := range node {
+		if shouldKeepExpr(expr.Expr) {
+			newExprs = append(newExprs, expr)
+		} else {
+			simplified = true
+		}
+	}
+
+	cursor.Replace(newExprs)
+
 	return simplified
 }
 
