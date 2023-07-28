@@ -213,11 +213,15 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		panic(err)
 	}
 
-	simplified := true
+	simplified := false
 	shouldKeepExpr := func(expr sqlparser.Expr) bool {
 		return !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
 	}
-	sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
+	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+		return true
+	}
+
+	up := func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.JoinTableExpr:
 			lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
@@ -225,6 +229,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 				ts := semTable.TableSetFor(lft)
 				if searchedTS == ts {
 					cursor.Replace(node.RightExpr)
+					simplified = true
 				}
 			}
 			rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
@@ -232,14 +237,14 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 				ts := semTable.TableSetFor(rgt)
 				if searchedTS == ts {
 					cursor.Replace(node.LeftExpr)
+					simplified = true
 				}
 			}
 		case *sqlparser.Select:
 			if len(node.From) == 1 {
 				_, notJoin := node.From[0].(*sqlparser.AliasedTableExpr)
 				if notJoin {
-					simplified = false
-					return false
+					return true
 				}
 			}
 			for i, tbl := range node.From {
@@ -248,7 +253,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 					ts := semTable.TableSetFor(lft)
 					if searchedTS == ts {
 						node.From = append(node.From[:i], node.From[i+1:]...)
-						return true
+						simplified = true
 					}
 				}
 			}
@@ -258,6 +263,8 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			for _, expr := range exprs {
 				if !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) {
 					newPredicate = sqlparser.AndExpressions(newPredicate, expr)
+				} else {
+					simplified = true
 				}
 			}
 			node.Expr = newPredicate
@@ -276,6 +283,8 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 				}
 				if shouldKeepExpr(expr.Expr) {
 					newExprs = append(newExprs, ae)
+				} else {
+					simplified = true
 				}
 			}
 			cursor.Replace(newExprs)
@@ -284,6 +293,8 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			for _, expr := range node {
 				if shouldKeepExpr(expr) {
 					newExprs = append(newExprs, expr)
+				} else {
+					simplified = true
 				}
 			}
 			cursor.Replace(newExprs)
@@ -292,13 +303,16 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			for _, expr := range node {
 				if shouldKeepExpr(expr.Expr) {
 					newExprs = append(newExprs, expr)
+				} else {
+					simplified = true
 				}
 			}
 
 			cursor.Replace(newExprs)
 		}
 		return true
-	}, nil)
+	}
+	sqlparser.SafeRewrite(clone, alwaysVisit, up)
 	return simplified
 }
 
