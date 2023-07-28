@@ -145,21 +145,21 @@ add_apt_key 9334A25F8507EFA5
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql57)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.7' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ bullseye mysql-5.7' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql80)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-8.0' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ bullseye mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql57|mysql80|percona57)
-    echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/ps-80/apt buster main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/ps-80/apt bullseye main' > /etc/apt/sources.list.d/percona80.list
     ;;
 esac
 
