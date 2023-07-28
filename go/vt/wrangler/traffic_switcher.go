@@ -2063,45 +2063,36 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context) e
 			nextVal,
 		)
 		log.Errorf("DEBUG: query: %s", query.Query)
-		// Execute this on the primary tablet of the keyspace housing
-		// the backing table.
+		// Execute this on the primary tablet of the unsharded keyspace
+		// housing the backing table.
 		sequenceShard, err := ts.wr.TopoServer().GetOnlyShard(ctx, sequenceMetadata.backingTableKeyspace)
 		if err != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				sequenceMetadata.backingTableKeyspace, err)
 		}
-		_, err = ts.wr.ExecuteFetchAsApp(ctx, sequenceShard.PrimaryAlias, true, query.Query, 1)
+		qr, err := ts.wr.ExecuteFetchAsApp(ctx, sequenceShard.PrimaryAlias, true, query.Query, 1)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the sequence table %s.%s: %v",
 				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, err)
 		}
-	}
-
-	// Now force the primary tablets managing the sequences to refresh their
-	// sequence caches for the tables we're moving.
-	ksDone := make(map[string]bool)
-	for _, sm := range sequencesByUsingTable {
-		if ksDone[sm.backingTableKeyspace] {
+		// If we actually updated the backing sequence table, then we need
+		// to tell the primary tablet managing the sequence to refresh/reset
+		// its cache for the table.
+		if qr.RowsAffected == 0 {
 			continue
 		}
-		si, err := ts.TopoServer().GetOnlyShard(ctx, sm.backingTableKeyspace)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get shard for keyspace %s: %v",
-				sm.backingTableKeyspace, err)
-		}
-		ts.Logger().Infof("Resetting sequence caches for shard %s.%s on tablet %s",
-			si.Keyspace(), si.ShardName(), si.PrimaryAlias)
-		ti, err := ts.TopoServer().GetTablet(ctx, si.PrimaryAlias)
+		ts.Logger().Infof("Resetting sequence cache for table %s on shard %s.%s using tablet %s",
+			sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias)
+		ti, err := ts.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
-				sm.backingTableKeyspace, err)
+				sequenceMetadata.backingTableKeyspace, err)
 		}
-		err = ts.TabletManagerClient().ResetSequences(ctx, ti.Tablet, ts.Tables())
+		err = ts.TabletManagerClient().ResetSequences(ctx, ti.Tablet, []string{sequenceMetadata.backingTableName})
 		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset sequence caches for shard %s.%s on tablet %s: %v",
-				si.Keyspace(), si.ShardName(), si.PrimaryAlias, err)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset sequence cache for table %s on shard %s.%s using tablet %s: %v",
+				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, err)
 		}
-		ksDone[sm.backingTableKeyspace] = true
 	}
 
 	// We completed the work w/o errors.
