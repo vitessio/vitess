@@ -2041,7 +2041,6 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 				sm != nil && tableName == sm.backingTableName {
 				tablesFound++
 				sm.backingTableKeyspace = keyspace
-				// TODO: get and set this properly in order to deal with db_name_overrides
 				sm.backingTableDBName = "vt_" + keyspace
 				if tablesFound == tableCount {
 					log.Errorf("DEBUG: sequence backing table found: %+v", sequencesByBackingTable)
@@ -2080,13 +2079,19 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 		shardResults := make([]int64, 0, len(ts.TargetShards()))
 		srMu := sync.Mutex{}
 		err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+			primary := target.GetPrimary()
+			if primary == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
+					ts.targetKeyspace, target.GetShard().ShardName())
+			}
 			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
 				sqlescape.EscapeID(sequenceMetadata.usingTableDefinition.AutoIncrement.Column),
 				sqlescape.EscapeID(sequenceMetadata.usingTableDBName),
 				sqlescape.EscapeID(sequenceMetadata.usingTableName),
 			)
-			log.Errorf("DEBUG: query: %s on shard: %s", query.Query, target.GetShard().ShardName())
-			qr, err := ts.wr.ExecuteFetchAsApp(ctx, target.GetPrimary().GetAlias(), true, query.Query, 1)
+			log.Errorf("DEBUG: query: %s on shard: %s/%s",
+				query.Query, ts.targetKeyspace, target.GetShard().ShardName())
+			qr, err := ts.wr.ExecuteFetchAsApp(ctx, primary.GetAlias(), true, query.Query, 1)
 			if err != nil || len(qr.Rows) != 1 {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get max used value for target table %s in order to initialize the backing sequence table %s: %v",
 					sequenceMetadata.usingTableName, ts.targetKeyspace, err)
@@ -2118,6 +2123,19 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 		nextVal := shardResults[len(shardResults)-1] + 1
 		// Now we need to update the sequence table, if needed, in order to
 		// ensure that that the next value it provides is > the current max.
+		sequenceShard, err := ts.wr.TopoServer().GetOnlyShard(ctx, sequenceMetadata.backingTableKeyspace)
+		if err != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for %s: %v",
+				sequenceMetadata.backingTableKeyspace, err)
+		}
+		sequenceTablet, err := ts.wr.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
+		if err != nil || sequenceTablet == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, err)
+		}
+		if sequenceTablet.DbNameOverride != "" {
+			sequenceMetadata.backingTableDBName = sequenceTablet.DbNameOverride
+		}
 		query := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
 			sqlescape.EscapeID(sequenceMetadata.backingTableDBName),
 			sqlescape.EscapeID(sequenceMetadata.backingTableName),
@@ -2126,13 +2144,8 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 			nextVal,
 		)
 		log.Errorf("DEBUG: query: %s", query.Query)
-		// Execute this on the primary tablet of the unsharded keyspace
+		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
-		sequenceShard, err := ts.wr.TopoServer().GetOnlyShard(ctx, sequenceMetadata.backingTableKeyspace)
-		if err != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
-				sequenceMetadata.backingTableKeyspace, err)
-		}
 		qr, err := ts.wr.ExecuteFetchAsApp(ctx, sequenceShard.PrimaryAlias, true, query.Query, 1)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the sequence table %s.%s: %v",
