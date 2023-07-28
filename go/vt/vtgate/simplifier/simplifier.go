@@ -114,9 +114,12 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 		}
 	}
 
-	abort := false
+	simplified := false
+	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+		return true
+	}
 
-	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
+	up := func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Union:
 			if _, ok := cursor.Parent().(*sqlparser.RootNode); ok {
@@ -126,25 +129,25 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 			cursor.Replace(node.Left)
 			clone := sqlparser.CloneSelectStatement(in)
 			if test(clone) {
-				log.Errorf("replaced UNION with one of its children")
-				abort = true
+				log.Errorf("replaced UNION with its left child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Left))
+				simplified = true
 				return true
 			}
 			cursor.Replace(node.Right)
 			clone = sqlparser.CloneSelectStatement(in)
 			if test(clone) {
-				log.Errorf("replaced UNION with one of its children")
-				abort = true
+				log.Errorf("replaced UNION with its right child")
+				simplified = true
 				return true
 			}
 			cursor.Replace(node)
 		}
 		return true
-	}, func(*sqlparser.Cursor) bool {
-		return !abort
-	})
+	}
 
-	if !abort {
+	sqlparser.SafeRewrite(in, alwaysVisit, up)
+
+	if !simplified {
 		// we found no simplifications
 		return nil
 	}

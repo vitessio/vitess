@@ -35,6 +35,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
 		return true
 	}
+
 	up := func(cursor *sqlparser.Cursor) bool {
 		node := sqlparser.CloneSQLNode(cursor.Node())
 		s := &shrinker{orig: node}
