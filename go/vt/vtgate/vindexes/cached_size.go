@@ -95,6 +95,32 @@ func (cached *CFC) CachedSize(alloc bool) int64 {
 	size += cached.prefixCFC.CachedSize(true)
 	return size
 }
+func (cached *ChildFKInfo) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
+	size += cached.Table.CachedSize(true)
+	// field ChildColumns vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ChildColumns)) * int64(32))
+		for _, elem := range cached.ChildColumns {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field ParentColumns vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ParentColumns)) * int64(32))
+		for _, elem := range cached.ParentColumns {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *Column) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -444,6 +470,32 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ParentFKInfo) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
+	size += cached.Table.CachedSize(true)
+	// field ParentColumns vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ParentColumns)) * int64(32))
+		for _, elem := range cached.ParentColumns {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field ChildColumns vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ChildColumns)) * int64(32))
+		for _, elem := range cached.ChildColumns {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -537,7 +589,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(240)
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
@@ -596,6 +648,20 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	}
 	// field Source *vitess.io/vitess/go/vt/vtgate/vindexes.Source
 	size += cached.Source.CachedSize(true)
+	// field ChildForeignKeys []vitess.io/vitess/go/vt/vtgate/vindexes.ChildFKInfo
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ChildForeignKeys)) * int64(80))
+		for _, elem := range cached.ChildForeignKeys {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field ParentForeignKeys []vitess.io/vitess/go/vt/vtgate/vindexes.ParentFKInfo
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ParentForeignKeys)) * int64(56))
+		for _, elem := range cached.ParentForeignKeys {
+			size += elem.CachedSize(false)
+		}
+	}
 	return size
 }
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {

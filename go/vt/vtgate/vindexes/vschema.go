@@ -141,6 +141,19 @@ type ParentFKInfo struct {
 	ChildColumns  sqlparser.Columns
 }
 
+// MarshalJSON returns a JSON representation of ParentFKInfo.
+func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name          string            `json:"parent_table"`
+		ParentColumns sqlparser.Columns `json:"parent_columns"`
+		ChildColumns  sqlparser.Columns `json:"child_columns"`
+	}{
+		Name:          fk.Table.Name.String(),
+		ChildColumns:  fk.ChildColumns,
+		ParentColumns: fk.ParentColumns,
+	})
+}
+
 func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ParentFKInfo {
 	return ParentFKInfo{
 		Table:         parentTbl,
@@ -156,6 +169,19 @@ type ChildFKInfo struct {
 	Match         sqlparser.MatchAction
 	OnDelete      sqlparser.ReferenceAction
 	OnUpdate      sqlparser.ReferenceAction
+}
+
+// MarshalJSON returns a JSON representation of ChildFKInfo.
+func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name          string            `json:"child_table"`
+		ChildColumns  sqlparser.Columns `json:"child_columns"`
+		ParentColumns sqlparser.Columns `json:"parent_columns"`
+	}{
+		Name:          fk.Table.Name.String(),
+		ChildColumns:  fk.ChildColumns,
+		ParentColumns: fk.ParentColumns,
+	})
 }
 
 func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
@@ -364,6 +390,26 @@ func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vsch
 		return vschemapb.Keyspace_FK_UNMANAGED
 	}
 	return fkMode
+}
+
+// addForeignKey is for testing only.
+func (vschema *VSchema) addForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	cTbl, ok := ks.Tables[childTableName]
+	if !ok {
+		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
+	}
+	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
+	pTbl, ok := ks.Tables[parentTableName]
+	if !ok {
+		return fmt.Errorf("parent table %s not found in keyspace %s", parentTableName, ksname)
+	}
+	pTbl.ChildForeignKeys = append(pTbl.ChildForeignKeys, NewChildFkInfo(cTbl, fkConstraint))
+	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
+	return nil
 }
 
 func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
