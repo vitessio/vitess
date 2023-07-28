@@ -29,7 +29,8 @@ import (
 type CheckF = func(sqlparser.Expr) bool
 
 func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
-	smallestKnown := sqlparser.CloneExpr(in)
+	// since we can't rewrite the top level, wrap the expr in an Exprs object
+	smallestKnown := sqlparser.Exprs{sqlparser.CloneExpr(in)}
 
 	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
 		return true
@@ -41,7 +42,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 		for expr != nil {
 			cursor.Replace(expr)
 
-			valid := test(smallestKnown)
+			valid := test(smallestKnown[0])
 			log.Errorf("test: %t: simplified %s to %s, full expr: %s", valid, sqlparser.String(node), sqlparser.String(expr), sqlparser.String(smallestKnown))
 			if valid {
 				break // we will still continue trying to simplify other expressions at this level
@@ -55,25 +56,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 	}
 	sqlparser.SafeRewrite(smallestKnown, alwaysVisit, up)
 
-	return smallestKnown
-}
-
-func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, replaceF []func(node sqlparser.SQLNode)) {
-	lvl := 0
-	pre := func(cursor *sqlparser.Cursor) bool {
-		if expr, isExpr := cursor.Node().(sqlparser.Expr); level == lvl && isExpr {
-			result = append(result, expr)
-			replaceF = append(replaceF, cursor.ReplacerF())
-		}
-		lvl++
-		return true
-	}
-	post := func(cursor *sqlparser.Cursor) bool {
-		lvl--
-		return true
-	}
-	sqlparser.Rewrite(e, pre, post)
-	return
+	return smallestKnown[0]
 }
 
 type shrinker struct {
