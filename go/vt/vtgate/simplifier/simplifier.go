@@ -98,7 +98,7 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 	if simplified {
 		return in
 	}
-
+	// we found no simplifications
 	return nil
 }
 
@@ -379,17 +379,13 @@ func newExprCursor(expr sqlparser.Expr, replace func(replaceWith sqlparser.Expr)
 }
 
 // visitAllExpressionsInAST will walk the AST and visit all expressions
-// This cursor has a few extra capabilities that the normal sqlparser.Rewrite does not have,
+// This cursor has a few extra capabilities that the normal sqlparser.SafeRewrite does not have,
 // such as visiting and being able to change individual expressions in a AND tree
 func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expressionCursor) bool) {
-	abort := false
-	post := func(*sqlparser.Cursor) bool {
-		return !abort
+	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+		return true
 	}
-	pre := func(cursor *sqlparser.Cursor) bool {
-		if abort {
-			return true
-		}
+	up := func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case sqlparser.SelectExprs:
 			_, isSel := cursor.Parent().(*sqlparser.Select)
@@ -441,7 +437,7 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 						expr.Expr = original
 					},
 				)
-				abort = !visit(item)
+				visit(item)
 			}
 		case *sqlparser.Where:
 			exprs := sqlparser.SplitAndExpression(nil, node.Expr)
@@ -449,27 +445,28 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 				node.Expr = sqlparser.AndExpressions(input...)
 				exprs = input
 			}
-			abort = !visitExpressions(exprs, set, visit)
+			visitExpressions(exprs, set, visit)
 		case *sqlparser.JoinCondition:
 			join, ok := cursor.Parent().(*sqlparser.JoinTableExpr)
 			if !ok {
 				return true
 			}
+			// TODO: improve this
 			if join.Join != sqlparser.NormalJoinType || node.Using != nil {
-				return false
+				return true
 			}
 			exprs := sqlparser.SplitAndExpression(nil, node.On)
 			set := func(input []sqlparser.Expr) {
 				node.On = sqlparser.AndExpressions(input...)
 				exprs = input
 			}
-			abort = !visitExpressions(exprs, set, visit)
+			visitExpressions(exprs, set, visit)
 		case sqlparser.GroupBy:
 			set := func(input []sqlparser.Expr) {
 				node = input
 				cursor.Replace(node)
 			}
-			abort = !visitExpressions(node, set, visit)
+			visitExpressions(node, set, visit)
 		case sqlparser.OrderBy:
 			for idx := 0; idx < len(node); idx++ {
 				order := node[idx]
@@ -513,10 +510,7 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 						order.Expr = original
 					},
 				)
-				abort = visit(item)
-				if abort {
-					break
-				}
+				visit(item)
 			}
 		case *sqlparser.Limit:
 			if node.Offset != nil {
@@ -532,9 +526,9 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 					/*restore*/ func() {
 						node.Offset = original
 					})
-				abort = visit(cursor)
+				visit(cursor)
 			}
-			if !abort && node.Rowcount != nil {
+			if node.Rowcount != nil {
 				original := node.Rowcount
 				cursor := newExprCursor(node.Rowcount,
 					/*replace*/ func(replaceWith sqlparser.Expr) {
@@ -547,12 +541,12 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 					/*restore*/ func() {
 						node.Rowcount = original
 					})
-				abort = visit(cursor)
+				visit(cursor)
 			}
 		}
 		return true
 	}
-	sqlparser.Rewrite(clone, pre, post)
+	sqlparser.SafeRewrite(clone, alwaysVisit, up)
 }
 
 // visitExpressions allows the cursor to visit all expressions in a slice,
