@@ -1971,7 +1971,11 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 		return nil, nil
 	}
 
-	targetDBName := maps.Values(ts.Targets())[0].GetPrimary().DbName()
+	targets := maps.Values(ts.Targets())
+	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet for target keyspace %s", ts.targetKeyspace)
+	}
+	targetDBName := targets[0].GetPrimary().DbName()
 	sequencesByBackingTable := make(map[string]*sequenceMetadata)
 	smMu := sync.Mutex{}
 	for _, table := range ts.Tables() {
@@ -2051,9 +2055,6 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 		select {
 		case <-ctx.Done():
 			return
-		default:
-		}
-		select {
 		case <-ksCtx.Done():
 			return
 		default:
@@ -2077,9 +2078,6 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 			select {
 			case <-ctx.Done():
 				return
-			default:
-			}
-			select {
 			case <-ksCtx.Done(): // The search has been cancelled
 				return
 			default:
@@ -2126,8 +2124,8 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 	initDone := make(chan struct{}) // The initialization has completed
 	initWg := sync.WaitGroup{}      // All of the goroutines finished
 	initFunc := func(sequenceTableName string, sequenceMetadata *sequenceMetadata) {
-		log.Errorf("DEBUG: sequence table: %v, sequenceMetadata: %+v", sequenceTableName, sequenceMetadata)
 		defer initWg.Done()
+		log.Errorf("DEBUG: sequence table: %v, sequenceMetadata: %+v", sequenceTableName, sequenceMetadata)
 		// Now we need to run this query on the target shards in order
 		// to get the max value and set the next id for the sequence to
 		// a higher value.
