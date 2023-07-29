@@ -295,9 +295,6 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		got := query.Sql
 		expected := wantQueries[idx].Sql
 		assert.Equal(t, expected, got)
-		// FIXME: Bizarre behavior. The following log statement causes the test to pass.
-		// commenting the hack to surface the errors in CI, leaving the comment in, in case it can help debug the issue.
-		//log.Infof("\n%v\n%v", wantQueries[idx].BindVariables, query.BindVariables)
 		assert.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		idx++
 	}

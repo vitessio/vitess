@@ -86,7 +86,6 @@ func (e *Executor) newExecute(
 	}
 
 	// During MoveTables we need to replan since the routing rules change and hence the target keyspace will be different.
-	retrying := false
 	var lastVSchemaCreated time.Time
 	vs := e.VSchema()
 	lastVSchemaCreated = vs.GetCreated()
@@ -150,22 +149,17 @@ func (e *Executor) newExecute(
 			err = execPlan(ctx, plan, vcursor, bindVars, execStart)
 		}
 
-		if !safeSession.InTransaction() && err != nil {
-			rootCause := vterrors.RootCause(err)
-			if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
-				log.Infof("%d:%t will retry query %s due to %v", try, retrying, query, err)
-				retrying = true
-				lastVSchemaCreated = vs.GetCreated()
-				continue
-			} else {
-				retrying = false
-			}
-		} else {
-			retrying = false
+		if err == nil || safeSession.InTransaction() {
+			return err
 		}
-		if err == nil && try > 0 {
-			log.Infof("query %d:%t succeeded on retry: %s", try, retrying, query)
+
+		rootCause := vterrors.RootCause(err)
+		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
+			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
+			lastVSchemaCreated = vs.GetCreated()
+			continue
 		}
+
 		return err
 	}
 	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("query %s failed after retries: %v ", query, err))
