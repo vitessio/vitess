@@ -343,12 +343,12 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 }
 
 func (ts *txThrottlerState) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
-	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.config.healthCheckCells)
+	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
 
 	ts.topologyWatchers = make(
-		map[string]TopologyWatcherInterface, len(ts.config.healthCheckCells))
-	for _, cell := range ts.config.healthCheckCells {
+		map[string]TopologyWatcherInterface, len(ts.healthCheckCells))
+	for _, cell := range ts.healthCheckCells {
 		ts.topologyWatchers[cell] = topologyWatcherFactory(
 			topoServer,
 			ts.healthCheck,
