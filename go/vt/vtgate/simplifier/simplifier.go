@@ -162,7 +162,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, 
 		simplified := removeTable(clone, searchedTS, currentDB, si)
 		name, _ := tbl.Name()
 		if simplified && test(clone) {
-			log.Errorf("removed table %s", sqlparser.String(name))
+			log.Errorf("removed table %s: %s -> %s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone))
 			return clone
 		}
 	}
@@ -221,12 +221,21 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		panic(err)
 	}
 
-	simplified := false
+	simplified, kontinue := false, true
 	shouldKeepExpr := func(expr sqlparser.Expr) bool {
 		// why do we keep if the expr contains an aggregation?
 		return !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
 	}
-	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+	checkSelect := func(node, parent sqlparser.SQLNode) bool {
+		if sel, ok := node.(*sqlparser.Select); ok {
+			// remove the table from the from clause on the way down
+			// so that it happens before removing it anywhere else
+			kontinue, simplified = removeTableinSelect(sel, searchedTS, semTable, simplified)
+			if !kontinue {
+				return false
+			}
+		}
+
 		return true
 	}
 
@@ -234,8 +243,6 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		switch node := cursor.Node().(type) {
 		case *sqlparser.JoinTableExpr:
 			simplified = removeTableinJoinTableExpr(node, searchedTS, semTable, cursor, simplified)
-		case *sqlparser.Select:
-			simplified = removeTableinSelect(node, searchedTS, semTable, simplified)
 		case *sqlparser.Where:
 			simplified = removeTableinWhere(node, shouldKeepExpr, simplified)
 		case sqlparser.SelectExprs:
@@ -248,7 +255,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		return true
 	}
 
-	sqlparser.SafeRewrite(clone, alwaysVisit, up)
+	sqlparser.SafeRewrite(clone, checkSelect, up)
 	return simplified
 }
 
@@ -273,11 +280,11 @@ func removeTableinJoinTableExpr(node *sqlparser.JoinTableExpr, searchedTS semant
 	return simplified
 }
 
-func removeTableinSelect(node *sqlparser.Select, searchedTS semantics.TableSet, semTable *semantics.SemTable, simplified bool) bool {
+func removeTableinSelect(node *sqlparser.Select, searchedTS semantics.TableSet, semTable *semantics.SemTable, simplified bool) (bool, bool) {
 	if len(node.From) == 1 {
 		_, notJoin := node.From[0].(*sqlparser.AliasedTableExpr)
 		if notJoin {
-			return simplified
+			return false, simplified
 		}
 	}
 	for i, tbl := range node.From {
@@ -291,7 +298,7 @@ func removeTableinSelect(node *sqlparser.Select, searchedTS semantics.TableSet, 
 		}
 	}
 
-	return simplified
+	return true, simplified
 }
 
 func removeTableinWhere(node *sqlparser.Where, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
