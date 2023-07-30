@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/crc32"
@@ -56,6 +57,8 @@ const (
 	builtinBackupEngineName = "builtin"
 	autoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
+
+	compressorTimeout = 3 * time.Second
 )
 
 var (
@@ -756,6 +759,27 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 	}
 }
 
+// closeWithTimeout attempts to close an unreliable Closer. The Close() function may time out. Unfortunately Close() does not accept a
+// context, and so we wrap it with an external context.WithTimeout.
+// We only wait very briefly as we don't want to hold up anything else.
+func closeWithTimeout(ctx context.Context, closer io.Closer, timeout time.Duration) error {
+	done := make(chan error)
+	defer close(done)
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	go func() {
+		done <- closer.Close()
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timeout waiting for compressor/decompressor Close()")
+	}
+}
+
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
@@ -795,12 +819,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
 		if rerr := dest.Close(); rerr != nil {
-			if finalErr != nil {
-				// We already have an error, just log this one.
-				params.Logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
-			} else {
-				finalErr = rerr
-			}
+			finalErr = errors.Join(finalErr, vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name))
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
@@ -827,6 +846,16 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
 		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
+
+		defer func() {
+			// Close gzip to flush it, after that all data is sent to writer.
+			closeCompressorAt := time.Now()
+			if cerr := closeWithTimeout(ctx, compressor, compressorTimeout); err != nil {
+				finalErr = errors.Join(finalErr, vterrors.Wrapf(cerr, "failed to close compressor %v", name))
+			}
+			params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
+		}()
+
 	}
 
 	if builtinBackupFileReadBufferSize > 0 {
@@ -840,15 +869,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		return vterrors.Wrap(err, "cannot copy data")
 	}
 
-	// Close gzip to flush it, after that all data is sent to writer.
-	if compressor != nil {
-		closeCompressorAt := time.Now()
-		if err = compressor.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close compressor")
-		}
-		params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
-	}
-
 	// Close the backupPipe to finish writing on destination.
 	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
@@ -860,7 +880,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
-	return nil
+	return finalErr
 }
 
 // executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
@@ -1047,12 +1067,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	defer func() {
 		closeDestAt := time.Now()
 		if cerr := dest.Close(); cerr != nil {
-			if finalErr != nil {
-				// We already have an error, just log this one.
-				log.Errorf("failed to close file %v: %v", name, cerr)
-			} else {
-				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
-			}
+			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
@@ -1097,14 +1112,8 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 		defer func() {
 			closeDecompressorAt := time.Now()
-			if cerr := decompressor.Close(); cerr != nil {
-				params.Logger.Errorf("failed to close decompressor: %v", cerr)
-				if finalErr != nil {
-					// We already have an error, just log this one.
-					log.Errorf("failed to close decompressor %v: %v", name, cerr)
-				} else {
-					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
-				}
+			if cerr := closeWithTimeout(ctx, decompressor, compressorTimeout); err != nil {
+				finalErr = errors.Join(finalErr, vterrors.Wrapf(cerr, "failed to close decompressor %v", name))
 			}
 			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
@@ -1130,7 +1139,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
-	return nil
+	return finalErr
 }
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
