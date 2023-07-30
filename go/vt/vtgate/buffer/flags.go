@@ -162,10 +162,12 @@ func NewDefaultConfig() *Config {
 	}
 }
 
+// EnableBuffering is used in tests where we require the keyspace event watcher to be created
 func EnableBuffering() {
 	bufferEnabled = true
 }
 
+// DisableBuffering is the counterpart of EnableBuffering
 func DisableBuffering() {
 	bufferEnabled = false
 }

@@ -85,7 +85,6 @@ func (e *Executor) newExecute(
 		return err
 	}
 
-	// During MoveTables we need to replan since the routing rules change and hence the target keyspace will be different.
 	var lastVSchemaCreated time.Time
 	vs := e.VSchema()
 	lastVSchemaCreated = vs.GetCreated()
@@ -104,9 +103,15 @@ func (e *Executor) newExecute(
 		}
 
 		// 3: Create a plan for the query
+		// If we are retrying, it is likely that the routing rules have changed and hence we need to
+		// replan the query since the target keyspace of the resolved shards may have changed as a
+		// result of MoveTables. So we cannot reuse the plan from the first try.
+		// When buffering ends, many queries might be getting planned at the same time. Ideally we
+		// should be able to reuse plans once the first drained query has been planned. For now, we
+		// punt on this and choose not to prematurely optimize since it is not clear how much caching
+		// will help and if it will result in hard-to-track edge cases.
+
 		var plan *engine.Plan
-		// If we are retrying, it is likely that the routing rules have changed and hence we need to replan the query since the target
-		// keyspace of the resolved shards may have changed.
 		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 

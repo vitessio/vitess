@@ -770,8 +770,6 @@ func (lg *loadGenerator) start() {
 						// this can happen when a second keyspace is setup with the same tables, but there are no routing rules
 						// set yet by MoveTables. So we ignore these errors.
 						atomic.AddInt64(&ambiguousErrors, 1)
-						log.Flush()
-						//panic(err)
 					} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
 						atomic.AddInt64(&reshardedErrors, 1)
 					} else if strings.Contains(strings.ToLower(err.Error()), "not found") {

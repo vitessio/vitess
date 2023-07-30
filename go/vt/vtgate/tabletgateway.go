@@ -272,7 +272,6 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				err = vterrors.Wrapf(bufferErr,
 					"failed to automatically buffer and retry failed request during failover. original err (type=%T): %v",
 					err, err)
-				log.Infof("%v", err)
 				break
 			}
 		}
@@ -283,7 +282,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// or if a reparent operation is in progress.
 			if kev := gw.kev; kev != nil {
 				if kev.TargetIsBeingResharded(target) {
-					log.Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
+					log.V(2).Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}

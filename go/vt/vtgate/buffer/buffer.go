@@ -112,7 +112,7 @@ func isFailoverError(err error) (string, bool) {
 	switch vterrors.Code(err) {
 	case vtrpcpb.Code_CLUSTER_EVENT:
 		isFailover = true
-	case vtrpcpb.Code_FAILED_PRECONDITION: // previous attempt, not used, to be removed
+	case vtrpcpb.Code_FAILED_PRECONDITION:
 		if strings.Contains(err.Error(), ClusterEventMoveTables) {
 			isFailover = true
 		}
