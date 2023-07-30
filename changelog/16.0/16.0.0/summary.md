@@ -3,7 +3,10 @@
 ### Table of Contents
 
 - **[Known Issues](#known-issues)**
-  - [MySQL & Xtrabackup known issue](#mysql-xtrabackup-ddl) 
+  - [MySQL & Xtrabackup known issue](#mysql-xtrabackup-ddl)
+  - [VTTablet Restore Metrics](#vttablet-restore-metrics)
+  - [Schema-initialization stuck on semi-sync ACKs while upgrading to v16.0.0](#schema-init-upgrade)
+  - [Broken downgrade from v17.x.x when super_read_only turned on by default](#init-db-sql-turned-on)
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
@@ -98,6 +101,28 @@ or
 > SET @@ddl_strategy='vitess';
 > ALTER TABLE your_table ENGINE=InnoDB;
 ```
+
+### <a id="vttablet-restore-metrics">VTTablet Restore Metrics
+
+As part of the VTTablet Sidecar Schema Maintenance Refactor in v16.0.0, we dropped the `local_metadata` table from the sidecar database schema. This table was storing a couple of metrics related to restores from backup, which have now been lost.
+They have been re-introduced in v17.0.0 as metrics that can be accessed from `/debug/vars`.
+
+The original issue can be found [here](https://github.com/vitessio/vitess/issues/13336).
+
+### <a id="schema-init-upgrade"/>Schema-initialization stuck on semi-sync ACKs while upgrading to `v16.0.0`
+
+During upgrades from `<= v15.x.x` to `v16.0.0`, as part of `PromoteReplica` call, the schema-init realizes that there are schema diffs to apply and ends up writing to the database if [semi-sync](https://vitess.io/docs/16.0/reference/features/mysql-replication/#semi-sync) is enabled, all of these writes get blocked indefinitely.
+Eventually, `PromoteReplica` fails, and this fails the entire PRS call.
+
+A fix for this issue was merged on `release-16.0` in [PR#13441](https://github.com/vitessio/vitess/pull/13441), read the [corresponding bug report to learn more](https://github.com/vitessio/vitess/issues/13426).
+
+This issue is fixed  in `v16.0.3` and later patch releases.
+
+### <a id="init-db-sql-turned-on"/>Broken downgrade from v17.x.x when super_read_only turned on by default
+
+In `v17.x.x` `super_read_only` is turned on by default meaning that downgrading from `v17` to `v16.0.0` breaks due to `init_db.sql` needing write access.
+
+This issue is fixed in `>= v16.0.3` thanks to [PR #13525](https://github.com/vitessio/vitess/pull/13525).
 
 ## <a id="major-changes"/>Major Changes
 

@@ -22,100 +22,15 @@ limitations under the License.
 package uchar
 
 import (
-	"errors"
 	"strconv"
-
-	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
-	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
-	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
-
-var uprops struct {
-	trie             *utrie.UTrie2
-	trie2            *utrie.UTrie2
-	vectorsColumns   int32
-	vectors          []uint32
-	scriptExtensions []uint16
-}
-
-func readData(bytes *udata.Bytes) error {
-	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.DataFormat[0] == 0x55 &&
-			info.DataFormat[1] == 0x50 &&
-			info.DataFormat[2] == 0x72 &&
-			info.DataFormat[3] == 0x6f &&
-			info.FormatVersion[0] == 7
-	})
-	if err != nil {
-		return err
-	}
-
-	propertyOffset := bytes.Int32()
-	/* exceptionOffset = */ bytes.Int32()
-	/* caseOffset = */ bytes.Int32()
-	additionalOffset := bytes.Int32()
-	additionalVectorsOffset := bytes.Int32()
-	uprops.vectorsColumns = bytes.Int32()
-	scriptExtensionsOffset := bytes.Int32()
-	reservedOffset7 := bytes.Int32()
-	/* reservedOffset8 = */ bytes.Int32()
-	/* dataTopOffset = */ bytes.Int32()
-	_ = bytes.Int32()
-	_ = bytes.Int32()
-	bytes.Skip((16 - 12) << 2)
-
-	uprops.trie, err = utrie.UTrie2FromBytes(bytes)
-	if err != nil {
-		return err
-	}
-
-	expectedTrieLength := (propertyOffset - 16) * 4
-	trieLength := uprops.trie.SerializedLength()
-
-	if trieLength > expectedTrieLength {
-		return errors.New("ucase.icu: not enough bytes for the trie")
-	}
-
-	bytes.Skip(expectedTrieLength - trieLength)
-	bytes.Skip((additionalOffset - propertyOffset) * 4)
-
-	if uprops.vectorsColumns > 0 {
-		uprops.trie2, err = utrie.UTrie2FromBytes(bytes)
-		if err != nil {
-			return err
-		}
-
-		expectedTrieLength = (additionalVectorsOffset - additionalOffset) * 4
-		trieLength = uprops.trie2.SerializedLength()
-
-		if trieLength > expectedTrieLength {
-			return errors.New("ucase.icu: not enough bytes for the trie")
-		}
-
-		bytes.Skip(expectedTrieLength - trieLength)
-		uprops.vectors = bytes.Uint32Slice(scriptExtensionsOffset - additionalVectorsOffset)
-	}
-
-	if n := (reservedOffset7 - scriptExtensionsOffset) * 2; n > 0 {
-		uprops.scriptExtensions = bytes.Uint16Slice(n)
-	}
-
-	return nil
-}
-
-func init() {
-	b := udata.NewBytes(icudata.UProps)
-	if err := readData(b); err != nil {
-		panic(err)
-	}
-}
 
 type PropertySet interface {
 	AddRune(ch rune)
 }
 
 func VecAddPropertyStarts(sa PropertySet) {
-	uprops.trie2.Enum(nil, func(start, _ rune, _ uint32) bool {
+	trie2().Enum(nil, func(start, _ rune, _ uint32) bool {
 		sa.AddRune(start)
 		return true
 	})
@@ -139,7 +54,7 @@ const (
 
 func AddPropertyStarts(sa PropertySet) {
 	/* add the start code point of each same-value range of the main trie */
-	uprops.trie.Enum(nil, func(start, _ rune, _ uint32) bool {
+	trie().Enum(nil, func(start, _ rune, _ uint32) bool {
 		sa.AddRune(start)
 		return true
 	})
@@ -205,12 +120,8 @@ func AddPropertyStarts(sa PropertySet) {
 }
 
 func CharType(c rune) Category {
-	props := uprops.trie.Get16(c)
+	props := trie().Get16(c)
 	return getCategory(props)
-}
-
-func GetProperties(c rune) uint16 {
-	return uprops.trie.Get16(c)
 }
 
 func getCategory(props uint16) Category {
@@ -218,19 +129,19 @@ func getCategory(props uint16) Category {
 }
 
 func GetUnicodeProperties(c rune, column int) uint32 {
-	if column >= int(uprops.vectorsColumns) {
+	if column >= int(vectorsColumns()) {
 		return 0
 	}
-	vecIndex := uprops.trie2.Get16(c)
-	return uprops.vectors[int(vecIndex)+column]
+	vecIndex := trie2().Get16(c)
+	return vectors()[int(vecIndex)+column]
 }
 
 func ScriptExtension(idx uint32) uint16 {
-	return uprops.scriptExtensions[idx]
+	return scriptExtensions()[idx]
 }
 
 func ScriptExtensions(idx uint32) []uint16 {
-	return uprops.scriptExtensions[idx:]
+	return scriptExtensions()[idx:]
 }
 
 func IsDigit(c rune) bool {
@@ -242,7 +153,7 @@ func IsPOSIXPrint(c rune) bool {
 }
 
 func IsGraphPOSIX(c rune) bool {
-	props := uprops.trie.Get16(c)
+	props := trie().Get16(c)
 	/* \p{space}\p{gc=Control} == \p{gc=Z}\p{Control} */
 	/* comparing ==0 returns FALSE for the categories mentioned */
 	return uMask(getCategory(props))&(GcCcMask|GcCsMask|GcCnMask|GcZMask) == 0
@@ -321,7 +232,7 @@ whitespace:
 const upropsNumericTypeValueShift = 6
 
 func NumericTypeValue(c rune) uint16 {
-	props := uprops.trie.Get16(c)
+	props := trie().Get16(c)
 	return props >> upropsNumericTypeValueShift
 }
 

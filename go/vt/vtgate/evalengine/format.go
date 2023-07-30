@@ -170,7 +170,7 @@ func (c *CallExpr) format(w *formatter, depth int) {
 
 func (c *builtinWeightString) format(w *formatter, depth int) {
 	w.WriteString("WEIGHT_STRING(")
-	c.String.format(w, depth)
+	c.Expr.format(w, depth)
 
 	if c.Cast != "" {
 		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)
