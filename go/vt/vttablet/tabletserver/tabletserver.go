@@ -1843,7 +1843,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		var ratio = 1.0
+		var ratio = throttle.DefaultThrottleRatio
 		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
 			ratio, err = strconv.ParseFloat(ratioParam, 64)
 			if err != nil {
@@ -1851,7 +1851,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 				return
 			}
 		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio)
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio, false)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)

@@ -346,7 +346,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	for _, appRule := range throttlerConfig.ThrottledApps {
-		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio)
+		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio, appRule.Exempt)
 	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
@@ -443,7 +443,7 @@ func (throttler *Throttler) Open() error {
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
-	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
+	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	log.Infof("Throttler: throttler-config-via-topo detected")
 	// We want to read throttler config from topo and apply it.
@@ -904,7 +904,7 @@ func (throttler *Throttler) expireThrottledApps() {
 }
 
 // ThrottleApp instructs the throttler to begin throttling an app, to som eperiod and with some ratio.
-func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64) (appThrottle *base.AppThrottle) {
+func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64, exempt bool) (appThrottle *base.AppThrottle) {
 	throttler.throttledAppsMutex.Lock()
 	defer throttler.throttledAppsMutex.Unlock()
 
@@ -917,6 +917,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		if ratio >= 0 {
 			appThrottle.Ratio = ratio
 		}
+		appThrottle.Exempt = exempt
 	} else {
 		if expireAt.IsZero() {
 			expireAt = now.Add(DefaultAppThrottleDuration)
@@ -924,7 +925,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio
 		}
-		appThrottle = base.NewAppThrottle(appName, expireAt, ratio)
+		appThrottle = base.NewAppThrottle(appName, expireAt, ratio, exempt)
 	}
 	if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
@@ -939,7 +940,7 @@ func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.App
 	throttler.throttledApps.Delete(appName)
 	// the app is likely to check
 	go throttler.heartbeatWriter.RequestHeartbeats()
-	return base.NewAppThrottle(appName, time.Now(), 0)
+	return base.NewAppThrottle(appName, time.Now(), 0, false)
 }
 
 // IsAppThrottled tells whether some app should be throttled.
@@ -947,16 +948,21 @@ func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.App
 // on the throttle ratio
 func (throttler *Throttler) IsAppThrottled(appName string) bool {
 	isSingleAppNameThrottled := func(singleAppName string) bool {
-		if object, found := throttler.throttledApps.Get(singleAppName); found {
-			appThrottle := object.(*base.AppThrottle)
-			if appThrottle.ExpireAt.Before(time.Now()) {
-				// throttling cleanup hasn't purged yet, but it is expired
-				return false
-			}
-			// handle ratio
-			if rand.Float64() < appThrottle.Ratio {
-				return true
-			}
+		object, found := throttler.throttledApps.Get(singleAppName)
+		if !found {
+			return false
+		}
+		appThrottle := object.(*base.AppThrottle)
+		if !appThrottle.ExpireAt.After(time.Now()) {
+			// throttling cleanup hasn't purged yet, but it is expired
+			return false
+		}
+		if appThrottle.Exempt {
+			return false
+		}
+		// handle ratio
+		if rand.Float64() < appThrottle.Ratio {
+			return true
 		}
 		return false
 	}
@@ -968,6 +974,40 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 			continue
 		}
 		if isSingleAppNameThrottled(singleAppName) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAppExempt
+func (throttler *Throttler) IsAppExempted(appName string) bool {
+	isSingleAppNameExempted := func(singleAppName string) bool {
+		if throttlerapp.ExemptFromChecks(appName) { // well known statically exempted apps
+			return true
+		}
+		object, found := throttler.throttledApps.Get(singleAppName)
+		if !found {
+			return false
+		}
+		appThrottle := object.(*base.AppThrottle)
+		if !appThrottle.ExpireAt.After(time.Now()) {
+			// throttling cleanup hasn't purged yet, but it is expired
+			return false
+		}
+		if appThrottle.Exempt {
+			return true
+		}
+		return false
+	}
+	if isSingleAppNameExempted(appName) {
+		return true
+	}
+	for _, singleAppName := range strings.Split(appName, ":") {
+		if singleAppName == "" {
+			continue
+		}
+		if isSingleAppNameExempted(singleAppName) {
 			return true
 		}
 	}
@@ -1040,7 +1080,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
-	if throttlerapp.ExemptFromChecks(appName) {
+	if throttler.IsAppExempted(appName) {
 		// Some apps are exempt from checks. They are always responded with OK. This is because those apps are
 		// continuous and do not generate a substantial load.
 		return okMetricCheckResult
