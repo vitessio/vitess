@@ -60,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -354,6 +355,12 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 
 	if req.DryRun { // we return what was passed in and parsed, rather than current
 		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
+	}
+
+	_, err = vindexes.BuildKeyspace(vs)
+	if err != nil {
+		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
+		return nil, err
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {

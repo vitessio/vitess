@@ -70,6 +70,12 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 	}
 
 	ks := vschema.Keyspaces[ksName]
+
+	_, err = vindexes.BuildKeyspace(ks)
+	if err != nil {
+		return err
+	}
+
 	err = topoServer.SaveVSchema(ctx, ksName, ks)
 	if err != nil {
 		return err

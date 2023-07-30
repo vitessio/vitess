@@ -3418,6 +3418,10 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 
+	if _, err := vindexes.BuildKeyspace(vs); err != nil {
+		return err
+	}
+
 	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
 		return err
 	}
