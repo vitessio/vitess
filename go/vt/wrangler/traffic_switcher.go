@@ -477,7 +477,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
-	cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+	cancel, reverse, reverseReplication bool, dryRun, initTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
@@ -539,7 +539,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	sequenceMetadata := make(map[string]*sequenceMetadata)
 	// For sharded to sharded migrations the sequence must already be setup.
 	// For reshards the sequence usage is not changed.
-	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+	if initTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
 		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
 		sequenceMetadata, err = ts.getSequenceMetadata(ctx)
@@ -652,14 +652,14 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		return 0, nil, err
 	}
 	// Initialize any target sequences, if there are any, before allowing new writes.
-	if len(sequenceMetadata) > 0 {
+	if initTargetSequences && len(sequenceMetadata) > 0 {
 		// Writes are blocked so we can safely initialize the sequence tables but
 		// we also want to use a shorter timeout than the parent context.
 		// We use up at most half of the overall timeout.
 		initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
 		defer cancel()
-		if err := ts.initializeTargetSequenceTables(initSeqCtx, sequenceMetadata); err != nil {
-			werr := vterrors.Wrapf(err, "initializeTargetSequenceTables failed")
+		if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
+			werr := vterrors.Wrapf(err, "initializeTargetSequences failed")
 			ts.Logger().Error(werr)
 			return 0, nil, werr
 		}
@@ -2111,7 +2111,7 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 	}
 }
 
-// initializeTargetSequenceTables initializes the backing sequence tables
+// initializeTargetSequences initializes the backing sequence tables
 // using a map keyed by the backing sequence table name.
 //
 // The backing tables must have already been created. This function will
@@ -2120,8 +2120,8 @@ func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]
 // backing table is updated to a new higher value then it will also tell
 // the primary tablet serving the sequence to refresh/reset its cache to
 // be sure that it does not provide a value that is less than the current max.
-func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	log.Error("DEBUG: initializeTargetSequenceTables")
+func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	log.Error("DEBUG: initializeTargetSequences")
 	initErr := make(chan error)     // Used if we encounter an error
 	initDone := make(chan struct{}) // The initialization has completed
 	initWg := sync.WaitGroup{}      // All of the goroutines finished
@@ -2240,8 +2240,7 @@ func (ts *trafficSwitcher) initializeTargetSequenceTables(ctx context.Context, s
 	}()
 
 	select {
-	// We completed the work w/o errors.
-	case <-initDone:
+	case <-initDone: // We completed the work w/o errors
 		return nil
 	case err := <-initErr:
 		return err

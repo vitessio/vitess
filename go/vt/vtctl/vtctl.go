@@ -443,7 +443,7 @@ var commands = []commandGroup{
 			{
 				name:   "MoveTables",
 				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--defer-secondary-keys] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--defer-secondary-keys] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] [--initialize-target-sequences] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
@@ -2107,6 +2107,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	allTables := subFlags.Bool("all", false, "MoveTables only. Move all tables from the source keyspace. Either table_specs or --all needs to be specified.")
 	excludes := subFlags.String("exclude", "", "MoveTables only. Tables to exclude (comma-separated) if --all is specified")
 	sourceKeyspace := subFlags.String("source", "", "MoveTables only. Source keyspace")
+	initializeTargetSequences := subFlags.Bool("initialize-target-sequences", false, "MoveTables only. When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target.")
 
 	// if sourceTimeZone is specified, the target needs to have time zones loaded
 	// note we make an opinionated decision to not allow specifying a different target time zone than UTC.
@@ -2288,6 +2289,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
 		vrwp.MaxAllowedTransactionLagSeconds = int64(math.Ceil(maxReplicationLagAllowed.Seconds()))
+		vrwp.InitializeTargetSequences = *initializeTargetSequences
 	case vReplicationWorkflowActionCancel:
 		vrwp.KeepData = *keepData
 		vrwp.KeepRoutingRules = *keepRoutingRules

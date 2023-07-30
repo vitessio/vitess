@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
@@ -381,5 +383,11 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 		return nil
 	}
 	dr.drLog.Log("The sequence caches will be reset on the source since sequence tables are being moved")
+	return nil
+}
+
+func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
+		strings.Join(maps.Keys(sequencesByBackingTable), ",")))
 	return nil
 }
