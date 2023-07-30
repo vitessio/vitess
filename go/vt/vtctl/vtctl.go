@@ -2107,7 +2107,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	allTables := subFlags.Bool("all", false, "MoveTables only. Move all tables from the source keyspace. Either table_specs or --all needs to be specified.")
 	excludes := subFlags.String("exclude", "", "MoveTables only. Tables to exclude (comma-separated) if --all is specified")
 	sourceKeyspace := subFlags.String("source", "", "MoveTables only. Source keyspace")
-	initializeTargetSequences := subFlags.Bool("initialize-target-sequences", false, "MoveTables only. When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target.")
+	initializeTargetSequences := subFlags.Bool("initialize-target-sequences", false, "MoveTables only. When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 
 	// if sourceTimeZone is specified, the target needs to have time zones loaded
 	// note we make an opinionated decision to not allow specifying a different target time zone than UTC.

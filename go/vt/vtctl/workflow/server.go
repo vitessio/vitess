@@ -68,6 +68,23 @@ type TableCopyProgress struct {
 // CopyProgress stores the TableCopyProgress for all tables still being copied
 type CopyProgress map[string]*TableCopyProgress
 
+// sequenceMetadata contains all of the relevant metadata for a sequence that
+// is being used by a table involved in a vreplication workflow.
+type sequenceMetadata struct {
+	// The name of the sequence table.
+	backingTableName string
+	// The keyspace where the backing table lives.
+	backingTableKeyspace string
+	// The dbName in use by the keyspace where the backing table lives.
+	backingTableDBName string
+	// The name of the table using the sequence.
+	usingTableName string
+	// The dbName in use by the keyspace where the using table lives.
+	usingTableDBName string
+	// The using table definition.
+	usingTableDefinition *vschemapb.Table
+}
+
 const (
 	cannotSwitchError               = "workflow has errors"
 	cannotSwitchCopyIncomplete      = "copy is still in progress"
@@ -2436,6 +2453,23 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		defer targetUnlock(&err)
 	}
 
+	// Find out if the target is using any sequence tables for auto_increment
+	// value generation. If so, then we'll need to ensure that they are
+	// initialized properly before allowing new writes on the target.
+	sequenceMetadata := make(map[string]*sequenceMetadata)
+	// For sharded to sharded migrations the sequence must already be setup.
+	// For reshards the sequence usage is not changed.
+	if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
+		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
+		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
+		if err != nil {
+			werr := vterrors.Wrapf(err, "getSequenceMetadata failed")
+			ts.Logger().Error(werr)
+			return 0, nil, werr
+		}
+	}
+
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
@@ -2536,6 +2570,19 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		ts.Logger().Errorf("createJournals failed: %v", err)
 		return 0, nil, err
+	}
+	// Initialize any target sequences, if there are any, before allowing new writes.
+	if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
+		// Writes are blocked so we can safely initialize the sequence tables but
+		// we also want to use a shorter timeout than the parent context.
+		// We use up at most half of the overall timeout.
+		initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
+		defer cancel()
+		if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
+			werr := vterrors.Wrapf(err, "initializeTargetSequences failed")
+			ts.Logger().Error(werr)
+			return 0, nil, werr
+		}
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		ts.Logger().Errorf("allowTargetWrites failed: %v", err)

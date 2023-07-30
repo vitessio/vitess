@@ -477,7 +477,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
-	cancel, reverse, reverseReplication bool, dryRun, initTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
+	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
@@ -539,12 +539,12 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	sequenceMetadata := make(map[string]*sequenceMetadata)
 	// For sharded to sharded migrations the sequence must already be setup.
 	// For reshards the sequence usage is not changed.
-	if initTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+	if initializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
 		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
-		sequenceMetadata, err = ts.getSequenceMetadata(ctx)
+		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
 		if err != nil {
-			werr := vterrors.Wrapf(err, "getSequenceMetadata failed")
+			werr := vterrors.Wrapf(err, "getTargetSequenceMetadata failed")
 			ts.Logger().Error(werr)
 			return 0, nil, werr
 		}
@@ -652,7 +652,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		return 0, nil, err
 	}
 	// Initialize any target sequences, if there are any, before allowing new writes.
-	if initTargetSequences && len(sequenceMetadata) > 0 {
+	if initializeTargetSequences && len(sequenceMetadata) > 0 {
 		// Writes are blocked so we can safely initialize the sequence tables but
 		// we also want to use a shorter timeout than the parent context.
 		// We use up at most half of the overall timeout.
@@ -1956,12 +1956,12 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 	return sequenceFound, nil
 }
 
-// getSequenceMetadata returns a map of sequence metadata keyed by the
+// getTargetSequenceMetadata returns a map of sequence metadata keyed by the
 // backing sequence table name. If the target keyspace has no tables
 // defined that use sequences for auto_increment generation then a nil
 // map will be returned.
-func (ts *trafficSwitcher) getSequenceMetadata(ctx context.Context) (map[string]*sequenceMetadata, error) {
-	log.Error("DEBUG: getSequenceMetadata")
+func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[string]*sequenceMetadata, error) {
+	log.Error("DEBUG: getTargetSequenceMetadata")
 	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
@@ -2136,7 +2136,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 			primary := target.GetPrimary()
 			if primary == nil || primary.GetAlias() == nil {
-				initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
 					ts.targetKeyspace, target.GetShard().ShardName())
 			}
 			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
@@ -2148,12 +2148,12 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				query.Query, ts.targetKeyspace, target.GetShard().ShardName())
 			qr, err := ts.wr.ExecuteFetchAsApp(ctx, primary.GetAlias(), true, query.Query, 1)
 			if err != nil || len(qr.Rows) != 1 {
-				initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
 					ts.targetKeyspace, sequenceMetadata.usingTableName, err)
 			}
 			maxID, err := sqltypes.Proto3ToResult(qr).Rows[0][0].ToInt64()
 			if err != nil {
-				initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
 					ts.targetKeyspace, sequenceMetadata.usingTableName, err)
 			}
 			log.Errorf("DEBUG: max ID seen on shard %s: %d", target.GetShard().ShardName(), maxID)
@@ -2181,11 +2181,13 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		if err != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
 			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				sequenceMetadata.backingTableKeyspace, err)
+			return
 		}
 		sequenceTablet, err := ts.wr.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
 		if err != nil || sequenceTablet == nil {
 			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				sequenceMetadata.backingTableKeyspace, err)
+			return
 		}
 		if sequenceTablet.DbNameOverride != "" {
 			sequenceMetadata.backingTableDBName = sequenceTablet.DbNameOverride
@@ -2204,6 +2206,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		if err != nil {
 			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
 				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, err)
+			return
 		}
 		// If we actually updated the backing sequence table, then we need
 		// to tell the primary tablet managing the sequence to refresh/reset
@@ -2222,11 +2225,13 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		if err != nil {
 			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
 				sequenceMetadata.backingTableKeyspace, err)
+			return
 		}
 		err = ts.TabletManagerClient().ResetSequences(ctx, ti.Tablet, []string{sequenceMetadata.backingTableName})
 		if err != nil {
 			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s.%s using tablet %s: %v",
 				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, err)
+			return
 		}
 	}
 

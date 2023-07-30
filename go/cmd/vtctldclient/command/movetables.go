@@ -237,13 +237,14 @@ var (
 		StopAfterCopy                bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
-		Cells                    []string
-		TabletTypes              []topodatapb.TabletType
-		MaxReplicationLagAllowed time.Duration
-		EnableReverseReplication bool
-		Timeout                  time.Duration
-		DryRun                   bool
-		Direction                workflow.TrafficSwitchDirection
+		Cells                     []string
+		TabletTypes               []topodatapb.TabletType
+		MaxReplicationLagAllowed  time.Duration
+		EnableReverseReplication  bool
+		Timeout                   time.Duration
+		DryRun                    bool
+		InitializeTargetSequences bool
+		Direction                 workflow.TrafficSwitchDirection
 	}{}
 )
 
@@ -533,6 +534,7 @@ func init() {
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	MoveTables.AddCommand(MoveTablesSwitchTraffic)
 
 	MoveTablesReverseTraffic.Flags().StringSliceVarP(&moveTablesSwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in")

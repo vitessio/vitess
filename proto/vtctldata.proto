@@ -1426,6 +1426,7 @@ message WorkflowSwitchTrafficRequest {
   int32 direction = 7;
   vttime.Duration timeout = 8;
   bool dry_run = 9;
+  bool initialize_target_sequences = 10;
 }
 
 message WorkflowSwitchTrafficResponse {
