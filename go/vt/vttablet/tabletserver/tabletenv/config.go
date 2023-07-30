@@ -826,11 +826,12 @@ var defaultConfig = TabletConfig{
 	MessagePostponeParallelism: 4,
 	SignalWhenSchemaChange:     true,
 
-	EnableTxThrottler:           false,
-	TxThrottlerConfig:           defaultTxThrottlerConfig(),
-	TxThrottlerHealthCheckCells: []string{},
-	TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
-	TxThrottlerTabletTypes:      &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
+	EnableTxThrottler:              false,
+	TxThrottlerConfig:              defaultTxThrottlerConfig(),
+	TxThrottlerHealthCheckCells:    []string{},
+	TxThrottlerDefaultPriority:     sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
+	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
+	TxThrottlerTopoRefreshInterval: time.Minute * 5,
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
