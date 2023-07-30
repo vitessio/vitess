@@ -1411,6 +1411,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		})
 		if err != nil {
 			initErr <- err
+			return
 		}
 		select {
 		case <-ctx.Done():
