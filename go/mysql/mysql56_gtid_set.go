@@ -126,8 +126,18 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 			intervals = append(sidIntervals, intervals...)
 		}
 		// Internally we expect intervals to be stored in order.
-		slices.SortFunc(intervals, func(a, b interval) bool {
-			return a.start < b.start
+		slices.SortFunc(intervals, func(a, b interval) int {
+			// TODO: switch to cmp.Compare for Go 1.21+.
+			//
+			// https://pkg.go.dev/cmp@master#Compare.
+			switch {
+			case a.start < b.start:
+				return -1
+			case a.start > b.start:
+				return 1
+			default:
+				return 0
+			}
 		})
 		set[sid] = intervals
 	}
@@ -149,8 +159,8 @@ func (set Mysql56GTIDSet) SIDs() []SID {
 }
 
 func sortSIDs(sids []SID) {
-	slices.SortFunc(sids, func(a, b SID) bool {
-		return bytes.Compare(a[:], b[:]) < 0
+	slices.SortFunc(sids, func(a, b SID) int {
+		return bytes.Compare(a[:], b[:])
 	})
 }
 

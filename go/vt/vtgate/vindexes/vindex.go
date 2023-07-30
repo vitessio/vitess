@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -42,6 +43,7 @@ type (
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 		InTransactionAndIsDML() bool
 		LookupRowLockShardSession() vtgatepb.CommitOrder
+		ConnCollation() collations.ID
 	}
 
 	// Vindex defines the interface required to register a vindex.

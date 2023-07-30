@@ -261,6 +261,12 @@ type VtctldClient interface {
 	// PlannedReparentShard or EmergencyReparentShard should be used in those
 	// cases instead.
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
+	// MoveTablesCreate creates a workflow which moves one or more tables from a
+	// source keyspace to a target keyspace.
+	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(ctx context.Context, in *vtctldata.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs.
 	// This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error)
@@ -398,6 +404,10 @@ type VtctldClient interface {
 	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
+	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	WorkflowSwitchTraffic(ctx context.Context, in *vtctldata.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
@@ -871,6 +881,24 @@ func (c *vtctldClient) InitShardPrimary(ctx context.Context, in *vtctldata.InitS
 	return out, nil
 }
 
+func (c *vtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MoveTablesCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldata.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error) {
+	out := new(vtctldata.MoveTablesCompleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MoveTablesComplete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error) {
 	out := new(vtctldata.PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/PingTablet", in, out, opts...)
@@ -1236,6 +1264,33 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
+func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
+	out := new(vtctldata.WorkflowDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) WorkflowSwitchTraffic(ctx context.Context, in *vtctldata.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	out := new(vtctldata.WorkflowSwitchTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowSwitchTraffic", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
 	out := new(vtctldata.WorkflowUpdateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowUpdate", in, out, opts...)
@@ -1374,6 +1429,12 @@ type VtctldServer interface {
 	// PlannedReparentShard or EmergencyReparentShard should be used in those
 	// cases instead.
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
+	// MoveTablesCreate creates a workflow which moves one or more tables from a
+	// source keyspace to a target keyspace.
+	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(context.Context, *vtctldata.MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs.
 	// This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error)
@@ -1511,6 +1572,10 @@ type VtctldServer interface {
 	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
+	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
+	WorkflowSwitchTraffic(context.Context, *vtctldata.WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1659,6 +1724,12 @@ func (UnimplementedVtctldServer) GetWorkflows(context.Context, *vtctldata.GetWor
 func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitShardPrimary not implemented")
 }
+func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
+}
+func (UnimplementedVtctldServer) MoveTablesComplete(context.Context, *vtctldata.MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesComplete not implemented")
+}
 func (UnimplementedVtctldServer) PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
 }
@@ -1772,6 +1843,15 @@ func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldat
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowStatus not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowSwitchTraffic(context.Context, *vtctldata.WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowSwitchTraffic not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
@@ -2623,6 +2703,42 @@ func _Vtctld_InitShardPrimary_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MoveTablesCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MoveTablesCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MoveTablesCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MoveTablesCreate(ctx, req.(*vtctldata.MoveTablesCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_MoveTablesComplete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MoveTablesCompleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MoveTablesComplete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MoveTablesComplete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MoveTablesComplete(ctx, req.(*vtctldata.MoveTablesCompleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -3310,6 +3426,60 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowDelete(ctx, req.(*vtctldata.WorkflowDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_WorkflowStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowStatus(ctx, req.(*vtctldata.WorkflowStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_WorkflowSwitchTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowSwitchTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowSwitchTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowSwitchTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowSwitchTraffic(ctx, req.(*vtctldata.WorkflowSwitchTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowUpdateRequest)
 	if err := dec(in); err != nil {
@@ -3512,6 +3682,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_InitShardPrimary_Handler,
 		},
 		{
+			MethodName: "MoveTablesCreate",
+			Handler:    _Vtctld_MoveTablesCreate_Handler,
+		},
+		{
+			MethodName: "MoveTablesComplete",
+			Handler:    _Vtctld_MoveTablesComplete_Handler,
+		},
+		{
 			MethodName: "PingTablet",
 			Handler:    _Vtctld_PingTablet_Handler,
 		},
@@ -3658,6 +3836,18 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVSchema",
 			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
+		{
+			MethodName: "WorkflowDelete",
+			Handler:    _Vtctld_WorkflowDelete_Handler,
+		},
+		{
+			MethodName: "WorkflowStatus",
+			Handler:    _Vtctld_WorkflowStatus_Handler,
+		},
+		{
+			MethodName: "WorkflowSwitchTraffic",
+			Handler:    _Vtctld_WorkflowSwitchTraffic_Handler,
 		},
 		{
 			MethodName: "WorkflowUpdate",

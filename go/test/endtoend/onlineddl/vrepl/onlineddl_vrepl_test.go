@@ -26,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -35,8 +38,7 @@ import (
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 var (
@@ -521,12 +523,12 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 			})
 			t.Run("wait for vreplication to run on shard -80", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
-				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String())
+				require.Contains(t, []string{binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String()}, vreplStatus)
 			})
 			t.Run("wait for vreplication to run on shard 80-", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
-				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String())
+				require.Contains(t, []string{binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String()}, vreplStatus)
 			})
 			t.Run("check status again", func(t *testing.T) {
 				// again see that we're still 'running'
@@ -616,12 +618,12 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 			})
 			t.Run("wait for vreplication to run on shard -80", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
-				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String())
+				require.Contains(t, []string{binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String()}, vreplStatus)
 			})
 			t.Run("wait for vreplication to run on shard 80-", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
-				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String())
+				require.Contains(t, []string{binlogdatapb.VReplicationWorkflowState_Copying.String(), binlogdatapb.VReplicationWorkflowState_Running.String()}, vreplStatus)
 			})
 			t.Run("check status again", func(t *testing.T) {
 				// again see that we're still 'running'

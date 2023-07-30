@@ -30,6 +30,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -63,7 +65,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
@@ -78,7 +80,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
@@ -242,7 +244,7 @@ func revert(t *testing.T, workflowType string) {
 	validateReadsRouteToSource(t, "replica")
 
 	// cancel the workflow to cleanup
-	_, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "Cancel", ksWorkflow)
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", targetKs, "--workflow", workflowName, "cancel")
 	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
 }
 
@@ -308,7 +310,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 
-	waitForWorkflowState(t, vc, "customer.wf2", workflowStateRunning)
+	waitForWorkflowState(t, vc, "customer.wf2", binlogdatapb.VReplicationWorkflowState_Running.String())
 	waitForLowLag(t, "customer", "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
@@ -342,7 +344,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, "product.wf3", workflowStateRunning)
+	waitForWorkflowState(t, vc, "product.wf3", binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	waitForLowLag(t, "product", "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,

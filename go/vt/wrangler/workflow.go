@@ -17,6 +17,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -267,7 +268,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 			if st.Pos == "" {
 				continue
 			}
-			if st.State == "Running" || st.State == "Copying" {
+			if st.State == binlogdatapb.VReplicationWorkflowState_Running.String() || st.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
 				started++
 			}
 		}
@@ -525,9 +526,9 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		statuses := result.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
 			switch st.State {
-			case "Copying":
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
 				return cannotSwitchCopyIncomplete, nil
-			case "Error":
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
 			}
 		}

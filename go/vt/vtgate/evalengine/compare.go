@@ -139,7 +139,7 @@ func compareStrings(l, r eval) (int, error) {
 	}
 	collation := col.Collation.Get()
 	if collation == nil {
-		panic("unknown collation after coercion")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: %d)", col.Collation)
 	}
 	return collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false), nil
 }
