@@ -3638,3 +3638,185 @@ func AssertReparentEventsEqual(t *testing.T, expected *events.Reparent, actual *
 
 	AssertReparentEventsEqualWithMessage(t, expected, actual, "")
 }
+
+// TestPlannedReparenter_verifyAllTabletsReachable tests the functionality of verifyAllTabletsReachable.
+func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
+	tests := []struct {
+		name         string
+		ts           *topo.Server
+		tmc          tmclient.TabletManagerClient
+		tabletMap    map[string]*topo.TabletInfo
+		remoteOpTime time.Duration
+		wantErr      string
+	}{
+		{
+			name: "Success",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000201": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+		}, {
+			name: "Failure",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: fmt.Errorf("primary status failed"),
+					},
+					"zone1-0000000201": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantErr: "primary status failed",
+		}, {
+			name: "Timeout",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryStatusDelays: map[string]time.Duration{
+					"zone1-0000000100": 20 * time.Second,
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000201": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			remoteOpTime: 100 * time.Millisecond,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantErr: "context deadline exceeded",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pr := &PlannedReparenter{
+				ts:  tt.ts,
+				tmc: tt.tmc,
+			}
+			if tt.remoteOpTime != 0 {
+				oldTime := topo.RemoteOperationTimeout
+				topo.RemoteOperationTimeout = tt.remoteOpTime
+				defer func() {
+					topo.RemoteOperationTimeout = oldTime
+				}()
+			}
+			err := pr.verifyAllTabletsReachable(context.Background(), tt.tabletMap)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}

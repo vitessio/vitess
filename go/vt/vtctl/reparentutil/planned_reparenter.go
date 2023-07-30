@@ -719,6 +719,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	return nil
 }
 
+// verifyAllTabletsReachable verifies that all the tablets are reachable when running PRS.
 func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) error {
 	// Create a cancellable context for the entire set of RPCs to verify reachability.
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
