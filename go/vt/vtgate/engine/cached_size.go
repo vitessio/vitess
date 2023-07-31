@@ -145,7 +145,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -153,7 +153,20 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.KsidVindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-
+	// field TableNames []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TableNames)) * int64(16))
+		for _, elem := range cached.TableNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field OwnedVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.OwnedVindexes)) * int64(8))
+		for _, elem := range cached.OwnedVindexes {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field OwnedVindexQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.OwnedVindexQuery)))
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters
