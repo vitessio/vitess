@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -37,62 +38,69 @@ func TestWeightStrings(t *testing.T) {
 	}
 
 	var cases = []struct {
-		name string
-		gen  func() sqltypes.Value
-		t    sqltypes.Type
-		col  collations.ID
-		len  int
-		prec int
+		name  string
+		gen   func() sqltypes.Value
+		types []sqltypes.Type
+		col   collations.ID
+		len   int
+		prec  int
 	}{
-		{name: "int64", gen: randomInt64, t: sqltypes.Int64, col: collations.CollationBinaryID},
-		{name: "uint64", gen: randomUint64, t: sqltypes.Uint64, col: collations.CollationBinaryID},
-		{name: "float64", gen: randomFloat64, t: sqltypes.Float64, col: collations.CollationBinaryID},
-		{name: "varchar", gen: randomVarChar, t: sqltypes.VarChar, col: collations.CollationUtf8mb4ID},
-		{name: "varbinary", gen: randomVarBinary, t: sqltypes.VarBinary, col: collations.CollationBinaryID},
-		{name: "decimal", gen: randomDecimal, t: sqltypes.Decimal, col: collations.CollationBinaryID, len: 20, prec: 10},
-		{name: "json", gen: randomJSON, t: sqltypes.TypeJSON, col: collations.CollationBinaryID},
-		{name: "date", gen: randomDate, t: sqltypes.Date, col: collations.CollationBinaryID},
-		{name: "datetime", gen: randomDatetime, t: sqltypes.Datetime, col: collations.CollationBinaryID},
-		{name: "timestamp", gen: randomTimestamp, t: sqltypes.Timestamp, col: collations.CollationBinaryID},
-		{name: "time", gen: randomTime, t: sqltypes.Time, col: collations.CollationBinaryID},
+		{name: "int64", gen: randomInt64, types: []sqltypes.Type{sqltypes.Int64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "uint64", gen: randomUint64, types: []sqltypes.Type{sqltypes.Uint64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "float64", gen: randomFloat64, types: []sqltypes.Type{sqltypes.Float64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "varchar", gen: randomVarChar, types: []sqltypes.Type{sqltypes.VarChar, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationUtf8mb4ID},
+		{name: "varbinary", gen: randomVarBinary, types: []sqltypes.Type{sqltypes.VarBinary, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "decimal", gen: randomDecimal, types: []sqltypes.Type{sqltypes.Decimal, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, len: 20, prec: 10},
+		{name: "json", gen: randomJSON, types: []sqltypes.Type{sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "date", gen: randomDate, types: []sqltypes.Type{sqltypes.Date, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "datetime", gen: randomDatetime, types: []sqltypes.Type{sqltypes.Datetime, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "timestamp", gen: randomTimestamp, types: []sqltypes.Type{sqltypes.Timestamp, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "time", gen: randomTime, types: []sqltypes.Type{sqltypes.Time, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			items := make([]item, 0, Length)
-			for i := 0; i < Length; i++ {
-				v := tc.gen()
-				w, _, err := WeightString(nil, v, tc.t, tc.col, tc.len, tc.prec)
-				require.NoError(t, err)
+		for _, typ := range tc.types {
+			t.Run(fmt.Sprintf("%s/%v", tc.name, typ), func(t *testing.T) {
+				items := make([]item, 0, Length)
+				for i := 0; i < Length; i++ {
+					v := tc.gen()
+					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec)
+					require.NoError(t, err)
 
-				items = append(items, item{value: v, weight: string(w)})
-			}
+					items = append(items, item{value: v, weight: string(w)})
+				}
 
-			slices.SortFunc(items, func(a, b item) int {
-				if a.weight < b.weight {
-					return -1
-				} else if a.weight > b.weight {
-					return 1
-				} else {
-					return 0
+				slices.SortFunc(items, func(a, b item) int {
+					if a.weight < b.weight {
+						return -1
+					} else if a.weight > b.weight {
+						return 1
+					} else {
+						return 0
+					}
+				})
+
+				for i := 0; i < Length-1; i++ {
+					a := items[i]
+					b := items[i+1]
+
+					v1, err := valueToEvalCast(a.value, typ, tc.col)
+					require.NoError(t, err)
+					v2, err := valueToEvalCast(b.value, typ, tc.col)
+					require.NoError(t, err)
+
+					cmp, err := evalCompareNullSafe(v1, v2)
+					require.NoError(t, err)
+
+					if cmp > 0 {
+						t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\nav = %v\nbv = %v",
+							a.value, i, b.value, i+1,
+							[]byte(a.weight), []byte(b.weight),
+						)
+					}
 				}
 			})
-
-			for i := 0; i < Length-1; i++ {
-				a := items[i]
-				b := items[i+1]
-
-				cmp, err := NullsafeCompare(a.value, b.value, tc.col)
-				require.NoError(t, err)
-
-				if cmp > 0 {
-					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\nav = %v\nbv = %v",
-						a.value, i, b.value, i+1,
-						[]byte(a.weight), []byte(b.weight),
-					)
-				}
-			}
-		})
+		}
 	}
 }
 
