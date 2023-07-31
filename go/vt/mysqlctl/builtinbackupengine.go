@@ -826,18 +826,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
 
-	// Note about `finalErr`: it's a named return value and we have a deferred function that sets it. That means
-	// this function will ALWAYS return `finalErr`, overriding any other returned value (ie returned error).
-	// See for example this snippet:
-	//     // explain_this_comment() returns "surprise" rather than <nil>:
-	//     func explain_this_comment() (finalErr error) {
-	// 	     defer func() {
-	// 		     finalErr = fmt.Errorf("surprise")
-	// 	     }()
-	// 	     return nil
-	//     }
-	// This is why from this point on we take care to always assign any error into `finalErr`.
-
 	destStats := params.Stats.Scope(stats.Operation("Destination:Write"))
 	timedDest := ioutil.NewMeteredWriteCloser(dest, destStats.TimedIncrementBytes)
 
@@ -855,8 +843,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
 		}
 		if err != nil {
-			finalErr = vterrors.Wrap(err, "can't create compressor")
-			return finalErr
+			return vterrors.Wrap(err, "can't create compressor")
 		}
 
 		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
@@ -883,24 +870,21 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	// optional pipe, tee, output file and hasher).
 	_, err = io.Copy(writer, reader)
 	if err != nil {
-		finalErr = vterrors.Wrap(err, "cannot copy data")
-		return finalErr
+		return vterrors.Wrap(err, "cannot copy data")
 	}
 
 	// Close the backupPipe to finish writing on destination.
 	if err := bw.Close(); err != nil {
-		finalErr = vterrors.Wrapf(err, "cannot flush destination: %v", name)
-		return finalErr
+		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
 
 	if err := br.Close(); err != nil {
-		finalErr = vterrors.Wrap(err, "failed to close the source reader")
-		return finalErr
+		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
-	return finalErr
+	return nil
 }
 
 // executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
@@ -1141,43 +1125,27 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		}()
 	}
 
-	// Note about `finalErr`: it's a named return value and we have a deferred function that sets it. That means
-	// this function will ALWAYS return `finalErr`, overriding any other returned value (ie returned error).
-	// See for example this snippet:
-	//     // explain_this_comment() returns "surprise" rather than <nil>:
-	//     func explain_this_comment() (finalErr error) {
-	// 	     defer func() {
-	// 		     finalErr = fmt.Errorf("surprise")
-	// 	     }()
-	// 	     return nil
-	//     }
-	// This is why from this point on we take care to always assign any error into `finalErr`.
-
 	// Copy the data. Will also write to the hasher.
 	if _, err := io.Copy(bufferedDest, reader); err != nil {
-		finalErr = vterrors.Wrap(err, "failed to copy file contents")
-		return finalErr
+		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
 	// Check the hash.
 	hash := br.HashString()
 	if hash != fe.Hash {
-		finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
-		return finalErr
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
 	// Flush the buffer.
 	if err := bufferedDest.Flush(); err != nil {
-		finalErr = vterrors.Wrap(err, "failed to flush destination buffer")
-		return finalErr
+		return vterrors.Wrap(err, "failed to flush destination buffer")
 	}
 
 	if err := br.Close(); err != nil {
-		finalErr = vterrors.Wrap(err, "failed to close the source reader")
-		return finalErr
+		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
-	return finalErr
+	return nil
 }
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
