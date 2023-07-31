@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -99,6 +101,8 @@ func ValueIsSimulatedNull(val any) bool {
 		return int32(cval) == int32(SimulatedNullInt)
 	case int64:
 		return int64(cval) == int64(SimulatedNullInt)
+	case []topodatapb.TabletType:
+		return len(cval) == 1 && cval[0] == topodatapb.TabletType(SimulatedNullInt)
 	default:
 		return false
 	}

@@ -32,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -47,6 +49,12 @@ import (
 	// import the gRPC client implementation for query service
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
+
+func init() {
+	// Ensure we will use the right protocol (gRPC) in all unit tests.
+	tabletconntest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
+	tmclienttest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
+}
 
 // This file was copied from testlib. All tests from testlib should be moved
 // to the current directory. In order to move tests from there, we have to
@@ -81,6 +89,8 @@ type fakeTablet struct {
 	StartHTTPServer bool
 	HTTPListener    net.Listener
 	HTTPServer      *http.Server
+
+	queryservice.QueryService
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -141,6 +151,7 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 		Tablet:          tablet,
 		FakeMysqlDaemon: fakeMysqlDaemon,
 		RPCServer:       grpc.NewServer(),
+		QueryService:    fakes.ErrorQueryService,
 	}
 }
 
@@ -238,8 +249,14 @@ func (ft *fakeTablet) Target() querypb.Target {
 	}
 }
 
-func init() {
-	// enforce we will use the right protocol (gRPC) in all unit tests
-	tabletconntest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
-	tmclienttest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
+func (ft *fakeTablet) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	return callback(&querypb.StreamHealthResponse{
+		Serving: true,
+		Target: &querypb.Target{
+			Keyspace:   ft.Tablet.Keyspace,
+			Shard:      ft.Tablet.Shard,
+			TabletType: ft.Tablet.Type,
+		},
+		RealtimeStats: &querypb.RealtimeStats{},
+	})
 }

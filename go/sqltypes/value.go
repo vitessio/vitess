@@ -29,7 +29,8 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
-
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -74,17 +75,22 @@ type (
 func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 	switch {
 	case IsSigned(typ):
-		if _, err := strconv.ParseInt(string(val), 10, 64); err != nil {
+		if _, err := fastparse.ParseInt64(hack.String(val), 10); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
 	case IsUnsigned(typ):
-		if _, err := strconv.ParseUint(string(val), 10, 64); err != nil {
+		if _, err := fastparse.ParseUint64(hack.String(val), 10); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsFloat(typ) || typ == Decimal:
-		if _, err := strconv.ParseFloat(string(val), 64); err != nil {
+	case IsFloat(typ):
+		if _, err := fastparse.ParseFloat64(hack.String(val)); err != nil {
+			return NULL, err
+		}
+		return MakeTrusted(typ, val), nil
+	case IsDecimal(typ):
+		if _, err := decimal.NewFromMySQL(val); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
@@ -286,7 +292,7 @@ func (v Value) ToInt64() (int64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseInt(v.RawStr(), 10, 64)
+	return fastparse.ParseInt64(v.RawStr(), 10)
 }
 
 func (v Value) ToInt32() (int32, error) {
@@ -313,7 +319,7 @@ func (v Value) ToFloat64() (float64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseFloat(v.RawStr(), 64)
+	return fastparse.ParseFloat64(v.RawStr())
 }
 
 // ToUint16 returns the value as MySQL would return it as a uint16.
@@ -332,7 +338,7 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseUint(v.RawStr(), 10, 64)
+	return fastparse.ParseUint64(v.RawStr(), 10)
 }
 
 func (v Value) ToUint32() (uint32, error) {

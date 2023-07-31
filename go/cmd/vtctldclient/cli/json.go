@@ -54,3 +54,25 @@ func MarshalJSON(obj any) ([]byte, error) {
 		return data, nil
 	}
 }
+
+// MarshalJSONCompact works the same as MarshalJSON but elides zero value elements.
+func MarshalJSONCompact(obj any) ([]byte, error) {
+	switch obj := obj.(type) {
+	case proto.Message:
+		m := protojson.MarshalOptions{
+			Multiline:       true,
+			Indent:          "  ",
+			UseEnumNumbers:  true,
+			UseProtoNames:   true,
+			EmitUnpopulated: false, // elide zero value elements
+		}
+		return m.Marshal(obj)
+	default:
+		data, err := json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("json.Marshal = %v", err)
+		}
+
+		return data, nil
+	}
+}

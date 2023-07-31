@@ -418,9 +418,9 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// StreamHealth is not implemented.
+// StreamHealth always mocks a "healthy" result.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return fmt.Errorf("not implemented in test")
+	return nil
 }
 
 // ExpectVStreamStartPos makes the conn verify that that the next vstream request has the right startPos.

@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 /*
@@ -253,7 +255,7 @@ func (wf *workflow) create() {
 		panic(fmt.Sprintf("unknown workflow type: %s", wf.typ))
 	}
 	require.NoError(t, err)
-	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), workflowStateRunning)
+	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String())
 	ks2 := wf.tc.vc.Cells[cell].Keyspaces[wf.toKeyspace]
 	var i int64
 	for _, shardName := range wf.tc.keyspaces[wf.toKeyspace].shards {
