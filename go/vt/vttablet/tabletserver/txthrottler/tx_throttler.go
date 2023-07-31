@@ -222,7 +222,7 @@ func (t *txThrottler) Open() (err error) {
 	}
 	log.Info("txThrottler: opening")
 	t.throttlerRunning.Set(1)
-	t.state, err = newTxThrottlerState(t.config, t, t.target)
+	t.state, err = newTxThrottlerState(t, t.config, t.target)
 	return err
 }
 
@@ -266,7 +266,7 @@ func (t *txThrottler) Throttle(priority int, workload string) (result bool) {
 	return result
 }
 
-func newTxThrottlerState(config *tabletenv.TabletConfig, txThrottler *txThrottler, target *querypb.Target) (*txThrottlerState, error) {
+func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfig, target *querypb.Target) (*txThrottlerState, error) {
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.TxThrottlerConfig.Get()}
 
 	t, err := throttlerFactory(
@@ -292,9 +292,9 @@ func newTxThrottlerState(config *tabletenv.TabletConfig, txThrottler *txThrottle
 	state := &txThrottlerState{
 		config:           config,
 		healthCheckCells: config.TxThrottlerHealthCheckCells,
+		tabletTypes:      tabletTypes,
 		throttler:        t,
 		txThrottler:      txThrottler,
-		tabletTypes:      tabletTypes,
 	}
 
 	// get cells from topo if none defined in tabletenv config
