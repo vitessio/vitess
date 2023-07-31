@@ -510,7 +510,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	edml := &engine.DML{
 		Query:             generateQuery(ast),
 		TableNames:        []string{upd.VTable.Name.String()},
-		OwnedVindexes:     upd.VTable.Owned,
+		Vindexes:          upd.VTable.ColumnVindexes,
 		OwnedVindexQuery:  upd.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
@@ -536,7 +536,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	edml := &engine.DML{
 		Query:             generateQuery(ast),
 		TableNames:        []string{del.VTable.Name.String()},
-		OwnedVindexes:     del.VTable.Owned,
+		Vindexes:          del.VTable.Owned,
 		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}

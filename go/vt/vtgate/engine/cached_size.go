@@ -160,10 +160,10 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field OwnedVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
+	// field Vindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OwnedVindexes)) * int64(8))
-		for _, elem := range cached.OwnedVindexes {
+		size += hack.RuntimeAllocSize(int64(cap(cached.Vindexes)) * int64(8))
+		for _, elem := range cached.Vindexes {
 			size += elem.CachedSize(true)
 		}
 	}

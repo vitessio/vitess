@@ -48,8 +48,8 @@ type DML struct {
 	// TableNames are the name of the tables involved in the query.
 	TableNames []string
 
-	// OwnedVindexes are the column vindexes owned by this DML.
-	OwnedVindexes []*vindexes.ColumnVindex
+	// Vindexes are the column vindexes modified by this DML.
+	Vindexes []*vindexes.ColumnVindex
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
 	OwnedVindexQuery string

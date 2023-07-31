@@ -128,7 +128,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 			return err
 		}
 
-		for _, colVindex := range upd.OwnedVindexes {
+		for _, colVindex := range upd.Vindexes {
 			// Skip this vindex if no rows are being changed
 			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
 			if !ok {
