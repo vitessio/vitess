@@ -412,9 +412,9 @@ func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*DBDDL) iStatement()             {}
-func (*DDL) iStatement()               {}
-func (*MultiAlterDDL) iStatement()     {}
-func (*Explain) iStatement()           {}
+func (*DDL) iStatement()        {}
+func (*AlterTable) iStatement() {}
+func (*Explain) iStatement()    {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
@@ -1911,16 +1911,16 @@ func (c Characteristic) String() string {
 	return string(c.Type)
 }
 
-// MultiAlterDDL represents multiple ALTER statements on a single table.
-type MultiAlterDDL struct {
+// AlterTable represents an ALTER table statement, which can include multiple DDL clauses.
+type AlterTable struct {
 	Table      TableName
 	Statements []*DDL
 }
 
-var _ SQLNode = (*MultiAlterDDL)(nil)
+var _ SQLNode = (*AlterTable)(nil)
 
 // Format implements SQLNode.
-func (m *MultiAlterDDL) Format(buf *TrackedBuffer) {
+func (m *AlterTable) Format(buf *TrackedBuffer) {
 	buf.Myprintf("alter table %v", m.Table)
 	for i, ddl := range m.Statements {
 		if i > 0 {
@@ -1931,7 +1931,7 @@ func (m *MultiAlterDDL) Format(buf *TrackedBuffer) {
 }
 
 // walkSubtree implements SQLNode.
-func (m *MultiAlterDDL) walkSubtree(visit Visit) error {
+func (m *AlterTable) walkSubtree(visit Visit) error {
 	for _, ddl := range m.Statements {
 		err := ddl.walkSubtree(visit)
 		if err != nil {

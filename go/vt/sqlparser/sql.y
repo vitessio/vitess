@@ -1049,9 +1049,9 @@ create_statement:
   }
 | CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
-    // For consistency, we always return MultiAlterDDL for any ALTER TABLE-equivalent statements
+    // For consistency, we always return AlterTable for any ALTER TABLE-equivalent statements
     ddl := &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
-    $$ = &MultiAlterDDL{Table: $7, Statements: []*DDL{ddl}}
+    $$ = &AlterTable{Table: $7, Statements: []*DDL{ddl}}
   }
 | CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
@@ -4378,7 +4378,7 @@ alter_table_statement:
         $5[i].Table = $4
       }
     }
-    $$ = &MultiAlterDDL{Table: $4, Statements: $5}
+    $$ = &AlterTable{Table: $4, Statements: $5}
   }
 
 alter_table_statement_list:
@@ -4661,9 +4661,9 @@ drop_statement:
   }
 | DROP INDEX sql_id ON table_name
   {
-    // For consistency, we always use a MultiAlterDDL for ALTER TABLE equivalent statements
+    // For consistency, we always use a AlterTable for ALTER TABLE equivalent statements
     ddl := &DDL{Action: AlterStr, Table: $5, IndexSpec: &IndexSpec{Action: DropStr, ToName: $3}}
-    $$ = &MultiAlterDDL{Table: $5, Statements: []*DDL{ddl}}
+    $$ = &AlterTable{Table: $5, Statements: []*DDL{ddl}}
   }
 | DROP VIEW exists_opt view_name_list
   {
