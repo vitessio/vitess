@@ -138,9 +138,11 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
 	edml := engine.NewDML()
 	edml.Keyspace = ks
-	edml.Table = tables
 	edml.Opcode = engine.Unsharded
 	edml.Query = generateQuery(stmt)
+	for _, tbl := range tables {
+		edml.TableNames = append(edml.TableNames, tbl.Name.String())
+	}
 	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}
 }
 

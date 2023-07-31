@@ -33,7 +33,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		name           string
 		srvVschema     *vschemapb.SrvVSchema
 		currentVSchema *vindexes.VSchema
-		schema         map[string][]vindexes.Column
+		schema         map[string]*vindexes.TableInfo
 		expected       *vindexes.VSchema
 	}{{
 		name: "0 Schematracking- 1 srvVSchema",
@@ -47,12 +47,12 @@ func TestVSchemaUpdate(t *testing.T) {
 	}, {
 		name:       "1 Schematracking- 0 srvVSchema",
 		srvVschema: makeTestSrvVSchema("ks", false, nil),
-		schema:     map[string][]vindexes.Column{"tbl": cols1},
+		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
 	}, {
 		name:       "1 Schematracking - 1 srvVSchema (no columns) not authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {}}),
-		schema:     map[string][]vindexes.Column{"tbl": cols1},
+		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
 	}, {
@@ -63,7 +63,7 @@ func TestVSchemaUpdate(t *testing.T) {
 				ColumnListAuthoritative: false,
 			},
 		}),
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
 	}, {
@@ -71,7 +71,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {
 			ColumnListAuthoritative: true,
 		}}),
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblNoCol}),
 	}, {
@@ -82,17 +82,17 @@ func TestVSchemaUpdate(t *testing.T) {
 				ColumnListAuthoritative: true,
 			},
 		}),
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema tracker will be ignored for authoritative tables.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol2}),
 	}, {
 		name:     "srvVschema received as nil",
-		schema:   map[string][]vindexes.Column{"tbl": cols1},
+		schema:   map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		expected: makeTestEmptyVSchema(),
 	}, {
 		name:           "srvVschema received as nil - have existing vschema",
 		currentVSchema: &vindexes.VSchema{},
-		schema:         map[string][]vindexes.Column{"tbl": cols1},
+		schema:         map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		expected:       &vindexes.VSchema{},
 	}}
 
@@ -138,7 +138,7 @@ func TestRebuildVSchema(t *testing.T) {
 	tcases := []struct {
 		name       string
 		srvVschema *vschemapb.SrvVSchema
-		schema     map[string][]vindexes.Column
+		schema     map[string]*vindexes.TableInfo
 		expected   *vindexes.VSchema
 	}{{
 		name: "0 Schematracking- 1 srvVSchema",
@@ -152,12 +152,12 @@ func TestRebuildVSchema(t *testing.T) {
 	}, {
 		name:       "1 Schematracking- 0 srvVSchema",
 		srvVschema: makeTestSrvVSchema("ks", false, nil),
-		schema:     map[string][]vindexes.Column{"tbl": cols1},
+		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
 	}, {
 		name:       "1 Schematracking - 1 srvVSchema (no columns) not authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {}}),
-		schema:     map[string][]vindexes.Column{"tbl": cols1},
+		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
 	}, {
@@ -168,7 +168,7 @@ func TestRebuildVSchema(t *testing.T) {
 				ColumnListAuthoritative: false,
 			},
 		}),
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
 	}, {
@@ -176,7 +176,7 @@ func TestRebuildVSchema(t *testing.T) {
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {
 			ColumnListAuthoritative: true,
 		}}),
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblNoCol}),
 	}, {
@@ -187,12 +187,12 @@ func TestRebuildVSchema(t *testing.T) {
 				ColumnListAuthoritative: true,
 			},
 		}),
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema tracker will be ignored for authoritative tables.
 		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol2}),
 	}, {
 		name:   "srvVschema received as nil",
-		schema: map[string][]vindexes.Column{"tbl": cols1},
+		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 	}}
 
 	vm := &VSchemaManager{}
@@ -252,14 +252,14 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 }
 
 type fakeSchema struct {
-	t map[string][]vindexes.Column
+	t map[string]*vindexes.TableInfo
 }
 
-func (f *fakeSchema) Tables(string) map[string][]vindexes.Column {
+func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
 	return f.t
 }
 
-func (f *fakeSchema) Views(ks string) map[string]sqlparser.SelectStatement {
+func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 	return nil
 }
 

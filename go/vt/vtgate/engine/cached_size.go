@@ -145,7 +145,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -153,10 +153,17 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.KsidVindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Table []*vitess.io/vitess/go/vt/vtgate/vindexes.Table
+	// field TableNames []string
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Table)) * int64(8))
-		for _, elem := range cached.Table {
+		size += hack.RuntimeAllocSize(int64(cap(cached.TableNames)) * int64(16))
+		for _, elem := range cached.TableNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field Vindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Vindexes)) * int64(8))
+		for _, elem := range cached.Vindexes {
 			size += elem.CachedSize(true)
 		}
 	}
@@ -306,7 +313,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(224)
+		size += int64(240)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -338,8 +345,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	size += cached.Table.CachedSize(true)
+	// field TableName string
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
 	size += cached.Generate.CachedSize(true)
 	// field Prefix string

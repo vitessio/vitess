@@ -380,6 +380,76 @@ func TestVSchemaViews(t *testing.T) {
 	require.JSONEq(t, want, got)
 }
 
+func TestVSchemaForeignKeys(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}},
+			"main": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}}}}
+	vschema := BuildVSchema(&good)
+	require.NoError(t, vschema.Keyspaces["main"].Error)
+
+	// add fk containst a keyspace.
+	vschema.addForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
+		Source: sqlparser.Columns{sqlparser.NewIdentifierCI("c2")},
+		ReferenceDefinition: &sqlparser.ReferenceDefinition{
+			ReferencedTable:   sqlparser.NewTableName("t1"),
+			ReferencedColumns: sqlparser.Columns{sqlparser.NewIdentifierCI("c1")},
+		},
+	})
+
+	out, err := json.MarshalIndent(vschema.Keyspaces["main"], "", "  ")
+	require.NoError(t, err)
+	want := `
+{
+  "foreignKeyMode": "FK_UNMANAGED",
+  "tables": {
+    "t1": {
+      "name": "t1",
+      "columns": [
+        {
+          "name": "c1",
+          "type": "NULL_TYPE"
+        },
+        {
+          "name": "c2",
+          "type": "VARCHAR"
+        }
+      ],
+      "parent_foreign_keys": [
+        {
+          "parent_table": "t1",
+          "parent_columns": ["c1"],
+          "child_columns": ["c2"]
+        }
+      ],
+      "child_foreign_keys": [
+        {
+          "child_table": "t1",
+          "child_columns": ["c2"],
+          "parent_columns": ["c1"]
+        }
+      ]
+    }
+  }
+}`
+	got := string(out)
+	require.JSONEq(t, want, got)
+}
+
 func TestVSchemaColumnListAuthoritative(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
