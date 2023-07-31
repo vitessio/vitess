@@ -133,7 +133,7 @@ func (c *Config) Parse(args []string) error {
 		}
 	}
 
-	if credentialsUsername != nil || credentialsPassword != nil {
+	if *credentialsUsername != "" || *credentialsPassword != "" {
 		// Set credentials to values potentially supplied by credentials-password and credentials-username
 		c.Credentials = &StaticAuthCredentials{
 			EffectiveUser: *credentialsUsername,
