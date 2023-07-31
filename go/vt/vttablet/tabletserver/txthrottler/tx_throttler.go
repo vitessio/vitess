@@ -161,6 +161,7 @@ type txThrottler struct {
 
 // txThrottlerState holds the state of an open TxThrottler object.
 type txThrottlerState struct {
+	config      *tabletenv.TabletConfig
 	txThrottler *txThrottler
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
@@ -174,8 +175,8 @@ type txThrottlerState struct {
 	healthCheckChan  chan *discovery.TabletHealth
 	healthCheckCells []string
 	cellsFromTopo    bool
-  
-  // tabletTypes stores the tablet types for throttling
+
+	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
 }
 
@@ -290,10 +291,10 @@ func newTxThrottlerState(config *tabletenv.TabletConfig, txThrottler *txThrottle
 
 	state := &txThrottlerState{
 		config:           config,
-		healthCheckCells: config.healthCheckCells,
+		healthCheckCells: config.TxThrottlerHealthCheckCells,
 		throttler:        t,
 		txThrottler:      txThrottler,
-    tabletTypes:      tabletTypes,
+		tabletTypes:      tabletTypes,
 	}
 
 	// get cells from topo if none defined in tabletenv config
@@ -361,7 +362,7 @@ func (ts *txThrottlerState) updateHealthCheckCells(ctx context.Context, topoServ
 func (ts *txThrottlerState) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
 	var cellsUpdateTicks <-chan time.Time
 	if ts.cellsFromTopo {
-		ticker := time.NewTicker(ts.config.topoRefreshInterval)
+		ticker := time.NewTicker(ts.config.TxThrottlerTopoRefreshInterval)
 		cellsUpdateTicks = ticker.C
 		defer ticker.Stop()
 	}
