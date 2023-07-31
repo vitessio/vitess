@@ -320,7 +320,7 @@ $(DOCKER_BASE_TARGETS): docker_base_%:
 docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 
 docker_lite:
-	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
+	${call build_docker_image,docker/lite/Dockerfile,frouioui/lite}
 
 DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 percona57 ubi7.percona57 percona80 ubi7.percona80 testing ubi8.mysql80 ubi8.arm64.mysql80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
