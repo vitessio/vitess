@@ -61,7 +61,7 @@ type (
 	}
 
 	builtinWeightString struct {
-		String Expr
+		Expr   Expr
 		Cast   string
 		Len    int
 		HasLen bool
@@ -431,7 +431,7 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 	col := evalCollation(arg).Collation.Get()
 
-	// the collation of a `COLLATION` expr is hardcoded to `utf8_general_ci`,
+	// the collation of a `COLLATION` expr is hardcoded to `utf8mb3_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
 	return newEvalText([]byte(col.Name()), collationUtf8mb3), nil
 }
@@ -455,76 +455,93 @@ func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
 }
 
 func (c *builtinWeightString) callable() []Expr {
-	return []Expr{c.String}
+	return []Expr{c.Expr}
 }
 
 func (c *builtinWeightString) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := c.String.typeof(env, fields)
+	_, f := c.Expr.typeof(env, fields)
 	return sqltypes.VarBinary, f
 }
 
 func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
-	var (
-		tc      collations.TypedCollation
-		text    []byte
-		weights []byte
-		length  = c.Len
-	)
+	var weights []byte
 
-	str, err := c.String.eval(env)
+	input, err := c.Expr.eval(env)
 	if err != nil {
 		return nil, err
 	}
 
-	switch str := str.(type) {
-	case *evalInt64, *evalUint64:
-		// when calling WEIGHT_STRING with an integral value, MySQL returns the
-		// internal sort key that would be used in an InnoDB table... we do not
-		// support that
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrEvaluatedExprNotSupported, FormatExpr(c))
+	if c.Cast == "binary" {
+		weights, _, err = evalWeightString(weights, evalToBinary(input), c.Len, 0)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalBinary(weights), nil
+	}
+
+	switch val := input.(type) {
+	case *evalInt64, *evalUint64, *evalTemporal:
+		weights, _, err = evalWeightString(weights, val, 0, 0)
 	case *evalBytes:
-		text = str.bytes
-		tc = str.col
+		if val.isBinary() {
+			weights, _, err = evalWeightString(weights, val, 0, 0)
+		} else {
+			var strLen int
+			if c.Cast == "char" {
+				strLen = c.Len
+			}
+			weights, _, err = evalWeightString(weights, val, strLen, 0)
+		}
 	default:
 		return nil, nil
 	}
 
-	if c.Cast == "binary" {
-		tc = collationBinary
-		weights = make([]byte, 0, c.Len)
-		length = collations.PadToMax
+	if err != nil {
+		return nil, err
 	}
 
-	collation := tc.Collation.Get()
-	weights = collation.WeightString(weights, text, length)
 	return newEvalBinary(weights), nil
 }
 
 func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
-	str, err := call.String.compile(c)
+	str, err := call.Expr.compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	switch str.Type {
-	case sqltypes.Int64, sqltypes.Uint64:
-		return ctype{}, c.unsupported(call)
+	var flag typeFlag
+	if str.Flag&flagNullable != 0 {
+		flag = flag | flagNullable
+	}
 
-	case sqltypes.VarChar, sqltypes.VarBinary:
-		skip := c.compileNullCheck1(str)
-
-		if call.Cast == "binary" {
-			c.asm.Fn_WEIGHT_STRING_b(call.Len)
-		} else {
-			c.asm.Fn_WEIGHT_STRING_c(str.Col.Collation.Get(), call.Len)
+	skip := c.compileNullCheck1(str)
+	if call.Cast == "binary" {
+		if !sqltypes.IsBinary(str.Type) {
+			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
 		}
+		c.asm.Fn_WEIGHT_STRING(call.Len)
 		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+	}
+
+	switch str.Type {
+	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time, sqltypes.VarBinary, sqltypes.Binary, sqltypes.Blob:
+		c.asm.Fn_WEIGHT_STRING(0)
+
+	case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
+		var strLen int
+		if call.Cast == "char" {
+			strLen = call.Len
+		}
+		c.asm.Fn_WEIGHT_STRING(strLen)
 
 	default:
 		c.asm.SetNull(1)
-		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+		flag = flag | flagNull | flagNullable
 	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarBinary, Flag: flag, Col: collationBinary}, nil
 }
 
 func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
@@ -620,17 +637,18 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	length := evalToInt64(l).i
-	if length < 0 {
-		return nil, nil
-	}
-
+	cs := text.col.Collation.Get().Charset()
 	pad, ok := p.(*evalBytes)
-	if !ok {
-		pad, err = evalToVarchar(p, call.collate, true)
+	if !ok || pad.col.Collation.Get().Charset() != cs {
+		pad, err = evalToVarchar(p, text.col.Collation, true)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	length := evalToInt64(l).i
+	if length < 0 {
+		return nil, nil
 	}
 
 	if !validMaxLength(int64(len(pad.bytes)), length) {
@@ -638,7 +656,6 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	// LPAD / RPAD operates on characters, not bytes
-	cs := text.col.Collation.Get().Charset()
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen >= int(length) {
@@ -700,14 +717,19 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col
 	default:
-		c.asm.Convert_xc(3, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xce(3, sqltypes.VarChar, col.Collation)
 	}
 	_ = c.compileToInt64(l, 2)
 
 	switch {
 	case pad.isTextual():
+		fromCharset := pad.Col.Collation.Get().Charset()
+		toCharset := col.Collation.Get().Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 	}
 
 	if call.left {
@@ -859,7 +881,7 @@ func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	pat, ok := p.(*evalBytes)
-	if !ok {
+	if !ok || pat.col.Collation.Get().Charset() != text.col.Collation.Get().Charset() {
 		pat, err = evalToVarchar(p, text.col.Collation, true)
 		if err != nil {
 			return nil, err
@@ -919,8 +941,13 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	switch {
 	case pat.isTextual():
+		fromCharset := pat.Col.Collation.Get().Charset()
+		toCharset := col.Collation.Get().Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 	}
 
 	switch call.trim {

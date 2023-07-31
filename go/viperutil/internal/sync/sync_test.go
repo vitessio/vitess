@@ -19,7 +19,6 @@ package sync_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"os"
 	"sync"
@@ -36,58 +35,39 @@ import (
 )
 
 func TestWatchConfig(t *testing.T) {
-	t.Skip("flaky test (@ajm188): https://github.com/vitessio/vitess/issues/13498")
 	type config struct {
 		A, B int
 	}
 
-	tmp, err := os.CreateTemp(".", "TestWatchConfig_*.json")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
-
-	stat, err := os.Stat(tmp.Name())
-	require.NoError(t, err)
-
-	writeConfig := func(a, b int) error {
+	writeConfig := func(tmp *os.File, a, b int) error {
 		data, err := json.Marshal(&config{A: a, B: b})
 		if err != nil {
 			return err
 		}
 
-		err = os.WriteFile(tmp.Name(), data, stat.Mode())
-		if err != nil {
-			return err
-		}
-
-		data, err = os.ReadFile(tmp.Name())
-		if err != nil {
-			return err
-		}
-
-		var cfg config
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return err
-		}
-
-		if cfg.A != a || cfg.B != b {
-			return fmt.Errorf("config did not persist; want %+v got %+v", config{A: a, B: b}, cfg)
-		}
-
-		return nil
+		// In order to guarantee viper's watcher detects exactly one config
+		// change, we perform a write specific to the platform we're executing
+		// on.
+		//
+		// Consequently, this test only supports linux and macos for now.
+		return atomicWrite(tmp.Name(), data)
 	}
-	writeRandomConfig := func() error {
+	writeRandomConfig := func(tmp *os.File) error {
 		a, b := rand.Intn(100), rand.Intn(100)
-		return writeConfig(a, b)
+		return writeConfig(tmp, a, b)
 	}
 
-	require.NoError(t, writeRandomConfig())
+	tmp, err := os.CreateTemp(t.TempDir(), "TestWatchConfig_*.json")
+	require.NoError(t, err)
+
+	require.NoError(t, writeRandomConfig(tmp))
 
 	v := viper.New()
 	v.SetConfigFile(tmp.Name())
 	require.NoError(t, v.ReadInConfig())
 
 	wCh, rCh := make(chan struct{}), make(chan struct{})
-	v.OnConfigChange(func(in fsnotify.Event) {
+	v.OnConfigChange(func(event fsnotify.Event) {
 		select {
 		case <-rCh:
 			return
@@ -103,7 +83,7 @@ func TestWatchConfig(t *testing.T) {
 	// Make sure that basic, unsynchronized WatchConfig is set up before
 	// beginning the actual test.
 	a, b := v.GetInt("a"), v.GetInt("b")
-	require.NoError(t, writeConfig(a+1, b+1))
+	require.NoError(t, writeConfig(tmp, a+1, b+1))
 	<-wCh // wait for the update to finish
 
 	require.Equal(t, a+1, v.GetInt("a"))
@@ -163,7 +143,7 @@ func TestWatchConfig(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, writeRandomConfig())
+		require.NoError(t, writeRandomConfig(tmp))
 		time.Sleep(writeJitter())
 	}
 

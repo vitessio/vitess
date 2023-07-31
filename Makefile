@@ -93,7 +93,7 @@ endif
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
-	./web/vtadmin/build.sh
+	PREFIX="" ./web/vtadmin/build.sh
 endif
 
 # cross-build can be used to cross-compile Vitess client binaries
@@ -379,7 +379,7 @@ tools:
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh

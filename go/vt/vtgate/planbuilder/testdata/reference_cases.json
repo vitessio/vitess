@@ -2,22 +2,7 @@
   {
     "comment": "select from unqualified ambiguous reference routes to reference source",
     "query": "select * from ambiguous_ref_with_source",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from ambiguous_ref_with_source",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from ambiguous_ref_with_source where 1 != 1",
-        "Query": "select * from ambiguous_ref_with_source",
-        "Table": "ambiguous_ref_with_source"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select * from ambiguous_ref_with_source",
       "Instructions": {
@@ -39,41 +24,7 @@
   {
     "comment": "join with unqualified ambiguous reference table routes to optimal keyspace",
     "query": "select user.col from user join ambiguous_ref_with_source",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join ambiguous_ref_with_source",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_ambiguous_ref_with_source",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from ambiguous_ref_with_source where 1 != 1",
-            "Query": "select 1 from ambiguous_ref_with_source",
-            "Table": "ambiguous_ref_with_source"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join ambiguous_ref_with_source",
       "Instructions": {
@@ -96,22 +47,7 @@
   {
     "comment": "ambiguous unqualified reference table self-join routes to reference source",
     "query": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select r1.col from ambiguous_ref_with_source as r1 join ambiguous_ref_with_source where 1 != 1",
-        "Query": "select r1.col from ambiguous_ref_with_source as r1 join ambiguous_ref_with_source",
-        "Table": "ambiguous_ref_with_source"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
       "Instructions": {
@@ -133,41 +69,7 @@
   {
     "comment": "ambiguous unqualified reference table can merge with other opcodes left to right.",
     "query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "ambiguous_ref_with_source_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source where 1 != 1",
-            "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source",
-            "Table": "ambiguous_ref_with_source"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
       "Instructions": {
@@ -190,45 +92,7 @@
   {
     "comment": "ambiguous unqualified reference table can merge with other opcodes left to right and vindex value is in the plan",
     "query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "ambiguous_ref_with_source_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source where 1 != 1",
-            "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source",
-            "Table": "ambiguous_ref_with_source"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from (select aa from `user` where 1 != 1) as `user` where 1 != 1",
-            "Query": "select 1 from (select aa from `user` where `user`.id = 1) as `user`",
-            "Table": "`user`",
-            "Values": [
-              "INT64(1)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
       "Instructions": {
@@ -255,41 +119,7 @@
   {
     "comment": "qualified join to reference table routes to optimal keyspace",
     "query": "select user.col from user join main.ambiguous_ref_with_source",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join main.ambiguous_ref_with_source",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_ambiguous_ref_with_source",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from ambiguous_ref_with_source where 1 != 1",
-            "Query": "select 1 from ambiguous_ref_with_source",
-            "Table": "ambiguous_ref_with_source"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join main.ambiguous_ref_with_source",
       "Instructions": {
@@ -332,27 +162,9 @@
     }
   },
   {
-    "comment": "insert into qualified ambiguous reference table routes v3 to requested keyspace gen4 to source",
+    "comment": "insert into qualified ambiguous reference table routes to source",
     "query": "insert into user.ambiguous_ref_with_source(col) values(1)",
-    "v3-plan": {
-      "QueryType": "INSERT",
-      "Original": "insert into user.ambiguous_ref_with_source(col) values(1)",
-      "Instructions": {
-        "OperatorType": "Insert",
-        "Variant": "Sharded",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "insert into ambiguous_ref_with_source(col) values (1)",
-        "TableName": "ambiguous_ref_with_source"
-      },
-      "TablesUsed": [
-        "user.ambiguous_ref_with_source"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "INSERT",
       "Original": "insert into user.ambiguous_ref_with_source(col) values(1)",
       "Instructions": {
@@ -394,10 +206,9 @@
     }
   },
   {
-    "comment": "update qualified ambiguous reference table v3 error no primary vindex v4 route to source",
+    "comment": "update qualified ambiguous reference table route to source",
     "query": "update user.ambiguous_ref_with_source set col = 1",
-    "v3-plan": "VT09001: table 'ambiguous_ref_with_source' does not have a primary vindex",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "UPDATE",
       "Original": "update user.ambiguous_ref_with_source set col = 1",
       "Instructions": {
@@ -439,10 +250,9 @@
     }
   },
   {
-    "comment": "delete from qualified ambiguous reference table v3 error no primary vindex v4 route to source",
+    "comment": "delete from qualified ambiguous reference table route to source",
     "query": "delete from user.ambiguous_ref_with_source where col = 1",
-    "v3-plan": "VT09001: table 'ambiguous_ref_with_source' does not have a primary vindex",
-    "gen4-plan": {
+    "plan": {
       "QueryType": "DELETE",
       "Original": "delete from user.ambiguous_ref_with_source where col = 1",
       "Instructions": {
@@ -464,22 +274,7 @@
   {
     "comment": "join with unqualified unambiguous ref with source routes to requested table",
     "query": "select user.col from user join ref_with_source",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join ref_with_source",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` join ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user` join ref_with_source",
-        "Table": "`user`, ref_with_source"
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join ref_with_source",
       "Instructions": {
@@ -502,41 +297,7 @@
   {
     "comment": "join with unqualified reference optimize routes when source & reference have different names",
     "query": "select user.col from user join source_of_ref",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join source_of_ref",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_source_of_ref",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from source_of_ref where 1 != 1",
-            "Query": "select 1 from source_of_ref",
-            "Table": "source_of_ref"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join source_of_ref",
       "Instructions": {
@@ -559,41 +320,7 @@
   {
     "comment": "join with unqualified reference respects routing rules",
     "query": "select user.col from user join rerouted_ref",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join rerouted_ref",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_rerouted_ref",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from rerouted_ref where 1 != 1",
-            "Query": "select 1 from rerouted_ref",
-            "Table": "rerouted_ref"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join rerouted_ref",
       "Instructions": {
@@ -616,41 +343,7 @@
   {
     "comment": "join with reference to unqualified source routes to optimal keyspace",
     "query": "select user.col from user join global_ref",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col from user join global_ref",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_global_ref",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from global_ref where 1 != 1",
-            "Query": "select 1 from global_ref",
-            "Table": "global_ref"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join global_ref",
       "Instructions": {
@@ -671,27 +364,9 @@
     }
   },
   {
-    "comment": "insert into qualified reference with unqualified source routes v3 to requested keyspace gen4 to source",
+    "comment": "insert into qualified reference with unqualified source routes to source",
     "query": "insert into user.global_ref(col) values(1)",
-    "v3-plan": {
-      "QueryType": "INSERT",
-      "Original": "insert into user.global_ref(col) values(1)",
-      "Instructions": {
-        "OperatorType": "Insert",
-        "Variant": "Sharded",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "insert into global_ref(col) values (1)",
-        "TableName": "global_ref"
-      },
-      "TablesUsed": [
-        "user.global_ref"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "INSERT",
       "Original": "insert into user.global_ref(col) values(1)",
       "Instructions": {

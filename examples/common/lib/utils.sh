@@ -139,6 +139,35 @@ function wait_for_healthy_shard() {
 	wait_for_shard_vreplication_engine "${keyspace}" "${shard}"
 }
 
+# Wait for a workflow to reach the running state. Example:
+#  wait_for_workflow_running customer customer2customer
+function wait_for_workflow_running() {
+    if [[ -z ${1} || -z ${2} ]]; then
+        fail "A keyspace and workflow must be specified when waiting for a workflow to reach the running state"
+    fi
+
+    local keyspace=${1}
+    local workflow=${2}
+    local wait_secs=90
+    local result=""
+
+    echo "Waiting for the ${workflow} workflow in the ${keyspace} keyspace to finish the copy phase..." 
+
+    for _ in $(seq 1 ${wait_secs}); do
+        result=$(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep "Copy phase completed")
+        if [[ ${result} != "" ]]; then
+            break
+        fi
+        sleep 1
+    done;
+
+    if [[ ${result} == "" ]]; then
+        fail "Timed out after ${wait_secs} seconds waiting for the ${workflow} workflow in the ${keyspace} keyspace to reach the running state"
+    fi
+
+    echo "The ${workflow} workflow in the ${keyspace} keyspace is now running. $(sed -rn 's/.*"(Copy phase.*)".*/\1/p' <<< "${result}")."
+}
+
 # Stop the specified binary name using the provided PID file.
 # Example:
 #  stop_process "vtadmin-web" "$VTDATAROOT/tmp/vtadmin-web.pid"

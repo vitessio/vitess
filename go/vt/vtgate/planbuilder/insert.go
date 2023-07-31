@@ -17,441 +17,101 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
-	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(string) stmtPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-		pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
-		ins := stmt.(*sqlparser.Insert)
-		err := checkUnsupportedExpressions(ins)
-		if err != nil {
-			return nil, err
-		}
-		exprs := sqlparser.TableExprs{ins.Table}
-		rb, err := pb.processDMLTable(exprs, reservedVars, nil)
-		if err != nil {
-			return nil, err
-		}
-		// The table might have been routed to a different one.
-		ins.Table = exprs[0].(*sqlparser.AliasedTableExpr)
-		// remove any alias added from routing table. insert query does not support table alias.
-		ins.Table.As = sqlparser.NewIdentifierCS("")
-		if rb.eroute.TargetDestination != nil {
-			return nil, vterrors.VT12001("INSERT with a target destination")
-		}
-
-		if len(pb.st.tables) != 1 {
-			// Unreachable.
-			return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
-		}
-		var vschemaTable *vindexes.Table
-		for _, tval := range pb.st.tables {
-			// There is only one table.
-			vschemaTable = tval.vschemaTable
-		}
-		if !rb.eroute.Keyspace.Sharded {
-			return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
-		}
-		if ins.Action == sqlparser.ReplaceAct {
-			return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
-		}
-		return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
+func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStmt *sqlparser.Insert, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
 	}
-}
-
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	eins := engine.NewSimpleInsert(
-		engine.InsertUnsharded,
-		table,
-		table.Keyspace,
-	)
-	applyCommentDirectives(ins, eins)
-
-	var rows sqlparser.Values
-	tc := &tableCollector{}
-	tc.addVindexTable(table)
-	switch insertValues := ins.Rows.(type) {
-	case *sqlparser.Select, *sqlparser.Union:
-		if eins.Table.AutoIncrement != nil {
-			return nil, vterrors.VT12001("auto-increment and SELECT in INSERT")
-		}
-		plan, err := subquerySelectPlan(ins, vschema, reservedVars, false)
-		if err != nil {
-			return nil, err
-		}
-		tc.addAllTables(plan.tables)
-		if route, ok := plan.primitive.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
-			eins.Query = generateQuery(ins)
-		} else {
-			eins.Input = plan.primitive
-			eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins)
-		}
-		return newPlanResult(eins, tc.getTables()...), nil
-	case sqlparser.Values:
-		rows = insertValues
-	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("unexpected construct in INSERT: %T", insertValues))
-	}
-	if eins.Table.AutoIncrement == nil {
-		eins.Query = generateQuery(ins)
-	} else {
-		// Table has auto-inc and has a VALUES clause.
-		// If the column list is nil then add all the columns
-		// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
-		if ins.Columns == nil {
-			if table.ColumnListAuthoritative {
-				populateInsertColumnlist(ins, table)
-			} else {
-				return nil, vterrors.VT13001("column list required for tables with auto-inc columns")
-			}
-		}
-		for _, row := range rows {
-			if len(ins.Columns) != len(row) {
-				return nil, vterrors.VT13001("column list does not match values")
-			}
-		}
-		if err := modifyForAutoinc(ins, eins); err != nil {
-			return nil, err
-		}
-		eins.Query = generateQuery(ins)
-	}
-
-	return newPlanResult(eins, tc.getTables()...), nil
-}
-
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	eins := &engine.Insert{
-		Table:    table,
-		Keyspace: table.Keyspace,
-	}
-	tc := &tableCollector{}
-	tc.addVindexTable(table)
-	eins.Ignore = bool(ins.Ignore)
-	if ins.OnDup != nil {
-		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
-			return nil, vterrors.VT12001("DML cannot update vindex column")
-		}
-		eins.Ignore = true
-	}
-	if ins.Columns == nil && table.ColumnListAuthoritative {
-		populateInsertColumnlist(ins, table)
-	}
-
-	applyCommentDirectives(ins, eins)
-	eins.ColVindexes = getColVindexes(eins.Table.ColumnVindexes)
-
-	// Till here common plan building done for insert by providing values or select query.
-
-	rows, isRowValues := ins.Rows.(sqlparser.Values)
-	if !isRowValues {
-		return buildInsertSelectPlan(ins, table, reservedVars, vschema, eins)
-	}
-	eins.Opcode = engine.InsertSharded
-
-	for _, value := range rows {
-		if len(ins.Columns) != len(value) {
-			return nil, vterrors.VT13001("column list does not match values")
-		}
-	}
-
-	if err := modifyForAutoinc(ins, eins); err != nil {
-		return nil, err
-	}
-
-	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
-	colVindexes := eins.ColVindexes
-	routeValues := make([][][]evalengine.Expr, len(colVindexes))
-	for vIdx, colVindex := range colVindexes {
-		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
-		for colIdx, col := range colVindex.Columns {
-			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
-			colNum := findOrAddColumn(ins, col)
-			for rowNum, row := range rows {
-				innerpv, err := evalengine.Translate(row[colNum], nil)
-				if err != nil {
-					return nil, err
-				}
-				routeValues[vIdx][colIdx][rowNum] = innerpv
-			}
-		}
-	}
-	for _, colVindex := range colVindexes {
-		for _, col := range colVindex.Columns {
-			colNum := findOrAddColumn(ins, col)
-			for rowNum, row := range rows {
-				name := engine.InsertVarName(col, rowNum)
-				row[colNum] = sqlparser.NewArgument(name)
-			}
-		}
-	}
-	eins.VindexValues = routeValues
-	eins.Query = generateQuery(ins)
-	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins)
-	return newPlanResult(eins, tc.getTables()...), nil
-}
-
-// buildInsertSelectPlan builds an insert using select plan.
-func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, eins *engine.Insert) (*planResult, error) {
-	eins.Opcode = engine.InsertSelect
-	tc := &tableCollector{}
-	tc.addVindexTable(table)
-
-	// check if column list is provided if not, then vschema should be able to provide the column list.
-	if len(ins.Columns) == 0 {
-		if !table.ColumnListAuthoritative {
-			return nil, vterrors.VT09004()
-		}
-		populateInsertColumnlist(ins, table)
-	}
-
-	// select plan will be taken as input to insert rows into the table.
-	plan, err := subquerySelectPlan(ins, vschema, reservedVars, true)
+	semTable, err := semantics.Analyze(insStmt, ksName, vschema)
 	if err != nil {
 		return nil, err
 	}
-	tc.addAllTables(plan.tables)
-	eins.Input = plan.primitive
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
 
-	// When the table you are steaming data from and table you are inserting from are same.
-	// Then due to locking of the index range on the table we might not be able to insert into the table.
-	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
-	if strings.Contains(plan.primitive.GetTableName(), table.Name.String()) {
-		eins.ForceNonStreaming = true
-	}
-
-	// auto-increment column is added explicitly if not provided.
-	if err := modifyForAutoinc(ins, eins); err != nil {
+	err = rewriteRoutedTables(insStmt, vschema)
+	if err != nil {
 		return nil, err
 	}
+	// remove any alias added from routing table.
+	// insert query does not support table alias.
+	insStmt.Table.As = sqlparser.NewIdentifierCS("")
 
-	// Fill out the 3-d Values structure
-	eins.VindexValueOffset, err = extractColVindexOffsets(ins, eins.ColVindexes)
+	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
+	// We cannot shortcut here as sequence column needs additional planning.
+	ks, tables := semTable.SingleUnshardedKeyspace()
+	if ks != nil && tables[0].AutoIncrement == nil {
+		plan := insertUnshardedShortcut(insStmt, ks, tables)
+		plan = pushCommentDirectivesOnPlan(plan, insStmt)
+		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+	}
+
+	tblInfo, err := semTable.TableInfoFor(semTable.TableSetFor(insStmt.Table))
+	if err != nil {
+		return nil, err
+	}
+	if tblInfo.GetVindexTable().Keyspace.Sharded && semTable.NotUnshardedErr != nil {
+		return nil, semTable.NotUnshardedErr
+	}
+
+	err = queryRewrite(semTable, reservedVars, insStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins)
-	return newPlanResult(eins, tc.getTables()...), nil
-}
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (*planResult, error) {
-	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
+	op, err := operators.PlanQuery(ctx, insStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	// validate the columns to match on insert and select
-	// for sharded insert table only
-	if sharded {
-		if err := checkColumnCounts(ins, selectStmt); err != nil {
-			return nil, err
-		}
-	}
-
-	// Override the locking with `for update` to lock the rows for inserting the data.
-	selectStmt.SetLock(sqlparser.ForUpdateLock)
-
-	return queryPlanner(selectStmt, reservedVars, vschema)
-}
-
-func getStatementAndPlanner(
-	ins *sqlparser.Insert,
-	vschema plancontext.VSchema,
-) (selectStmt sqlparser.SelectStatement, configuredPlanner stmtPlanner, err error) {
-	switch stmt := ins.Rows.(type) {
-	case *sqlparser.Select:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
-		selectStmt = stmt
-	case *sqlparser.Union:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
-		selectStmt = stmt
-	default:
-		err = vterrors.VT12001(fmt.Sprintf("INSERT plan with %T", ins.Rows))
-	}
-
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return selectStmt, configuredPlanner, nil
+	plan = pushCommentDirectivesOnPlan(plan, insStmt)
+
+	setLockOnAllSelect(plan)
+
+	if err := plan.Wireup(ctx); err != nil {
+		return nil, err
+	}
+
+	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStatement) error {
-	if len(ins.Columns) < selectStmt.GetColumnCount() {
-		return vterrors.VT03006()
-	}
-	if len(ins.Columns) > selectStmt.GetColumnCount() {
-		sel := sqlparser.GetFirstSelect(selectStmt)
-		var hasStarExpr bool
-		for _, sExpr := range sel.SelectExprs {
-			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
-				break
-			}
-		}
-		if !hasStarExpr {
-			return vterrors.VT03006()
-		}
-	}
-	return nil
-}
-
-func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
-	directives := ins.Comments.Directives()
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		eins.MultiShardAutocommit = true
-	}
-	eins.QueryTimeout = queryTimeout(directives)
-}
-
-func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
-	for _, colVindex := range allColVindexes {
-		if colVindex.IsPartialVindex() {
-			continue
-		}
-		colVindexes = append(colVindexes, colVindex)
-	}
-	return
-}
-
-func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.ColumnVindex) ([][]int, error) {
-	vv := make([][]int, len(colVindexes))
-	for idx, colVindex := range colVindexes {
-		for _, col := range colVindex.Columns {
-			colNum := findColumn(ins, col)
-			// sharding column values should be provided in the insert.
-			if colNum == -1 && idx == 0 {
-				return nil, vterrors.VT09003(col)
-			}
-			vv[idx] = append(vv[idx], colNum)
-		}
-	}
-	return vv, nil
-}
-
-// findColumn returns the column index where it is placed on the insert column list.
-// Otherwise, return -1 when not found.
-func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
-	for i, column := range ins.Columns {
-		if col.Equal(column) {
-			return i
-		}
-	}
-	return -1
-}
-
-func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
-	cols := make(sqlparser.Columns, 0, len(table.Columns))
-	for _, c := range table.Columns {
-		cols = append(cols, c.Name)
-	}
-	ins.Columns = cols
-}
-
-// modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
-// For row values cases, bind variable names are generated using baseName.
-func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
-	if eins.Table.AutoIncrement == nil {
-		return nil
-	}
-	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
-	selNext := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: &sqlparser.TableName{Name: eins.Table.AutoIncrement.Sequence.Name}}},
-		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
-	}
-	eins.Generate = &engine.Generate{
-		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
-		Query:    sqlparser.String(selNext),
-	}
-	switch rows := ins.Rows.(type) {
-	case sqlparser.SelectStatement:
-		eins.Generate.Offset = colNum
-		return nil
-	case sqlparser.Values:
-		autoIncValues := make([]evalengine.Expr, 0, len(rows))
-		for rowNum, row := range rows {
-			// Support the DEFAULT keyword by treating it as null
-			if _, ok := row[colNum].(*sqlparser.Default); ok {
-				row[colNum] = &sqlparser.NullVal{}
-			}
-
-			pv, err := evalengine.Translate(row[colNum], nil)
-			if err != nil {
-				return err
-			}
-			autoIncValues = append(autoIncValues, pv)
-			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
-		}
-		eins.Generate.Values = evalengine.NewTupleExpr(autoIncValues...)
-		return nil
-	}
-	return vterrors.VT13001(fmt.Sprintf("unexpected construct in INSERT: %T", ins.Rows))
-}
-
-// findOrAddColumn finds the position of a column in the insert. If it's
-// absent it appends it to the with NULL values and returns that position.
-func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
-	colNum := findColumn(ins, col)
-	if colNum >= 0 {
-		return colNum
-	}
-	colOffset := len(ins.Columns)
-	ins.Columns = append(ins.Columns, col)
-	if rows, ok := ins.Rows.(sqlparser.Values); ok {
-		for i := range rows {
-			rows[i] = append(rows[i], &sqlparser.NullVal{})
-		}
-	}
-	return colOffset
-}
-
-// isVindexChanging returns true if any of the update
-// expressions modify a vindex column.
-func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
-	for _, assignment := range setClauses {
-		for _, vcol := range colVindexes {
-			for _, col := range vcol.Columns {
-				if col.Equal(assignment.Name.Name) {
-					valueExpr, isValuesFuncExpr := assignment.Expr.(*sqlparser.ValuesFuncExpr)
-					if !isValuesFuncExpr {
-						return true
-					}
-					// update on duplicate key is changing the vindex column, not supported.
-					if !valueExpr.Name.Name.Equal(assignment.Name.Name) {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
+func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
+	eIns := &engine.Insert{}
+	eIns.Keyspace = ks
+	eIns.Table = tables[0]
+	eIns.Opcode = engine.InsertUnsharded
+	eIns.Query = generateQuery(stmt)
+	return &insert{eInsert: eIns}
 }
 
 type insert struct {
 	eInsert *engine.Insert
 	source  logicalPlan
-	gen4Plan
 }
 
 var _ logicalPlan = (*insert)(nil)
 
-func (i *insert) WireupGen4(ctx *plancontext.PlanningContext) error {
+func (i *insert) Wireup(ctx *plancontext.PlanningContext) error {
 	if i.source == nil {
 		return nil
 	}
-	return i.source.WireupGen4(ctx)
+	return i.source.Wireup(ctx)
 }
 
 func (i *insert) Primitive() engine.Primitive {

@@ -42,7 +42,6 @@ var (
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
-	signalInterval  = 1
 	sqlSchema       = `
 		create table vt_user (
 			id bigint,
@@ -78,8 +77,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
@@ -91,10 +89,7 @@ func TestMain(m *testing.M) {
 
 		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
 		tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-		tablet.VttabletProcess.ExtraArgs = []string{
-			"--queryserver-config-schema-change-signal",
-			fmt.Sprintf("--queryserver-config-schema-change-signal-interval=%d", signalInterval),
-		}
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "--queryserver-config-schema-change-signal")
 		if err := tablet.RestartOnlyTablet(); err != nil {
 			return 1
 		}

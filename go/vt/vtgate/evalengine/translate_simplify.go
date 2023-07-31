@@ -123,12 +123,12 @@ func (c *CallExpr) simplify(env *ExpressionEnv) error {
 }
 
 func (c *builtinWeightString) constant() bool {
-	return c.String.constant()
+	return c.Expr.constant()
 }
 
 func (c *builtinWeightString) simplify(env *ExpressionEnv) error {
 	var err error
-	c.String, err = simplifyExpr(env, c.String)
+	c.Expr, err = simplifyExpr(env, c.Expr)
 	return err
 }
 

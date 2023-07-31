@@ -47,7 +47,7 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 	if err != nil {
 		return nil, nil, err
 	}
-	plan := &routeGen4{
+	plan := &route{
 		eroute: &engine.Route{
 			RoutingParameters: &engine.RoutingParameters{
 				Opcode:   engine.Unsharded,
@@ -58,7 +58,7 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 		Select: stmt,
 	}
 
-	if err := plan.WireupGen4(ctx); err != nil {
+	if err := plan.Wireup(ctx); err != nil {
 		return nil, nil, err
 	}
 	return plan, operators.QualifiedTableNames(ks, tableNames), nil

@@ -17,10 +17,11 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"bytes"
 	"math/big"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -352,16 +353,18 @@ func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 		case DecimalVal:
 			v, err = sqltypes.NewValue(sqltypes.Decimal, node.Bytes())
 		case HexNum:
-			v, err = sqltypes.NewValue(sqltypes.HexNum, node.Bytes())
+			buf := make([]byte, 0, len(node.Bytes()))
+			buf = append(buf, "0x"...)
+			buf = append(buf, bytes.ToUpper(node.Bytes()[2:])...)
+			v, err = sqltypes.NewValue(sqltypes.HexNum, buf)
 		case HexVal:
 			// We parse the `x'7b7d'` string literal into a hex encoded string of `7b7d` in the parser
 			// We need to re-encode it back to the original MySQL query format before passing it on as a bindvar value to MySQL
-			var vbytes []byte
-			vbytes, err = node.encodeHexOrBitValToMySQLQueryFormat()
-			if err != nil {
-				return nil
-			}
-			v, err = sqltypes.NewValue(sqltypes.HexVal, vbytes)
+			buf := make([]byte, 0, len(node.Bytes())+3)
+			buf = append(buf, 'x', '\'')
+			buf = append(buf, bytes.ToUpper(node.Bytes())...)
+			buf = append(buf, '\'')
+			v, err = sqltypes.NewValue(sqltypes.HexVal, buf)
 		case BitVal:
 			// Convert bit value to hex number in parameterized query format
 			var i big.Int
@@ -369,7 +372,12 @@ func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 			if !ok {
 				return nil
 			}
-			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%s", i.Text(16))))
+
+			buf := i.Bytes()
+			out := make([]byte, 0, (len(buf)*2)+2)
+			out = append(out, '0', 'x')
+			out = append(out, hex.EncodeBytes(buf)...)
+			v, err = sqltypes.NewValue(sqltypes.HexNum, out)
 		case DateVal:
 			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
 		case TimeVal:

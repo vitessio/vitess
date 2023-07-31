@@ -24,6 +24,8 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -113,15 +115,17 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
 }
 
-func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
+func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Type, collations.ID) {
 	if aggr.Func == nil {
-		return collations.Unknown
+		return sqltypes.Unknown, collations.Unknown
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
-		return ctx.SemTable.CollationForExpr(aggr.Func.GetArg())
+		typ, col, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
+		return typ, col
+
 	}
-	return collations.Unknown
+	return sqltypes.Unknown, collations.Unknown
 }
 
 // NewGroupBy creates a new group by from the given fields.

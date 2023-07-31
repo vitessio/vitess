@@ -54,12 +54,27 @@ type fakeRPCTM struct {
 	mu sync.Mutex
 }
 
-func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error {
+func (fra *fakeRPCTM) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (fra *fakeRPCTM) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+func (fra *fakeRPCTM) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error {
 	//TODO implement me
 	panic("implement me")
 }

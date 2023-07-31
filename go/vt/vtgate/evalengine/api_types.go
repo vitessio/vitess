@@ -24,44 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// CoerceTo takes two input types, and decides how they should be coerced before compared
-func CoerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
-	if v1 == v2 {
-		return v1, nil
-	}
-	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
-		return sqltypes.Null, nil
-	}
-	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
-		return sqltypes.VarChar, nil
-	}
-	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
-		switch {
-		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
-			return sqltypes.Float64, nil
-		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
-			return sqltypes.Float64, nil
-		case sqltypes.IsSigned(v1):
-			switch {
-			case sqltypes.IsUnsigned(v2):
-				return sqltypes.Uint64, nil
-			case sqltypes.IsSigned(v2):
-				return sqltypes.Int64, nil
-			default:
-				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
-			}
-		case sqltypes.IsUnsigned(v1):
-			switch {
-			case sqltypes.IsSigned(v2) || sqltypes.IsUnsigned(v2):
-				return sqltypes.Uint64, nil
-			default:
-				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
-			}
-		}
-	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
-}
-
 // Cast converts a Value to the target type.
 func Cast(v sqltypes.Value, typ sqltypes.Type) (sqltypes.Value, error) {
 	if v.Type() == typ || v.IsNull() {

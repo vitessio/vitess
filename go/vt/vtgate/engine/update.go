@@ -161,7 +161,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 					if err != nil {
 						return err
 					}
-					vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value())
+					vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value(vcursor.ConnCollation()))
 				} else {
 					// Set the column value to original as this column in vindex is not updated.
 					vindexColumnKeys = append(vindexColumnKeys, origColValue)

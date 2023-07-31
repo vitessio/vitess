@@ -19,11 +19,11 @@ package vindexes
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
-
-	"strings"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -112,6 +112,10 @@ func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariab
 		return &sqltypes.Result{}, nil
 	}
 	panic("unexpected")
+}
+
+func (vc *vcursor) ConnCollation() collations.ID {
+	return collations.Default()
 }
 
 func lookupCreateVindexTestCase(
