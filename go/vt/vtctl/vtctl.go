@@ -705,7 +705,7 @@ var commands = []commandGroup{
 			{
 				name:   "UpdateThrottlerConfig",
 				method: commandUpdateThrottlerConfig,
-				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app|unthrottle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
 				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
@@ -3567,6 +3567,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
 	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
+	unthrottledApp := subFlags.String("unthrottle-app", "", "an app name to unthrottle")
 	throttledApp := subFlags.String("throttle-app", "", "an app name to throttle")
 	throttledAppRatio := subFlags.Float64("throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
 	throttledAppDuration := subFlags.Duration("throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specified in --throttled-app)")
@@ -3584,6 +3585,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
+	if *throttledApp != "" && *unthrottledApp != "" {
+		return fmt.Errorf("--throttle-app and --unthrottle-app are mutually exclusive")
+	}
 	if subFlags.Changed("throttle-app-ratio") && *throttledApp == "" {
 		return fmt.Errorf("--throttle-app-ratio requires --throttle-app")
 	}
@@ -3608,6 +3612,12 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 			Name:      *throttledApp,
 			Ratio:     *throttledAppRatio,
 			ExpiresAt: logutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
+		}
+	} else if *unthrottledApp != "" {
+		req.ThrottledApp = &topodatapb.ThrottledAppRule{
+			Name:      *unthrottledApp,
+			Ratio:     0,
+			ExpiresAt: logutil.TimeToProto(time.Now()),
 		}
 	}
 	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)
