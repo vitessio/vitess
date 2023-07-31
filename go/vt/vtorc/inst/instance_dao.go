@@ -56,12 +56,6 @@ const (
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
-var (
-	// Mutex to protect the access of the following variable
-	errantGtidMapMu = sync.Mutex{}
-	errantGtidMap   = make(map[string]string)
-)
-
 var forgetAliases *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
@@ -81,11 +75,6 @@ func init() {
 	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
-	stats.NewStringMapFuncWithMultiLabels("ErrantGtidMap", "Metric to track the errant GTIDs detected by VTOrc", []string{"TabletAlias"}, "ErrantGtid", func() map[string]string {
-		errantGtidMapMu.Lock()
-		defer errantGtidMapMu.Unlock()
-		return errantGtidMap
-	})
 
 	go initializeInstanceDao()
 }
@@ -154,6 +143,14 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 	}
 	log.Errorf(msg)
 	return fmt.Errorf(msg)
+}
+
+// RegisterStats registers stats from the inst package
+func RegisterStats() {
+	stats.NewGaugeFunc("ErrantGtidTabletCount", "Number of tablets with errant GTIDs", func() int64 {
+		instances, _ := ReadInstancesWithErrantGTIds("", "")
+		return int64(len(instances))
+	})
 }
 
 // ReadTopologyInstance collects information on the state of a MySQL
@@ -385,12 +382,6 @@ Cleanup:
 				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
-		// update the errant gtid map
-		go func() {
-			errantGtidMapMu.Lock()
-			defer errantGtidMapMu.Unlock()
-			errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
-		}()
 	}
 
 	latency.Stop("instance")
@@ -679,6 +670,18 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 		`
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	return readInstancesByCondition(condition, args, "")
+}
+
+// ReadInstancesWithErrantGTIds reads all instances with errant GTIDs
+func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, error) {
+	condition := `
+			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and gtid_errant != ''
+		`
+
+	args := sqlutils.Args(keyspace, keyspace, shard, shard)
 	return readInstancesByCondition(condition, args, "")
 }
 
