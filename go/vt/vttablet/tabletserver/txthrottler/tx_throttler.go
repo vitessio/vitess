@@ -185,12 +185,15 @@ type txThrottlerState struct {
 func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	config := env.Config()
 	if config.EnableTxThrottler {
-		defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q",
-			config.TxThrottlerTabletTypes,
-			config.TxThrottlerHealthCheckCells,
-			config.TxThrottlerConfig.Get(),
-		)
-
+		if len(config.TxThrottlerHealthCheckCells) == 0 {
+			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q",
+				config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get(),
+			)
+		} else {
+			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q",
+				config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get(),
+			)
+		}
 	}
 
 	return &txThrottler{
