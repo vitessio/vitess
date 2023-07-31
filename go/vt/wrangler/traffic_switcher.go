@@ -2046,8 +2046,11 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		defer ksWg.Done()
 		vschema, err = ts.TopoServer().GetVSchema(ctx, ks)
 		if err != nil {
-			ksErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
-				ks, err)
+			select {
+			case ksErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
+				ks, err):
+			default:
+			}
 			return
 		}
 		if vschema == nil || vschema.Sharded || vschema.Tables == nil || len(vschema.Tables) == 0 {
@@ -2095,6 +2098,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	go func() {
 		ksWg.Wait()
 		close(ksDone)
+		close(ksErr)
 	}()
 
 	select {
@@ -2122,9 +2126,11 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // be sure that it does not provide a value that is less than the current max.
 func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	log.Error("DEBUG: initializeTargetSequences")
-	initErr := make(chan error)     // Used if we encounter an error
-	initDone := make(chan struct{}) // The initialization has completed
-	initWg := sync.WaitGroup{}      // All of the goroutines finished
+	initCtx, initCancel := context.WithCancel(ctx) // Used to cancel the goroutines
+	defer initCancel()                             // Cancel all of the goroutines when we are done
+	initErr := make(chan error)                    // Used if we encounter an error
+	initDone := make(chan struct{})                // The initialization has completed
+	initWg := sync.WaitGroup{}                     // All of the goroutines finished
 	initFunc := func(sequenceTableName string, sequenceMetadata *sequenceMetadata) {
 		defer initWg.Done()
 		log.Errorf("DEBUG: sequence table: %v, sequenceMetadata: %+v", sequenceTableName, sequenceMetadata)
@@ -2163,11 +2169,16 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			return nil
 		})
 		if err != nil {
-			initErr <- err
+			select {
+			case initErr <- err:
+			default:
+			}
 			return
 		}
 		select {
 		case <-ctx.Done():
+			return
+		case <-initCtx.Done(): // The initialization work has been cancelled
 			return
 		default:
 		}
@@ -2180,15 +2191,28 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		// ensure that that the next value it provides is > the current max.
 		sequenceShard, err := ts.wr.TopoServer().GetOnlyShard(ctx, sequenceMetadata.backingTableKeyspace)
 		if err != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
-			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
-				sequenceMetadata.backingTableKeyspace, err)
+			select {
+			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, err):
+			default:
+			}
 			return
 		}
 		sequenceTablet, err := ts.wr.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
 		if err != nil || sequenceTablet == nil {
-			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
-				sequenceMetadata.backingTableKeyspace, err)
+			select {
+			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, err):
+			default:
+			}
 			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-initCtx.Done(): // The initialization work has been cancelled
+			return
+		default:
 		}
 		if sequenceTablet.DbNameOverride != "" {
 			sequenceMetadata.backingTableDBName = sequenceTablet.DbNameOverride
@@ -2205,8 +2229,11 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		// housing the backing table.
 		qr, err := ts.wr.ExecuteFetchAsApp(ctx, sequenceShard.PrimaryAlias, true, query.Query, 1)
 		if err != nil {
-			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
-				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, err)
+			select {
+			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
+				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, err):
+			default:
+			}
 			return
 		}
 		// If we actually updated the backing sequence table, then we need
@@ -2218,20 +2245,28 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		select {
 		case <-ctx.Done():
 			return
+		case <-initCtx.Done(): // The initialization work has been cancelled
+			return
 		default:
 		}
 		ts.Logger().Infof("Resetting sequence cache for backing table %s on shard %s.%s using tablet %s",
 			sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias)
 		ti, err := ts.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
 		if err != nil {
-			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
-				sequenceMetadata.backingTableKeyspace, err)
+			select {
+			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, err):
+			default:
+			}
 			return
 		}
 		err = ts.TabletManagerClient().ResetSequences(ctx, ti.Tablet, []string{sequenceMetadata.backingTableName})
 		if err != nil {
-			initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s.%s using tablet %s: %v",
-				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, err)
+			select {
+			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s.%s using tablet %s: %v",
+				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, err):
+			default:
+			}
 			return
 		}
 	}
@@ -2243,6 +2278,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	go func() {
 		initWg.Wait()
 		close(initDone)
+		close(initErr)
 	}()
 
 	select {
