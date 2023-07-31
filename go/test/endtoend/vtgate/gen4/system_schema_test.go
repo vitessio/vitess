@@ -65,7 +65,7 @@ func TestInformationSchemaQuery(t *testing.T) {
 	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks'", "vt_ks")
 	assertResultIsEmpty(t, conn, "table_schema = 'NONE'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema'", "performance_schema")
-	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'", "performance_schema")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
 	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
@@ -126,7 +126,8 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 	query := "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on fk.constraint_schema = rc.constraint_schema and fk.constraint_name = rc.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
 	utils.AssertMatchesAny(t, conn, query,
 		`[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`,
-		`[[VARBINARY("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") BINARY("CASCADE") BINARY("SET NULL")]]`)
+		`[[VARBINARY("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") BINARY("CASCADE") BINARY("SET NULL")]]`,
+		`[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") BINARY("CASCADE") BINARY("SET NULL")]]`)
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {

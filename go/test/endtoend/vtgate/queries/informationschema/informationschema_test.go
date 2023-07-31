@@ -78,7 +78,7 @@ func TestInformationSchemaQuery(t *testing.T) {
 	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'vt_ks'", "vt_ks")
 	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'NONE'")
 	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'performance_schema'", "performance_schema")
-	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'PERFORMANCE_SCHEMA'")
+	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'PERFORMANCE_SCHEMA'", "performance_schema")
 	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
 	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'performance_schema' and table_name = 'foo'")
 	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
@@ -99,8 +99,8 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 
 	utils.Exec(t, mcmp.VtConn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4)")
 
-	_ = utils.Exec(t, mcmp.VtConn, "SELECT /*vt+ PLANNER=gen4 */ * FROM t1000") // test that the routed table is available to us
-	result := utils.Exec(t, mcmp.VtConn, "SELECT /*vt+ PLANNER=gen4 */ * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
+	_ = utils.Exec(t, mcmp.VtConn, "SELECT * FROM t1000") // test that the routed table is available to us
+	result := utils.Exec(t, mcmp.VtConn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
 	assert.NotEmpty(t, result.Rows)
 }
 
@@ -111,7 +111,8 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 	query := "select  fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on fk.constraint_schema = rc.constraint_schema and fk.constraint_name = rc.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
 	mcmp.AssertMatchesAny(query,
 		`[[VARBINARY("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") BINARY("CASCADE") BINARY("SET NULL")]]`,
-		`[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`)
+		`[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`,
+		`[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") BINARY("CASCADE") BINARY("SET NULL")]]`)
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {
