@@ -48,8 +48,8 @@ chmod -R o=rx *;
 
 arch=$(uname -m)
 
-base_image="${base_image:-vitess/bootstrap:$version-common}"
-image="${image:-vitess/bootstrap:$version-$flavor}"
+base_image="${base_image:-frouioui/bootstrap:$version-common}"
+image="${image:-frouioui/bootstrap:$version-$flavor}"
 
 while [ $# -gt 0 ]; do
    if [[ $1 == *"--"* ]]; then
