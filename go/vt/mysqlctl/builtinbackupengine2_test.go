@@ -18,9 +18,12 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
@@ -66,4 +69,21 @@ func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
 			}
 		})
 	}
+}
+
+type hangCloser struct {
+}
+
+func (c hangCloser) Close() error {
+	ch := make(chan bool)
+	ch <- true // hang forever
+	return nil
+}
+
+func TestCloseWithTimeout(t *testing.T) {
+	closer := hangCloser{}
+
+	err := closeWithTimeout(context.Background(), closer, time.Second)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout waiting")
 }
