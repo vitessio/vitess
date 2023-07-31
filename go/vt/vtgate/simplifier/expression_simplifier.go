@@ -18,6 +18,7 @@ package simplifier
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
@@ -181,7 +182,7 @@ func (s *shrinker) fillQueue() bool {
 		}
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
-		s.queue = append(s.queue, sqlparser.NewIntLiteral("0"))
+		s.queue = append(s.queue, sqlparser.NewIntLiteral(strconv.Itoa(rand.Intn(10))))
 	case *sqlparser.CaseExpr:
 		s.queue = append(s.queue, e.Expr, e.Else)
 		for _, when := range e.Whens {
