@@ -22,6 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -112,7 +113,6 @@ func TestEnabledThrottler(t *testing.T) {
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
-	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
 	env := tabletenv.NewEnv(config, t.Name())
@@ -159,6 +159,19 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerImpl.Close()
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
+}
+
+func TestFetchKnownCells(t *testing.T) {
+	{
+		ts := memorytopo.NewServer("cell1", "cell2")
+		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		assert.Equal(t, []string{"cell1", "cell2"}, cells)
+	}
+	{
+		ts := memorytopo.NewServer()
+		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		assert.Equal(t, []string{"cell1"}, cells)
+	}
 }
 
 func TestNewTxThrottler(t *testing.T) {
