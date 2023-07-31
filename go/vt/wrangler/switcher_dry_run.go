@@ -387,7 +387,11 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
+	sort.Slice(sortedBackingTableNames, func(i, j int) bool {
+		return i < j
+	})
 	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
-		strings.Join(maps.Keys(sequencesByBackingTable), ",")))
+		strings.Join(sortedBackingTableNames, ",")))
 	return nil
 }
