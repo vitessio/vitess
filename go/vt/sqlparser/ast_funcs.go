@@ -17,12 +17,10 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -132,7 +130,7 @@ const (
 type MatchAction int
 
 const (
-	// DefaultAction indicates no action was explicitly specified.
+	// DefaultMatch indicates no action was explicitly specified.
 	DefaultMatch MatchAction = iota
 	Full
 	Partial
@@ -535,7 +533,7 @@ func NewTimestampLiteral(in string) *Literal {
 
 // NewArgument builds a new ValArg.
 func NewArgument(in string) *Argument {
-	return &Argument{Name: in, Type: -1}
+	return &Argument{Name: in, Type: sqltypes.Unknown}
 }
 
 func parseBindVariable(yylex yyLexer, bvar string) *Argument {
@@ -594,38 +592,6 @@ func (node *Literal) SQLType() sqltypes.Type {
 	}
 }
 
-// encodeHexOrBitValToMySQLQueryFormat encodes the hexval or bitval back into the query format
-// for passing on to MySQL as a bind var
-func (node *Literal) encodeHexOrBitValToMySQLQueryFormat() ([]byte, error) {
-	nb := node.Bytes()
-	if node.Type != HexVal && node.Type != BitVal {
-		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
-	}
-
-	prefix := 'x'
-	regex := "^x'.*'$"
-	if node.Type == BitVal {
-		prefix = 'b'
-		regex = "^b'.*'$"
-	}
-	// Let's make this idempotent in case it's called more than once
-	match, err := regexp.Match(regex, nb)
-	if err != nil {
-		return nb, err
-	}
-	if match {
-		return nb, nil
-	}
-
-	var bb bytes.Buffer
-	bb.WriteByte(byte(prefix))
-	bb.WriteByte('\'')
-	bb.WriteString(string(nb))
-	bb.WriteByte('\'')
-	nb = bb.Bytes()
-	return nb, nil
-}
-
 // Equal returns true if the column names match.
 func (node *ColName) Equal(c *ColName) bool {
 	// Failsafe: ColName should not be empty.
@@ -682,6 +648,106 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 			Name:      NewIdentifierCS(table.Name.String()),
 			Qualifier: NewIdentifierCS(table.Qualifier.String()),
 		},
+	}
+}
+
+// NewTableName makes a new TableName
+func NewTableName(name string) TableName {
+	return TableName{
+		Name: NewIdentifierCS(name),
+	}
+}
+
+// NewTableNameWithQualifier makes a new TableName with a qualifier
+func NewTableNameWithQualifier(name, qualifier string) TableName {
+	return TableName{
+		Name:      NewIdentifierCS(name),
+		Qualifier: NewIdentifierCS(qualifier),
+	}
+}
+
+// NewAliasedTableExpr makes a new AliasedTableExpr with an alias
+func NewAliasedTableExpr(simpleTableExpr SimpleTableExpr, alias string) *AliasedTableExpr {
+	return &AliasedTableExpr{
+		Expr: simpleTableExpr,
+		As:   NewIdentifierCS(alias),
+	}
+}
+
+// NewJoinTableExpr makes a new JoinTableExpr
+func NewJoinTableExpr(leftExpr TableExpr, join JoinType, rightExpr TableExpr, condition *JoinCondition) *JoinTableExpr {
+	return &JoinTableExpr{
+		LeftExpr:  leftExpr,
+		Join:      join,
+		RightExpr: rightExpr,
+		Condition: condition,
+	}
+}
+
+// NewJoinCondition makes a new JoinCondition
+func NewJoinCondition(on Expr, using Columns) *JoinCondition {
+	return &JoinCondition{
+		On:    on,
+		Using: using,
+	}
+}
+
+// NewAliasedExpr makes a new AliasedExpr
+func NewAliasedExpr(expr Expr, alias string) *AliasedExpr {
+	return &AliasedExpr{
+		Expr: expr,
+		As:   NewIdentifierCI(alias),
+	}
+}
+
+// NewOrder makes a new Order
+func NewOrder(expr Expr, direction OrderDirection) *Order {
+	return &Order{
+		Expr:      expr,
+		Direction: direction,
+	}
+}
+
+// NewComparisonExpr makes a new ComparisonExpr
+func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr) *ComparisonExpr {
+	return &ComparisonExpr{
+		Operator: operator,
+		Left:     left,
+		Right:    right,
+		Escape:   escape,
+	}
+}
+
+// NewLimit makes a new Limit
+func NewLimit(offset, rowCount int) *Limit {
+	return &Limit{
+		Offset: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(offset),
+		},
+		Rowcount: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(rowCount),
+		},
+	}
+}
+
+// NewLimitWithoutOffset makes a new Limit without an offset
+func NewLimitWithoutOffset(rowCount int) *Limit {
+	return &Limit{
+		Offset: nil,
+		Rowcount: &Literal{
+			Type: IntVal,
+			Val:  fmt.Sprint(rowCount),
+		},
+	}
+}
+
+// NewDerivedTable makes a new DerivedTable
+func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+	return &DerivedTable{
+		Lateral: lateral,
+		Select:  selectStatement,
 	}
 }
 
@@ -950,6 +1016,10 @@ func compliantName(in string) string {
 		buf.WriteRune(c)
 	}
 	return buf.String()
+}
+
+func (node *Select) AddSelectExprs(selectExprs SelectExprs) {
+	node.SelectExprs = append(node.SelectExprs, selectExprs...)
 }
 
 // AddOrder adds an order by element
@@ -2147,6 +2217,11 @@ func convertStringToInt(integer string) int {
 	return val
 }
 
+func convertStringToUInt64(integer string) uint64 {
+	val, _ := strconv.ParseUint(integer, 10, 64)
+	return val
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -2399,5 +2474,23 @@ func (node *IntervalDateExpr) FnName() string {
 		return "<arithmetic interval subtraction>"
 	default:
 		return "<unknown>"
+	}
+}
+
+func IsDistinct(f AggrFunc) bool {
+	da, ok := f.(DistinctableAggr)
+	if !ok {
+		return false
+	}
+	return da.IsDistinct()
+}
+
+// ToString returns the type as a string
+func (ty KillType) ToString() string {
+	switch ty {
+	case QueryType:
+		return QueryStr
+	default:
+		return ConnectionStr
 	}
 }

@@ -98,6 +98,11 @@ var (
 		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
 		regexp.MustCompile(`Illegal mix of collations`),
 		regexp.MustCompile(`Incorrect (DATE|DATETIME) value`),
+		regexp.MustCompile(`Syntax error in regular expression`),
+		regexp.MustCompile(`The regular expression contains an unclosed bracket expression`),
+		regexp.MustCompile(`Illegal argument to a regular expression`),
+		regexp.MustCompile(`Incorrect arguments to regexp_substr`),
+		regexp.MustCompile(`Incorrect arguments to regexp_replace`),
 	}
 )
 
@@ -164,7 +169,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		}()
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
-			tt, err = env.TypeOf(local, fields)
+			tt, _, err = env.TypeOf(local, fields)
 			if errors.Is(err, evalengine.ErrAmbiguousType) {
 				tt = -1
 				err = nil
@@ -224,7 +229,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value()
+			res.localVal = eval.Value(collations.Default())
 		}
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0]

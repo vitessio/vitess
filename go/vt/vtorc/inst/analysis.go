@@ -18,7 +18,6 @@ package inst
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -31,6 +30,9 @@ type StructureAnalysisCode string
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
+	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
+	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
 	DeadPrimary                            AnalysisCode = "DeadPrimary"
 	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
@@ -89,17 +91,19 @@ const (
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceHostname                  string
-	AnalyzedInstancePort                      int
-	AnalyzedInstanceAlias                     string
-	AnalyzedInstancePrimaryAlias              string
-	TabletType                                topodatapb.TabletType
-	PrimaryTimeStamp                          time.Time
-	ClusterDetails                            ClusterInfo
-	AnalyzedInstanceDataCenter                string
-	AnalyzedInstanceRegion                    string
-	AnalyzedKeyspace                          string
-	AnalyzedShard                             string
+	AnalyzedInstanceHostname     string
+	AnalyzedInstancePort         int
+	AnalyzedInstanceAlias        string
+	AnalyzedInstancePrimaryAlias string
+	TabletType                   topodatapb.TabletType
+	PrimaryTimeStamp             time.Time
+	ClusterDetails               ClusterInfo
+	AnalyzedInstanceDataCenter   string
+	AnalyzedInstanceRegion       string
+	AnalyzedKeyspace             string
+	AnalyzedShard                string
+	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
+	ShardPrimaryTermTimestamp                 string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool
@@ -152,18 +156,6 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
-}
-
-// AnalysisString returns a human friendly description of all analysis issues
-func (replicationAnalysis *ReplicationAnalysis) AnalysisString() string {
-	result := []string{}
-	if replicationAnalysis.Analysis != NoProblem {
-		result = append(result, string(replicationAnalysis.Analysis))
-	}
-	for _, structureAnalysis := range replicationAnalysis.StructureAnalysis {
-		result = append(result, string(structureAnalysis))
-	}
-	return strings.Join(result, ", ")
 }
 
 // Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)

@@ -180,6 +180,7 @@ func TestMergeSortCollation(t *testing.T) {
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	orderBy := []OrderByParams{{
 		Col:         0,
+		Type:        sqltypes.VarChar,
 		CollationID: collationID,
 	}}
 
@@ -369,7 +370,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 	}}
 
 	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error { return nil })
-	want := `strconv.ParseInt: parsing "2.1": invalid syntax`
+	want := `unparsed tail left after parsing int64 from "2.1": ".1"`
 	require.EqualError(t, err, want)
 
 	// Create a new VCursor because the previous MergeSort will still
@@ -385,7 +386,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 		),
 	}}
 	err = testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error { return nil })
-	want = `strconv.ParseInt: parsing "1.1": invalid syntax`
+	want = `unparsed tail left after parsing int64 from "1.1": ".1"`
 	require.EqualError(t, err, want)
 }
 

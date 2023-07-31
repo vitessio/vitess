@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -169,7 +170,7 @@ func isConstantFalse(expr sqlparser.Expr) bool {
 	if err != nil {
 		return false
 	}
-	if eres.Value().IsNull() {
+	if eres.Value(collations.Default()).IsNull() {
 		return false
 	}
 	b, err := eres.ToBooleanStrict()
@@ -542,21 +543,22 @@ func createProjection(src ops.Operator) (*Projection, error) {
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
 	removeKeyspaceFromSelectExpr(expr)
 
-	// check if columns is already added.
-	cols, err := r.GetColumns()
-	if err != nil {
-		return nil, 0, err
+	if reuseExisting {
+		// check if columns is already added.
+		cols, err := r.GetColumns()
+		if err != nil {
+			return nil, 0, err
+		}
+		colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr {
+			return e.Expr
+		}
+		if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
+			return r, offset, nil
+		}
 	}
-	colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr {
-		return e.Expr
-	}
-	if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
-		return r, offset, nil
-	}
-
 	// if column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
 	if ok, offset := addColumnToInput(r.Source, expr, addToGroupBy); ok {
@@ -582,6 +584,7 @@ type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	isDerived() bool
+	findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 }
 
 func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
@@ -607,6 +610,10 @@ func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToG
 
 func (r *Route) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return r.Source.GetColumns()
+}
+
+func (r *Route) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return r.Source.GetSelectExprs()
 }
 
 func (r *Route) GetOrdering() ([]ops.OrderBy, error) {

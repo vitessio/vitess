@@ -122,6 +122,13 @@ func (c *CollateExpr) format(w *formatter, depth int) {
 	w.WriteString(coll.Name())
 }
 
+func (i *IntroducerExpr) format(w *formatter, depth int) {
+	w.WriteString("_")
+	coll := i.TypedCollation.Collation.Get()
+	w.WriteString(coll.Name())
+	i.Inner.format(w, depth)
+}
+
 func (n *NotExpr) format(w *formatter, depth int) {
 	w.WriteString("NOT ")
 	n.Inner.format(w, depth)
@@ -163,7 +170,7 @@ func (c *CallExpr) format(w *formatter, depth int) {
 
 func (c *builtinWeightString) format(w *formatter, depth int) {
 	w.WriteString("WEIGHT_STRING(")
-	c.String.format(w, depth)
+	c.Expr.format(w, depth)
 
 	if c.Cast != "" {
 		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)

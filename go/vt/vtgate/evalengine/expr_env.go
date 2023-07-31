@@ -91,12 +91,12 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 
 var ErrAmbiguousType = errors.New("the type of this expression cannot be statically computed")
 
-func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.Type, error) {
+func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.Type, typeFlag, error) {
 	ty, f := expr.typeof(env, fields)
 	if f&flagAmbiguousType != 0 {
-		return ty, ErrAmbiguousType
+		return ty, f, ErrAmbiguousType
 	}
-	return ty, nil
+	return ty, f, nil
 }
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row

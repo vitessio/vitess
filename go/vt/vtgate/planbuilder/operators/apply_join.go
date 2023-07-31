@@ -183,6 +183,10 @@ func (a *ApplyJoin) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
 }
 
+func (a *ApplyJoin) GetSelectExprs() (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(a)
+}
+
 func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
 	return a.LHS.GetOrdering()
 }

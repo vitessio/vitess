@@ -19,12 +19,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-printf -v tablet_dir 'vt_%010d' $TABLET_UID
-pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
+printf -v tablet_dir 'vt_%010d' "$TABLET_UID"
 
-kill $pid
-
-# Wait for vttablet to die.
-while ps -p $pid > /dev/null; do sleep 1; done
-
+stop_process "vttablet" "$VTDATAROOT/$tablet_dir/vttablet.pid"
 

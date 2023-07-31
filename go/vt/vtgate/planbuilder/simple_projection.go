@@ -17,10 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -37,62 +34,13 @@ var _ logicalPlan = (*simpleProjection)(nil)
 // a simpleProjection.
 type simpleProjection struct {
 	logicalPlanCommon
-	resultColumns []*resultColumn
-	eSimpleProj   *engine.SimpleProjection
-}
-
-// newSimpleProjection builds a new simpleProjection.
-func newSimpleProjection(alias sqlparser.IdentifierCS, plan logicalPlan) (*simpleProjection, *symtab, error) {
-	sq := &simpleProjection{
-		logicalPlanCommon: newBuilderCommon(plan),
-		eSimpleProj:       &engine.SimpleProjection{},
-	}
-
-	// Create a 'table' that represents the derived table.
-	t := &table{
-		alias:  sqlparser.TableName{Name: alias},
-		origin: sq,
-	}
-
-	// Create column symbols based on the result column names.
-	for _, rc := range plan.ResultColumns() {
-		if _, ok := t.columns[rc.alias.Lowered()]; ok {
-			return nil, nil, vterrors.VT12001(fmt.Sprintf("duplicate column names in subquery: %s", sqlparser.String(rc.alias)))
-		}
-		t.addColumn(rc.alias, &column{origin: sq})
-	}
-	t.isAuthoritative = true
-	st := newSymtab()
-	// AddTable will not fail because symtab is empty.
-	_ = st.AddTable(t)
-	return sq, st, nil
+	eSimpleProj *engine.SimpleProjection
 }
 
 // Primitive implements the logicalPlan interface
 func (sq *simpleProjection) Primitive() engine.Primitive {
 	sq.eSimpleProj.Input = sq.input.Primitive()
 	return sq.eSimpleProj
-}
-
-// ResultColumns implements the logicalPlan interface
-func (sq *simpleProjection) ResultColumns() []*resultColumn {
-	return sq.resultColumns
-}
-
-// SupplyCol implements the logicalPlan interface
-func (sq *simpleProjection) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range sq.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-
-	// columns that reference subqueries will have their colNumber set.
-	// Let's use it here.
-	sq.eSimpleProj.Cols = append(sq.eSimpleProj.Cols, c.colNumber)
-	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
-	return rc, len(sq.resultColumns) - 1
 }
 
 // OutputColumns implements the logicalPlan interface

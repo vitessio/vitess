@@ -494,7 +494,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options)) {
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), options.GetWorkloadName()) {
 				return errTxThrottled
 			}
 			var connSetting *pools.Setting
@@ -1888,13 +1888,6 @@ func (tsv *TabletServer) registerDebugEnvHandler() {
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
 	tsv.rt.EnableHeartbeat(enabled)
-}
-
-// EnableThrottler forces throttler to be on or off.
-// When throttler is off, it responds to all check requests with HTTP 200 OK
-// Only to be used for testing.
-func (tsv *TabletServer) EnableThrottler(enabled bool) {
-	tsv.Config().EnableLagThrottler = enabled
 }
 
 // SetTracking forces tracking to be on or off.

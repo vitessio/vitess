@@ -18,10 +18,14 @@ package aggregation
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -55,16 +59,17 @@ func TestAggregateTypes(t *testing.T) {
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
 	mcmp.AssertMatches("select val1, count(distinct val2), count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
 	mcmp.AssertMatches("select val1, sum(distinct val2), sum(val2) from aggr_test group by val1", `[[VARCHAR("a") DECIMAL(1) DECIMAL(2)] [VARCHAR("b") DECIMAL(1) DECIMAL(1)] [VARCHAR("c") DECIMAL(7) DECIMAL(7)] [VARCHAR("d") NULL NULL] [VARCHAR("e") DECIMAL(1) DECIMAL(1)]]`)
-	mcmp.AssertMatches("select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
-	mcmp.AssertMatches("select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
 
 	mcmp.AssertMatches("select ascii(val1) as a, count(*) from aggr_test group by a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`)
-	mcmp.AssertMatches("select ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`)
-	mcmp.AssertMatches("select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(100) INT64(1)] [INT32(101) INT64(1)] [INT32(99) INT64(2)]]`)
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`)
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(100) INT64(1)] [INT32(101) INT64(1)] [INT32(99) INT64(2)]]`)
 
 	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatches("select sum(val1) from aggr_test", `[[FLOAT64(0)]]`)
 }
 
 func TestGroupBy(t *testing.T) {
@@ -315,7 +320,7 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatchesNoOrder(" select /*vt+ PLANNER=gen4 */ val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
 
 			// mysql returns FLOAT64(0), vitess returns DECIMAL(0)
-			mcmp.AssertMatchesNoCompare(" select /*vt+ PLANNER=gen4 */ count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) DECIMAL(0)]]")
+			mcmp.AssertMatchesNoCompare(" select /*vt+ PLANNER=gen4 */ count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
 			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7)]]")
 			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2) DECIMAL(14)]]")
 			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
@@ -363,7 +368,7 @@ func TestOrderByCount(t *testing.T) {
 	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC", `[[VARCHAR("3")] [VARCHAR("2")] [VARCHAR("1")]]`)
 }
 
-func TestAggregateRandom(t *testing.T) {
+func TestAggregateAnyValue(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -474,4 +479,86 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
 	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
 	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
+}
+
+// TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
+func TestGroupConcatAggregation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493)")
+	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
+
+	mQr, vtQr := mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(name) FROM t1`)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.shardKey = t2.shardKey `)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.t1_id = t2.shardKey `)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.shardKey = t2.id `)
+	compareRow(t, mQr, vtQr, nil, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value), t1.name FROM t1, t2 group by t1.name`)
+	compareRow(t, mQr, vtQr, []int{1}, []int{0})
+}
+
+func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grpCols []int, fCols []int) {
+	require.Equal(t, len(mRes.Rows), len(vtRes.Rows), "mysql and vitess result count does not match")
+	for _, row := range vtRes.Rows {
+		var grpKey string
+		for _, col := range grpCols {
+			grpKey += row[col].String()
+		}
+		var foundKey bool
+		for _, mRow := range mRes.Rows {
+			var mKey string
+			for _, col := range grpCols {
+				mKey += mRow[col].String()
+			}
+			if grpKey != mKey {
+				continue
+			}
+			foundKey = true
+			for _, col := range fCols {
+				vtFValSplit := strings.Split(row[col].ToString(), ",")
+				sort.Strings(vtFValSplit)
+				mFValSplit := strings.Split(mRow[col].ToString(), ",")
+				sort.Strings(mFValSplit)
+				require.True(t, slices.Equal(vtFValSplit, mFValSplit), "mysql and vitess result are not same: vitess:%v, mysql:%v", vtRes.Rows, mRes.Rows)
+			}
+		}
+		require.True(t, foundKey, "mysql and vitess result does not same row: vitess:%v, mysql:%v", vtRes.Rows, mRes.Rows)
+	}
+}
+
+func TestDistinctAggregation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
+
+	tcases := []struct {
+		query       string
+		expectedErr string
+	}{{
+		query:       `SELECT /*vt+ PLANNER=gen4 */ COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
+		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct shardkey) (errno 1235) (sqlstate 42000)",
+	}, {
+		query: `SELECT /*vt+ PLANNER=gen4 */ a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
+	}, {
+		query: `SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.value`,
+	}, {
+		query:       `SELECT /*vt+ PLANNER=gen4 */ count(distinct a.value), SUM(DISTINCT b.t1_id) FROM t1 a, t1 b`,
+		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct b.t1_id) (errno 1235) (sqlstate 42000)",
+	}, {
+		query: `SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
+	}}
+
+	for _, tc := range tcases {
+		mcmp.Run(tc.query, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.ExecAllowError(tc.query)
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.expectedErr)
+		})
+	}
 }

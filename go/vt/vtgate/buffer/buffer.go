@@ -28,14 +28,12 @@ package buffer
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -142,27 +140,6 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	}
 
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
-}
-
-// ProcessPrimaryHealth notifies the buffer to record a new primary
-// and end any failover buffering that may be in progress
-func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
-	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non-PRIMARY TabletHealth object must not be forwarded: %#v", th))
-	}
-	timestamp := th.PrimaryTermStartTime
-	if timestamp == 0 {
-		// Primarys where TabletExternallyReparented was never called will return 0.
-		// Ignore them.
-		return
-	}
-
-	sb := b.getOrCreateBuffer(th.Target.Keyspace, th.Target.Shard)
-	if sb == nil {
-		// Buffer is shut down. Ignore all calls.
-		return
-	}
-	sb.recordExternallyReparentedTimestamp(timestamp, th.Tablet.Alias)
 }
 
 func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {

@@ -55,6 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -285,6 +287,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJtOnResponse(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
+	case *Kill:
+		return CloneRefOfKill(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
@@ -726,6 +730,16 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfAnyValue creates a deep clone of the input.
+func CloneRefOfAnyValue(n *AnyValue) *AnyValue {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -1968,6 +1982,15 @@ func CloneRefOfJtOnResponse(n *JtOnResponse) *JtOnResponse {
 
 // CloneRefOfKeyState creates a deep clone of the input.
 func CloneRefOfKeyState(n *KeyState) *KeyState {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfKill creates a deep clone of the input.
+func CloneRefOfKill(n *Kill) *Kill {
 	if n == nil {
 		return nil
 	}
@@ -3407,6 +3430,8 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BitAnd:
@@ -3509,6 +3534,8 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3773,6 +3800,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -4143,6 +4172,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfFlush(in)
 	case *Insert:
 		return CloneRefOfInsert(in)
+	case *Kill:
+		return CloneRefOfKill(in)
 	case *Load:
 		return CloneRefOfLoad(in)
 	case *LockTables:

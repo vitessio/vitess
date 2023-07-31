@@ -91,6 +91,10 @@ endif
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
+ifndef NOVTADMINBUILD
+	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
+	PREFIX="" ./web/vtadmin/build.sh
+endif
 
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
@@ -375,7 +379,7 @@ tools:
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh

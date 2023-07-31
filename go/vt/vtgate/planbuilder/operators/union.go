@@ -144,7 +144,7 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 	for {
 		switch op := src.(type) {
 		case *Horizon:
-			return sqlparser.GetFirstSelect(op.Select), nil
+			return sqlparser.GetFirstSelect(op.Query), nil
 		case *Route:
 			src = op.Source
 		default:

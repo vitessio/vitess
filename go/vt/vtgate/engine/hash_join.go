@@ -98,7 +98,7 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		for _, currentLHSRow := range lftRows {
 			lhsVal := currentLHSRow[hj.LHSKey]
 			// hash codes can give false positives, so we need to check with a real comparison as well
-			cmp, err := evalengine.NullsafeCompare(joinVal, lhsVal, collations.Unknown)
+			cmp, err := evalengine.NullsafeCompare(joinVal, lhsVal, hj.Collation)
 			if err != nil {
 				return nil, err
 			}

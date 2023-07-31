@@ -27,16 +27,6 @@ const (
 	ReplicationThreadStateOther    ReplicationThreadState = 2
 )
 
-func ReplicationThreadStateFromStatus(status string) ReplicationThreadState {
-	switch status {
-	case "No":
-		return ReplicationThreadStateStopped
-	case "Yes":
-		return ReplicationThreadStateRunning
-	}
-	return ReplicationThreadStateOther
-}
-
 // ReplicationThreadStateFromReplicationState gets the replication thread state from replication state
 // TODO: Merge these two into one
 func ReplicationThreadStateFromReplicationState(state mysql.ReplicationState) ReplicationThreadState {

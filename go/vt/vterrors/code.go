@@ -59,6 +59,8 @@ var (
 
 	VT06001 = errorWithState("VT06001", vtrpcpb.Code_ALREADY_EXISTS, DbCreateExists, "cannot create database '%s'; database exists", "The given database name already exists.")
 
+	VT07001 = errorWithState("VT07001", vtrpcpb.Code_PERMISSION_DENIED, KillDeniedError, "%s", "Kill statement is not allowed. More in docs about how to enable it and its limitations.")
+
 	VT09001 = errorWithState("VT09001", vtrpcpb.Code_FAILED_PRECONDITION, RequiresPrimaryKey, PrimaryVindexNotSet, "the table does not have a primary vindex, the operation is impossible.")
 	VT09002 = errorWithState("VT09002", vtrpcpb.Code_FAILED_PRECONDITION, InnodbReadOnly, "%s statement with a replica target", "This type of DML statement is not allowed on a replica target.")
 	VT09003 = errorWithoutState("VT09003", vtrpcpb.Code_FAILED_PRECONDITION, "INSERT query does not have primary vindex column '%v' in the column list", "A vindex column is mandatory for the insert, please provide one.")
@@ -73,6 +75,7 @@ var (
 	VT09012 = errorWithoutState("VT09012", vtrpcpb.Code_FAILED_PRECONDITION, "%s statement with %s tablet not allowed", "This type of statement is not allowed on the given tablet.")
 	VT09013 = errorWithoutState("VT09013", vtrpcpb.Code_FAILED_PRECONDITION, "semi-sync plugins are not loaded", "Durability policy wants Vitess to use semi-sync, but the MySQL instances don't have the semi-sync plugin loaded.")
 	VT09014 = errorWithoutState("VT09014", vtrpcpb.Code_FAILED_PRECONDITION, "vindex cannot be modified", "The vindex cannot be used as table in DML statement")
+	VT09015 = errorWithoutState("VT09015", vtrpcpb.Code_FAILED_PRECONDITION, "schema tracking required", "This query cannot be planned without more information on the SQL schema. Please turn on schema tracking or add authoritative columns information to your VSchema.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
@@ -122,6 +125,7 @@ var (
 		VT05006,
 		VT05007,
 		VT06001,
+		VT07001,
 		VT09001,
 		VT09002,
 		VT09003,
@@ -136,6 +140,7 @@ var (
 		VT09012,
 		VT09013,
 		VT09014,
+		VT09015,
 		VT10001,
 		VT12001,
 		VT13001,

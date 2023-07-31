@@ -211,7 +211,7 @@ const (
 	Utf16Str    = "_utf16"
 	Utf16leStr  = "_utf16le"
 	Utf32Str    = "_utf32"
-	Utf8Str     = "_utf8"
+	Utf8mb3Str  = "_utf8mb3"
 	Utf8mb4Str  = "_utf8mb4"
 	NStringStr  = "N"
 
@@ -463,6 +463,10 @@ const (
 	LatitudeFromHashStr  = "st_latfromgeohash"
 	LongitudeFromHashStr = "st_longfromgeohash"
 	PointFromHashStr     = "st_pointfromgeohash"
+
+	// KillType strings
+	ConnectionStr = "connection"
+	QueryStr      = "query"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -1015,4 +1019,10 @@ const (
 	IntervalDateExprBinaryAddLeft
 	IntervalDateExprBinarySub
 	IntervalDateExprTimestampadd
+)
+
+// Constant for Enum Type - KillType
+const (
+	ConnectionType KillType = iota
+	QueryType
 )

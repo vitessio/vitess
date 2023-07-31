@@ -101,18 +101,6 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	}
 }
 
-func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
-	controller := newFakeController(
-		[]string{"create table test_table (pk int);"}, false, false, false)
-	executor := NewTabletExecutor("TestSchemaManagerExecutorExecuteFail", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
-	ctx := context.Background()
-
-	_, err := Run(ctx, controller, executor)
-	if err == nil || !strings.Contains(err.Error(), "unknown database: vt_test_keyspace") {
-		t.Fatalf("run schema change should fail due to executor.Execute fail, but got: %v", err)
-	}
-}
-
 func TestSchemaManagerRun(t *testing.T) {
 	sql := "create table test_table (pk int)"
 	controller := newFakeController(

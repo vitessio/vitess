@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -128,7 +130,7 @@ func TestLimitExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
-		Count: evalengine.NewBindVar("l"),
+		Count: evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID),
 		Input: fp,
 	}
 
@@ -341,8 +343,8 @@ func TestLimitOffsetExecute(t *testing.T) {
 	}
 
 	l = &Limit{
-		Count:  evalengine.NewBindVar("l"),
-		Offset: evalengine.NewBindVar("o"),
+		Count:  evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID),
+		Offset: evalengine.NewBindVar("o", sqltypes.Int64, collations.CollationBinaryID),
 		Input:  fp,
 	}
 	result, err = l.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(1), "o": sqltypes.Int64BindVariable(1)}, false)
@@ -394,7 +396,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with bind vars.
 	fp.rewind()
-	l.Count = evalengine.NewBindVar("l")
+	l.Count = evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID)
 	results = nil
 	err = l.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
@@ -538,7 +540,7 @@ func TestLimitInputFail(t *testing.T) {
 
 func TestLimitInvalidCount(t *testing.T) {
 	l := &Limit{
-		Count: evalengine.NewBindVar("l"),
+		Count: evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID),
 	}
 	_, _, err := l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "query arguments missing for l")
