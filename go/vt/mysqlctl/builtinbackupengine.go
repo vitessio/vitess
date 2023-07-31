@@ -819,10 +819,24 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
 		if rerr := dest.Close(); rerr != nil {
-			finalErr = errors.Join(finalErr, vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name))
+			rerr = vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name)
+			params.Logger.Error(rerr)
+			finalErr = errors.Join(finalErr, rerr)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
+
+	// Note about `finalErr`: it's a named return value and we have a deferred function that sets it. That means
+	// this function will ALWAYS return `finalErr`, overriding any other returned value (ie returned error).
+	// See for example this snippet:
+	//     // explain_this_comment() returns "surprise" rather than <nil>:
+	//     func explain_this_comment() (finalErr error) {
+	// 	     defer func() {
+	// 		     finalErr = fmt.Errorf("surprise")
+	// 	     }()
+	// 	     return nil
+	//     }
+	// This is why from this point on we take care to always assign any error into `finalErr`.
 
 	destStats := params.Stats.Scope(stats.Operation("Destination:Write"))
 	timedDest := ioutil.NewMeteredWriteCloser(dest, destStats.TimedIncrementBytes)
@@ -841,7 +855,8 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
 		}
 		if err != nil {
-			return vterrors.Wrap(err, "can't create compressor")
+			finalErr = vterrors.Wrap(err, "can't create compressor")
+			return finalErr
 		}
 
 		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
@@ -851,7 +866,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			// Close gzip to flush it, after that all data is sent to writer.
 			closeCompressorAt := time.Now()
 			if cerr := closeWithTimeout(ctx, compressor, compressorTimeout); err != nil {
-				finalErr = errors.Join(finalErr, vterrors.Wrapf(cerr, "failed to close compressor %v", name))
+				cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
+				params.Logger.Error(cerr)
+				finalErr = errors.Join(finalErr, cerr)
 			}
 			params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
 		}()
@@ -866,16 +883,19 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	// optional pipe, tee, output file and hasher).
 	_, err = io.Copy(writer, reader)
 	if err != nil {
-		return vterrors.Wrap(err, "cannot copy data")
+		finalErr = vterrors.Wrap(err, "cannot copy data")
+		return finalErr
 	}
 
 	// Close the backupPipe to finish writing on destination.
-	if err = bw.Close(); err != nil {
-		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
+	if err := bw.Close(); err != nil {
+		finalErr = vterrors.Wrapf(err, "cannot flush destination: %v", name)
+		return finalErr
 	}
 
 	if err := br.Close(); err != nil {
-		return vterrors.Wrap(err, "failed to close the source reader")
+		finalErr = vterrors.Wrap(err, "failed to close the source reader")
+		return finalErr
 	}
 
 	// Save the hash.
@@ -1113,30 +1133,48 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		defer func() {
 			closeDecompressorAt := time.Now()
 			if cerr := closeWithTimeout(ctx, decompressor, compressorTimeout); err != nil {
-				finalErr = errors.Join(finalErr, vterrors.Wrapf(cerr, "failed to close decompressor %v", name))
+				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
+				params.Logger.Error(cerr)
+				finalErr = errors.Join(finalErr, cerr)
 			}
 			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
 	}
 
+	// Note about `finalErr`: it's a named return value and we have a deferred function that sets it. That means
+	// this function will ALWAYS return `finalErr`, overriding any other returned value (ie returned error).
+	// See for example this snippet:
+	//     // explain_this_comment() returns "surprise" rather than <nil>:
+	//     func explain_this_comment() (finalErr error) {
+	// 	     defer func() {
+	// 		     finalErr = fmt.Errorf("surprise")
+	// 	     }()
+	// 	     return nil
+	//     }
+	// This is why from this point on we take care to always assign any error into `finalErr`.
+
 	// Copy the data. Will also write to the hasher.
-	if _, err = io.Copy(bufferedDest, reader); err != nil {
-		return vterrors.Wrap(err, "failed to copy file contents")
+	if _, err := io.Copy(bufferedDest, reader); err != nil {
+		finalErr = vterrors.Wrap(err, "failed to copy file contents")
+		return finalErr
 	}
 
 	// Check the hash.
 	hash := br.HashString()
 	if hash != fe.Hash {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
+		finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
+		return finalErr
 	}
 
 	// Flush the buffer.
 	if err := bufferedDest.Flush(); err != nil {
-		return vterrors.Wrap(err, "failed to flush destination buffer")
+		finalErr = vterrors.Wrap(err, "failed to flush destination buffer")
+		return finalErr
 	}
 
 	if err := br.Close(); err != nil {
-		return vterrors.Wrap(err, "failed to close the source reader")
+		finalErr = vterrors.Wrap(err, "failed to close the source reader")
+		return finalErr
 	}
 
 	return finalErr
