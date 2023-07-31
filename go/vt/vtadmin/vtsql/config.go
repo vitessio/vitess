@@ -107,15 +107,6 @@ func (c *Config) Parse(args []string) error {
 		return err
 	}
 
-	// First set credentials to values potentially supplied by credentials-password and credentials-username
-	c.Credentials = &StaticAuthCredentials{
-		EffectiveUser: *credentialsUsername,
-		StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
-			Username: *credentialsUsername,
-			Password: *credentialsPassword,
-		},
-	}
-
 	var tmplStrCreds *grpcclient.StaticAuthClientCreds
 
 	// If credentials-path-tmpl is provided, use those credentials instead
@@ -139,6 +130,17 @@ func (c *Config) Parse(args []string) error {
 		c.Credentials = &StaticAuthCredentials{
 			EffectiveUser:         *effectiveUser,
 			StaticAuthClientCreds: tmplStrCreds,
+		}
+	}
+
+	if credentialsUsername != nil || credentialsPassword != nil {
+		// Set credentials to values potentially supplied by credentials-password and credentials-username
+		c.Credentials = &StaticAuthCredentials{
+			EffectiveUser: *credentialsUsername,
+			StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
+				Username: *credentialsUsername,
+				Password: *credentialsPassword,
+			},
 		}
 	}
 
