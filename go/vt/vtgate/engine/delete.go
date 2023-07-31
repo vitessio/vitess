@@ -108,11 +108,7 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 			return err
 		}
 		colnum := del.KsidLength
-		vindexTable, err := del.GetSingleTable()
-		if err != nil {
-			return err
-		}
-		for _, colVindex := range vindexTable.Owned {
+		for _, colVindex := range del.OwnedVindexes {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 			for range colVindex.Columns {
