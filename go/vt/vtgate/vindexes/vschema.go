@@ -135,6 +135,7 @@ type ColumnVindex struct {
 	backfill bool
 }
 
+// ParentFKInfo contains the parent foreign key info for the table.
 type ParentFKInfo struct {
 	Table         *Table
 	ParentColumns sqlparser.Columns
@@ -154,6 +155,7 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// NewParentFkInfo creates a new ParentFKInfo.
 func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ParentFKInfo {
 	return ParentFKInfo{
 		Table:         parentTbl,
@@ -162,6 +164,7 @@ func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) Pa
 	}
 }
 
+// ChildFKInfo contains the child foreign key info for the table.
 type ChildFKInfo struct {
 	Table         *Table
 	ChildColumns  sqlparser.Columns
@@ -184,6 +187,7 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// NewChildFkInfo creates a new ChildFKInfo.
 func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
 	return ChildFKInfo{
 		Table:         childTbl,
@@ -195,6 +199,7 @@ func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) Chil
 	}
 }
 
+// TableInfo contains column and foreign key info for a table.
 type TableInfo struct {
 	Columns     []Column
 	ForeignKeys []*sqlparser.ForeignKeyDefinition
