@@ -949,8 +949,8 @@ func TestUCACollationOrder(t *testing.T) {
 			j := rand.Intn(i + 1)
 			ary[i], ary[j] = ary[j], ary[i]
 		}
-		slices.SortFunc(ary, func(a, b string) bool {
-			return col.Collate([]byte(a), []byte(b), false) < 0
+		slices.SortFunc(ary, func(a, b string) int {
+			return col.Collate([]byte(a), []byte(b), false)
 		})
 		require.Equal(t, sorted, ary)
 	}

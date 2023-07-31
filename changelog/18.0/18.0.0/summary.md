@@ -6,6 +6,7 @@
   - **[Breaking Changes](#breaking-changes)**
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
+    - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -34,6 +35,13 @@ reparent operations. The users that want VTOrc to fix the replication issues, bu
 should start using this flag. By default, VTOrc will be able to run `EmergencyReparentShard`. The users must specify the
 flag to `false` to change the behaviour.
 
+#### <a id="new-ers-subflag"/>ERS sub flag `--wait-for-all-tablets`
+
+Running `EmergencyReparentShard` from the vtctldclient has a new sub-flag `--wait-for-all-tablets` that makes `EmergencyReparentShard` wait 
+for a response from all the tablets. Originally `EmergencyReparentShard` was meant only to be run when a primary tablet is unreachable.
+We have realized now that there are cases when the replication is broken but all the tablets are reachable. In these cases, it is advisable to 
+call `EmergencyReparentShard` with `--wait-for-all-tablets` so that it doesn't ignore one of the tablets.
+
 ### <a id="vtadmin"/>VTAdmin
 
 #### <a id="updated-node"/>vtadmin-web updated to node v18.16.0 (LTS)
@@ -53,7 +61,11 @@ Throttler related `vttablet` flags:
 - `--throttle_metrics_query` is deprecated and will be removed in `v19.0`
 - `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
-- `--throttler-config-via-topo` is deprecated after asummed `true` in `v17.0`. It will be removed in a future version.
+- `--throttler-config-via-topo` is deprecated after assumed `true` in `v17.0`. It will be removed in a future version.
+
+Buffering related `vtgate` flags:
+
+- `--buffer_implementation` is deprecated and will be removed in `v19.0`
 
 VTGate flag:
 

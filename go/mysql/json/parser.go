@@ -585,8 +585,18 @@ func (o *Object) sort() {
 		return
 	}
 
-	slices.SortStableFunc(o.kvs, func(a, b kv) bool {
-		return a.k < b.k
+	slices.SortStableFunc(o.kvs, func(a, b kv) int {
+		// TODO: switch to cmp.Compare for Go 1.21+.
+		//
+		// https://pkg.go.dev/cmp@master#Compare.
+		switch {
+		case a.k < b.k:
+			return -1
+		case a.k > b.k:
+			return 1
+		default:
+			return 0
+		}
 	})
 	uniq := o.kvs[:1]
 	for _, kv := range o.kvs[1:] {

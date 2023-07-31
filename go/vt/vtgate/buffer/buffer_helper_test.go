@@ -20,17 +20,6 @@ type failover func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard strin
 func testAllImplementations(t *testing.T, runTest func(t *testing.T, fail failover)) {
 	t.Helper()
 
-	t.Run("HealthCheck", func(t *testing.T) {
-		t.Helper()
-		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {
-			buf.ProcessPrimaryHealth(&discovery.TabletHealth{
-				Tablet:               tablet,
-				Target:               &query.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY},
-				PrimaryTermStartTime: now.Unix(),
-			})
-		})
-	})
-
 	t.Run("KeyspaceEvent", func(t *testing.T) {
 		t.Helper()
 		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {
