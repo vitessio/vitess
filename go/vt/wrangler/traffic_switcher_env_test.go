@@ -159,7 +159,8 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
-		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+		allPrimaries := append(tme.sourcePrimaries, tme.targetPrimaries...)
+		for _, ft := range append(allPrimaries, tme.additionalPrimaries...) {
 			if ft.Tablet.Alias.Uid == tablet.Alias.Uid {
 				return ft, nil
 			}
@@ -735,10 +736,6 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		log.Infof("Adding as additionalPrimary %s", primary.Tablet.Alias)
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbAdditionalClients = append(tme.dbTargetClients, dbclient)
-		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
-		// Replace existing engine with a new one
-		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
-		primary.TM.VREngine.Open(ctx)
 	}
 	tme.allDBClients = append(tme.dbSourceClients, tme.dbTargetClients...)
 	tme.allDBClients = append(tme.allDBClients, tme.dbAdditionalClients...)
@@ -899,6 +896,9 @@ func (tme *testMigraterEnv) close(t *testing.T) {
 		dbclient.Close()
 	}
 	for _, dbclient := range tme.dbTargetClients {
+		dbclient.Close()
+	}
+	for _, dbclient := range tme.dbAdditionalClients {
 		dbclient.Close()
 	}
 	tme.tmeDB.CloseAllConnections()
