@@ -1496,7 +1496,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			return
 		default:
 		}
-		ts.Logger().Infof("Resetting sequence cache for backing table %s on shard %s.%s using tablet %s",
+		ts.Logger().Infof("Resetting sequence cache for backing table %s on shard %s/%s using tablet %s",
 			sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias)
 		ti, err := ts.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
 		if err != nil {
@@ -1510,7 +1510,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		err = ts.TabletManagerClient().ResetSequences(ctx, ti.Tablet, []string{sequenceMetadata.backingTableName})
 		if err != nil {
 			select {
-			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s.%s using tablet %s: %v",
+			case initErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s/%s using tablet %s: %v",
 				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, err):
 			default:
 			}
