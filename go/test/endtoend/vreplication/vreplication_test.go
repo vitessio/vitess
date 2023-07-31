@@ -1355,8 +1355,11 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
 	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, action}
-	if strings.EqualFold(action, strings.ToLower(workflowActionCreate)) {
+	switch strings.ToLower(action) {
+	case strings.ToLower(workflowActionCreate):
 		extraFlags = append(extraFlags, "--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
+	case strings.ToLower(workflowActionSwitchTraffic):
+		extraFlags = append(extraFlags, "--initialize-target-sequences")
 	}
 	args = append(args, extraFlags...)
 	err = vc.VtctldClient.ExecuteCommand(args...)
