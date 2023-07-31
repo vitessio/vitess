@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -32,7 +33,7 @@ import (
 var (
 	// UpdateThrottlerConfig makes a UpdateThrottlerConfig gRPC call to a vtctld.
 	UpdateThrottlerConfig = &cobra.Command{
-		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
+		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app|unthrottle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
 		Short:                 "Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -43,6 +44,7 @@ var (
 var (
 	updateThrottlerConfigOptions vtctldatapb.UpdateThrottlerConfigRequest
 	throttledAppRule             topodatapb.ThrottledAppRule
+	unthrottledAppRule           topodatapb.ThrottledAppRule
 	throttledAppDuration         time.Duration
 )
 
@@ -50,12 +52,19 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	keyspace := cmd.Flags().Arg(0)
 	cli.FinishedParsing(cmd)
 
+	if throttledAppRule.Name != "" && unthrottledAppRule.Name != "" {
+		return fmt.Errorf("throttle-app and unthrottle-app are mutually exclusive")
+	}
+
 	updateThrottlerConfigOptions.CustomQuerySet = cmd.Flags().Changed("custom-query")
 	updateThrottlerConfigOptions.Keyspace = keyspace
 
-	throttledAppRule.ExpiresAt = logutil.TimeToProto(time.Now().Add(throttledAppDuration))
 	if throttledAppRule.Name != "" {
+		throttledAppRule.ExpiresAt = logutil.TimeToProto(time.Now().Add(throttledAppDuration))
 		updateThrottlerConfigOptions.ThrottledApp = &throttledAppRule
+	} else if unthrottledAppRule.Name != "" {
+		unthrottledAppRule.ExpiresAt = logutil.TimeToProto(time.Now())
+		updateThrottlerConfigOptions.ThrottledApp = &unthrottledAppRule
 	}
 
 	_, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
@@ -73,6 +82,7 @@ func init() {
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckSelf, "check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckShard, "check-as-check-shard", false, "use standard behavior for /throttler/check requests")
 
+	UpdateThrottlerConfig.Flags().StringVar(&unthrottledAppRule.Name, "unthrottle-app", "", "an app name to unthrottle")
 	UpdateThrottlerConfig.Flags().StringVar(&throttledAppRule.Name, "throttle-app", "", "an app name to throttle")
 	UpdateThrottlerConfig.Flags().Float64Var(&throttledAppRule.Ratio, "throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
 	UpdateThrottlerConfig.Flags().DurationVar(&throttledAppDuration, "throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specififed in --throttled-app)")

@@ -2732,22 +2732,17 @@ func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollatio
 	}, "FN TO_BASE64 VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_WEIGHT_STRING_b(length int) {
+func (asm *assembler) Fn_WEIGHT_STRING(length int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		w := collations.Binary.WeightString(make([]byte, 0, length), str.bytes, collations.PadToMax)
+		input := env.vm.stack[env.vm.sp-1]
+		w, _, err := evalWeightString(nil, input, length, 0)
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(w)
 		return 1
-	}, "FN WEIGHT_STRING VARBINARY(SP-1)")
-}
-
-func (asm *assembler) Fn_WEIGHT_STRING_c(col collations.Collation, length int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		w := col.WeightString(nil, str.bytes, length)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(w)
-		return 1
-	}, "FN WEIGHT_STRING VARCHAR(SP-1)")
+	}, "FN WEIGHT_STRING (SP-1)")
 }
 
 func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {

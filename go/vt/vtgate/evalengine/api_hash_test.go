@@ -250,13 +250,19 @@ func randTime() time.Time {
 	return time.Unix(sec, 0)
 }
 
-func randomNull() sqltypes.Value      { return sqltypes.NULL }
-func randomInt8() sqltypes.Value      { return sqltypes.NewInt8(int8(rand.Intn(255))) }
-func randomInt32() sqltypes.Value     { return sqltypes.NewInt32(rand.Int31()) }
-func randomInt64() sqltypes.Value     { return sqltypes.NewInt64(rand.Int63()) }
-func randomUint32() sqltypes.Value    { return sqltypes.NewUint32(rand.Uint32()) }
-func randomUint64() sqltypes.Value    { return sqltypes.NewUint64(rand.Uint64()) }
-func randomDecimal() sqltypes.Value   { return sqltypes.NewDecimal(fmt.Sprintf("%d", rand.Int63())) }
+func randomNull() sqltypes.Value   { return sqltypes.NULL }
+func randomInt8() sqltypes.Value   { return sqltypes.NewInt8(int8(rand.Intn(255))) }
+func randomInt32() sqltypes.Value  { return sqltypes.NewInt32(rand.Int31()) }
+func randomInt64() sqltypes.Value  { return sqltypes.NewInt64(rand.Int63()) }
+func randomUint32() sqltypes.Value { return sqltypes.NewUint32(rand.Uint32()) }
+func randomUint64() sqltypes.Value { return sqltypes.NewUint64(rand.Uint64()) }
+func randomDecimal() sqltypes.Value {
+	dec := fmt.Sprintf("%d.%d", rand.Intn(9999999999), rand.Intn(9999999999))
+	if rand.Int()&0x1 == 1 {
+		dec = "-" + dec
+	}
+	return sqltypes.NewDecimal(dec)
+}
 func randomVarChar() sqltypes.Value   { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
 func randomDate() sqltypes.Value      { return sqltypes.NewDate(randTime().Format(time.DateOnly)) }
 func randomDatetime() sqltypes.Value  { return sqltypes.NewDatetime(randTime().Format(time.DateTime)) }
