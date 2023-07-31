@@ -185,6 +185,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 	fs.IntVar(&currentConfig.TxThrottlerDefaultPriority, "tx-throttler-default-priority", defaultConfig.TxThrottlerDefaultPriority, "Default priority assigned to queries that lack priority information")
 	fs.Var(currentConfig.TxThrottlerTabletTypes, "tx-throttler-tablet-types", "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
+	fs.DurationVar(&currentConfig.TxThrottlerTopoRefreshInterval, "tx-throttler-topo-refresh-interval", time.Minute*5, "The rate that the transaction throttler will refresh the topology to find cells.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -359,11 +360,12 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler           bool                          `json:"-"`
-	TxThrottlerConfig           *TxThrottlerConfigFlag        `json:"-"`
-	TxThrottlerHealthCheckCells []string                      `json:"-"`
-	TxThrottlerDefaultPriority  int                           `json:"-"`
-	TxThrottlerTabletTypes      *topoproto.TabletTypeListFlag `json:"-"`
+	EnableTxThrottler              bool                          `json:"-"`
+	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
+	TxThrottlerHealthCheckCells    []string                      `json:"-"`
+	TxThrottlerDefaultPriority     int                           `json:"-"`
+	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag `json:"-"`
+	TxThrottlerTopoRefreshInterval time.Duration                 `json:"-"`
 
 	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
@@ -721,9 +723,6 @@ func (c *TabletConfig) verifyTxThrottlerConfig() error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse throttlerdatapb.Configuration config: %v", err)
 	}
 
-	if len(c.TxThrottlerHealthCheckCells) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "empty healthCheckCells given: %+v", c.TxThrottlerHealthCheckCells)
-	}
 	if v := c.TxThrottlerDefaultPriority; v > sqlparser.MaxPriorityValue || v < 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--tx-throttler-default-priority must be > 0 and < 100 (specified value: %d)", v)
 	}
@@ -827,11 +826,12 @@ var defaultConfig = TabletConfig{
 	MessagePostponeParallelism: 4,
 	SignalWhenSchemaChange:     true,
 
-	EnableTxThrottler:           false,
-	TxThrottlerConfig:           defaultTxThrottlerConfig(),
-	TxThrottlerHealthCheckCells: []string{},
-	TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
-	TxThrottlerTabletTypes:      &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
+	EnableTxThrottler:              false,
+	TxThrottlerConfig:              defaultTxThrottlerConfig(),
+	TxThrottlerHealthCheckCells:    []string{},
+	TxThrottlerDefaultPriority:     sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
+	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
+	TxThrottlerTopoRefreshInterval: time.Minute * 5,
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
