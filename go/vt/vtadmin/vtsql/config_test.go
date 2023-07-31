@@ -98,6 +98,42 @@ func TestConfigParse(t *testing.T) {
 		assert.Equal(t, expectedCreds, cfg.Credentials)
 	})
 
+	t.Run("it uses vtsql credentials passed as flags", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &Config{
+			Cluster: &vtadminpb.Cluster{
+				Name: "testcluster",
+			},
+		}
+
+		args := []string{
+			"--discovery-tags=a:1,b:2",
+			"--effective-user=vt_appdebug",
+			"--discovery-tags=c:3",
+			"--credentials-username=vtadmin",
+			"--credentials-password=my_password",
+		}
+
+		expectedCreds := &StaticAuthCredentials{
+			EffectiveUser: "vtadmin",
+			StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
+				Username: "vtadmin",
+				Password: "my_password",
+			},
+		}
+		expectedTags := []string{
+			"a:1",
+			"b:2",
+			"c:3",
+		}
+
+		err = cfg.Parse(args)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedTags, cfg.ResolverOptions.DiscoveryTags)
+		assert.Equal(t, expectedCreds, cfg.Credentials)
+	})
+
 	t.Run("", func(t *testing.T) {
 		t.Parallel()
 
