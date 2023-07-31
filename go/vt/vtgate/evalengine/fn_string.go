@@ -61,7 +61,7 @@ type (
 	}
 
 	builtinWeightString struct {
-		String Expr
+		Expr   Expr
 		Cast   string
 		Len    int
 		HasLen bool
@@ -455,76 +455,138 @@ func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
 }
 
 func (c *builtinWeightString) callable() []Expr {
-	return []Expr{c.String}
+	return []Expr{c.Expr}
 }
 
 func (c *builtinWeightString) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := c.String.typeof(env, fields)
+	tt, f := c.Expr.typeof(env, fields)
+	switch tt {
+	case sqltypes.Blob, sqltypes.Text, sqltypes.TypeJSON:
+		return sqltypes.Blob, f
+	}
 	return sqltypes.VarBinary, f
 }
 
 func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
-	var (
-		tc      collations.TypedCollation
-		text    []byte
-		weights []byte
-		length  = c.Len
-	)
+	var weights []byte
 
-	str, err := c.String.eval(env)
+	input, err := c.Expr.eval(env)
 	if err != nil {
 		return nil, err
 	}
 
-	switch str := str.(type) {
-	case *evalInt64, *evalUint64:
-		// when calling WEIGHT_STRING with an integral value, MySQL returns the
-		// internal sort key that would be used in an InnoDB table... we do not
-		// support that
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrEvaluatedExprNotSupported, FormatExpr(c))
+	typ := sqltypes.VarBinary
+
+	if c.Cast == "binary" {
+		switch input.SQLType() {
+		case sqltypes.Blob, sqltypes.Text, sqltypes.TypeJSON:
+			typ = sqltypes.Blob
+		}
+
+		weights, _, err = evalWeightString(weights, evalToBinary(input), c.Len, 0)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalRaw(typ, weights, collationBinary), nil
+	}
+
+	switch val := input.(type) {
+	case *evalInt64, *evalUint64, *evalTemporal:
+		weights, _, err = evalWeightString(weights, val, 0, 0)
+	case *evalJSON:
+		// JSON doesn't actually use a sortable weight string for this function, but
+		// returns the weight string directly for the string based representation. This
+		// means that ordering etc. is not correct for JSON values, but that's how MySQL
+		// works here for this function. We still have the internal weight string logic
+		// that can order these correctly.
+		out, err := evalToVarchar(val, collationJSON.Collation, false)
+		if err != nil {
+			return nil, err
+		}
+		weights, _, err = evalWeightString(weights, out, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		typ = sqltypes.Blob
 	case *evalBytes:
-		text = str.bytes
-		tc = str.col
+		switch val.SQLType() {
+		case sqltypes.Blob, sqltypes.Text:
+			typ = sqltypes.Blob
+		}
+		if val.isBinary() {
+			weights, _, err = evalWeightString(weights, val, 0, 0)
+		} else {
+			var strLen int
+			if c.Cast == "char" {
+				strLen = c.Len
+			}
+			weights, _, err = evalWeightString(weights, val, strLen, 0)
+		}
 	default:
 		return nil, nil
 	}
 
-	if c.Cast == "binary" {
-		tc = collationBinary
-		weights = make([]byte, 0, c.Len)
-		length = collations.PadToMax
+	if err != nil {
+		return nil, err
 	}
 
-	collation := tc.Collation.Get()
-	weights = collation.WeightString(weights, text, length)
-	return newEvalBinary(weights), nil
+	return newEvalRaw(typ, weights, collationBinary), nil
 }
 
 func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
-	str, err := call.String.compile(c)
+	str, err := call.Expr.compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	switch str.Type {
-	case sqltypes.Int64, sqltypes.Uint64:
-		return ctype{}, c.unsupported(call)
+	var flag typeFlag
+	if str.Flag&flagNullable != 0 {
+		flag = flag | flagNullable
+	}
 
-	case sqltypes.VarChar, sqltypes.VarBinary:
-		skip := c.compileNullCheck1(str)
-
-		if call.Cast == "binary" {
-			c.asm.Fn_WEIGHT_STRING_b(call.Len)
-		} else {
-			c.asm.Fn_WEIGHT_STRING_c(str.Col.Collation.Get(), call.Len)
+	typ := sqltypes.VarBinary
+	skip := c.compileNullCheck1(str)
+	if call.Cast == "binary" {
+		if !sqltypes.IsBinary(str.Type) {
+			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
 		}
+		switch str.Type {
+		case sqltypes.Blob, sqltypes.Text, sqltypes.TypeJSON:
+			typ = sqltypes.Blob
+		}
+
+		c.asm.Fn_WEIGHT_STRING(typ, call.Len)
 		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+	}
+
+	switch str.Type {
+	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time, sqltypes.VarBinary, sqltypes.Binary, sqltypes.Blob:
+		if str.Type == sqltypes.Blob {
+			typ = sqltypes.Blob
+		}
+		c.asm.Fn_WEIGHT_STRING(typ, 0)
+	case sqltypes.TypeJSON:
+		typ = sqltypes.Blob
+		c.asm.Convert_xce(1, sqltypes.VarChar, collationJSON.Collation)
+		c.asm.Fn_WEIGHT_STRING(typ, 0)
+	case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
+		if str.Type == sqltypes.Text {
+			typ = sqltypes.Blob
+		}
+		var strLen int
+		if call.Cast == "char" {
+			strLen = call.Len
+		}
+		c.asm.Fn_WEIGHT_STRING(typ, strLen)
 
 	default:
 		c.asm.SetNull(1)
-		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+		flag = flag | flagNull | flagNullable
 	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: typ, Flag: flag, Col: collationBinary}, nil
 }
 
 func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {

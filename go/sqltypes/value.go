@@ -486,6 +486,16 @@ func (v Value) IsDateTime() bool {
 	return v.typ == querypb.Type_DATETIME
 }
 
+// IsTimestamp returns true if Value is date.
+func (v Value) IsTimestamp() bool {
+	return v.typ == querypb.Type_TIMESTAMP
+}
+
+// IsDate returns true if Value is date.
+func (v Value) IsDate() bool {
+	return v.typ == querypb.Type_DATE
+}
+
 // IsTime returns true if Value is time.
 func (v Value) IsTime() bool {
 	return v.typ == querypb.Type_TIME

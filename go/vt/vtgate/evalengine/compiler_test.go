@@ -464,6 +464,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `concat('test', _latin1 0xff)`,
 			result:     `VARCHAR("testÿ")`,
 		},
+		{
+			expression: `WEIGHT_STRING('foobar' as char(3))`,
+			result:     `VARBINARY("\x1c\xe5\x1d\xdd\x1d\xdd")`,
+		},
 	}
 
 	for _, tc := range testCases {
