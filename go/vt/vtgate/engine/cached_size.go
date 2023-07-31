@@ -306,7 +306,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(224)
+		size += int64(240)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -338,8 +338,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	size += cached.Table.CachedSize(true)
+	// field TableName string
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
 	size += cached.Generate.CachedSize(true)
 	// field Prefix string

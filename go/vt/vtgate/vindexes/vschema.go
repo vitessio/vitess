@@ -1235,10 +1235,6 @@ func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) 
 	return keyspace, nil
 }
 
-func (vschema *VSchema) SetForeignKeyChecks(name string, tbl *Table, keys []*sqlparser.ForeignKeyDefinition) {
-
-}
-
 // ByCost provides the interface needed for ColumnVindexes to
 // be sorted by cost order.
 type ByCost []*ColumnVindex

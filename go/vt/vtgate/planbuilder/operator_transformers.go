@@ -402,7 +402,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	eins := &engine.Insert{
 		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
 		Keyspace:          op.Routing.Keyspace(),
-		Table:             ins.VTable,
+		TableName:         ins.VTable.Name.String(),
 		Ignore:            ins.Ignore,
 		ForceNonStreaming: ins.ForceNonStreaming,
 		Generate:          autoIncGenerate(ins.AutoIncrement),
