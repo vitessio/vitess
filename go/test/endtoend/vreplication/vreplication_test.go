@@ -1438,8 +1438,7 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	}
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	// Use vtctldclient for MoveTables SwitchTraffic ~ 50% of the time.
-	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() && time.Now().Second()%2 == 0 &&
-		command == "SwitchTraffic" {
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() && time.Now().Second()%2 == 0 {
 		parts := strings.Split(ksWorkflow, ".")
 		require.Equal(t, 2, len(parts))
 		moveTablesAction(t, command, defaultCellName, parts[1], sourceKs, parts[0], "", "--timeout="+SwitchWritesTimeout, "--tablet-types=primary")
