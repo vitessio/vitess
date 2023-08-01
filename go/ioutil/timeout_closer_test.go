@@ -25,17 +25,27 @@ import (
 )
 
 type hangCloser struct {
+	hang bool
 }
 
 func (c hangCloser) Close() error {
-	ch := make(chan bool)
-	ch <- true // hang forever
+	if c.hang {
+		ch := make(chan bool)
+		ch <- true // hang forever
+	}
 	return nil
 }
 
 func TestTimeoutCloser(t *testing.T) {
-	closer := NewTimeoutCloser(&hangCloser{}, time.Second)
-	err := closer.Close()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded")
+	{
+		closer := NewTimeoutCloser(&hangCloser{hang: false}, time.Second)
+		err := closer.Close()
+		require.NoError(t, err)
+	}
+	{
+		closer := NewTimeoutCloser(&hangCloser{hang: true}, time.Second)
+		err := closer.Close()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "context deadline exceeded")
+	}
 }
