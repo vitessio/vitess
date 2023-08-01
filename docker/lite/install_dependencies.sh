@@ -67,7 +67,7 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
 mysql57)
-      DEBIAN_FRONTEND=noninteractive apt-get install -y cmake gcc g++ bison libncurses5-dev libssl-dev
+      DEBIAN_FRONTEND=noninteractive apt-get install -y pkg-config cmake gcc g++ bison libncurses5-dev libssl-dev
       wget https://dev.mysql.com/get/Downloads/MySQL-5.7/mysql-5.7.31.tar.gz
       tar xzf mysql-5.7.31.tar.gz
       cd mysql-5.7.31 && mkdir bld && cd bld
