@@ -107,9 +107,10 @@ func (c *Config) Parse(args []string) error {
 		return err
 	}
 
-	var tmplStrCreds *grpcclient.StaticAuthClientCreds
+	var username, password string
 
 	// If credentials-path-tmpl is provided, use those credentials instead
+	var tmplStrCreds *grpcclient.StaticAuthClientCreds
 	if *credentialsTmplStr != "" {
 		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
 		if err != nil {
@@ -119,29 +120,32 @@ func (c *Config) Parse(args []string) error {
 		c.CredentialsPath = path
 		tmplStrCreds = _creds
 	}
-
 	if tmplStrCreds != nil {
-		// If we did not receive an effective user, but loaded credentials, then the
-		// immediate user is the effective user.
-		if *effectiveUser == "" {
-			*effectiveUser = tmplStrCreds.Username
-		}
-
-		c.Credentials = &StaticAuthCredentials{
-			EffectiveUser:         *effectiveUser,
-			StaticAuthClientCreds: tmplStrCreds,
-		}
+		username = tmplStrCreds.Username
+		password = tmplStrCreds.Password
 	}
 
-	if *credentialsUsername != "" || *credentialsPassword != "" {
-		// Set credentials to values potentially supplied by credentials-password and credentials-username
-		c.Credentials = &StaticAuthCredentials{
-			EffectiveUser: *credentialsUsername,
-			StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
-				Username: *credentialsUsername,
-				Password: *credentialsPassword,
-			},
-		}
+	// If credentials-username and credentials-password are provided, use those credentials instead
+	if *credentialsUsername != "" {
+		username = *credentialsUsername
+	}
+	if *credentialsPassword != "" {
+		password = *credentialsPassword
+	}
+
+	// If we did not receive an effective user, but loaded user credentials, then the
+	// immediate user is the effective user.
+	if *effectiveUser == "" {
+		*effectiveUser = username
+	}
+
+	// Set credentials to values potentially supplied by credentials-password and credentials-username
+	c.Credentials = &StaticAuthCredentials{
+		EffectiveUser: *effectiveUser,
+		StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
+			Username: username,
+			Password: password,
+		},
 	}
 
 	return nil
