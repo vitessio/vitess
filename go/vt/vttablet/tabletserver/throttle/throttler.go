@@ -730,7 +730,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 				// log.Errorf("error in GRPC call to tablet %v: %v", probe.Tablet.GetAlias(), gRPCErr)
 			}
 		}
-		// Backwards compatibility to v18: if the underlying tablets do not support CheckThrottler gRPC, attempt a HTTP cehck:
+		// Backwards compatibility to v17: if the underlying tablets do not support CheckThrottler gRPC, attempt a HTTP cehck:
 		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, throttlerapp.VitessName)
 		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
 		if err != nil {
