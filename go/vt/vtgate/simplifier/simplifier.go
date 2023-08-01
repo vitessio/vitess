@@ -40,12 +40,12 @@ func SimplifyStatement(
 		return testF(sqlparser.CloneSelectStatement(s))
 	}
 
+	// first we try to simplify the query by removing any unions
 	if success := trySimplifyUnions(sqlparser.CloneSelectStatement(in), test); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
-	// first we try to simplify the query by removing any table.
-	// If we can remove a table and all uses of it, that's a good start
+	// then we try to remove a table and all uses of it
 	if success := tryRemoveTable(tables, sqlparser.CloneSelectStatement(in), currentDB, si, testF); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
@@ -55,22 +55,59 @@ func SimplifyStatement(
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
-	// we try to remove select expressions next
+	// we try to remove/replace any expressions next
 	if success := trySimplifyExpressions(sqlparser.CloneSelectStatement(in), test); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
+
+	// we try to remove distinct last
+	if success := trySimplifyDistinct(sqlparser.CloneSelectStatement(in), test); success != nil {
+		return SimplifyStatement(success, currentDB, si, testF)
+	}
+
 	return in
+}
+
+func trySimplifyDistinct(in sqlparser.SelectStatement, test func(statement sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
+	simplified := false
+	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
+		return true
+	}
+
+	up := func(cursor *sqlparser.Cursor) bool {
+		if sel, ok := cursor.Node().(*sqlparser.Select); ok {
+			if sel.Distinct {
+				sel.Distinct = false
+				if test(sel) {
+					log.Errorf("removed distinct to yield: %s", sqlparser.String(sel))
+					simplified = true
+				} else {
+					sel.Distinct = true
+				}
+			}
+		}
+
+		return true
+	}
+
+	sqlparser.SafeRewrite(in, alwaysVisitChildren, up)
+
+	if simplified {
+
+		return in
+	}
+	// we found no simplifications
+	return nil
 }
 
 func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
 	simplified := false
-	visitAllExpressionsInAST(in, func(cursor expressionCursor) bool {
+	visit := func(cursor expressionCursor) bool {
 		// first - let's try to remove the expression
 		if cursor.remove() {
 			if test(in) {
 				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
 				simplified = true
-				// initially return false, but that made the rewriter prematurely abort sometimes
 				return true
 			}
 			cursor.restore()
@@ -91,9 +128,10 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 		})
 
 		cursor.replace(newExpr)
-		// initially return false, but that made the rewriter prematurely abort sometimes
 		return true
-	})
+	}
+
+	visitAllExpressionsInAST(in, visit)
 
 	if simplified {
 		return in
@@ -114,7 +152,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 	}
 
 	simplified := false
-	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
 		return true
 	}
 
@@ -144,7 +182,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 		return true
 	}
 
-	sqlparser.SafeRewrite(in, alwaysVisit, up)
+	sqlparser.SafeRewrite(in, alwaysVisitChildren, up)
 
 	if simplified {
 
@@ -182,7 +220,7 @@ func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.Sche
 
 func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
 	simplified := false
-	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
 		return true
 	}
 
@@ -204,7 +242,7 @@ func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectSt
 		return true
 	}
 
-	sqlparser.SafeRewrite(in, alwaysVisit, up)
+	sqlparser.SafeRewrite(in, alwaysVisitChildren, up)
 
 	if simplified {
 		return in
@@ -387,7 +425,7 @@ func newExprCursor(expr sqlparser.Expr, replace func(replaceWith sqlparser.Expr)
 // such as visiting and being able to change individual expressions in a AND tree
 // if visit returns true, then traversal continues, otherwise traversal stops
 func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expressionCursor) bool) {
-	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
 		return true
 	}
 	up := func(cursor *sqlparser.Cursor) bool {
@@ -407,7 +445,7 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 		}
 		return true
 	}
-	sqlparser.SafeRewrite(clone, alwaysVisit, up)
+	sqlparser.SafeRewrite(clone, alwaysVisitChildren, up)
 }
 
 func visitSelectExprs(node sqlparser.SelectExprs, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
