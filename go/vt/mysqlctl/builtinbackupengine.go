@@ -759,27 +759,6 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 	}
 }
 
-// closeWithTimeout attempts to close an unreliable Closer. The Close() function may time out. Unfortunately Close() does not accept a
-// context, and so we wrap it with an external context.WithTimeout.
-// We only wait very briefly as we don't want to hold up anything else.
-func closeWithTimeout(ctx context.Context, closer io.Closer, timeout time.Duration) error {
-	done := make(chan error)
-	defer close(done)
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	go func() {
-		done <- closer.Close()
-	}()
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timeout waiting for compressor/decompressor Close()")
-	}
-}
-
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
@@ -835,8 +814,8 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	var writer io.Writer = bw
 
 	// Create the gzip compression pipe, if necessary.
-	var compressor io.WriteCloser
 	if backupStorageCompress {
+		var compressor io.WriteCloser
 		if ExternalCompressorCmd != "" {
 			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
 		} else {
@@ -845,6 +824,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
 		}
+		closer := ioutil.NewTimeoutCloser(compressor, closeTimeout)
 
 		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
 		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
@@ -852,14 +832,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		defer func() {
 			// Close gzip to flush it, after that all data is sent to writer.
 			closeCompressorAt := time.Now()
-			if cerr := closeWithTimeout(ctx, compressor, compressorTimeout); err != nil {
+			if cerr := closer.Close(); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
 			}
 			params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
 		}()
-
 	}
 
 	if builtinBackupFileReadBufferSize > 0 {
@@ -1110,13 +1089,14 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		if err != nil {
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
+		closer := ioutil.NewTimeoutCloser(decompressor, closeTimeout)
 
 		decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
 		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 		defer func() {
 			closeDecompressorAt := time.Now()
-			if cerr := closeWithTimeout(ctx, decompressor, compressorTimeout); err != nil {
+			if cerr := closer.Close(); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
