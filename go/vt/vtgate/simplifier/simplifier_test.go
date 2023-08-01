@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -134,7 +136,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 		}
 		return toInt64 >= 8
 	})
-	fmt.Printf("simplest expr to evaluate to >= 8: [%s], started from: [%s]\n", sqlparser.String(expr), sqlparser.String(p0))
+	log.Errorf("simplest expr to evaluate to >= 8: [%s], started from: [%s]", sqlparser.String(expr), sqlparser.String(p0))
 }
 
 func plus(a, b sqlparser.Expr) sqlparser.Expr {

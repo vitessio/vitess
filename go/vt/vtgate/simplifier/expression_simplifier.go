@@ -55,7 +55,15 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 		}
 		return true
 	}
-	sqlparser.SafeRewrite(smallestKnown, alwaysVisit, up)
+
+	// loop until rewriting introduces no more changes
+	for {
+		prevSmallest := sqlparser.CloneExprs(smallestKnown)
+		sqlparser.SafeRewrite(smallestKnown, alwaysVisit, up)
+		if sqlparser.Equals.Exprs(prevSmallest, smallestKnown) {
+			break
+		}
+	}
 
 	return smallestKnown[0]
 }
