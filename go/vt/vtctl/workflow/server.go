@@ -2310,25 +2310,25 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 // switchReads is a generic way of switching read traffic for a workflow.
 func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection) (*[]string, error) {
 	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
-	var hasReplica, hasRdonly bool
+	var switchReplica, switchRdonly bool
 	for _, roType := range req.TabletTypes {
 		switch roType {
 		case topodatapb.TabletType_REPLICA:
-			hasReplica = true
+			switchReplica = true
 		case topodatapb.TabletType_RDONLY:
-			hasRdonly = true
+			switchRdonly = true
 		}
 	}
 
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
-	if !hasReplica && !hasRdonly {
+	if !switchReplica && !switchRdonly {
 		return nil, fmt.Errorf("tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr)
 	}
 	if !ts.isPartialMigration { // shard level traffic switching is all or nothing
-		if direction == DirectionBackward && hasReplica && len(state.ReplicaCellsSwitched) == 0 {
+		if direction == DirectionBackward && switchReplica && len(state.ReplicaCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
 		}
-		if direction == DirectionBackward && hasRdonly && len(state.RdonlyCellsSwitched) == 0 {
+		if direction == DirectionBackward && switchRdonly && len(state.RdonlyCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 		}
 	}
@@ -2342,14 +2342,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
 	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent
 	// rdonly tablets.
-	if hasReplica && !hasRdonly {
+	if switchReplica && !switchRdonly {
 		var err error
 		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, cells)
 		if err != nil {
 			return nil, err
 		}
-		if rdonlyTabletsExist {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for REPLICAs but RDONLY tablets also exist in the cells")
+		if !rdonlyTabletsExist {
+			req.TabletTypes = append(req.TabletTypes, topodatapb.TabletType_RDONLY)
 		}
 	}
 

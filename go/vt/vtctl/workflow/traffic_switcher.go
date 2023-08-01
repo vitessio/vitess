@@ -1146,7 +1146,7 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error 
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
 		}
 		tablet := primary.Tablet
-		_, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		_, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:          []byte(lockStmt),
 			MaxRows:        uint64(1),
 			DisableBinlogs: false,
