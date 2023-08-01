@@ -4027,8 +4027,8 @@ func (m *StreamHealthResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i--
 		dAtA[i] = 0x22
 	}
-	if m.TabletExternallyReparentedTimestamp != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.TabletExternallyReparentedTimestamp))
+	if m.PrimaryTermStartTimestamp != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.PrimaryTermStartTimestamp))
 		i--
 		dAtA[i] = 0x18
 	}
@@ -5794,8 +5794,8 @@ func (m *StreamHealthResponse) SizeVT() (n int) {
 	if m.Serving {
 		n += 2
 	}
-	if m.TabletExternallyReparentedTimestamp != 0 {
-		n += 1 + sov(uint64(m.TabletExternallyReparentedTimestamp))
+	if m.PrimaryTermStartTimestamp != 0 {
+		n += 1 + sov(uint64(m.PrimaryTermStartTimestamp))
 	}
 	if m.RealtimeStats != nil {
 		l = m.RealtimeStats.SizeVT()
@@ -16285,9 +16285,9 @@ func (m *StreamHealthResponse) UnmarshalVT(dAtA []byte) error {
 			m.Serving = bool(v != 0)
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TabletExternallyReparentedTimestamp", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryTermStartTimestamp", wireType)
 			}
-			m.TabletExternallyReparentedTimestamp = 0
+			m.PrimaryTermStartTimestamp = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -16297,7 +16297,7 @@ func (m *StreamHealthResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TabletExternallyReparentedTimestamp |= int64(b&0x7F) << shift
+				m.PrimaryTermStartTimestamp |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
