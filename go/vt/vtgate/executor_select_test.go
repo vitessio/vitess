@@ -795,6 +795,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("own_gtid"),
 			sqltypes.NewVarChar(""),
 			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar(""),
 			sqltypes.NewInt64(0),
 		}},
 	}
