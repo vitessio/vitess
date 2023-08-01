@@ -70,9 +70,6 @@ const (
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
 	xbstream             = "xbstream"
-
-	// closeTimeout is the timeout for closing backup files after writing.
-	closeTimeout = 10 * time.Minute
 )
 
 // xtraBackupManifest represents a backup.

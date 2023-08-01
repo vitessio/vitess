@@ -57,6 +57,9 @@ const (
 	RestoreState = "restore_in_progress"
 	// BackupTimestampFormat is the format in which we save BackupTime and FinishedTime
 	BackupTimestampFormat = "2006-01-02.150405"
+
+	// closeTimeout is the timeout for closing backup files after writing.
+	closeTimeout = 10 * time.Minute
 )
 
 const (
