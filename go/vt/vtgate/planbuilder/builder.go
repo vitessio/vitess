@@ -178,7 +178,7 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterMigration:
-		return buildAlterMigrationPlan(query, vschema, enableOnlineDDL)
+		return buildAlterMigrationPlan(query, stmt, vschema, enableOnlineDDL)
 	case *sqlparser.RevertMigration:
 		return buildRevertMigrationPlan(query, stmt, vschema, enableOnlineDDL)
 	case *sqlparser.ShowMigrationLogs:

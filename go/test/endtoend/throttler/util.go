@@ -209,19 +209,23 @@ func UnthrottleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp th
 	return throttleApp(clusterInstance, throttlerApp, false)
 }
 
+func WaitUntilTabletsConfirmThrottledApp(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name, expectThrottled bool) {
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottledApp(t, tablet, throttlerApp, expectThrottled, ConfigTimeout)
+			}
+		}
+	}
+}
+
 // ThrottleAppAndWaitUntilTabletsConfirm
 func ThrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name) (string, error) {
 	res, err := throttleApp(clusterInstance, throttlerApp, true)
 	if err != nil {
 		return res, err
 	}
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				WaitForThrottledApp(t, tablet, throttlerApp, true, ConfigTimeout)
-			}
-		}
-	}
+	WaitUntilTabletsConfirmThrottledApp(t, clusterInstance, throttlerApp, true)
 	return res, nil
 }
 
@@ -231,13 +235,7 @@ func UnthrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *clus
 	if err != nil {
 		return res, err
 	}
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				WaitForThrottledApp(t, tablet, throttlerApp, false, ConfigTimeout)
-			}
-		}
-	}
+	WaitUntilTabletsConfirmThrottledApp(t, clusterInstance, throttlerApp, false)
 	return res, nil
 }
 
