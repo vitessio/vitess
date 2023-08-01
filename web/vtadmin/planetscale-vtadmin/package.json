@@ -1,6 +1,0 @@
-{
-  "name": "@planetscale/vtadmin",
-  "version": "1.2.3",
-  "description": "Planetscale's internal version of vtadmin-web, packaged as an npm module. For use with vtadmin-api.",
-  "homepage": "./"
-}
