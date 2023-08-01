@@ -66,6 +66,8 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
+mysql57)
+  ;;
 mysql80)
     mysql8_version=8.0.30
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-common_${mysql8_version}-1debian10_amd64.deb
