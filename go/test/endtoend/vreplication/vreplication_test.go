@@ -1407,8 +1407,8 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 }
 
 func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse bool) {
-	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
-		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables.String() &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_Reshard.String() {
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
 			"workflow type specified: %s", workflowType)
 	}
@@ -1438,8 +1438,6 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	}
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	// Use vtctldclient for MoveTables SwitchTraffic ~ 50% of the time.
-	// TODO: remove the command conditional below once I figure out why the
-	// vtctldclient ReverseTraffic command fails...
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() && time.Now().Second()%2 == 0 &&
 		command == "SwitchTraffic" {
 		parts := strings.Split(ksWorkflow, ".")
@@ -1450,7 +1448,7 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
 		"--timeout="+SwitchWritesTimeout, "--initialize-target-sequences", command, ksWorkflow)
 	if output != "" {
-		fmt.Printf("Output of switching writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+		fmt.Printf("Output of switching writes with vtctlclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
 	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug
