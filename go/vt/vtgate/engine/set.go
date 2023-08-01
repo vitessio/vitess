@@ -498,6 +498,9 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		if err != nil {
 			return err
 		}
+		if err := schema.ValidateMigrationContext(str); err != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid migration_context: %s", str)
+		}
 		vcursor.Session().SetMigrationContext(str)
 	case sysvars.QueryTimeout.Name:
 		queryTimeout, err := svss.evalAsInt64(env, vcursor)
