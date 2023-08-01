@@ -7,7 +7,7 @@ FROM --platform=linux/amd64 "${image}"
 RUN apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates && \
     for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 467B942D3A79BD29 && break; done && \
     for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y apt-get install cmake gcc g++ bison libncurses5-dev libssl-dev && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y cmake gcc g++ bison libncurses5-dev libssl-dev && \
     wget https://dev.mysql.com/get/Downloads/MySQL-5.7/mysql-5.7.31.tar.gz && \
     tar xzf mysql-5.7.31.tar.gz && \
     cd mysql-5.7.31 && mkdir bld && cd bld && \
