@@ -697,7 +697,7 @@ func TestAlterDropConstraint(t *testing.T) {
 			require.NoError(t, err)
 			ddlRes, ok := res.(*DDL)
 			if !ok {
-				mAlterDDL, ok := res.(*MultiAlterDDL)
+				mAlterDDL, ok := res.(*AlterTable)
 				require.True(t, ok)
 				require.Len(t, mAlterDDL.Statements, 1)
 				ddlRes = mAlterDDL.Statements[0]
@@ -727,7 +727,7 @@ func testIndex(t *testing.T, tests []testIndexStruct) {
 			require.NoError(t, err)
 			ddlRes, ok := res.(*DDL)
 			if !ok {
-				mAlterDDL, ok := res.(*MultiAlterDDL)
+				mAlterDDL, ok := res.(*AlterTable)
 				require.True(t, ok)
 				require.Len(t, mAlterDDL.Statements, 1)
 				ddlRes = mAlterDDL.Statements[0]
@@ -751,7 +751,7 @@ func testForeignKey(t *testing.T, tests []testForeignKeyStruct, expectedConstrai
 			require.NoError(t, err)
 			ddlRes, ok := res.(*DDL)
 			if !ok {
-				mAlterDDL, ok := res.(*MultiAlterDDL)
+				mAlterDDL, ok := res.(*AlterTable)
 				require.True(t, ok)
 				require.Len(t, mAlterDDL.Statements, 1)
 				ddlRes = mAlterDDL.Statements[0]

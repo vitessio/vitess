@@ -257,7 +257,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a", "b"},
 	}, {
 		query: "alter table a auto_increment 19",
-		output: &MultiAlterDDL{
+		output: &AlterTable{
 			Table: TableName{Name: NewTableIdent("a")},
 			Statements: []*DDL{{
 				Action:      AlterStr,
@@ -268,7 +268,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a"},
 	}, {
 		query: "alter table a auto_increment 19.9",
-		output: &MultiAlterDDL{
+		output: &AlterTable{
 			Table: TableName{Name: NewTableIdent("a")},
 			Statements: []*DDL{{
 				Action:      AlterStr,
