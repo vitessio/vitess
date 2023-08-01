@@ -2267,7 +2267,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 	if hasPrimary {
-		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false, req.EnableReverseReplication); err != nil {
+		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false); err != nil {
 			return nil, err
 		}
 	}
@@ -2409,7 +2409,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
 func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, timeout time.Duration,
-	cancel, reverseReplication bool) (journalID int64, dryRunResults *[]string, err error) {
+	cancel bool) (journalID int64, dryRunResults *[]string, err error) {
 
 	var sw iswitcher
 	if req.DryRun {
@@ -2428,7 +2428,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		return 0, nil, err
 	}
 
-	if reverseReplication {
+	if req.EnableReverseReplication {
 		err := areTabletsAvailableToStreamFrom(ctx, req, ts, ts.TargetKeyspaceName(), ts.TargetShards())
 		if err != nil {
 			return 0, nil, err
@@ -2596,7 +2596,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		ts.Logger().Errorf("finalize failed: %v", err)
 		return 0, nil, err
 	}
-	if reverseReplication {
+	if req.EnableReverseReplication {
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			ts.Logger().Errorf("startReverseVReplication failed: %v", err)
 			return 0, nil, err
