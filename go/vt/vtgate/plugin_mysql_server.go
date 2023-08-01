@@ -422,6 +422,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			},
 			Autocommit:           true,
 			DDLStrategy:          defaultDDLStrategy,
+			MigrationContext:     "",
 			SessionUUID:          u.String(),
 			EnableSystemSettings: sysVarSetEnabled,
 		}

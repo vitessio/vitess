@@ -493,6 +493,12 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid DDL strategy: %s", str)
 		}
 		vcursor.Session().SetDDLStrategy(str)
+	case sysvars.MigrationContext.Name:
+		str, err := svss.evalAsString(env, vcursor)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetMigrationContext(str)
 	case sysvars.QueryTimeout.Name:
 		queryTimeout, err := svss.evalAsInt64(env, vcursor)
 		if err != nil {

@@ -760,7 +760,7 @@ func TestSelectSystemVariables(t *testing.T) {
 
 	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@socket, @@query_timeout"
+		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@migration_context, @@socket, @@query_timeout"
 
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
@@ -776,6 +776,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@session_track_gtids", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "@@ddl_strategy", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "@@migration_context", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "@@socket", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
 		},

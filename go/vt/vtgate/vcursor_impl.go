@@ -903,6 +903,16 @@ func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
 }
 
+// SetMigrationContext implements the SessionActions interface
+func (vc *vcursorImpl) SetMigrationContext(migrationContext string) {
+	vc.safeSession.SetMigrationContext(migrationContext)
+}
+
+// GetMigrationContext implements the SessionActions interface
+func (vc *vcursorImpl) GetMigrationContext() string {
+	return vc.safeSession.GetMigrationContext()
+}
+
 // GetSessionUUID implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionUUID() string {
 	return vc.safeSession.GetSessionUUID()
