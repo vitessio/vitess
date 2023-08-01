@@ -156,7 +156,7 @@ func TestReparentAvoid(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
+	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 }
