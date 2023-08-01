@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -35,7 +36,7 @@ import (
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
 	Backup = &cobra.Command{
-		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--upgrade-safe] <tablet_alias>",
+		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|auto] [--upgrade-safe] <tablet_alias>",
 		Short:                 "Uses the BackupStorage service on the given tablet to create and store a new backup.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -70,7 +71,7 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 	}
 	// RestoreFromBackup makes a RestoreFromBackup gRPC call to a vtctld.
 	RestoreFromBackup = &cobra.Command{
-		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] <tablet_alias>",
+		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] [--restore-to-pos <pos>] [--dry-run] <tablet_alias>",
 		Short:                 "Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -79,9 +80,10 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 )
 
 var backupOptions = struct {
-	AllowPrimary bool
-	Concurrency  uint64
-	UpgradeSafe  bool
+	AllowPrimary       bool
+	Concurrency        uint64
+	IncrementalFromPos string
+	UpgradeSafe        bool
 }{}
 
 func commandBackup(cmd *cobra.Command, args []string) error {
@@ -93,10 +95,11 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	stream, err := client.Backup(commandCtx, &vtctldatapb.BackupRequest{
-		TabletAlias:  tabletAlias,
-		AllowPrimary: backupOptions.AllowPrimary,
-		Concurrency:  backupOptions.Concurrency,
-		UpgradeSafe:  backupOptions.UpgradeSafe,
+		TabletAlias:        tabletAlias,
+		AllowPrimary:       backupOptions.AllowPrimary,
+		Concurrency:        backupOptions.Concurrency,
+		IncrementalFromPos: backupOptions.IncrementalFromPos,
+		UpgradeSafe:        backupOptions.UpgradeSafe,
 	})
 	if err != nil {
 		return err
@@ -214,7 +217,10 @@ func commandRemoveBackup(cmd *cobra.Command, args []string) error {
 }
 
 var restoreFromBackupOptions = struct {
-	BackupTimestamp string
+	BackupTimestamp    string
+	RestoreToPos       string
+	RestoreToTimestamp string
+	DryRun             bool
 }{}
 
 func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
@@ -223,8 +229,23 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if restoreFromBackupOptions.RestoreToPos != "" && restoreFromBackupOptions.RestoreToTimestamp != "" {
+		return fmt.Errorf("--restore-to-pos and --restore-to-timestamp are mutually exclusive")
+	}
+
+	var restoreToTimestamp time.Time
+	if restoreFromBackupOptions.RestoreToTimestamp != "" {
+		restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreFromBackupOptions.RestoreToTimestamp)
+		if err != nil {
+			return err
+		}
+	}
+
 	req := &vtctldatapb.RestoreFromBackupRequest{
-		TabletAlias: alias,
+		TabletAlias:        alias,
+		RestoreToPos:       restoreFromBackupOptions.RestoreToPos,
+		RestoreToTimestamp: logutil.TimeToProto(restoreToTimestamp),
+		DryRun:             restoreFromBackupOptions.DryRun,
 	}
 
 	if restoreFromBackupOptions.BackupTimestamp != "" {
@@ -259,6 +280,8 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 func init() {
 	Backup.Flags().BoolVar(&backupOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	Backup.Flags().Uint64Var(&backupOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
+	Backup.Flags().StringVar(&backupOptions.IncrementalFromPos, "incremental-from-pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
+
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Root.AddCommand(Backup)
 
@@ -274,5 +297,8 @@ func init() {
 	Root.AddCommand(RemoveBackup)
 
 	RestoreFromBackup.Flags().StringVarP(&restoreFromBackupOptions.BackupTimestamp, "backup-timestamp", "t", "", "Use the backup taken at, or closest before, this timestamp. Omit to use the latest backup. Timestamp format is \"YYYY-mm-DD.HHMMSS\".")
+	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToPos, "restore-to-pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
+	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToTimestamp, "restore-to-timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
+	RestoreFromBackup.Flags().BoolVar(&restoreFromBackupOptions.DryRun, "dry-run", false, "Only validate restore steps, do not actually restore data")
 	Root.AddCommand(RestoreFromBackup)
 }

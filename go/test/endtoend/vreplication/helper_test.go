@@ -46,16 +46,14 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
 	defaultTick          = 1 * time.Second
 	defaultTimeout       = 30 * time.Second
 	workflowStateTimeout = 90 * time.Second
-	workflowStateCopying = "Copying" // nolint
-	workflowStateRunning = "Running" // nolint
-	workflowStateStopped = "Stopped" // nolint
-	workflowStateError   = "Error"   // nolint
 )
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
@@ -563,7 +561,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
 						state := attributeValue.Get("State").String()
 						pos := attributeValue.Get("Pos").String()
 						// If we've actually copied anything then we'll have a position in the stream
-						if (state == workflowStateRunning || state == workflowStateCopying) && pos != "" {
+						if (state == binlogdatapb.VReplicationWorkflowState_Running.String() || state == binlogdatapb.VReplicationWorkflowState_Copying.String()) && pos != "" {
 							require.FailNowf(t, "Unexpected data copied in workflow",
 								"The MoveTables workflow %q copied data in less than %s when it should have been waiting. Show output: %s",
 								ksWorkflow, defaultTimeout, output)

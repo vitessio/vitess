@@ -16,14 +16,44 @@ limitations under the License.
 
 package workflow
 
-// Type is the type of a workflow.
+import (
+	"fmt"
+	"strings"
+)
+
+// VReplicationWorkflowType specifies whether workflow is
+// MoveTables or Reshard and maps directly to what is stored
+// in the backend database.
+type VReplicationWorkflowType int
+
+// VReplicationWorkflowType enums.
+const (
+	MoveTablesWorkflow = VReplicationWorkflowType(iota)
+	ReshardWorkflow
+	MigrateWorkflow
+)
+
+// Type is the type of a workflow as a string and maps directly
+// to what is provided and presented to the user.
 type Type string
 
-// Workflow types.
+// Workflow string types.
 const (
-	TypeReshard    Type = "Reshard"
 	TypeMoveTables Type = "MoveTables"
+	TypeReshard    Type = "Reshard"
+	TypeMigrate    Type = "Migrate"
 )
+
+var TypeStrMap = map[VReplicationWorkflowType]Type{
+	MoveTablesWorkflow: TypeMoveTables,
+	ReshardWorkflow:    TypeReshard,
+	MigrateWorkflow:    TypeMigrate,
+}
+var TypeIntMap = map[Type]VReplicationWorkflowType{
+	TypeMoveTables: MoveTablesWorkflow,
+	TypeReshard:    ReshardWorkflow,
+	TypeMigrate:    MigrateWorkflow,
+}
 
 // State represents the state of a workflow.
 type State struct {
@@ -44,4 +74,53 @@ type State struct {
 	IsPartialMigration    bool
 	ShardsAlreadySwitched []string
 	ShardsNotYetSwitched  []string
+}
+
+func (s *State) String() string {
+	var stateInfo []string
+	if !s.IsPartialMigration { // shard level traffic switching is all or nothing
+		if len(s.RdonlyCellsNotSwitched) == 0 && len(s.ReplicaCellsNotSwitched) == 0 && len(s.ReplicaCellsSwitched) > 0 {
+			stateInfo = append(stateInfo, "All Reads Switched")
+		} else if len(s.RdonlyCellsSwitched) == 0 && len(s.ReplicaCellsSwitched) == 0 {
+			stateInfo = append(stateInfo, "Reads Not Switched")
+		} else {
+			stateInfo = append(stateInfo, "Reads partially switched")
+			if len(s.ReplicaCellsNotSwitched) == 0 {
+				stateInfo = append(stateInfo, "All Replica Reads Switched")
+			} else if len(s.ReplicaCellsSwitched) == 0 {
+				stateInfo = append(stateInfo, "Replica not switched")
+			} else {
+				stateInfo = append(stateInfo, "Replica switched in cells: "+strings.Join(s.ReplicaCellsSwitched, ","))
+			}
+			if len(s.RdonlyCellsNotSwitched) == 0 {
+				stateInfo = append(stateInfo, "All Rdonly Reads Switched")
+			} else if len(s.RdonlyCellsSwitched) == 0 {
+				stateInfo = append(stateInfo, "Rdonly not switched")
+			} else {
+				stateInfo = append(stateInfo, "Rdonly switched in cells: "+strings.Join(s.RdonlyCellsSwitched, ","))
+			}
+		}
+	}
+	if s.WritesSwitched {
+		stateInfo = append(stateInfo, "Writes Switched")
+	} else if s.IsPartialMigration {
+		// For partial migrations, the traffic switching is all or nothing
+		// at the shard level, so reads are effectively switched on the
+		// shard when writes are switched.
+		if len(s.ShardsAlreadySwitched) > 0 && len(s.ShardsNotYetSwitched) > 0 {
+			stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(s.ShardsAlreadySwitched, ",")))
+			stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(s.ShardsAlreadySwitched, ",")))
+		} else {
+			if len(s.ShardsAlreadySwitched) == 0 {
+				stateInfo = append(stateInfo, "Reads Not Switched")
+				stateInfo = append(stateInfo, "Writes Not Switched")
+			} else {
+				stateInfo = append(stateInfo, "All Reads Switched")
+				stateInfo = append(stateInfo, "All Writes Switched")
+			}
+		}
+	} else {
+		stateInfo = append(stateInfo, "Writes Not Switched")
+	}
+	return strings.Join(stateInfo, ". ")
 }

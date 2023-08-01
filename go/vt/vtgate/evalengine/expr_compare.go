@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -108,7 +110,7 @@ func (compareGE) compare(left, right eval) (boolean, error) {
 func (compareNullSafeEQ) String() string { return "<=>" }
 func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 	cmp, err := evalCompareNullSafe(left, right)
-	return makeboolean(cmp), err
+	return makeboolean(cmp == 0), err
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
@@ -162,15 +164,21 @@ func compareAsJSON(l, r sqltypes.Type) bool {
 	return l == sqltypes.TypeJSON || r == sqltypes.TypeJSON
 }
 
-func evalCompareNullSafe(lVal, rVal eval) (bool, error) {
-	if lVal == nil || rVal == nil {
-		return lVal == rVal, nil
+func evalCompareNullSafe(lVal, rVal eval) (int, error) {
+	if lVal == nil {
+		if rVal == nil {
+			return 0, nil
+		}
+		return -1, nil
+	}
+	if rVal == nil {
+		return 1, nil
 	}
 	if left, right, ok := compareAsTuples(lVal, rVal); ok {
 		return evalCompareTuplesNullSafe(left.t, right.t)
 	}
 	n, err := evalCompare(lVal, rVal)
-	return n == 0, err
+	return n, err
 }
 
 func evalCompareMany(left, right []eval, fulleq bool) (int, bool, error) {
@@ -233,6 +241,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		return compareJSON(left, right)
 	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
+	case lt == rt && fallbackBinary(lt):
+		return bytes.Compare(left.ToRawBytes(), right.ToRawBytes()), nil
 	default:
 		// Quoting MySQL Docs:
 		//
@@ -247,20 +257,32 @@ func evalCompare(left, right eval) (comp int, err error) {
 	}
 }
 
-func evalCompareTuplesNullSafe(left, right []eval) (bool, error) {
+// fallbackBinary compares two values of the same type using the fallback binary comparison.
+// This is for types we don't yet properly support otherwise but do end up being used
+// for comparisons, for example when using vdiff.
+// TODO: Clean this up as we add more properly supported types and comparisons.
+func fallbackBinary(t sqltypes.Type) bool {
+	switch t {
+	case sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry:
+		return true
+	}
+	return false
+}
+
+func evalCompareTuplesNullSafe(left, right []eval) (int, error) {
 	if len(left) != len(right) {
 		panic("did not typecheck cardinality")
 	}
 	for idx, lResult := range left {
 		res, err := evalCompareNullSafe(lResult, right[idx])
 		if err != nil {
-			return false, err
+			return 0, err
 		}
-		if !res {
-			return false, nil
+		if res != 0 {
+			return res, nil
 		}
 	}
-	return true, nil
+	return 0, nil
 }
 
 // eval implements the Expr interface

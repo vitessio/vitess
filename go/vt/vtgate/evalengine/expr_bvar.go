@@ -57,11 +57,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 		tuple := make([]eval, 0, len(bvar.Values))
 		for _, value := range bvar.Values {
-			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), collations.TypedCollation{
-				Collation:    collations.DefaultCollationForType(value.Type),
-				Coercibility: collations.CoerceCoercible,
-				Repertoire:   collations.RepertoireUnicode,
-			})
+			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), defaultCoercionCollation(collations.DefaultCollationForType(value.Type)))
 			if err != nil {
 				return nil, err
 			}
@@ -77,11 +73,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 		if bv.typed() {
 			typ = bv.Type
 		}
-		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), collations.TypedCollation{
-			Collation:    collations.DefaultCollationForType(typ),
-			Coercibility: collations.CoerceCoercible,
-			Repertoire:   collations.RepertoireUnicode,
-		})
+		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), defaultCoercionCollation(collations.DefaultCollationForType(typ)))
 	}
 }
 

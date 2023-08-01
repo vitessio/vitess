@@ -185,6 +185,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, logutil.ProtoToTime(request.BackupTime))
 	}
 
+	startTime := logutil.ProtoToTime(request.BackupTime)
+	if startTime.IsZero() {
+		startTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
+	}
+
 	params := mysqlctl.RestoreParams{
 		Cnf:                 tm.Cnf,
 		Mysqld:              tm.MysqlDaemon,
@@ -195,9 +200,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DbName:              topoproto.TabletDbName(tablet),
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
-		StartTime:           logutil.ProtoToTime(request.BackupTime),
+		StartTime:           startTime,
 		DryRun:              request.DryRun,
 		Stats:               backupstats.RestoreStats(),
+	}
+	if request.RestoreToPos != "" && !logutil.ProtoToTime(request.RestoreToTimestamp).IsZero() {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore_to_pos and --restore_to_timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
 		pos, err := mysql.DecodePosition(request.RestoreToPos)
@@ -205,6 +213,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.Wrapf(err, "restore failed: unable to decode --restore_to_pos: %s", request.RestoreToPos)
 		}
 		params.RestoreToPos = pos
+	}
+	if restoreToTimestamp := logutil.ProtoToTime(request.RestoreToTimestamp); !restoreToTimestamp.IsZero() {
+		// Restore to given timestamp
+		params.RestoreToTimestamp = restoreToTimestamp
 	}
 	params.Logger.Infof("Restore: original tablet type=%v", originalType)
 

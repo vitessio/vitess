@@ -22,18 +22,9 @@ limitations under the License.
 package uprops
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/icuregex/internal/bytestrie"
-	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
-	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
 )
-
-var pnames struct {
-	valueMaps []uint32
-	byteTrie  []uint8
-}
 
 const (
 	ixValueMapsOffset  = 0
@@ -41,51 +32,6 @@ const (
 	ixNameGroupsOffset = 2
 	ixReserved3Offset  = 3
 )
-
-func readData(bytes *udata.Bytes) error {
-	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.DataFormat[0] == 0x70 &&
-			info.DataFormat[1] == 0x6e &&
-			info.DataFormat[2] == 0x61 &&
-			info.DataFormat[3] == 0x6d &&
-			info.FormatVersion[0] == 2
-	})
-	if err != nil {
-		return err
-	}
-
-	count := bytes.Int32() / 4
-	if count < 8 {
-		return fmt.Errorf("indexes[0] too small in ucase.icu")
-	}
-
-	indexes := make([]int32, count)
-	indexes[0] = count * 4
-
-	for i := int32(1); i < count; i++ {
-		indexes[i] = bytes.Int32()
-	}
-
-	offset := indexes[ixValueMapsOffset]
-	nextOffset := indexes[ixByteTriesOffset]
-	numInts := (nextOffset - offset) / 4
-
-	pnames.valueMaps = bytes.Uint32Slice(numInts)
-
-	offset = nextOffset
-	nextOffset = indexes[ixNameGroupsOffset]
-	numBytes := nextOffset - offset
-
-	pnames.byteTrie = bytes.Uint8Slice(numBytes)
-	return nil
-}
-
-func init() {
-	b := udata.NewBytes(icudata.PNames)
-	if err := readData(b); err != nil {
-		panic(err)
-	}
-}
 
 func (prop Property) source() propertySource {
 	if prop < UCharBinaryStart {
@@ -158,20 +104,22 @@ func getPropertyValueEnum(prop Property, alias string) int32 {
 		return -1
 	}
 
-	valueMapIdx = int32(pnames.valueMaps[valueMapIdx+1])
+	valueMps := valueMaps()
+	valueMapIdx = int32(valueMps[valueMapIdx+1])
 	if valueMapIdx == 0 {
 		return -1
 	}
 	// valueMapIndex is the start of the property's valueMap,
 	// where the first word is the BytesTrie offset.
-	return getPropertyOrValueEnum(int32(pnames.valueMaps[valueMapIdx]), alias)
+	return getPropertyOrValueEnum(int32(valueMps[valueMapIdx]), alias)
 }
 
 func findProperty(prop Property) int32 {
 	var i = int32(1)
-	for numRanges := int32(pnames.valueMaps[0]); numRanges > 0; numRanges-- {
-		start := int32(pnames.valueMaps[i])
-		limit := int32(pnames.valueMaps[i+1])
+	valueMps := valueMaps()
+	for numRanges := int32(valueMps[0]); numRanges > 0; numRanges-- {
+		start := int32(valueMps[i])
+		limit := int32(valueMps[i+1])
 		i += 2
 		if int32(prop) < start {
 			break
@@ -185,7 +133,7 @@ func findProperty(prop Property) int32 {
 }
 
 func getPropertyOrValueEnum(offset int32, alias string) int32 {
-	trie := bytestrie.New(pnames.byteTrie[offset:])
+	trie := bytestrie.New(byteTrie()[offset:])
 	if trie.ContainsName(alias) {
 		return trie.GetValue()
 	}

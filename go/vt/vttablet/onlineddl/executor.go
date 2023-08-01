@@ -2115,7 +2115,7 @@ func (e *Executor) validateThrottleParams(ctx context.Context, expireString stri
 			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
 		}
 	}
-	ratio = 1.0
+	ratio = throttle.DefaultThrottleRatio
 	if ratioLiteral != nil {
 		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
 		if err != nil || ratio < 0 || ratio > 1 {
@@ -2134,7 +2134,7 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
+	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio, false)
 	return emptyResult, nil
 }
 
@@ -2147,7 +2147,7 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio)
+	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio, false)
 	return emptyResult, nil
 }
 
@@ -3371,7 +3371,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		timeThrottled:        row.AsInt64("time_throttled", 0),
 		componentThrottled:   row.AsString("component_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
-		state:                row.AsString("state", ""),
+		state:                binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row.AsString("state", "")]),
 		message:              row.AsString("message", ""),
 		rowsCopied:           row.AsInt64("rows_copied", 0),
 		bls:                  &binlogdatapb.BinlogSource{},
@@ -3450,9 +3450,9 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 		return false, s, nil
 	}
 	switch s.state {
-	case binlogplayer.BlpError:
+	case binlogdatapb.VReplicationWorkflowState_Error:
 		return false, s, nil
-	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+	case binlogdatapb.VReplicationWorkflowState_Init, binlogdatapb.VReplicationWorkflowState_Copying, binlogdatapb.VReplicationWorkflowState_Running:
 		return true, s, nil
 	}
 	if strings.Contains(strings.ToLower(s.message), "error") {

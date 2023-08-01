@@ -494,7 +494,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options)) {
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), options.GetWorkloadName()) {
 				return errTxThrottled
 			}
 			var connSetting *pools.Setting
@@ -1702,6 +1702,12 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 	return tsv.topoServer
 }
 
+// CheckThrottler issues a self check
+func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+	r := tsv.lagThrottler.CheckByType(ctx, appName, "", flags, throttle.ThrottleCheckSelf)
+	return r
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
@@ -1843,7 +1849,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		var ratio = 1.0
+		var ratio = throttle.DefaultThrottleRatio
 		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
 			ratio, err = strconv.ParseFloat(ratioParam, 64)
 			if err != nil {
@@ -1851,7 +1857,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 				return
 			}
 		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio)
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio, false)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)

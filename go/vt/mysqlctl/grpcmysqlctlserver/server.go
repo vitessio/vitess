@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
@@ -54,11 +53,7 @@ func (s *server) RunMysqlUpgrade(ctx context.Context, _ *mysqlctlpb.RunMysqlUpgr
 
 // RunMysqlUpgrade implements the server side of the MysqlctlClient interface.
 func (s *server) ApplyBinlogFile(ctx context.Context, request *mysqlctlpb.ApplyBinlogFileRequest) (*mysqlctlpb.ApplyBinlogFileResponse, error) {
-	pos, err := mysql.DecodePosition(request.BinlogRestorePosition)
-	if err != nil {
-		return nil, err
-	}
-	return &mysqlctlpb.ApplyBinlogFileResponse{}, s.mysqld.ApplyBinlogFile(ctx, request.BinlogFileName, pos)
+	return &mysqlctlpb.ApplyBinlogFileResponse{}, s.mysqld.ApplyBinlogFile(ctx, request)
 }
 
 // ReinitConfig implements the server side of the MysqlctlClient interface.

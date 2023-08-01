@@ -1118,7 +1118,9 @@ func ForgetLongUnseenInstances() error {
 		log.Error(err)
 		return err
 	}
-	_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+	if rows > 0 {
+		_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+	}
 	return err
 }
 

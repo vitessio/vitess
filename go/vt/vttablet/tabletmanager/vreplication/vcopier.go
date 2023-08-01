@@ -237,7 +237,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
 			return err
 		}
-		if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
+		if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
 			return err
 		}
 		if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)",
@@ -268,7 +268,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 			}
 		}
 	} else {
-		if err := vc.vr.setState(binlogplayer.BlpStopped, "There is nothing to replicate"); err != nil {
+		if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "There is nothing to replicate"); err != nil {
 			return err
 		}
 	}

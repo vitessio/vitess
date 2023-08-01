@@ -35,9 +35,12 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+const (
+	ThrottledAppsTimeout = 60 * time.Second
 )
 
 // VtgateExecQuery runs a query on VTGate using given query params
@@ -313,16 +316,35 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
 func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) {
-	query := "show vitess_throttled_apps"
-	r := VtgateExecQuery(t, vtParams, query, "")
 
-	found := false
-	for _, row := range r.Named().Rows {
-		if throttlerApp.Equals(row.AsString("app", "")) {
-			found = true
+	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		query := "show vitess_throttled_apps"
+		r := VtgateExecQuery(t, vtParams, query, "")
+
+		appFound := false
+		for _, row := range r.Named().Rows {
+			if throttlerApp.Equals(row.AsString("app", "")) {
+				appFound = true
+			}
+		}
+		if appFound == expectFind {
+			// we're all good
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			assert.Failf(t, "CheckThrottledApps timed out waiting for %v to be in throttled status '%v'", throttlerApp.String(), expectFind)
+			return
+		case <-ticker.C:
 		}
 	}
-	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", throttlerApp, found)
 }
 
 // WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp
@@ -348,33 +370,6 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	}
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
-}
-
-// WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as enabled.
-func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, timeout time.Duration) {
-	jsonPath := "IsEnabled"
-	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
-
-	ctx, cancel := context.WithTimeout(context.Background(), throttlerConfigTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		body := getHTTPBody(url)
-		val, err := jsonparser.GetBoolean([]byte(body), jsonPath)
-		require.NoError(t, err)
-		if val {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Error("timeout waiting for tablet's throttler status to be enabled")
-			return
-		case <-ticker.C:
-		}
-	}
 }
 
 func getHTTPBody(url string) string {

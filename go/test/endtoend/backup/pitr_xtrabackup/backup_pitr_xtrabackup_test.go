@@ -33,3 +33,29 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 	}
 	backup.ExecTestIncrementalBackupAndRestoreToPos(t, tcase)
 }
+
+// TestIncrementalBackupAndRestoreToTimestamp - tests incremental backups and restores.
+// The general outline of the test:
+//   - Generate some schema with data
+//   - Take a full backup
+//   - Proceed to take a series of inremental backups. In between, inject data (insert rows), and keep record
+//     of which data (number of rows) is present in each backup, and at which timestamp.
+//   - Expect backups success/failure per scenario
+//   - Next up, we start testing restores. Randomly pick recorded timestamps and restore to those points in time.
+//   - In each restore, excpect to find the data (number of rows) recorded for said timestamp
+//   - Some restores should fail because the timestamp exceeds the last binlog
+//   - Do so for all recorded tiemstamps.
+//   - Then, a 2nd round where some backups are purged -- this tests to see that we're still able to find a restore path
+//     (of course we only delete backups that still leave us with valid restore paths).
+//
+// All of the above is done for BuiltinBackup, XtraBackup, Mysqlctld (which is technically builtin)
+func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
+	tcase := &backup.PITRTestCase{
+		Name:      "XtraBackup",
+		SetupType: backup.XtraBackup,
+		ComprssDetails: &backup.CompressionDetails{
+			CompressorEngineName: "pgzip",
+		},
+	}
+	backup.ExecTestIncrementalBackupAndRestoreToTimestamp(t, tcase)
+}
