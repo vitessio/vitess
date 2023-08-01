@@ -441,7 +441,7 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 		case sqlparser.OrderBy:
 			return visitOrderBy(node, cursor, visit)
 		case *sqlparser.Limit:
-			return visitLimit(node, visit)
+			return visitLimit(node, cursor, visit)
 		}
 		return true
 	}
@@ -598,7 +598,7 @@ func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(e
 	return true
 }
 
-func visitLimit(node *sqlparser.Limit, visit func(expressionCursor) bool) bool {
+func visitLimit(node *sqlparser.Limit, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
 	if node.Offset != nil {
 		original := node.Offset
 		item := newExprCursor(node.Offset,
@@ -622,9 +622,12 @@ func visitLimit(node *sqlparser.Limit, visit func(expressionCursor) bool) bool {
 			/*replace*/ func(replaceWith sqlparser.Expr) {
 				node.Rowcount = replaceWith
 			},
-			/*remove*/ func() bool {
-				// removing Rowcount is an invalid op
-				return false
+			// this removes the whole limit clause
+			/*remove*/
+			func() bool {
+				var nilVal *sqlparser.Limit // this is used to create a typed nil value
+				cursor.Replace(nilVal)
+				return true
 			},
 			/*restore*/ func() {
 				node.Rowcount = original
