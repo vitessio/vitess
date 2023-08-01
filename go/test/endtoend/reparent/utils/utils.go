@@ -676,6 +676,13 @@ func CheckDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, 
 	assert.Equal(t, want, got)
 }
 
+// SetReplicationSourceFailed returns true if the given output from PRS had failed because the given tablet was
+// unable to setReplicationSource. Since some tests are used in upgrade-downgrade testing, we need this function to
+// work with different versions of vtctl.
+func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
+	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias))
+}
+
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
 func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
 	res := RunSQL(ctx, t, "show slave status;", tablet)
