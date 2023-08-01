@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqlescape"
@@ -2030,89 +2031,70 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 
 	// Now we need to locate the backing sequence table(s) which will
 	// be in another unsharded keyspace.
-	keyspaces, err := ts.TopoServer().GetKeyspaces(ctx)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
-	}
-	log.Errorf("DEBUG: keyspaces: %+v", keyspaces)
 	tableCount := len(sequencesByBackingTable)
-	tablesFound := 0                           // Used to short circuit the search
-	ksCtx, ksCancel := context.WithCancel(ctx) // Used to cancel the goroutines
-	defer ksCancel()                           // Cancel all of the goroutines when we are done
-	ksErr := make(chan error)                  // Used if we encountered an error during the search
-	ksDone := make(chan struct{})              // The search has completed
-	ksWg := sync.WaitGroup{}                   // All of the goroutines finished
-	ksFunc := func(ks string) {                // The function used to search each keyspace
-		defer ksWg.Done()
-		kvs, kerr := ts.TopoServer().GetVSchema(ctx, ks)
+	tablesFound := 0                                                      // Used to short circuit the search
+	searchCompleted := make(chan struct{})                                // The search has completed
+	searchKeyspace := func(sctx context.Context, keyspace string) error { // The function used to search each keyspace
+		kvs, kerr := ts.TopoServer().GetVSchema(ctx, keyspace)
 		if kerr != nil {
-			select {
-			case ksErr <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
-				ks, kerr):
-			default:
-			}
-			return
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
+				keyspace, kerr)
 		}
 		if kvs == nil || kvs.Sharded || kvs.Tables == nil || len(kvs.Tables) == 0 {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ksCtx.Done():
-			return
-		default:
+			return nil
 		}
 		for tableName, tableDef := range kvs.Tables {
+			select {
+			case <-sctx.Done():
+				return sctx.Err()
+			case <-searchCompleted:
+				return nil
+			default:
+			}
 			smMu.Lock() // Prevent concurrent access to the map
 			sm := sequencesByBackingTable[tableName]
 			if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
 				sm != nil && tableName == sm.backingTableName {
 				tablesFound++ // This is also protected by the mutex
-				sm.backingTableKeyspace = ks
-				sm.backingTableDBName = "vt_" + ks
+				sm.backingTableKeyspace = keyspace
+				sm.backingTableDBName = "vt_" + keyspace
 				if tablesFound == tableCount { // Short circuit the search
 					log.Errorf("DEBUG: all sequence backing tables found: %+v", sequencesByBackingTable)
 					smMu.Unlock()
-					ksDone <- struct{}{}
-					return
+					select {
+					case <-searchCompleted: // It's already been closed
+						return nil
+					default:
+						close(searchCompleted) // Mark the search as completed
+						return nil
+					}
 				}
 			}
 			smMu.Unlock()
-			select {
-			case <-ctx.Done():
-				return
-			case <-ksCtx.Done(): // The search has been cancelled
-				return
-			default:
-			}
 		}
+		return nil
 	}
-
+	keyspaces, err := ts.TopoServer().GetKeyspaces(ctx)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
+	}
+	log.Errorf("DEBUG: keyspaces: %+v", keyspaces)
+	eg, gctx := errgroup.WithContext(ctx)
 	for _, keyspace := range keyspaces {
-		ksWg.Add(1)
-		go ksFunc(keyspace)
+		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
+		eg.Go(func() error {
+			return searchKeyspace(gctx, keyspace)
+		})
 	}
-	// Wait for all the goroutines to finish on their own, which means we
-	// probably did not find all of the tables.
-	go func() {
-		ksWg.Wait()
-		close(ksDone)
-		close(ksErr)
-	}()
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
 
-	select {
-	case <-ksDone:
-		if tablesFound != tableCount {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence table metadata: %+v",
-				sequencesByBackingTable)
-		}
-		return sequencesByBackingTable, nil
-	case ksErr := <-ksErr:
-		return nil, ksErr
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	if tablesFound != tableCount {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence table metadata: %+v",
+			sequencesByBackingTable)
 	}
+	return sequencesByBackingTable, nil
 }
 
 // initializeTargetSequences initializes the backing sequence tables
