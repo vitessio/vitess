@@ -2494,3 +2494,23 @@ func (ty KillType) ToString() string {
 		return ConnectionStr
 	}
 }
+
+// Indexes returns if the list of columns contains all the elements in the other list provided.
+// If it does, then it also returns the indexes of the columns.
+func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
+	var indexes []int
+	for _, subSetCol := range subSetCols {
+		colFound := false
+		for idx, col := range cols {
+			if col.Equal(subSetCol) {
+				colFound = true
+				indexes = append(indexes, idx)
+				break
+			}
+		}
+		if !colFound {
+			return false, nil
+		}
+	}
+	return true, indexes
+}

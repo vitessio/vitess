@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -162,7 +163,15 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 }
 
 func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) error {
-	if fkStrategyMap[vschema.ForeignKeyMode()] == fkDisallow {
+	_, ks, _, err := vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+	if err != nil {
+		return err
+	}
+	fkMode, err := vschema.ForeignKeyMode(ks.Name)
+	if err != nil {
+		return err
+	}
+	if fkMode == vschemapb.Keyspace_FK_DISALLOW {
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {

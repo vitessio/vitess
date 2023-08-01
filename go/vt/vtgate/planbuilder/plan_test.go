@@ -507,8 +507,8 @@ func (vw *vschemaWrapper) ConnCollation() collations.ID {
 func (vw *vschemaWrapper) PlannerWarning(_ string) {
 }
 
-func (vw *vschemaWrapper) ForeignKeyMode() string {
-	return "allow"
+func (vw *vschemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	return vschemapb.Keyspace_FK_UNMANAGED, nil
 }
 
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {

@@ -50,6 +50,10 @@ type Insert struct {
 	// Insert using select query will have select plan as input operator for the insert operation.
 	Input ops.Operator
 
+	// FKVerify is required to check the validity of foreign key constraints that aren't shard scoped.
+	// It is nil if no verification is required.
+	FKVerify ops.Operator
+
 	noColumns
 	noPredicates
 }
@@ -111,6 +115,7 @@ func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
 		ColVindexes:       i.ColVindexes,
 		VindexValues:      i.VindexValues,
 		VindexValueOffset: i.VindexValueOffset,
+		FKVerify:          i.FKVerify,
 	}
 }
 
