@@ -1702,6 +1702,12 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 	return tsv.topoServer
 }
 
+// CheckThrottler issues a self check
+func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+	r := tsv.lagThrottler.CheckByType(ctx, appName, "", flags, throttle.ThrottleCheckSelf)
+	return r
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {

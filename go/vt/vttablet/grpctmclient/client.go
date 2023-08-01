@@ -1001,6 +1001,20 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req
 	}, nil
 }
 
+// CheckThrottler is part of the tmclient.TabletManagerClient interface.
+func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.CheckThrottler(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 type restoreFromBackupStreamAdapter struct {
 	stream tabletmanagerservicepb.TabletManager_RestoreFromBackupClient
 	closer io.Closer
