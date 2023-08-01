@@ -37,6 +37,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1135,6 +1136,55 @@ func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
 
 func (vc *vcursorImpl) SetExec(ctx context.Context, name string, value string) error {
 	return vc.executor.setVitessMetadata(ctx, name, value)
+}
+
+func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topodatapb.ThrottledAppRule) (err error) {
+	if throttledAppRule == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ThrottleApp: nil rule")
+	}
+	if throttledAppRule.Name == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ThrottleApp: app name is empty")
+	}
+	// We don't strictly have to construct a UpdateThrottlerConfigRequest here, because we only populate it
+	// with a couple variables; we could do without it. However, constructing the request makes the remaining code
+	// consistent with vtctldclient/command/throttler.go and we prefer this consistency
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:     vc.keyspace,
+		ThrottledApp: throttledAppRule,
+	}
+
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
+		if throttlerConfig == nil {
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
+		}
+		if throttlerConfig.ThrottledApps == nil {
+			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+		}
+		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		return throttlerConfig
+	}
+
+	ctx, unlock, lockErr := vc.topoServer.LockKeyspace(ctx, req.Keyspace, "UpdateThrottlerConfig")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	ki, err := vc.topoServer.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return err
+	}
+
+	ki.ThrottlerConfig = update(ki.ThrottlerConfig)
+
+	err = vc.topoServer.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return err
+	}
+
+	_, err = vc.topoServer.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+
+	return err
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
