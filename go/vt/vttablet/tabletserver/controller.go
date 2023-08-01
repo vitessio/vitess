@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	"time"
 
@@ -89,6 +90,9 @@ type Controller interface {
 
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server
+
+	// CheckThrottler
+	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult
 }
 
 // Ensure TabletServer satisfies Controller interface.
