@@ -171,7 +171,7 @@ func TestConfigParse(t *testing.T) {
 		}
 
 		expectedCreds := &StaticAuthCredentials{
-			EffectiveUser: "vtadmin",
+			EffectiveUser: "vt_appdebug",
 			StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
 				Username: "vtadmin",
 				Password: "my_password",
