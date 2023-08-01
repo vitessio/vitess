@@ -66,22 +66,6 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
-mysql57)
-    mysql57_version=5.7.31
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-server_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
-    PACKAGES=(
-        /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
-        percona-xtrabackup-24
-    )
-    ;;
 mysql80)
     mysql8_version=8.0.30
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-common_${mysql8_version}-1debian10_amd64.deb
@@ -144,9 +128,6 @@ add_apt_key 9334A25F8507EFA5
 
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
-mysql57)
-    echo 'deb http://repo.mysql.com/apt/debian/ bullseye mysql-5.7' > /etc/apt/sources.list.d/mysql.list
-    ;;
 mysql80)
     echo 'deb http://repo.mysql.com/apt/debian/ bullseye mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;

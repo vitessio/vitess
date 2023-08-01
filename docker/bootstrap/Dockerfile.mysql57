@@ -13,7 +13,7 @@ RUN apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     cd mysql-5.7.31 && mkdir bld && cd bld && \
     cmake -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp -SSL=system .. && \
     make && make install && \
-    groupadd mysql && useradd -r -g mysql -s /bin/false mysql && cd /usr/local && sudo chown -R mysql:mysql ./mysql && \
+    groupadd mysql && useradd -r -g mysql -s /bin/false mysql && cd /usr/local && chown -R mysql:mysql ./mysql && \
     cd /usr/local/mysql && bin/mysqld --initialize-insecure --user=mysql && \
     echo 'export PATH=$PATH:/usr/local/mysql/bin' >> ~/.bashrc && source ~/.bashrc && \
     echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list && \
