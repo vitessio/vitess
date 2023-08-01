@@ -57,8 +57,6 @@ const (
 	builtinBackupEngineName = "builtin"
 	autoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
-
-	compressorTimeout = 3 * time.Second
 )
 
 var (
@@ -761,6 +759,8 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
@@ -832,6 +832,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		defer func() {
 			// Close gzip to flush it, after that all data is sent to writer.
 			closeCompressorAt := time.Now()
+			params.Logger.Infof("closing compressor")
 			if cerr := closer.Close(); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
 				params.Logger.Error(cerr)
@@ -1018,6 +1019,8 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 // restoreFile restores an individual file.
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, name)
@@ -1096,6 +1099,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 		defer func() {
 			closeDecompressorAt := time.Now()
+			params.Logger.Infof("closing decompressor")
 			if cerr := closer.Close(); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
