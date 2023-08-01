@@ -67,7 +67,16 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
 mysql57)
-  ;;
+      DEBIAN_FRONTEND=noninteractive apt-get install -y cmake gcc g++ bison libncurses5-dev libssl-dev
+      wget https://dev.mysql.com/get/Downloads/MySQL-5.7/mysql-5.7.31.tar.gz
+      tar xzf mysql-5.7.31.tar.gz
+      cd mysql-5.7.31 && mkdir bld && cd bld
+      cmake -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp -SSL=system ..
+      make && make install
+      groupadd mysql && useradd -r -g mysql -s /bin/false mysql && cd /usr/local && chown -R mysql:mysql ./mysql
+      cd /usr/local/mysql && bin/mysqld --initialize-insecure --user=mysql
+      echo 'export PATH=$PATH:/usr/local/mysql/bin' >> ~/.bashrc && . ~/.bashrc
+      ;;
 mysql80)
     mysql8_version=8.0.30
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-common_${mysql8_version}-1debian10_amd64.deb
