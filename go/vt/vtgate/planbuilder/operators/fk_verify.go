@@ -71,7 +71,7 @@ func NewFkVerify(ctx *plancontext.PlanningContext, parentFKs []vindexes.ParentFK
 				),
 			),
 		}
-		op, err := createOperatorFromSelect(ctx, query)
+		op, err := PlanQuery(ctx, query)
 		if err != nil {
 			return nil, err
 		}

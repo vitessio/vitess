@@ -66,6 +66,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformAggregator(ctx, op)
 	case *operators.Distinct:
 		return transformDistinct(ctx, op)
+	case *operators.FKVerify:
+		return nil, vterrors.VT12002()
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -426,6 +428,14 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 			return
 		}
 	}
+
+	if ins.FKVerify != nil {
+		i.fkVerify, err = transformToLogicalPlan(ctx, ins.FKVerify, true)
+		if err != nil {
+			return
+		}
+	}
+
 	return
 }
 
