@@ -74,8 +74,7 @@ mysql57)
       cmake -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp -SSL=system ..
       make && make install
       groupadd mysql && useradd -r -g mysql -s /bin/false mysql && cd /usr/local && chown -R mysql:mysql ./mysql
-      cd /usr/local/mysql && bin/mysqld --initialize-insecure --user=mysql
-      echo 'export PATH=$PATH:/usr/local/mysql/bin' >> ~/.bashrc && . ~/.bashrc
+      cd /usr/local/mysql && bin/mysqld --initialize-insecure --user=mysql && cp ./bin/* /usr/local/bin/
       ;;
 mysql80)
     mysql8_version=8.0.30
