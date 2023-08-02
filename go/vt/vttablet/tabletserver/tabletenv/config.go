@@ -185,6 +185,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 	fs.IntVar(&currentConfig.TxThrottlerDefaultPriority, "tx-throttler-default-priority", defaultConfig.TxThrottlerDefaultPriority, "Default priority assigned to queries that lack priority information")
 	fs.Var(currentConfig.TxThrottlerTabletTypes, "tx-throttler-tablet-types", "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
+	fs.BoolVar(&currentConfig.TxThrottlerDryRun, "tx-throttler-dry-run", defaultConfig.TxThrottlerDryRun, "If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.")
 	fs.DurationVar(&currentConfig.TxThrottlerTopoRefreshInterval, "tx-throttler-topo-refresh-interval", time.Minute*5, "The rate that the transaction throttler will refresh the topology to find cells.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
@@ -366,6 +367,7 @@ type TabletConfig struct {
 	TxThrottlerDefaultPriority     int                           `json:"-"`
 	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag `json:"-"`
 	TxThrottlerTopoRefreshInterval time.Duration                 `json:"-"`
+	TxThrottlerDryRun              bool                          `json:"-"`
 
 	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
@@ -831,6 +833,7 @@ var defaultConfig = TabletConfig{
 	TxThrottlerHealthCheckCells:    []string{},
 	TxThrottlerDefaultPriority:     sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
 	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
+	TxThrottlerDryRun:              false,
 	TxThrottlerTopoRefreshInterval: time.Minute * 5,
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
