@@ -39,12 +39,12 @@ func NewTimeoutCloser(ctx context.Context, closer io.Closer, timeout time.Durati
 
 func (c *TimeoutCloser) Close() error {
 	done := make(chan error)
-	defer close(done)
 
 	ctx, cancel := context.WithTimeout(c.ctx, c.timeout)
 	defer cancel()
 
 	go func() {
+		defer close(done)
 		done <- c.closer.Close()
 	}()
 	select {
