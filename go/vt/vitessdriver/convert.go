@@ -109,12 +109,16 @@ func (cv *converter) bindVarsFromNamedValues(args []driver.NamedValue) (map[stri
 	return bindVars, nil
 }
 
-func newConverter(cfg *Configuration) (c *converter, err error) {
-	c = &converter{
-		location: time.UTC,
+func newConverter(cfg *Configuration) (*converter, error) {
+	c := &converter{location: time.UTC}
+	if cfg.DefaultLocation == "" {
+		return c, nil
 	}
-	if cfg.DefaultLocation != "" {
-		c.location, err = time.LoadLocation(cfg.DefaultLocation)
+
+	loc, err := time.LoadLocation(cfg.DefaultLocation)
+	if err != nil {
+		return nil, err
 	}
-	return
+	c.location = loc
+	return c, nil
 }
