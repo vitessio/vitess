@@ -846,12 +846,12 @@ func testScheduler(t *testing.T) {
 		t.Run("start and fail migration", func(t *testing.T) {
 			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
-			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, tabletmanagerdatapb.OnlineDDL_RUNNING)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, tabletmanagerdatapb.OnlineDDL_FAILED, tabletmanagerdatapb.OnlineDDL_CANCELLED)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_CANCELLED)
 		})
 
 		// now, we submit the exact same migratoin again: same UUID, same migration context.
@@ -860,9 +860,9 @@ func testScheduler(t *testing.T) {
 			require.Equal(t, uuid, executedUUID)
 
 			// expect it to complete
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 
 			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 			require.NotNil(t, rs)
