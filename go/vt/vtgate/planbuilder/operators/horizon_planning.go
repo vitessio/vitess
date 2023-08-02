@@ -82,17 +82,17 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		fmt.Println(ops.ToTree(output))
 	}
 
-	output, err = makeSureOutputIsCorrect(ctx, root, output)
-	if err != nil {
-		return nil, err
-	}
-
 	output, err = compact(ctx, output)
 	if err != nil {
 		return nil, err
 	}
 
-	return
+	output, err = addTruncationOrProjectionToReturnOutput(ctx, root, output)
+	if err != nil {
+		return nil, err
+	}
+
+	return compact(ctx, output)
 }
 
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
@@ -703,8 +703,8 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 	return newUnion(sources, selects, columns, op.distinct), rewrite.NewTree("merged union inputs", op), nil
 }
 
-// makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
-func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
+// addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
 	cols, err := output.GetSelectExprs(ctx)
 	if err != nil {
 		return nil, err

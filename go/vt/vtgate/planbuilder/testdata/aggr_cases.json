@@ -3661,6 +3661,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 1",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3992,6 +3993,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "bazo between 100 and 200",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4029,6 +4031,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "bazo between 100 and 200",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",

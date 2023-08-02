@@ -3323,6 +3323,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "coalesce(user_extra.col, 4) = 5",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -3880,6 +3881,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "user_extra.col between 10 and 20",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Join",

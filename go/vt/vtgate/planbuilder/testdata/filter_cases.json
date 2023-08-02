@@ -3155,6 +3155,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "user_extra.id is null",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Join",
