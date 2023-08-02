@@ -200,3 +200,54 @@ func TestNewTxThrottler(t *testing.T) {
 		assert.Equal(t, []string{"cell1", "cell2"}, throttlerImpl.config.healthCheckCells)
 	}
 }
+
+func TestDryRunThrottler(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, t.Name())
+
+	testCases := []struct {
+		Name                           string
+		txThrottlerStateShouldThrottle bool
+		throttlerDryRun                bool
+		expectedResult                 bool
+	}{
+		{Name: "Real run throttles when txThrottlerStateImpl says it should", txThrottlerStateShouldThrottle: true, throttlerDryRun: false, expectedResult: true},
+		{Name: "Real run does not throttle when txThrottlerStateImpl says it should not", txThrottlerStateShouldThrottle: false, throttlerDryRun: false, expectedResult: false},
+		{Name: "Dry run does not throttle when txThrottlerStateImpl says it should", txThrottlerStateShouldThrottle: true, throttlerDryRun: true, expectedResult: false},
+		{Name: "Dry run does not throttle when txThrottlerStateImpl says it should not", txThrottlerStateShouldThrottle: false, throttlerDryRun: true, expectedResult: false},
+	}
+
+	for _, aTestCase := range testCases {
+		theTestCase := aTestCase
+
+		t.Run(theTestCase.Name, func(t *testing.T) {
+			aTxThrottler := &txThrottler{
+				config: &txThrottlerConfig{
+					enabled: true,
+					dryRun:  theTestCase.throttlerDryRun,
+				},
+				state:             &mockTxThrottlerState{shouldThrottle: theTestCase.txThrottlerStateShouldThrottle},
+				throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+				requestsTotal:     env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerRequests", "transaction throttler requests", "workload"),
+				requestsThrottled: env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerThrottled", "transaction throttler requests throttled", "workload"),
+			}
+
+			assert.Equal(t, theTestCase.expectedResult, aTxThrottler.Throttle(100, "some-workload"))
+		})
+	}
+}
+
+type mockTxThrottlerState struct {
+	shouldThrottle bool
+}
+
+func (t *mockTxThrottlerState) deallocateResources() {
+
+}
+func (t *mockTxThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
+
+}
+
+func (t *mockTxThrottlerState) throttle() bool {
+	return t.shouldThrottle
+}
