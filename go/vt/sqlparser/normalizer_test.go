@@ -440,7 +440,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "select count(distinct id, name) from area where (id, name) in ((1, 'US'))",
+		input:  "",
 		output: "",
 	}
 	if testOne.input == "" {

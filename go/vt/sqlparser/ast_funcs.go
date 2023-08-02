@@ -2514,3 +2514,13 @@ func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
 	}
 	return true, indexes
 }
+
+// MakeColumns is to used to make a list of columns from a list of strings.
+// This function is meeant to be used in testing code.
+func MakeColumns(colNames ...string) Columns {
+	var cols Columns
+	for _, name := range colNames {
+		cols = append(cols, NewIdentifierCI(name))
+	}
+	return cols
+}
