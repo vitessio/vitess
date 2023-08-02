@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=19
+ARG bootstrap_version=20
 ARG image="vitess/bootstrap:${bootstrap_version}-percona57"
 
 FROM "${image}" AS builder
