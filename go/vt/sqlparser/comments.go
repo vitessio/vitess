@@ -53,12 +53,13 @@ const (
 	DirectiveConsolidator = "CONSOLIDATOR"
 	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
 	DirectiveWorkloadName = "WORKLOAD_NAME"
-	// DirectivePriority specifies the priority of a workload. It should be an integer between 0 and MaxPriorityValue,
-	// where 0 is the highest priority, and MaxPriorityValue is the lowest one.
+	// DirectivePriority specifies the priority of a workload. It should be an integer between MinPriorityValue (0) and MaxPriorityValue (100),
+	// where MinPriorityValue is the highest priority, and MaxPriorityValue is the lowest one.
 	DirectivePriority = "PRIORITY"
 
-	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
-	// between zero and MaxPriorityValue.
+	// MinPriorityValue specifies the minimum value allowed for the priority query directive.
+	MinPriorityValue = 0
+	// MaxPriorityValue specifies the maximum value allowed for the priority query directive.
 	MaxPriorityValue = 100
 )
 
@@ -404,7 +405,7 @@ func GetPriorityFromStatement(statement Statement) (string, error) {
 	}
 
 	intPriority, err := strconv.Atoi(priority)
-	if err != nil || intPriority < 0 || intPriority > MaxPriorityValue {
+	if err != nil || intPriority < MinPriorityValue || intPriority > MaxPriorityValue {
 		return "", ErrInvalidPriority
 	}
 

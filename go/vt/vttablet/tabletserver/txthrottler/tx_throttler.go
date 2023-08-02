@@ -368,12 +368,13 @@ func (t *txThrottler) Throttle(plan *planbuilder.Plan, options *querypb.ExecuteO
 		return nil
 	}
 
-	// get priority from execute options, skip priority 0
+	// get priority from execute options, skip if the priority
+	// is equal to sqlparser.MinPriorityValue
 	planType := plan.PlanID.String()
 	metricLabels := []string{planType, options.GetWorkloadName()}
 	t.requestsTotal.Add(metricLabels, 1)
 	priority := t.getPriorityFromOptions(options)
-	if priority == 0 {
+	if priority == sqlparser.MinPriorityValue {
 		return nil
 	}
 
