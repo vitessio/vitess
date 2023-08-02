@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -370,9 +371,7 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 
 func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
-	sort.Slice(sortedBackingTableNames, func(i, j int) bool {
-		return sortedBackingTableNames[i] < sortedBackingTableNames[j]
-	})
+	slices.Sort(sortedBackingTableNames)
 	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
 		strings.Join(sortedBackingTableNames, ",")))
 	return nil

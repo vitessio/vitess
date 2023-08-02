@@ -1962,7 +1962,6 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 // defined that use sequences for auto_increment generation then a nil
 // map will be returned.
 func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[string]*sequenceMetadata, error) {
-	log.Error("DEBUG: getTargetSequenceMetadata")
 	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
@@ -2008,7 +2007,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	if len(sequencesByBackingTable) == 0 { // Nothing to do
 		return nil, nil
 	}
-	log.Errorf("DEBUG: sequences: %+v", sequencesByBackingTable)
 
 	select {
 	case <-ctx.Done():
@@ -2059,7 +2057,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 				sm.backingTableKeyspace = keyspace
 				sm.backingTableDBName = "vt_" + keyspace
 				if tablesFound == tableCount { // Short circuit the search
-					log.Errorf("DEBUG: all sequence backing tables found: %+v", sequencesByBackingTable)
 					smMu.Unlock()
 					select {
 					case <-searchCompleted: // It's already been closed
@@ -2078,7 +2075,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
 	}
-	log.Errorf("DEBUG: keyspaces: %+v", keyspaces)
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	for _, keyspace := range keyspaces {
 		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
@@ -2107,9 +2103,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // the primary tablet serving the sequence to refresh/reset its cache to
 // be sure that it does not provide a value that is less than the current max.
 func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	log.Error("DEBUG: initializeTargetSequences")
 	initSequenceTable := func(ictx context.Context, sequenceTableName string, sequenceMetadata *sequenceMetadata) error {
-		log.Errorf("DEBUG: sequence table: %v, sequenceMetadata: %+v", sequenceTableName, sequenceMetadata)
 		// Now we need to run this query on the target shards in order
 		// to get the max value and set the next id for the sequence to
 		// a higher value.
@@ -2126,8 +2120,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				sqlescape.EscapeID(sequenceMetadata.usingTableDBName),
 				sqlescape.EscapeID(sequenceMetadata.usingTableName),
 			)
-			log.Errorf("DEBUG: query: %s on shard: %s/%s",
-				query.Query, ts.targetKeyspace, target.GetShard().ShardName())
 			qr, terr := ts.wr.ExecuteFetchAsApp(ictx, primary.GetAlias(), true, query.Query, 1)
 			if terr != nil || len(qr.Rows) != 1 {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
@@ -2138,7 +2130,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
 					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
 			}
-			log.Errorf("DEBUG: max ID seen on shard %s: %d", target.GetShard().ShardName(), maxID)
 			srMu.Lock()
 			defer srMu.Unlock()
 			shardResults = append(shardResults, maxID)
@@ -2184,7 +2175,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			nextVal,
 			nextVal,
 		)
-		log.Errorf("DEBUG: query: %s", query.Query)
 		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
 		qr, ierr := ts.wr.ExecuteFetchAsApp(ictx, sequenceShard.PrimaryAlias, true, query.Query, 1)
