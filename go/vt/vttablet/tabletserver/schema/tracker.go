@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -155,10 +155,10 @@ func (tr *Tracker) process(ctx context.Context) {
 	}
 }
 
-func (tr *Tracker) currentPosition(ctx context.Context) (mysql.Position, error) {
+func (tr *Tracker) currentPosition(ctx context.Context) (replication.Position, error) {
 	conn, err := tr.engine.cp.Connect(ctx)
 	if err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	defer conn.Close()
 	return conn.PrimaryPosition()
@@ -202,7 +202,7 @@ func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	gtid := mysql.EncodePosition(pos)
+	gtid := replication.EncodePosition(pos)
 	log.Infof("Saving initial schema for gtid %s", gtid)
 
 	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)

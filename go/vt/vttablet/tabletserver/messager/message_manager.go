@@ -27,7 +27,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
@@ -223,7 +224,7 @@ type messageManager struct {
 	// where a replica could have received and processed a GTID that the primary
 	// may not have yet commited; but this is harmless because any events missed
 	// will be picked up during the next poller run.
-	lastPollPosition *mysql.Position
+	lastPollPosition *replication.Position
 
 	// wg is for ensuring all running goroutines have returned
 	// before we can close the manager. You need to Add before
@@ -703,7 +704,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 			if curPos == "" {
 				return true, nil
 			}
-			cur, err := mysql.DecodePosition(curPos)
+			cur, err := replication.DecodePosition(curPos)
 			if err != nil {
 				return false, err
 			}
@@ -948,7 +949,7 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 			qr.Fields = response.Fields
 		}
 		if response.Gtid != "" {
-			pos, err := mysql.DecodePosition(response.Gtid)
+			pos, err := replication.DecodePosition(response.Gtid)
 			if err != nil {
 				return err
 			}
@@ -971,7 +972,7 @@ func (mm *messageManager) getReceiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *messageManager) getLastPollPosition() *mysql.Position {
+func (mm *messageManager) getLastPollPosition() *replication.Position {
 	mm.cacheManagementMu.Lock()
 	defer mm.cacheManagementMu.Unlock()
 	return mm.lastPollPosition

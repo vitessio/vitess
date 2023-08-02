@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"encoding/json"
@@ -209,7 +209,7 @@ func (rp *Position) MatchesFlavor(flavor string) bool {
 		_, matches := rp.GTIDSet.(MariadbGTIDSet)
 		return matches
 	case FilePosFlavorID:
-		_, matches := rp.GTIDSet.(filePosGTID)
+		_, matches := rp.GTIDSet.(FilePosGTID)
 		return matches
 	}
 	return false

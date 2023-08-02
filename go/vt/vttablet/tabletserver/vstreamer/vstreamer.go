@@ -26,6 +26,8 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
@@ -78,7 +80,7 @@ type vstreamer struct {
 
 	// format and pos are updated by parseEvent.
 	format  mysql.BinlogFormat
-	pos     mysql.Position
+	pos     replication.Position
 	stopPos string
 
 	phase string
@@ -167,7 +169,7 @@ func (vs *vstreamer) Stream() error {
 	}()
 	vs.vse.vstreamersCreated.Add(1)
 	log.Infof("Starting Stream() with startPos %s", vs.startPos)
-	pos, err := mysql.DecodePosition(vs.startPos)
+	pos, err := replication.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
 		vs.vse.vstreamersEndedWithErrors.Add(1)
@@ -448,11 +450,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+		vs.pos = replication.AppendGTID(vs.pos, gtid)
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
-			Gtid: mysql.EncodePosition(vs.pos),
+			Gtid: replication.EncodePosition(vs.pos),
 		}, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_COMMIT,
 		})
@@ -509,7 +511,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
-					Gtid: mysql.EncodePosition(vs.pos),
+					Gtid: replication.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
 					Type:      binlogdatapb.VEventType_DDL,
 					Statement: q.SQL,
@@ -518,7 +520,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				// If the DDL need not be sent, send a dummy OTHER event.
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
-					Gtid: mysql.EncodePosition(vs.pos),
+					Gtid: replication.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_OTHER,
 				})
@@ -543,7 +545,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			//    that we want to keep out of the stream for now.
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_GTID,
-				Gtid: mysql.EncodePosition(vs.pos),
+				Gtid: replication.EncodePosition(vs.pos),
 			}, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_OTHER,
 			})
@@ -635,7 +637,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 	case ev.IsTransactionPayload():
-		if !vs.pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+		if !vs.pos.MatchesFlavor(replication.Mysql56FlavorID) {
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)
 		}
@@ -778,7 +780,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			Flags:   mysql.FlagsForColumn(t, collations.DefaultCollationForType(t)),
 		})
 	}
-	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), mysql.EncodePosition(vs.pos))
+	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			log.Infof("No schema found for table %s", tm.Name)
@@ -1016,7 +1018,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	return ok, filtered, partial, err
 }
 
-func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
+func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)

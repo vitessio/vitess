@@ -29,7 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
@@ -362,7 +362,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	escapedTableName := sqlparser.String(sqlparser.NewIdentifierCS(tableName))
 	rs, err := si.exec(si.ctx, sqlparser.BuildParsedQuery(showCreateTableQuery, GetIdentifier(), escapedTableName).Query, 1, false)
 	if err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERNoSuchTable {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERNoSuchTable {
 			// table does not exist in the sidecar database
 			return "", nil
 		}

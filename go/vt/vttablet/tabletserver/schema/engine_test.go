@@ -31,6 +31,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -205,13 +208,13 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 
 	// ReloadAt tests
-	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
+	pos1, err := replication.DecodePosition("MariaDB/0-41983-20")
 	require.NoError(t, err)
-	pos2, err := mysql.DecodePosition("MariaDB/0-41983-40")
+	pos2, err := replication.DecodePosition("MariaDB/0-41983-40")
 	require.NoError(t, err)
 	se.UnregisterNotifier("test")
 
-	err = se.ReloadAt(context.Background(), mysql.Position{})
+	err = se.ReloadAt(context.Background(), replication.Position{})
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
@@ -447,7 +450,7 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), ""))
 	// rejecting the impossible query
-	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", mysql.NewSQLErrorFromError(errors.New("The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")))
+	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", sqlerror.NewSQLErrorFromError(errors.New("The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
@@ -482,7 +485,7 @@ func TestOpenNoErrorDueToInvalidViews(t *testing.T) {
 	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "bar_view"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), "col1", "col2"))
 	// rejecting the impossible query
-	db.AddRejectedQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`bar_view` WHERE 1 != 1", mysql.NewSQLError(mysql.ERWrongFieldWithGroup, mysql.SSClientError, "random error for table bar_view"))
+	db.AddRejectedQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`bar_view` WHERE 1 != 1", sqlerror.NewSQLError(sqlerror.ERWrongFieldWithGroup, sqlerror.SSClientError, "random error for table bar_view"))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)

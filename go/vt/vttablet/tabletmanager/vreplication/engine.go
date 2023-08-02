@@ -29,7 +29,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -779,7 +780,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			// The full error we get back from MySQL in that case is:
 			// Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)
 			// Docs: https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html#error_er_lock_deadlock
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock {
 				log.Infof("Deadlock detected waiting for pos %s: %v; will retry", pos, err)
 			} else {
 				return err

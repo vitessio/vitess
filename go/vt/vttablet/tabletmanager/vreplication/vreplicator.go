@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -37,7 +39,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -302,7 +303,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
-			return newVPlayer(vr, settings, nil, mysql.Position{}, "replicate").play(ctx)
+			return newVPlayer(vr, settings, nil, replication.Position{}, "replicate").play(ctx)
 		}
 	}
 }
@@ -691,7 +692,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {
 			// If they've already been dropped, e.g. by another controller running on the tablet
 			// when doing a shard merge, then we can ignore the error.
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERCantDropFieldOrKey {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.ERCantDropFieldOrKey {
 				secondaryKeys, err := vr.getTableSecondaryKeys(ctx, tableName)
 				if err == nil && len(secondaryKeys) == 0 {
 					return nil
@@ -944,7 +945,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// index definitions that we would have added already exist in
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
-				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERDupKeyName {
+				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
 					stmt, err := sqlparser.ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr

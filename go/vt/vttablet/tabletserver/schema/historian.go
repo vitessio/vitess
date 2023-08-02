@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -43,7 +43,7 @@ const vl = 10
 // trackedSchema has the snapshot of the table at a given pos (reached by ddl)
 type trackedSchema struct {
 	schema      map[string]*binlogdatapb.MinimalTable
-	pos         mysql.Position
+	pos         replication.Position
 	ddl         string
 	timeUpdated int64
 }
@@ -146,7 +146,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 	if gtid == "" {
 		return nil, nil
 	}
-	pos, err := mysql.DecodePosition(gtid)
+	pos, err := replication.DecodePosition(gtid)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err != nil {
 		return nil, 0, err
 	}
-	pos, err := mysql.DecodePosition(string(rowBytes))
+	pos, err := replication.DecodePosition(string(rowBytes))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -232,7 +232,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 		return nil, 0, err
 	}
 	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
-		id, mysql.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
+		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
@@ -281,7 +281,7 @@ func (h *historian) sortSchemas() {
 }
 
 // getTableFromHistoryForPos looks in the cache for a schema for a specific gtid
-func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, pos mysql.Position) *binlogdatapb.MinimalTable {
+func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, pos replication.Position) *binlogdatapb.MinimalTable {
 	idx := sort.Search(len(h.schemas), func(i int) bool {
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})

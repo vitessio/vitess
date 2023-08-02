@@ -25,7 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -224,7 +225,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestColTypes,
 			),
 				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, optionsJS,
-					mysql.NewSQLError(mysql.ERNoSuchTable, "42S02", "Table 'foo' doesn't exist")),
+					sqlerror.NewSQLError(sqlerror.ERNoSuchTable, "42S02", "Table 'foo' doesn't exist")),
 			),
 		},
 		{
@@ -234,7 +235,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestColTypes,
 			),
 				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, optionsJS,
-					mysql.NewSQLError(mysql.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")),
+					sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")),
 			),
 			expectRetry: true,
 		},

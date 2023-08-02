@@ -28,6 +28,9 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -68,7 +71,7 @@ type Engine struct {
 	tables     map[string]*Table
 	lastChange int64
 	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
-	reloadAtPos mysql.Position
+	reloadAtPos replication.Position
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
@@ -193,7 +196,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	if tabletType != topodatapb.TabletType_PRIMARY {
 		return err
 	}
-	if merr, isSQLErr := err.(*mysql.SQLError); !isSQLErr || merr.Num != mysql.ERBadDb {
+	if merr, isSQLErr := err.(*sqlerror.SQLError); !isSQLErr || merr.Num != sqlerror.ERBadDb {
 		return err
 	}
 
@@ -353,14 +356,14 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // The includeStats argument controls whether table size statistics should be
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
-	return se.ReloadAt(ctx, mysql.Position{})
+	return se.ReloadAt(ctx, replication.Position{})
 }
 
 // ReloadAt reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
-func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
+func (se *Engine) ReloadAt(ctx context.Context, pos replication.Position) error {
 	return se.ReloadAtEx(ctx, pos, true)
 }
 
@@ -370,7 +373,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 // The includeStats argument controls whether table size statistics should be
 // emitted, as they can be expensive to calculate for a large number of tables
-func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeStats bool) error {
+func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, includeStats bool) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -378,7 +381,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeSta
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Infof("ReloadAtEx: found cached schema at %s", mysql.EncodePosition(pos))
+		log.V(2).Infof("ReloadAtEx: found cached schema at %s", replication.EncodePosition(pos))
 		return nil
 	}
 	if err := se.reload(ctx, includeStats); err != nil {

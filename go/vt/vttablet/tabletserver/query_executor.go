@@ -26,9 +26,11 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -554,7 +556,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 			// Instead of synchronously recalculating table size stats
 			// after every DDL, let them be outdated until the periodic
 			// schema reload fixes it.
-			if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
+			if err := qre.tsv.se.ReloadAtEx(qre.ctx, replication.Position{}, false); err != nil {
 				log.Errorf("failed to reload schema %v", err)
 			}
 		}()
@@ -849,11 +851,11 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 }
 
 func rewriteOUTParamError(err error) error {
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	if !ok {
 		return err
 	}
-	if sqlErr.Num == mysql.ErSPNotVarArg {
+	if sqlErr.Num == sqlerror.ErSPNotVarArg {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OUT and INOUT parameters are not supported")
 	}
 	return err

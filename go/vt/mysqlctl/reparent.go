@@ -24,10 +24,10 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -42,10 +42,10 @@ func GenerateInitialBinlogEntry() string {
 // PopulateReparentJournal returns the SQL command to use to populate
 // the reparent_journal table, as well as the time_created_ns
 // value used.
-func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos mysql.Position) string {
-	posStr := mysql.EncodePosition(pos)
-	if len(posStr) > mysql.MaximumPositionSize {
-		posStr = posStr[:mysql.MaximumPositionSize]
+func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos replication.Position) string {
+	posStr := replication.EncodePosition(pos)
+	if len(posStr) > replication.MaximumPositionSize {
+		posStr = posStr[:replication.MaximumPositionSize]
 	}
 	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
@@ -85,11 +85,11 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 }
 
 // Promote will promote this server to be the new primary.
-func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (replication.Position, error) {
 	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	defer conn.Recycle()
 
@@ -106,7 +106,7 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	}
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	return conn.PrimaryPosition()
 }

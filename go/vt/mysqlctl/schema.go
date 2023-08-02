@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -128,8 +128,8 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 				// the list of tables (collectBasicTableData(), earlier) and the point above where we investigate
 				// the table.
 				// This is fine. We identify the situation and keep the table without any fields/columns/key information
-				sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-				if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchTable {
+				sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+				if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNoSuchTable {
 					return nil
 				}
 
