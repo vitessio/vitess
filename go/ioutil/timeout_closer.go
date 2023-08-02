@@ -24,13 +24,14 @@ import (
 
 // TimeoutCloser is an io.Closer that has a timeout for executing the Close() function.
 type TimeoutCloser struct {
-	io.Closer
+	ctx     context.Context
 	closer  io.Closer
 	timeout time.Duration
 }
 
-func NewTimeoutCloser(closer io.Closer, timeout time.Duration) *TimeoutCloser {
+func NewTimeoutCloser(ctx context.Context, closer io.Closer, timeout time.Duration) *TimeoutCloser {
 	return &TimeoutCloser{
+		ctx:     ctx,
 		closer:  closer,
 		timeout: timeout,
 	}
@@ -40,7 +41,7 @@ func (c *TimeoutCloser) Close() error {
 	done := make(chan error)
 	defer close(done)
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := context.WithTimeout(c.ctx, c.timeout)
 	defer cancel()
 
 	go func() {

@@ -824,7 +824,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
 		}
-		closer := ioutil.NewTimeoutCloser(compressor, closeTimeout)
+		closer := ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout)
 
 		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
 		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
@@ -1092,7 +1092,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		if err != nil {
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
-		closer := ioutil.NewTimeoutCloser(decompressor, closeTimeout)
+		closer := ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout)
 
 		decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
 		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)

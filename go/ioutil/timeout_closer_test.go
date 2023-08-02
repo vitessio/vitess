@@ -17,6 +17,7 @@ limitations under the License.
 package ioutil
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -37,13 +38,14 @@ func (c hangCloser) Close() error {
 }
 
 func TestTimeoutCloser(t *testing.T) {
+	ctx := context.Background()
 	{
-		closer := NewTimeoutCloser(&hangCloser{hang: false}, time.Second)
+		closer := NewTimeoutCloser(ctx, &hangCloser{hang: false}, time.Second)
 		err := closer.Close()
 		require.NoError(t, err)
 	}
 	{
-		closer := NewTimeoutCloser(&hangCloser{hang: true}, time.Second)
+		closer := NewTimeoutCloser(ctx, &hangCloser{hang: true}, time.Second)
 		err := closer.Close()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "context deadline exceeded")
