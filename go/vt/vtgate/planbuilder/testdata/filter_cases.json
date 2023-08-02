@@ -4115,6 +4115,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "repeat(a.textcol1, sum(a.id)) like 'And%res'",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",

@@ -2056,6 +2056,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 1.00",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -2124,6 +2125,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(id) = 10",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -2245,6 +2247,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(id) = 10",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -2919,6 +2922,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 3",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -2956,6 +2960,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "sum(foo) + sum(bar) = 42",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -2993,6 +2998,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "sum(foo) + sum(bar) = 42",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3030,6 +3036,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 3",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3067,6 +3074,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(u.`name`) = 3",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3170,6 +3178,7 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) < 3 and count(*) > 5",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -5943,5 +5952,4 @@
       ]
     }
   }
-
 ]

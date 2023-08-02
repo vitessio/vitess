@@ -38,6 +38,8 @@ type Filter struct {
 	// FinalPredicate is the evalengine expression that will finally be used.
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
 	FinalPredicate evalengine.Expr
+
+	Truncate int
 }
 
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
@@ -52,6 +54,7 @@ func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 		Source:         inputs[0],
 		Predicates:     slices.Clone(f.Predicates),
 		FinalPredicate: f.FinalPredicate,
+		Truncate:       f.Truncate,
 	}
 }
 
@@ -146,4 +149,8 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (f *Filter) ShortDescription() string {
 	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
+}
+
+func (f *Filter) setTruncateColumnCount(offset int) {
+	f.Truncate = offset
 }

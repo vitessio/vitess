@@ -257,6 +257,7 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 		efilter: &engine.Filter{
 			Predicate:    predicate,
 			ASTPredicate: ast,
+			Truncate:     op.Truncate,
 		},
 	}, nil
 }
