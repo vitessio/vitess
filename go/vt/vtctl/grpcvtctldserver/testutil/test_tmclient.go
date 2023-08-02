@@ -281,6 +281,11 @@ type TabletManagerClient struct {
 		Position *replicationdatapb.Status
 		Error    error
 	}
+	PrimaryStatusDelays  map[string]time.Duration
+	PrimaryStatusResults map[string]struct {
+		Status *replicationdatapb.PrimaryStatus
+		Error  error
+	}
 	RestoreFromBackupResults map[string]struct {
 		Events        []*logutilpb.Event
 		EventInterval time.Duration
@@ -343,6 +348,10 @@ type TabletManagerClient struct {
 	// WaitForPosition(tablet *topodatapb.Tablet, position string) error, so we
 	// key by tablet alias and then by position.
 	WaitForPositionResults map[string]map[string]error
+	// tablet alias => duration
+	CheckThrottlerDelays map[string]time.Duration
+	// keyed by tablet alias
+	CheckThrottlerResults map[string]*tabletmanagerdatapb.CheckThrottlerResponse
 }
 
 type backupStreamAdapter struct {
@@ -870,6 +879,32 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	return nil, assert.AnError
 }
 
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	if fake.PrimaryStatusResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.PrimaryStatusDelays != nil {
+		if delay, ok := fake.PrimaryStatusDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.PrimaryStatusResults[key]; ok {
+		return result.Status, result.Error
+	}
+
+	return nil, assert.AnError
+}
+
 type backupRestoreStreamAdapter struct {
 	*grpcshim.BidiStream
 	ch chan *logutilpb.Event
@@ -1322,6 +1357,36 @@ func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *t
 		if result, ok := resultsForTablet[parsedQuery]; ok {
 			return result.Result, result.Error
 		}
+	}
+
+	return nil, assert.AnError
+}
+
+// CheckThrottler is part of the tmclient.TabletManagerCLient interface.
+func (fake *TabletManagerClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	if fake.CheckThrottlerResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.CheckThrottlerDelays != nil {
+		if delay, ok := fake.CheckThrottlerDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if resultsForTablet, ok := fake.CheckThrottlerResults[key]; ok {
+		return resultsForTablet, nil
 	}
 
 	return nil, assert.AnError

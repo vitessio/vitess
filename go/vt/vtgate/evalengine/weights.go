@@ -169,6 +169,8 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 		return coll.WeightString(dst, b, length), false, nil
 	case *evalTemporal:
 		return e.dt.WeightString(dst), true, nil
+	case *evalJSON:
+		return e.WeightString(dst), false, nil
 	}
 
 	return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", e.SQLType())

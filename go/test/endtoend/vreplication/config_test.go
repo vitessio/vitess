@@ -59,6 +59,7 @@ create table json_tbl (id int, j1 json, j2 json, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
 create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
+create table loadtest (id int, name varchar(256), primary key(id), key(name));
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -76,6 +77,7 @@ create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 	"product": {},
 	"merchant": {},
 	"orders": {},
+    "loadtest": {},
 	"customer": {},
 	"customer_seq": {
 		"type": "sequence"
@@ -117,6 +119,14 @@ create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
     }
   },
   "tables": {
+    "loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
     "customer": {
       "column_vindexes": [
         {
@@ -283,7 +293,15 @@ create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
     }
   },
   "tables": {
-	"customer": {
+	"loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "customer": {
 	      "column_vindexes": [
 	        {
 	          "column": "cid",

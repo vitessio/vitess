@@ -189,7 +189,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		prevTarget.TabletType != topodata.TabletType_PRIMARY && prevTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
 	thc.lastResponseTimestamp = time.Now()
 	thc.Target = shr.Target
-	thc.PrimaryTermStartTime = shr.TabletExternallyReparentedTimestamp
+	thc.PrimaryTermStartTime = shr.PrimaryTermStartTimestamp
 	thc.Stats = shr.RealtimeStats
 	thc.LastError = healthErr
 	reason := "healthCheck update"

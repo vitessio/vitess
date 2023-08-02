@@ -29,6 +29,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -110,6 +111,8 @@ type (
 		ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 		// SetExec takes in k,v pair and use executor to set them in topo metadata.
 		SetExec(ctx context.Context, name string, value string) error
+		// ThrottleApp sets a ThrottlerappRule in topo
+		ThrottleApp(ctx context.Context, throttleAppRule *topodatapb.ThrottledAppRule) error
 
 		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
 		CanUseSetVar() bool

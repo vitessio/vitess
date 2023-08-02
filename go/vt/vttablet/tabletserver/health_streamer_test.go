@@ -150,9 +150,9 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_PRIMARY,
 		},
-		TabletAlias:                         alias,
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: now.Unix(),
+		TabletAlias:               alias,
+		Serving:                   true,
+		PrimaryTermStartTimestamp: now.Unix(),
 		RealtimeStats: &querypb.RealtimeStats{
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,

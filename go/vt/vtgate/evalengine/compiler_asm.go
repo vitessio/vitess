@@ -734,10 +734,10 @@ func (asm *assembler) CmpTupleNullsafe() {
 		l := env.vm.stack[env.vm.sp-2].(*evalTuple)
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
-		var equals bool
+		var equals int
 		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t)
 
-		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals)
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals == 0)
 		env.vm.sp -= 1
 		return 1
 	}, "CMP NULLSAFE TUPLE(SP-2), TUPLE(SP-1)")
@@ -2732,7 +2732,7 @@ func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollatio
 	}, "FN TO_BASE64 VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_WEIGHT_STRING(length int) {
+func (asm *assembler) Fn_WEIGHT_STRING(typ sqltypes.Type, length int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-1]
 		w, _, err := evalWeightString(nil, input, length, 0)
@@ -2740,7 +2740,7 @@ func (asm *assembler) Fn_WEIGHT_STRING(length int) {
 			env.vm.err = err
 			return 1
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(w)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(w, typ, collationBinary)
 		return 1
 	}, "FN WEIGHT_STRING (SP-1)")
 }

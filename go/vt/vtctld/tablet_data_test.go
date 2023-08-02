@@ -17,12 +17,11 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"io"
 	"sync"
 	"testing"
 	"time"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -93,7 +92,7 @@ func (s *streamHealthTabletServer) streamHealthUnregister(id int) error {
 // BroadcastHealth will broadcast the current health to all listeners
 func (s *streamHealthTabletServer) BroadcastHealth() {
 	shr := &querypb.StreamHealthResponse{
-		TabletExternallyReparentedTimestamp: 42,
+		PrimaryTermStartTimestamp: 42,
 		RealtimeStats: &querypb.RealtimeStats{
 			HealthError:           "testHealthError",
 			ReplicationLagSeconds: 72,

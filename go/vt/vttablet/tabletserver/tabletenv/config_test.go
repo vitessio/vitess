@@ -383,13 +383,6 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 			TxThrottlerConfig: &TxThrottlerConfigFlag{invalidMaxReplicationLagModuleConfig},
 		},
 		{
-			// enabled without cells defined
-			Name:              "enabled without cells",
-			ExpectedErrorCode: vtrpcpb.Code_FAILED_PRECONDITION,
-			EnableTxThrottler: true,
-			TxThrottlerConfig: &TxThrottlerConfigFlag{defaultMaxReplicationLagModuleConfig},
-		},
-		{
 			// enabled with good config (default/replica tablet type)
 			Name:                        "enabled",
 			EnableTxThrottler:           true,

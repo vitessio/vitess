@@ -19,6 +19,7 @@ package txthrottler
 import (
 	"context"
 	"math/rand"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -101,6 +102,17 @@ type TopologyWatcherInterface interface {
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
 
+// fetchKnownCells gathers a list of known cells from the topology. On error,
+// the cell of the local tablet will be used and an error is logged.
+func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) []string {
+	cells, err := topoServer.GetKnownCells(ctx)
+	if err != nil {
+		log.Errorf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err)
+		cells = []string{target.Cell}
+	}
+	return cells
+}
+
 // txThrottler implements TxThrottle for throttling transactions based on replication lag.
 // It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
 // It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
@@ -136,7 +148,7 @@ type txThrottler struct {
 
 	// state holds an open transaction throttler state. It is nil
 	// if the TransactionThrottler is closed.
-	state *txThrottlerState
+	state txThrottlerState
 
 	target     *querypb.Target
 	topoServer *topo.Server
@@ -158,6 +170,10 @@ type txThrottlerConfig struct {
 	// returns false.
 	enabled bool
 
+	// if dryRun is true, the txThrottler will run only on monitoring mode, meaning that it will increase counters for
+	// total and actually throttled requests, but it will not actually return that a transaction should be throttled.
+	dryRun bool
+
 	throttlerConfig *throttlerdatapb.Configuration
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for
 	// replication lag.
@@ -165,21 +181,33 @@ type txThrottlerConfig struct {
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
+
+	// rate to refresh topo for cells
+	topoRefreshInterval time.Duration
 }
 
-// txThrottlerState holds the state of an open TxThrottler object.
-type txThrottlerState struct {
+type txThrottlerState interface {
+	deallocateResources()
+	StatsUpdate(tabletStats *discovery.TabletHealth)
+	throttle() bool
+}
+
+// txThrottlerStateImpl holds the state of an open TxThrottler object.
+type txThrottlerStateImpl struct {
 	config      *txThrottlerConfig
 	txThrottler *txThrottler
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
-	throttleMu      sync.Mutex
-	throttler       ThrottlerInterface
-	stopHealthCheck context.CancelFunc
+	throttleMu       sync.Mutex
+	throttler        ThrottlerInterface
+	stopHealthCheck  context.CancelFunc
+	topologyWatchers map[string]TopologyWatcherInterface
 
 	healthCheck      discovery.HealthCheck
-	topologyWatchers map[string]TopologyWatcherInterface
+	healthCheckChan  chan *discovery.TabletHealth
+	healthCheckCells []string
+	cellsFromTopo    bool
 }
 
 // NewTxThrottler tries to construct a txThrottler from the
@@ -201,10 +229,12 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		}
 
 		throttlerConfig = &txThrottlerConfig{
-			enabled:          true,
-			tabletTypes:      tabletTypes,
-			throttlerConfig:  env.Config().TxThrottlerConfig.Get(),
-			healthCheckCells: healthCheckCells,
+			enabled:             true,
+			healthCheckCells:    healthCheckCells,
+			dryRun:              env.Config().TxThrottlerDryRun,
+			tabletTypes:         tabletTypes,
+			throttlerConfig:     env.Config().TxThrottlerConfig.Get(),
+			topoRefreshInterval: env.Config().TxThrottlerTopoRefreshInterval,
 		}
 
 		defer log.Infof("Initialized transaction throttler with config: %+v", throttlerConfig)
@@ -280,10 +310,10 @@ func (t *txThrottler) Throttle(priority int, workload string) (result bool) {
 		t.requestsThrottled.Add(workload, 1)
 	}
 
-	return result
+	return result && !t.config.dryRun
 }
 
-func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
+func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, target *querypb.Target) (txThrottlerState, error) {
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
 
 	t, err := throttlerFactory(
@@ -300,48 +330,95 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 		t.Close()
 		return nil, err
 	}
-	state := &txThrottlerState{
-		config:      config,
-		throttler:   t,
-		txThrottler: txThrottler,
+	state := &txThrottlerStateImpl{
+		config:           config,
+		healthCheckCells: config.healthCheckCells,
+		throttler:        t,
+		txThrottler:      txThrottler,
 	}
-	createTxThrottlerHealthCheck(txThrottler.topoServer, config, state, target.Cell)
 
-	state.topologyWatchers = make(
-		map[string]TopologyWatcherInterface, len(config.healthCheckCells))
-	for _, cell := range config.healthCheckCells {
-		state.topologyWatchers[cell] = topologyWatcherFactory(
-			txThrottler.topoServer,
-			state.healthCheck,
+	// get cells from topo if none defined in tabletenv config
+	if len(state.healthCheckCells) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+		state.healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
+		state.cellsFromTopo = true
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	state.stopHealthCheck = cancel
+	state.initHealthCheckStream(txThrottler.topoServer, target)
+	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
+
+	return state, nil
+}
+
+func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
+	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
+	ts.healthCheckChan = ts.healthCheck.Subscribe()
+
+	ts.topologyWatchers = make(
+		map[string]TopologyWatcherInterface, len(ts.healthCheckCells))
+	for _, cell := range ts.healthCheckCells {
+		ts.topologyWatchers[cell] = topologyWatcherFactory(
+			topoServer,
+			ts.healthCheck,
 			cell,
 			target.Keyspace,
 			target.Shard,
 			discovery.DefaultTopologyWatcherRefreshInterval,
 			discovery.DefaultTopoReadConcurrency,
 		)
-		txThrottler.topoWatchers.Add(cell, 1)
+		ts.txThrottler.topoWatchers.Add(cell, 1)
 	}
-	return state, nil
 }
 
-func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerState, cell string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	result.stopHealthCheck = cancel
-	result.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
-	ch := result.healthCheck.Subscribe()
-	go func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case th := <-ch:
-				result.StatsUpdate(th)
-			}
+func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
+	if ts.healthCheck == nil {
+		return
+	}
+	for cell, watcher := range ts.topologyWatchers {
+		watcher.Stop()
+		ts.txThrottler.topoWatchers.Reset(cell)
+	}
+	ts.topologyWatchers = nil
+	ts.stopHealthCheck()
+	ts.healthCheck.Close()
+}
+
+func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
+	fetchCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
+	if !reflect.DeepEqual(knownCells, ts.healthCheckCells) {
+		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
+		ts.healthCheckCells = knownCells
+		ts.closeHealthCheckStream()
+		ts.initHealthCheckStream(topoServer, target)
+	}
+}
+
+func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
+	var cellsUpdateTicks <-chan time.Time
+	if ts.cellsFromTopo {
+		ticker := time.NewTicker(ts.config.topoRefreshInterval)
+		cellsUpdateTicks = ticker.C
+		defer ticker.Stop()
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-cellsUpdateTicks:
+			ts.updateHealthCheckCells(ctx, topoServer, target)
+		case th := <-ts.healthCheckChan:
+			ts.StatsUpdate(th)
 		}
-	}(ctx)
+	}
 }
 
-func (ts *txThrottlerState) throttle() bool {
+func (ts *txThrottlerStateImpl) throttle() bool {
 	if ts.throttler == nil {
 		log.Error("throttle called after deallocateResources was called")
 		return false
@@ -352,27 +429,19 @@ func (ts *txThrottlerState) throttle() bool {
 	return ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
-func (ts *txThrottlerState) deallocateResources() {
-	// We don't really need to nil out the fields here
-	// as deallocateResources is not expected to be called
-	// more than once, but it doesn't hurt to do so.
-	for cell, watcher := range ts.topologyWatchers {
-		watcher.Stop()
-		ts.txThrottler.topoWatchers.Reset(cell)
-	}
-	ts.topologyWatchers = nil
-
-	ts.healthCheck.Close()
+func (ts *txThrottlerStateImpl) deallocateResources() {
+	// Close healthcheck and topo watchers
+	ts.closeHealthCheckStream()
 	ts.healthCheck = nil
 
-	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
+	// After ts.healthCheck is closed txThrottlerStateImpl.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
 	ts.throttler.Close()
 	ts.throttler = nil
 }
 
 // StatsUpdate updates the health of a tablet with the given healthcheck.
-func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
+func (ts *txThrottlerStateImpl) StatsUpdate(tabletStats *discovery.TabletHealth) {
 	if ts.config.tabletTypes == nil {
 		return
 	}
