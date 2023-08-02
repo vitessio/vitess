@@ -939,6 +939,8 @@ max_rate_approach_threshold: 0.9
 )
   --tx-throttler-default-priority int
 	Default priority assigned to queries that lack priority information.
+  --tx-throttler-dry-run bool
+    If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.
   --tx-throttler-healthcheck-cells value
 	Synonym to -tx_throttler_healthcheck_cells
   --tx-throttler-tablet-types value
