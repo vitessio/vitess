@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	errInvalidKeyValuePair            = errors.New("invalid key:value pair")
+	errInvalidKeyValuePair             = errors.New("invalid key:value pair")
 	errInvalidLowHighFloat64ValuesPair = errors.New("invalid low:high float pair")
 )
 
