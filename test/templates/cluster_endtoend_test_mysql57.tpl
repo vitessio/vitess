@@ -7,7 +7,8 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
     timeout-minutes: 45
 
     steps:

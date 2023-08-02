@@ -6,7 +6,8 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
 
     steps:
     - name: Check if workflow needs to be skipped

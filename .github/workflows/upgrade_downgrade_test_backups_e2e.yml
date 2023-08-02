@@ -11,7 +11,8 @@ jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Backups - E2E
-    runs-on: ubuntu-latest
+    runs-on:
+      group: vitess-ubuntu20
     needs:
       - get_upgrade_downgrade_label
     outputs:
@@ -34,7 +35,8 @@ jobs:
     timeout-minutes: 60
     if: always() && needs.get_previous_release.result == 'success'
     name: Run Upgrade Downgrade Test - Backups - E2E
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
     needs:
       - get_previous_release
 
