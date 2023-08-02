@@ -281,6 +281,11 @@ type TabletManagerClient struct {
 		Position *replicationdatapb.Status
 		Error    error
 	}
+	PrimaryStatusDelays  map[string]time.Duration
+	PrimaryStatusResults map[string]struct {
+		Status *replicationdatapb.PrimaryStatus
+		Error  error
+	}
 	RestoreFromBackupResults map[string]struct {
 		Events        []*logutilpb.Event
 		EventInterval time.Duration
@@ -869,6 +874,32 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 
 	if result, ok := fake.ReplicationStatusResults[key]; ok {
 		return result.Position, result.Error
+	}
+
+	return nil, assert.AnError
+}
+
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	if fake.PrimaryStatusResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.PrimaryStatusDelays != nil {
+		if delay, ok := fake.PrimaryStatusDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.PrimaryStatusResults[key]; ok {
+		return result.Status, result.Error
 	}
 
 	return nil, assert.AnError
