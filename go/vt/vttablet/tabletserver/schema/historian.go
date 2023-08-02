@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -172,10 +172,10 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	var tableData *sqltypes.Result
 	if h.lastID == 0 && h.schemaMaxAgeSeconds > 0 { // only at vttablet start
 		schemaMaxAge := time.Now().UTC().Add(time.Duration(-h.schemaMaxAgeSeconds) * time.Second)
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, dbname.GetIdentifier(),
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecardb.GetIdentifier(),
 			schemaMaxAge.Unix()).Query, 10000, true)
 	} else {
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, dbname.GetIdentifier(),
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecardb.GetIdentifier(),
 			h.lastID).Query, 10000, true)
 	}
 

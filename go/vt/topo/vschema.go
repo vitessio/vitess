@@ -28,7 +28,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// SaveVSchema first validates the VSchema, then saves it.
+// SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
 // If the VSchema is empty, just remove it.
 func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)

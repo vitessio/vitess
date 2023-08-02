@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
@@ -50,7 +49,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 	}
 	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%d, '%s', '%s', '%s')", dbname.GetIdentifier(),
+		"VALUES (%d, '%s', '%s', '%s')", sidecardb.GetIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr).Query
 }
 
@@ -58,7 +57,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
 	return sqlparser.BuildParsedQuery("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%d",
-		dbname.GetIdentifier(), timeCreatedNS).Query
+		sidecardb.GetIdentifier(), timeCreatedNS).Query
 }
 
 // WaitForReparentJournal will wait until the context is done for

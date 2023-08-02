@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -172,7 +172,7 @@ func (w *heartbeatWriter) bindHeartbeatVars(query string) (string, error) {
 		"ts":  sqltypes.Int64BindVariable(w.now().UnixNano()),
 		"uid": sqltypes.Int64BindVariable(int64(w.tabletAlias.Uid)),
 	}
-	parsed := sqlparser.BuildParsedQuery(query, dbname.GetIdentifier(), ":ts", ":uid", ":ks")
+	parsed := sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":ts", ":uid", ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err

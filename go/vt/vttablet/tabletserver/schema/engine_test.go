@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
@@ -1173,7 +1173,7 @@ func TestEngineReload(t *testing.T) {
 
 	// Detecting view changes.
 	// According to the database, v2, v3, v4, and v5 require updating.
-	db.AddQuery(fmt.Sprintf(detectViewChange, dbname.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+	db.AddQuery(fmt.Sprintf(detectViewChange, sidecardb.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
 		"v2",
 		"v3",
 		"v4",

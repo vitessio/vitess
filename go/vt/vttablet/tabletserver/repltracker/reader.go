@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -192,7 +192,7 @@ func (r *heartbeatReader) bindHeartbeatFetch() (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, dbname.GetIdentifier(), ":ks")
+	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, sidecardb.GetIdentifier(), ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err

@@ -32,12 +32,11 @@ import (
 	"time"
 	"unicode"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
-
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -529,7 +528,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 func (db *LocalCluster) createVTSchema() error {
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{fmt.Sprintf("use %s", dbname.GetIdentifier())}, ""); err != nil {
+			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecardb.GetIdentifier())}, ""); err != nil {
 				return nil, err
 			}
 		}

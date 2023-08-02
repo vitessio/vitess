@@ -36,13 +36,13 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -329,7 +329,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 	if keyspace.SidecarDBName == "" {
-		keyspace.SidecarDBName = dbname.DefaultName
+		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
@@ -482,7 +482,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 	if keyspace.SidecarDBName == "" {
-		keyspace.SidecarDBName = dbname.DefaultName
+		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
@@ -623,7 +623,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
 	if keyspace.SidecarDBName == "" {
-		keyspace.SidecarDBName = dbname.DefaultName
+		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 
 	if !cluster.ReusingVTDATAROOT {

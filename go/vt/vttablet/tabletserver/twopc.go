@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb/dbname"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -88,7 +88,7 @@ type TwoPC struct {
 // NewTwoPC creates a TwoPC variable.
 func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 	tpc := &TwoPC{readPool: readPool}
-	dbname := dbname.GetIdentifier()
+	dbname := sidecardb.GetIdentifier()
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":time_created")
