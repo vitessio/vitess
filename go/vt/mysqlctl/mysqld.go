@@ -193,6 +193,7 @@ func GetVersionString() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	log.Infof("MySQL root", mysqlRoot)
 	mysqldPath, err := binaryPath(mysqlRoot, "mysqld")
 	if err != nil {
 		return "", err
@@ -598,6 +599,7 @@ func binaryPath(root, binary string) (string, error) {
 	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
+		log.Infof("Path tried:", binPath)
 		if _, err := os.Stat(binPath); err == nil {
 			return binPath, nil
 		}
@@ -1428,7 +1430,7 @@ func noSocketFile() {
 	if socketFile != "" {
 		// We log an error for now until we fix the issue with ApplySchema surfacing in MoveTables.
 		// See https://github.com/vitessio/vitess/issues/13203 and https://github.com/vitessio/vitess/pull/13178
-		//panic("Running remotely through mysqlctl, socketFile must not be set")
+		// panic("Running remotely through mysqlctl, socketFile must not be set")
 		log.Warning("Running remotely through mysqlctl and thus socketFile should not be set")
 	}
 }
