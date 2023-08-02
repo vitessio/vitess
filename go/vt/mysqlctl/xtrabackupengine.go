@@ -32,6 +32,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -360,7 +361,7 @@ func (be *XtrabackupEngine) backupFiles(
 
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
-	destCompressors := []io.WriteCloser{}
+	destCompressors := []io.Closer{}
 	for _, file := range destFiles {
 		buffer := bufio.NewWriterSize(file, writerBufferSize)
 		destBuffers = append(destBuffers, buffer)
@@ -380,7 +381,7 @@ func (be *XtrabackupEngine) backupFiles(
 			}
 
 			writer = compressor
-			destCompressors = append(destCompressors, compressor)
+			destCompressors = append(destCompressors, ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout))
 		}
 
 		destWriters = append(destWriters, writer)
@@ -628,7 +629,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-	srcDecompressors := []io.ReadCloser{}
+	srcDecompressors := []io.Closer{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
@@ -661,7 +662,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")
 			}
-			srcDecompressors = append(srcDecompressors, decompressor)
+			srcDecompressors = append(srcDecompressors, ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout))
 			reader = decompressor
 		}
 
