@@ -73,7 +73,7 @@ mysql57)
       cd mysql-5.7.31 && mkdir bld && cd bld
       cmake -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp -SSL=system ..
       make && make install
-      groupadd mysql && useradd -r -g mysql -s /bin/false vitess && cd /usr/local && chown -R vitess:mysql ./mysql-files && chmod 750 ./mysql-files
+      groupadd mysql && useradd -a -G mysql vitess && cd /usr/local && chown -R vitess:mysql ./mysql-files && chmod 750 ./mysql-files
       cd /usr/local/mysql && bin/mysqld --initialize-insecure --user=mysql && cp ./bin/* /usr/bin/
       ;;
 mysql80)
