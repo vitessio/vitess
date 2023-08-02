@@ -126,7 +126,8 @@ func TestEnabledThrottler(t *testing.T) {
 	})
 
 	assert.Nil(t, throttlerImpl.Open())
-	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerImpl.state.tabletTypes)
+	throttlerStateImpl := throttlerImpl.state.(*txThrottlerStateImpl)
+	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttlerImpl.topoWatchers.Counts())
 
