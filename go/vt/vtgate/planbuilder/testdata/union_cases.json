@@ -42,8 +42,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt where 1 != 1",
-            "Query": "select id from (select id from `user` union select id from music) as dt",
+            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt where 1 != 1",
+            "Query": "select id, weight_string(id) from (select id from `user` union select id from music) as dt",
             "Table": "`user`, music"
           }
         ]
@@ -444,8 +444,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from ((select id from `user` where 1 != 1) union (select id from `user` where 1 != 1)) as dt where 1 != 1",
-            "Query": "select id from ((select id from `user` order by id desc) union (select id from `user` order by id asc)) as dt",
+            "FieldQuery": "select id, weight_string(id) from ((select id from `user` where 1 != 1) union (select id from `user` where 1 != 1)) as dt where 1 != 1",
+            "Query": "select id, weight_string(id) from ((select id from `user` order by id desc) union (select id from `user` order by id asc)) as dt",
             "Table": "`user`"
           }
         ]
@@ -811,8 +811,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
-                "Query": "select id from (select id from `user` union select 3 from dual) as dt limit :__upper_limit",
+                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
+                "Query": "select id, weight_string(id) from (select id from `user` union select 3 from dual limit :__upper_limit) as dt",
                 "Table": "`user`, dual"
               }
             ]
@@ -1033,11 +1033,14 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(0|1) ASC",
+        "OrderBy": "0 ASC",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1046,8 +1049,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
-                "Query": "select id from (select id from `user` union select 3 from dual) as dt",
+                "FieldQuery": "select weight_string(id), weight_string(weight_string(id)) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
+                "Query": "select weight_string(id), weight_string(weight_string(id)) from (select id from `user` union select 3 from dual) as dt",
                 "Table": "`user`, dual"
               }
             ]
@@ -1406,36 +1409,7 @@
   {
     "comment": "UNION with repeating column on the LHS",
     "query": "select foo, foo, foo from user union select bar, baz, toto from music",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select foo, foo, foo from user union select bar, baz, toto from music",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:3)",
-          "(0:0)",
-          "(0:0)"
-        ],
-        "ResultColumns": 3,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select weight_string(foo) from (select foo, foo, foo from `user` where 1 != 1 union select bar, baz, toto from music where 1 != 1) as dt where 1 != 1",
-            "Query": "select weight_string(foo) from (select foo, foo, foo from `user` union select bar, baz, toto from music) as dt",
-            "Table": "`user`, music"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user"
-      ]
-    }
+    "plan": "unable to plan DISTINCT operation"
   },
   {
     "comment": "UNION with repeating column on the RHS",
@@ -1447,8 +1421,8 @@
         "OperatorType": "Distinct",
         "Collations": [
           "(0:3)",
-          "(1:0)",
-          "(2:1)"
+          "(1:4)",
+          "(2:5)"
         ],
         "ResultColumns": 3,
         "Inputs": [
@@ -1459,8 +1433,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select weight_string(baz), weight_string(toto) from (select bar, baz, toto from music where 1 != 1 union select foo, foo, foo from `user` where 1 != 1) as dt where 1 != 1",
-            "Query": "select weight_string(baz), weight_string(toto) from (select bar, baz, toto from music union select foo, foo, foo from `user`) as dt",
+            "FieldQuery": "select bar, baz, toto, weight_string(bar), weight_string(baz), weight_string(toto) from (select bar, baz, toto from music where 1 != 1 union select foo, foo, foo from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select bar, baz, toto, weight_string(bar), weight_string(baz), weight_string(toto) from (select bar, baz, toto from music union select foo, foo, foo from `user`) as dt",
             "Table": "`user`, music"
           }
         ]

@@ -1748,66 +1748,12 @@
   {
     "comment": "Distinct with column alias",
     "query": "select distinct a as c, a from user",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct a as c, a from user",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:2)",
-          "(0:2)"
-        ],
-        "ResultColumns": 2,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
-            "Query": "select distinct a as c, a, weight_string(a) from `user`",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "unable to plan DISTINCT operation"
   },
   {
     "comment": "Distinct with same column",
     "query": "select distinct a, a from user",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct a, a from user",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:2)",
-          "(0:2)"
-        ],
-        "ResultColumns": 2,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1",
-            "Query": "select distinct a, a, weight_string(a) from `user`",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "unable to plan DISTINCT operation"
   },
   {
     "comment": "Order by has subqueries",

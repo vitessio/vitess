@@ -118,10 +118,19 @@ func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool
 	return p.addUnexploredExpr(expr, expr.Expr)
 }
 
-func (p *Projection) addColumnsWithoutPushing(expr []*sqlparser.AliasedExpr, _ []bool) []int {
-	return slice.Map(expr, func(ae *sqlparser.AliasedExpr) int {
-		return p.addUnexploredExpr(ae, ae.Expr)
-	})
+func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) []int {
+	offsets := make([]int, len(exprs))
+	for idx, expr := range exprs {
+		if reuse {
+			offset, _ := p.FindCol(ctx, expr.Expr, true)
+			if offset != -1 {
+				offsets[idx] = offset
+				continue
+			}
+		}
+		offsets[idx] = p.addUnexploredExpr(expr, expr.Expr)
+	}
+	return offsets
 }
 
 func (p *Projection) isDerived() bool {

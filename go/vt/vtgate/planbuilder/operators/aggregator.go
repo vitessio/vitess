@@ -113,7 +113,7 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 	return offset
 }
 
-func (a *Aggregator) addColumnsWithoutPushing(expr []*sqlparser.AliasedExpr, groupby []bool) (offsets []int) {
+func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, expr []*sqlparser.AliasedExpr) (offsets []int) {
 	for i, ae := range expr {
 		offsets = append(offsets, a.addColumnWithoutPushing(ae, groupby[i]))
 	}

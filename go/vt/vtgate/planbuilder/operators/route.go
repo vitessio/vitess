@@ -545,7 +545,8 @@ func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Proj
 
 func (r *Route) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
 	offsets := make([]int, len(exprs))
-	notFound := false
+	var notFoundExprs []*sqlparser.AliasedExpr
+	var pendingOffsetIdx []int
 	for idx, expr := range exprs {
 		removeKeyspaceFromSelectExpr(expr)
 
@@ -559,19 +560,24 @@ func (r *Route) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGr
 				continue
 			}
 		}
-		notFound = true
+		notFoundExprs = append(notFoundExprs, expr)
+		pendingOffsetIdx = append(pendingOffsetIdx, idx)
 	}
 
-	if !notFound {
+	if len(notFoundExprs) == 0 {
 		// we were able to find all columns, so we don't need to fetch anything else
 		return offsets, nil
 	}
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	if op, ok, offset := addMultipleColumnsToInput(ctx, r.Source, reuse, addToGroupBy, exprs); ok {
-		r.Source = op
-		return offset, nil
+	op, ok, remainingOffsets := addMultipleColumnsToInput(ctx, r.Source, reuse, addToGroupBy, notFoundExprs)
+	r.Source = op
+	if ok {
+		for i, offsetIdx := range pendingOffsetIdx {
+			offsets[offsetIdx] = remainingOffsets[i]
+		}
+		return offsets, nil
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
@@ -581,36 +587,43 @@ func (r *Route) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGr
 	}
 	r.Source = src
 
-	return src.addColumnsWithoutPushing(exprs, addToGroupBy), nil
+	return src.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs), nil
 }
 
 type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-	addColumnsWithoutPushing(expr []*sqlparser.AliasedExpr, addToGroupBy []bool) []int
+	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
 	isDerived() bool
 }
 
 // addColumnToInput adds a column to an operator without pushing it down.
 // It will return a bool indicating whether the addition was succesful or not, and an offset to where the column can be found
-func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, expr []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
+func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, expr)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
 		if added {
 			op.Outer = src
 		}
 		return op, added, offset
 
+	case *Distinct:
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		if added {
+			op.Source = src
+		}
+		return op, added, offset
+
 	case *Limit:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, expr)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {
 			op.Source = src
 		}
 		return op, added, offset
 
 	case *Ordering:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, expr)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {
 			op.Source = src
 		}
@@ -622,22 +635,23 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 			// we have to add a new projection and can't build on this one
 			return op, false, nil
 		}
-		offset := op.addColumnsWithoutPushing(expr, addToGroupBy)
+		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
 		return op, true, offset
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
 		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
 		unionColumns, err := op.GetColumns(ctx)
 		if err != nil {
-			return nil, false, nil
+			return op, false, nil
 		}
-		return &Projection{
+		proj := &Projection{
 			Source:      op,
 			Columns:     unionColumns,
 			Projections: nil,
 			TableID:     &tableID,
 			Alias:       "dt",
-		}, true, []int{len(op.unionColumns)}
+		}
+		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:
 		return op, false, nil
 	}

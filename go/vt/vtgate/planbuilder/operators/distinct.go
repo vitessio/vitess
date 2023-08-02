@@ -19,7 +19,9 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -51,31 +53,39 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	if err != nil {
 		return err
 	}
-	d.Columns = nil
-	var exprs []sqlparser.Expr
-	for _, col := range columns {
-		offsets, err := d.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{col})
-		if err != nil {
-			return err
-		}
+	var colExprs []*sqlparser.AliasedExpr
+	var wsExprs []*sqlparser.AliasedExpr
+	var wsCol []int
+	var addToGroupBy []bool
+	for i, col := range columns {
+		colExprs = append(colExprs, col)
+		addToGroupBy = append(addToGroupBy, false)
 		e := d.QP.GetSimplifiedExpr(col.Expr)
-		exprs = append(exprs, e)
-		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+		typ, coll, found := ctx.SemTable.TypeForExpr(e)
+		if !found {
+			wsExprs = append(wsExprs, aeWrap(weightStringFor(e)))
+			addToGroupBy = append(addToGroupBy, false)
+			wsCol = append(wsCol, i)
+		}
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       offsets[0],
+			Col:       i,
 			Type:      typ,
 			Collation: coll,
 		})
 	}
-	for i, e := range exprs {
-		if !ctx.SemTable.NeedsWeightString(e) {
-			continue
+	offsets, err := d.Source.AddColumns(ctx, true, addToGroupBy, append(colExprs, wsExprs...))
+	if err != nil {
+		return err
+	}
+	n := len(columns)
+	for i, offset := range offsets {
+		if i < n && i != offset {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unable to plan DISTINCT operation")
 		}
-		offsets, err := d.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(weightStringFor(e))})
-		if err != nil {
-			return err
+		if i >= n {
+			var wsOffset = offset
+			d.Columns[wsCol[i-n]].WsCol = &wsOffset
 		}
-		d.Columns[i].WsCol = &offsets[0]
 	}
 	return nil
 }
