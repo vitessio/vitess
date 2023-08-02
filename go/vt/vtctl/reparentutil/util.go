@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -66,13 +68,12 @@ func ChooseNewPrimary(
 	}
 
 	var (
-		wg sync.WaitGroup
 		// mutex to secure the next two fields from concurrent access
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
-		validTablets    []*topodatapb.Tablet
-		tabletPositions []mysql.Position
-		rec             concurrency.AllErrorRecorder
+		validTablets         []*topodatapb.Tablet
+		tabletPositions      []mysql.Position
+		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
 	for _, tablet := range tabletMap {
@@ -85,35 +86,32 @@ func ChooseNewPrimary(
 			continue
 		}
 
-		wg.Add(1)
-
-		go func(tablet *topodatapb.Tablet) {
-			defer wg.Done()
+		tb := tablet.Tablet
+		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
-			rec.RecordError(err)
+			pos, err := findPositionForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil {
-				validTablets = append(validTablets, tablet)
+				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
 			}
-		}(tablet.Tablet)
+			return err
+		})
 	}
 
-	wg.Wait()
+	err := errorGroup.Wait()
+	if err != nil {
+		return nil, err
+	}
 
 	// return nothing if there are no valid tablets available
 	if len(validTablets) == 0 {
 		return nil, nil
 	}
 
-	if rec.HasErrors() {
-		return nil, rec.Error()
-	}
-
 	// sort the tablets for finding the best primary
-	err := sortTabletsForReparent(validTablets, tabletPositions, durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, durability)
 	if err != nil {
 		return nil, err
 	}

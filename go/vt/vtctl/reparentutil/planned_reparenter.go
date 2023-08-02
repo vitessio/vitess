@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
@@ -725,20 +726,13 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer verifyCancel()
 
-	var (
-		wg  sync.WaitGroup
-		rec concurrency.AllErrorRecorder
-	)
-
+	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
 	for _, info := range tabletMap {
-		wg.Add(1)
-		go func(tablet *topodatapb.Tablet) {
-			defer wg.Done()
-			_, err := pr.tmc.PrimaryStatus(verifyCtx, tablet)
-			rec.RecordError(err)
-		}(info.Tablet)
+		tablet := info.Tablet
+		errorGroup.Go(func() error {
+			_, err := pr.tmc.PrimaryStatus(groupCtx, tablet)
+			return err
+		})
 	}
-
-	wg.Wait()
-	return rec.Error()
+	return errorGroup.Wait()
 }
