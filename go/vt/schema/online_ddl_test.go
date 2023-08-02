@@ -552,7 +552,6 @@ func TestFromJSON(t *testing.T) {
 			},
 			{
 				json: `{
-					"context": "abcd",
 					"tablet": "zone1-404",
 					"tablet_alias": {
 						"cell": "zone1",

@@ -86,10 +86,10 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	RequestTime int64 `json:"time_created,omitempty"`
+	RequestTime int64 `json:"time_created,omitempty" mapstructure:"time_created,omitempty"`
 	// Stateful fields:
-	MigrationContext   string `json:"context,omitempty"`
-	TabletAlias        string `json:"tablet,omitempty"`
+	MigrationContext   string `json:"context,omitempty" mapstructure:"context,omitempty"`
+	TabletAlias        string `json:"tablet,omitempty" mapstructure:"tablet,omitempty"`
 	WasReadyToComplete int64  `json:"was_ready_to_complete,omitempty"`
 }
 
