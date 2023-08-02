@@ -59,7 +59,9 @@ const (
 	BackupTimestampFormat = "2006-01-02.150405"
 
 	// closeTimeout is the timeout for closing backup files after writing.
-	closeTimeout = 10 * time.Minute
+	// The value is a bit arbitrary. How long does it make sense to wait for a Close()? With a cloud-based implementation,
+	// network might be an issue. _Seconds_ are probably too short. The whereabouts of a minute us a reasonable value.
+	closeTimeout = 1 * time.Minute
 )
 
 const (
