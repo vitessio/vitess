@@ -193,7 +193,6 @@ func GetVersionString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Infof("MySQL root", mysqlRoot)
 	mysqldPath, err := binaryPath(mysqlRoot, "mysqld")
 	if err != nil {
 		return "", err
@@ -599,7 +598,6 @@ func binaryPath(root, binary string) (string, error) {
 	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
-		log.Infof("Path tried:", binPath)
 		if _, err := os.Stat(binPath); err == nil {
 			return binPath, nil
 		}
