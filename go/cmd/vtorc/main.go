@@ -106,6 +106,7 @@ func main() {
 	servenv.ParseFlags("vtorc")
 	servenv.Init()
 	config.UpdateConfigValuesFromFlags()
+	inst.RegisterStats()
 
 	log.Info("starting vtorc")
 	if len(configFile) > 0 {
