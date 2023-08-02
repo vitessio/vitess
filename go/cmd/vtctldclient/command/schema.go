@@ -285,7 +285,9 @@ func commandReloadSchemaShard(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	ApplySchema.Flags().Bool("allow-long-unavailability", false, "Deprecated and has no effect.")
 	ApplySchema.Flags().MarkDeprecated("--allow-long-unavailability", "")
+	ApplySchema.Flags().Bool("skip-preflight", false, "Deprecated and has no effect.")
 	ApplySchema.Flags().MarkDeprecated("--skip-preflight", "Deprecated. Assumed to be always 'true'")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.DDLStrategy, "ddl-strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'.")
 	ApplySchema.Flags().StringSliceVar(&applySchemaOptions.UUIDList, "uuid", nil, "Optional, comma-delimited, repeatable, explicit UUIDs for migration. If given, must match number of DDL changes.")
