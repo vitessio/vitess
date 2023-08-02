@@ -48,6 +48,6 @@ func TestTimeoutCloser(t *testing.T) {
 		closer := NewTimeoutCloser(ctx, &hangCloser{hang: true}, time.Second)
 		err := closer.Close()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "context deadline exceeded")
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
 	}
 }
