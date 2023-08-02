@@ -119,6 +119,11 @@ func (tp *TxPool) AdjustLastID(id int64) {
 	tp.scp.AdjustLastID(id)
 }
 
+// UsagePercent returns the capacity of the pool as a percentage.
+func (tp *TxPool) UsagePercent() float64 {
+	return tp.scp.UsagePercent()
+}
+
 // Shutdown immediately rolls back all transactions that are not in use.
 // In-use connections will be closed when they are unlocked (not in use).
 func (tp *TxPool) Shutdown(ctx context.Context) {

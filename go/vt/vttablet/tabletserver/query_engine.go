@@ -321,6 +321,12 @@ func (qe *QueryEngine) Close() {
 	log.Info("Query Engine: closed")
 }
 
+// GetPoolUsagePercent returns the capacity of the query
+// engine conn pool as a percentage.
+func (qe *QueryEngine) GetPoolUsagePercent() float64 {
+	return qe.conns.UsagePercent()
+}
+
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")

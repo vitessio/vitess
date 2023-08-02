@@ -289,6 +289,8 @@ func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
 	case isGRPCOverflowRE.Match([]byte(msg)):
 		return ERNetPacketTooLarge
+	case strings.Contains(msg, "Query throttled"):
+		return EROutOfResources
 	case strings.Contains(msg, "Transaction throttled"):
 		return EROutOfResources
 	default:

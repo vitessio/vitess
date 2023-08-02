@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStringList(t *testing.T) {
@@ -33,16 +34,11 @@ func TestStringList(t *testing.T) {
 		"3ala,":          "3ala.",
 	}
 	for in, out := range wanted {
-		if err := p.Set(in); err != nil {
-			t.Errorf("v.Set(%v): %v", in, err)
+		if assert.Nil(t, p.Set(in)) {
 			continue
 		}
-		if strings.Join(p, ".") != out {
-			t.Errorf("want %#v, got %#v", strings.Split(out, "."), p)
-		}
-		if p.String() != in {
-			t.Errorf("v.String(): want %#v, got %#v", in, p.String())
-		}
+		assert.Equal(t, strings.Join(p, "."), out)
+		assert.Equal(t, in, p.String())
 	}
 }
 
@@ -82,27 +78,69 @@ func TestStringMap(t *testing.T) {
 		},
 	}
 	for _, want := range wanted {
-		if err := v.Set(want.in); err != want.err {
-			t.Errorf("v.Set(%v): %v", want.in, want.err)
-			continue
-		}
+		assert.Equal(t, want.err, v.Set(want.in))
 		if want.err != nil {
 			continue
 		}
 
 		if len(want.out) != len(v) {
-			t.Errorf("want %#v, got %#v", want.out, v)
+			assert.Equal(t, want.out, v)
 			continue
 		}
 		for key, value := range want.out {
-			if v[key] != value {
-				t.Errorf("want %#v, got %#v", want.out, v)
-				continue
-			}
+			assert.Equal(t, value, v[key])
 		}
+		assert.Equal(t, want.in, v.String())
+	}
+}
 
-		if vs := v.String(); vs != want.in {
-			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
+type lowHighFloat64Values struct {
+	in  string
+	out *StringLowHighFloat64Values
+	err error
+}
+
+func TestStringLowHighFloat64Values(t *testing.T) {
+	v := StringLowHighFloat64Values{}
+	var _ pflag.Value = &v
+	wanted := []lowHighFloat64Values{
+		{
+			in:  "",
+			err: errInvalidLowHighFloat64ValuesPair,
+		},
+		{
+			in:  "should:fail",
+			err: errInvalidLowHighFloat64ValuesPair,
+		},
+		{
+			in:  "2:1",
+			err: errInvalidLowHighFloat64ValuesPair,
+		},
+		{
+			in:  "-1:10",
+			err: errInvalidLowHighFloat64ValuesPair,
+		},
+		{
+			in:  "1:101",
+			err: errInvalidLowHighFloat64ValuesPair,
+		},
+		{
+			in:  "1:2:3",
+			err: errInvalidLowHighFloat64ValuesPair,
+		},
+		{
+			in:  "75.123:90.456",
+			out: &StringLowHighFloat64Values{Low: 75.123, High: 90.456},
+		},
+		{
+			in:  "2",
+			out: &StringLowHighFloat64Values{Low: 2, High: 0},
+		},
+	}
+	for _, want := range wanted {
+		assert.ErrorIs(t, want.err, v.Set(want.in))
+		if want.out != nil {
+			assert.Equal(t, *want.out, v.Get())
 		}
 	}
 }
