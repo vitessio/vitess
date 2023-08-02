@@ -1409,7 +1409,7 @@
   {
     "comment": "UNION with repeating column on the LHS",
     "query": "select foo, foo, foo from user union select bar, baz, toto from music",
-    "plan": "unable to plan DISTINCT operation"
+    "plan": "VT12001: unsupported: unable to plan the distinct query as not able to align the columns"
   },
   {
     "comment": "UNION with repeating column on the RHS",

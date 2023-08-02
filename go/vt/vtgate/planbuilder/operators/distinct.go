@@ -19,7 +19,6 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -53,39 +52,43 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	if err != nil {
 		return err
 	}
-	var colExprs []*sqlparser.AliasedExpr
 	var wsExprs []*sqlparser.AliasedExpr
-	var wsCol []int
 	var addToGroupBy []bool
-	for i, col := range columns {
-		colExprs = append(colExprs, col)
+	for _, col := range columns {
 		addToGroupBy = append(addToGroupBy, false)
 		e := d.QP.GetSimplifiedExpr(col.Expr)
-		typ, coll, found := ctx.SemTable.TypeForExpr(e)
-		if !found {
+		if ctx.SemTable.NeedsWeightString(e) {
 			wsExprs = append(wsExprs, aeWrap(weightStringFor(e)))
 			addToGroupBy = append(addToGroupBy, false)
-			wsCol = append(wsCol, i)
 		}
-		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       i,
-			Type:      typ,
-			Collation: coll,
-		})
 	}
-	offsets, err := d.Source.AddColumns(ctx, true, addToGroupBy, append(colExprs, wsExprs...))
+	offsets, err := d.Source.AddColumns(ctx, true, addToGroupBy, append(columns, wsExprs...))
 	if err != nil {
 		return err
 	}
+	modifiedCols, err := d.GetColumns(ctx)
+	if err != nil {
+		return err
+	}
+	if len(modifiedCols) < len(columns) {
+		return vterrors.VT12001("unable to plan the distinct query as not able to align the columns")
+	}
 	n := len(columns)
-	for i, offset := range offsets {
-		if i < n && i != offset {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unable to plan DISTINCT operation")
+	wsOffset := 0
+	for i, col := range columns {
+		e := d.QP.GetSimplifiedExpr(col.Expr)
+		typ, coll, found := ctx.SemTable.TypeForExpr(e)
+		var wsCol *int
+		if !found {
+			wsCol = &offsets[n+wsOffset]
+			wsOffset++
 		}
-		if i >= n {
-			var wsOffset = offset
-			d.Columns[wsCol[i-n]].WsCol = &wsOffset
-		}
+		d.Columns = append(d.Columns, engine.CheckCol{
+			Col:       i,
+			WsCol:     wsCol,
+			Type:      typ,
+			Collation: coll,
+		})
 	}
 	return nil
 }
