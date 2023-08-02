@@ -106,8 +106,8 @@ upgraded, and no upgrade should be done while such a workflow is in progress.
 A new CLI flag `--tx-throttler-dry-run` to set the Transaction Throttler to monitoring-only/dry-run mode has been added.
 If the transaction throttler is enabled with `--enable-tx-throttler` and the new dry-run flag is also specified, the
 tablet will not actually throttle any transactions; however, it will increase the counters for transactions throttled
-(`vttablet_transaction_throttler_throttled`). This allows to deploy the transaction throttler in production and gain
-observability on how much throttling would take place, without actually throttling any requests.
+(`vttablet_transaction_throttler_throttled`). This allows users to deploy the transaction throttler in production and
+gain observability on how much throttling would take place, without actually throttling any requests.
 
 ### <a id="docker"/>Docker
 
