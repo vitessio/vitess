@@ -375,6 +375,8 @@ message ThrottledAppRule {
   double ratio = 2;
   // ExpiresAt is the time at which the rule expires.
   vttime.Time expires_at = 3;
+  // Exempt indicates the app should never be throttled, even if the throttler is, in general, throttling other apps.
+  bool exempt = 4;
 }
 
 message ThrottlerConfig {

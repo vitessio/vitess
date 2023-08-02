@@ -3011,6 +3011,8 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 
 	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4)
+	// some sleep for all goroutines to start
+	time.Sleep(100 * time.Millisecond)
 	before := runtime.NumGoroutine()
 
 	query := "select id, col from user order by id limit 2"
@@ -3867,7 +3869,7 @@ func TestSelectCFC(t *testing.T) {
 	_, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
 	require.NoError(t, err)
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:
