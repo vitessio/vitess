@@ -16945,9 +16945,6 @@ export namespace tabletmanagerdata {
         /** OnlineDDL options */
         options?: (string|null);
 
-        /** OnlineDDL request_time */
-        request_time?: (vttime.ITime|null);
-
         /** OnlineDDL migration_context */
         migration_context?: (string|null);
 
@@ -16962,6 +16959,9 @@ export namespace tabletmanagerdata {
 
         /** OnlineDDL ready_to_complete */
         ready_to_complete?: (boolean|null);
+
+        /** OnlineDDL was_ready_to_complete */
+        was_ready_to_complete?: (boolean|null);
     }
 
     /** Represents an OnlineDDL. */
@@ -16994,9 +16994,6 @@ export namespace tabletmanagerdata {
         /** OnlineDDL options. */
         public options: string;
 
-        /** OnlineDDL request_time. */
-        public request_time?: (vttime.ITime|null);
-
         /** OnlineDDL migration_context. */
         public migration_context: string;
 
@@ -17011,6 +17008,9 @@ export namespace tabletmanagerdata {
 
         /** OnlineDDL ready_to_complete. */
         public ready_to_complete: boolean;
+
+        /** OnlineDDL was_ready_to_complete. */
+        public was_ready_to_complete: boolean;
 
         /**
          * Creates a new OnlineDDL instance using the specified properties.

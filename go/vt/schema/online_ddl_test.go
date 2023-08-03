@@ -30,7 +30,6 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestCreateUUID(t *testing.T) {
@@ -586,79 +585,6 @@ func TestFromJSON(t *testing.T) {
 		}
 	})
 
-	t.Run("request_time parsing", func(t *testing.T) {
-		tests := []testcase{
-			{
-				json: `{
-					"request_time": {
-						"seconds": 10,
-						"nanoseconds": 5
-					}
-				}`,
-				expected: &OnlineDDL{
-					RequestTime: 10e9 + 5,
-					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
-						RequestTime: &vttime.Time{
-							Seconds:     10,
-							Nanoseconds: 5,
-						},
-					},
-				},
-			},
-			{
-				json: fmt.Sprintf(
-					`{"time_created": %f}`,
-					3*1e9+2, // 3 seconds and 2 nanos
-				),
-				expected: &OnlineDDL{
-					RequestTime: 3e9 + 2,
-					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
-						RequestTime: &vttime.Time{
-							Seconds:     3,
-							Nanoseconds: 2,
-						},
-					},
-				},
-			},
-			{
-				json: fmt.Sprintf(
-					`{
-						"time_created": %f,
-						"request_time": {
-							"seconds": 10,
-							"nanoseconds": 5
-						}
-					}`,
-					3*1e9+2, // 3 seconds and 2 nanos
-				),
-				expected: &OnlineDDL{
-					RequestTime: 10e9 + 5,
-					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
-						RequestTime: &vttime.Time{
-							Seconds:     10,
-							Nanoseconds: 5,
-						},
-					},
-				},
-			},
-		}
-
-		for _, test := range tests {
-			test := test
-
-			t.Run("", func(t *testing.T) {
-				actual, err := FromJSON([]byte(test.json))
-				if test.shouldErr {
-					assert.Error(t, err)
-					return
-				}
-
-				require.NoError(t, err)
-				utils.MustMatch(t, test.expected, actual)
-			})
-		}
-	})
-
 	t.Run("context parsing", func(t *testing.T) {
 		tests := []testcase{
 			{
@@ -740,6 +666,58 @@ func TestFromJSON(t *testing.T) {
 				expected: &OnlineDDL{
 					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
 						ReadyToComplete: false,
+					},
+				},
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+
+			t.Run("", func(t *testing.T) {
+				actual, err := FromJSON([]byte(test.json))
+				if test.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				utils.MustMatch(t, test.expected, actual)
+			})
+		}
+	})
+
+	t.Run("was_ready_to_complete parsing", func(t *testing.T) {
+		tests := []testcase{
+			{
+				json: `{"was_ready_to_complete": true}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						WasReadyToComplete: true,
+					},
+				},
+			},
+			{
+				json: `{"was_ready_to_complete": 1}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						WasReadyToComplete: true,
+					},
+				},
+			},
+			{
+				json: `{"was_ready_to_complete": false}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						WasReadyToComplete: false,
+					},
+				},
+			},
+			{
+				json: `{"was_ready_to_complete": 0}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						WasReadyToComplete: false,
 					},
 				},
 			},

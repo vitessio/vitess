@@ -28,9 +28,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 
-	"vitess.io/vitess/go/protoutil"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema/internal/hooks"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -86,11 +84,9 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	RequestTime int64 `json:"time_created,omitempty" mapstructure:"time_created,omitempty"`
 	// Stateful fields:
-	MigrationContext   string `json:"context,omitempty" mapstructure:"context,omitempty"`
-	TabletAlias        string `json:"tablet,omitempty" mapstructure:"tablet,omitempty"`
-	WasReadyToComplete int64  `json:"was_ready_to_complete,omitempty"`
+	MigrationContext string `json:"context,omitempty" mapstructure:"context,omitempty"`
+	TabletAlias      string `json:"tablet,omitempty" mapstructure:"tablet,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -122,15 +118,15 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			hooks.DecodeReadyToComplete,
-			hooks.DecodeRequestTime,
 			hooks.DecodeStatus,
 			hooks.DecodeStrategy,
+			hooks.DecodeWasReadyToComplete,
 		),
 		Result: onlineDDL,
 		Squash: true,
 		MatchName: func(mapKey, fieldName string) bool {
 			switch mapKey {
-			case "tablet_alias", "request_time", "migration_context", "ready_to_complete":
+			case "tablet_alias", "migration_context", "ready_to_complete", "was_ready_to_complete":
 				if strings.EqualFold(mapKey, fieldName) {
 					return true
 				} else if strings.EqualFold(camelcase(mapKey), camelcase(fieldName)) {
@@ -164,23 +160,6 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 		}
 	}
 	onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
-
-	if onlineDDL.RequestTime != 0 {
-		switch onlineDDL.OnlineDDL.RequestTime {
-		case nil:
-			// TODO: log warning
-			secs := onlineDDL.RequestTime / 1e9
-			nanos := (onlineDDL.RequestTime) - (secs * 1e9)
-
-			onlineDDL.OnlineDDL.RequestTime = &vttime.Time{
-				Seconds:     secs,
-				Nanoseconds: int32(nanos),
-			}
-		default:
-			// TODO: log warning
-		}
-	}
-	onlineDDL.RequestTime = protoutil.TimeFromProto(onlineDDL.OnlineDDL.RequestTime).UnixNano()
 
 	if onlineDDL.MigrationContext != "" {
 		if onlineDDL.OnlineDDL.MigrationContext == "" {
@@ -496,16 +475,16 @@ func (onlineDDL *OnlineDDL) IsView() bool {
 	return false
 }
 
-// IsReady returns true if the given online DDL is ready to complete. It is
-// threadsafe.
+// IsReady returns true if the given online DDL is ready to complete, as well as
+// if it was _ever_ ready to complete. It is threadsafe.
 //
-// Do not attempt to access or modify the underlying field directly; instead
+// Do not attempt to access or modify the underlying fields directly; instead
 // use this method and its companion MarkReady.
-func (onlineDDL *OnlineDDL) IsReady() bool {
+func (onlineDDL *OnlineDDL) IsReady() (isReady, wasReady bool) {
 	onlineDDL.m.Lock()
 	defer onlineDDL.m.Unlock()
 
-	return onlineDDL.ReadyToComplete
+	return onlineDDL.ReadyToComplete, onlineDDL.OnlineDDL.WasReadyToComplete
 }
 
 // MarkReady marks the given online DDL as ready to complete. It is threadsafe.
@@ -515,6 +494,10 @@ func (onlineDDL *OnlineDDL) IsReady() bool {
 func (onlineDDL *OnlineDDL) MarkReady(isReady bool) {
 	onlineDDL.m.Lock()
 	defer onlineDDL.m.Unlock()
+
+	if isReady {
+		onlineDDL.WasReadyToComplete = true // WasReadyToComplete is set once and never cleared
+	}
 
 	onlineDDL.ReadyToComplete = isReady
 }

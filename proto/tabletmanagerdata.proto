@@ -42,12 +42,12 @@ message OnlineDDL {
   string uuid = 5;
   Strategy strategy = 6;
   string options = 7;
-  vttime.Time request_time = 8;
-  string migration_context = 9;
-  Status status = 10;
-  topodata.TabletAlias tablet_alias = 11;
-  int64 retries = 12;
-  bool ready_to_complete = 13;
+  string migration_context = 8;
+  Status status = 9;
+  topodata.TabletAlias tablet_alias = 10;
+  int64 retries = 11;
+  bool ready_to_complete = 12;
+  bool was_ready_to_complete = 13;
 
   enum Strategy {
     option allow_alias = true;

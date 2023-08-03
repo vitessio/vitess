@@ -57,6 +57,16 @@ func (m *OnlineDDL) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.WasReadyToComplete {
+		i--
+		if m.WasReadyToComplete {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x68
+	}
 	if m.ReadyToComplete {
 		i--
 		if m.ReadyToComplete {
@@ -65,12 +75,12 @@ func (m *OnlineDDL) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x68
+		dAtA[i] = 0x60
 	}
 	if m.Retries != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Retries))
 		i--
-		dAtA[i] = 0x60
+		dAtA[i] = 0x58
 	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
@@ -80,27 +90,17 @@ func (m *OnlineDDL) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x5a
+		dAtA[i] = 0x52
 	}
 	if m.Status != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Status))
 		i--
-		dAtA[i] = 0x50
+		dAtA[i] = 0x48
 	}
 	if len(m.MigrationContext) > 0 {
 		i -= len(m.MigrationContext)
 		copy(dAtA[i:], m.MigrationContext)
 		i = encodeVarint(dAtA, i, uint64(len(m.MigrationContext)))
-		i--
-		dAtA[i] = 0x4a
-	}
-	if m.RequestTime != nil {
-		size, err := m.RequestTime.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x42
 	}
@@ -5624,10 +5624,6 @@ func (m *OnlineDDL) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.RequestTime != nil {
-		l = m.RequestTime.SizeVT()
-		n += 1 + l + sov(uint64(l))
-	}
 	l = len(m.MigrationContext)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
@@ -5643,6 +5639,9 @@ func (m *OnlineDDL) SizeVT() (n int) {
 		n += 1 + sov(uint64(m.Retries))
 	}
 	if m.ReadyToComplete {
+		n += 2
+	}
+	if m.WasReadyToComplete {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -7818,42 +7817,6 @@ func (m *OnlineDDL) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 8:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RequestTime", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.RequestTime == nil {
-				m.RequestTime = &vttime.Time{}
-			}
-			if err := m.RequestTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 9:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MigrationContext", wireType)
 			}
 			var stringLen uint64
@@ -7884,7 +7847,7 @@ func (m *OnlineDDL) UnmarshalVT(dAtA []byte) error {
 			}
 			m.MigrationContext = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 10:
+		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
 			}
@@ -7903,7 +7866,7 @@ func (m *OnlineDDL) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 11:
+		case 10:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletAlias", wireType)
 			}
@@ -7939,7 +7902,7 @@ func (m *OnlineDDL) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 12:
+		case 11:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Retries", wireType)
 			}
@@ -7958,7 +7921,7 @@ func (m *OnlineDDL) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 13:
+		case 12:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReadyToComplete", wireType)
 			}
@@ -7978,6 +7941,26 @@ func (m *OnlineDDL) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReadyToComplete = bool(v != 0)
+		case 13:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WasReadyToComplete", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.WasReadyToComplete = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
