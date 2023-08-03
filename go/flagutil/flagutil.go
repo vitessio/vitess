@@ -136,18 +136,18 @@ func (value StringMapValue) String() string {
 // Type is part of the pflag.Value interface.
 func (value StringMapValue) Type() string { return "StringMap" }
 
-type StringLowHighFloat64Values struct {
+type LowHighFloat64Values struct {
 	Low  float64
 	High float64
 }
 
-// Get returns the StringLowHighFloat64Values value of this flag.
-func (value StringLowHighFloat64Values) Get() any {
-	return StringLowHighFloat64Values(value)
+// Get returns the LowHighFloat64Values value of this flag.
+func (value LowHighFloat64Values) Get() any {
+	return LowHighFloat64Values(value)
 }
 
 // Set sets the value of this flag from parsing the given string.
-func (value *StringLowHighFloat64Values) Set(v string) (err error) {
+func (value *LowHighFloat64Values) Set(v string) (err error) {
 	minMax := strings.SplitN(v, ":", 2)
 	value.High = 0
 	if value.Low, err = strconv.ParseFloat(minMax[0], 64); err != nil {
@@ -165,7 +165,7 @@ func (value *StringLowHighFloat64Values) Set(v string) (err error) {
 }
 
 // String returns the string representation of this flag.
-func (value StringLowHighFloat64Values) String() string {
+func (value LowHighFloat64Values) String() string {
 	if value.Low <= 0 && value.High <= 0 {
 		return ""
 	}
@@ -173,7 +173,7 @@ func (value StringLowHighFloat64Values) String() string {
 }
 
 // Type is part of the pflag.Value interface.
-func (value StringLowHighFloat64Values) Type() string { return "float:float" }
+func (value LowHighFloat64Values) Type() string { return "float:float" }
 
 // DualFormatStringListVar creates a flag which supports both dashes and underscores
 func DualFormatStringListVar(fs *pflag.FlagSet, p *[]string, name string, value []string, usage string) {

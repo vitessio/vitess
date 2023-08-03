@@ -96,12 +96,12 @@ func TestStringMap(t *testing.T) {
 
 type lowHighFloat64Values struct {
 	in  string
-	out *StringLowHighFloat64Values
+	out *LowHighFloat64Values
 	err error
 }
 
-func TestStringLowHighFloat64Values(t *testing.T) {
-	v := StringLowHighFloat64Values{}
+func TestLowHighFloat64Values(t *testing.T) {
+	v := LowHighFloat64Values{}
 	var _ pflag.Value = &v
 	wanted := []lowHighFloat64Values{
 		{
@@ -130,11 +130,11 @@ func TestStringLowHighFloat64Values(t *testing.T) {
 		},
 		{
 			in:  "75.123:90.456",
-			out: &StringLowHighFloat64Values{Low: 75.123, High: 90.456},
+			out: &LowHighFloat64Values{Low: 75.123, High: 90.456},
 		},
 		{
 			in:  "2",
-			out: &StringLowHighFloat64Values{Low: 2, High: 0},
+			out: &LowHighFloat64Values{Low: 2, High: 0},
 		},
 	}
 	for _, want := range wanted {

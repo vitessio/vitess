@@ -208,7 +208,7 @@ type txThrottlerConfig struct {
 	defaultPriority int
 
 	// queryPoolThresholds and txPoolThresholds are pool usage threshold to throttle all low-priority queries/transactions
-	queryPoolThresholds, txPoolThresholds *flagutil.StringLowHighFloat64Values
+	queryPoolThresholds, txPoolThresholds *flagutil.LowHighFloat64Values
 
 	// rate to refresh topo for cells
 	topoRefreshInterval time.Duration
@@ -371,7 +371,8 @@ func (t *txThrottler) Throttle(plan *planbuilder.Plan, options *querypb.ExecuteO
 	// get priority from execute options, skip if the priority
 	// is equal to sqlparser.MinPriorityValue
 	planType := plan.PlanID.String()
-	metricLabels := []string{planType, options.GetWorkloadName()}
+	workload := options.GetWorkloadName()
+	metricLabels := []string{planType, workload}
 	t.requestsTotal.Add(metricLabels, 1)
 	priority := t.getPriorityFromOptions(options)
 	if priority == sqlparser.MinPriorityValue {
@@ -387,7 +388,7 @@ func (t *txThrottler) Throttle(plan *planbuilder.Plan, options *querypb.ExecuteO
 	// Throttle probabilistically according to both what the throttler state says and the priority.
 	// Workloads with lower priority value are less likely to be throttled. "Hard" pool usage
 	// errors will throttle regardless of priority.
-	metricLabels = []string{planType, throttleErr.Error(), options.GetWorkloadName()}
+	metricLabels = []string{planType, throttleErr.Error(), workload}
 	switch throttleErr {
 	case ErrThrottledConnPoolUsageHard, ErrThrottledTxPoolUsageHard:
 		t.requestsThrottled.Add(metricLabels, 1)
@@ -398,8 +399,9 @@ func (t *txThrottler) Throttle(plan *planbuilder.Plan, options *querypb.ExecuteO
 			err = throttleErr
 		}
 	}
+
 	if t.config.dryRun {
-		return nil
+		err = nil
 	}
 	return err
 }
@@ -511,7 +513,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoS
 	}
 }
 
-func checkPoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.StringLowHighFloat64Values, highErr, lowErr error) error {
+func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighFloat64Values, highErr, lowErr error) error {
 	// Calls to .GetPoolUsagePercent() are serialized by the underlying engine.
 	switch usagePercent := engine.GetPoolUsagePercent(); {
 	case thresholds.High != 0 && usagePercent >= thresholds.High:
@@ -534,12 +536,12 @@ func (ts *txThrottlerStateImpl) throttle(plan *planbuilder.Plan) error {
 	}
 	switch plan.PlanID {
 	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShow:
-		// check query conn pool usage
-		return checkPoolUsage(ts.queryEngine, ts.config.queryPoolThresholds, ErrThrottledConnPoolUsageHard,
+		// check query engine conn pool usage
+		return checkEnginePoolUsage(ts.queryEngine, ts.config.queryPoolThresholds, ErrThrottledConnPoolUsageHard,
 			ErrThrottledConnPoolUsageSoft)
 	default:
-		// check tx pool usage
-		if err := checkPoolUsage(ts.txEngine, ts.config.txPoolThresholds, ErrThrottledTxPoolUsageHard,
+		// check tx engine pool usage
+		if err := checkEnginePoolUsage(ts.txEngine, ts.config.txPoolThresholds, ErrThrottledTxPoolUsageHard,
 			ErrThrottledTxPoolUsageSoft); err != nil {
 			return err
 		}

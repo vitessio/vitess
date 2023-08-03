@@ -121,8 +121,8 @@ func TestEnabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
-	config.TxThrottlerQueryPoolThresholds = &flagutil.StringLowHighFloat64Values{Low: 66.66, High: 80}
-	config.TxThrottlerTxPoolThresholds = &flagutil.StringLowHighFloat64Values{Low: 66.66, High: 80}
+	config.TxThrottlerQueryPoolThresholds = &flagutil.LowHighFloat64Values{Low: 66.66, High: 80}
+	config.TxThrottlerTxPoolThresholds = &flagutil.LowHighFloat64Values{Low: 66.66, High: 80}
 
 	env := tabletenv.NewEnv(config, t.Name())
 	mockQueryEngine := NewMockTabletserverEngine()

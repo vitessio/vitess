@@ -363,15 +363,15 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler              bool                                 `json:"-"`
-	TxThrottlerConfig              *TxThrottlerConfigFlag               `json:"-"`
-	TxThrottlerHealthCheckCells    []string                             `json:"-"`
-	TxThrottlerDefaultPriority     int                                  `json:"-"`
-	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag        `json:"-"`
-	TxThrottlerTopoRefreshInterval time.Duration                        `json:"-"`
-	TxThrottlerDryRun              bool                                 `json:"-"`
-	TxThrottlerQueryPoolThresholds *flagutil.StringLowHighFloat64Values `json:"-"`
-	TxThrottlerTxPoolThresholds    *flagutil.StringLowHighFloat64Values `json:"-"`
+	EnableTxThrottler              bool                           `json:"-"`
+	TxThrottlerDryRun              bool                           `json:"-"`
+	TxThrottlerConfig              *TxThrottlerConfigFlag         `json:"-"`
+	TxThrottlerHealthCheckCells    []string                       `json:"-"`
+	TxThrottlerDefaultPriority     int                            `json:"-"`
+	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag  `json:"-"`
+	TxThrottlerTopoRefreshInterval time.Duration                  `json:"-"`
+	TxThrottlerQueryPoolThresholds *flagutil.LowHighFloat64Values `json:"-"`
+	TxThrottlerTxPoolThresholds    *flagutil.LowHighFloat64Values `json:"-"`
 
 	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
@@ -839,8 +839,8 @@ var defaultConfig = TabletConfig{
 	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
 	TxThrottlerDryRun:              false,
 	TxThrottlerTopoRefreshInterval: time.Minute * 5,
-	TxThrottlerQueryPoolThresholds: &flagutil.StringLowHighFloat64Values{},
-	TxThrottlerTxPoolThresholds:    &flagutil.StringLowHighFloat64Values{},
+	TxThrottlerQueryPoolThresholds: &flagutil.LowHighFloat64Values{},
+	TxThrottlerTxPoolThresholds:    &flagutil.LowHighFloat64Values{},
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 

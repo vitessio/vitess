@@ -80,6 +80,7 @@ const (
 	PlanShowMigrationLogs
 	PlanShowThrottledApps
 	PlanShowThrottlerStatus
+	// PlanBegin is for BEGIN statements. This plan type is just a placeholder because BEGIN has no plan.
 	PlanBegin
 	NumPlans
 )

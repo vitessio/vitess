@@ -81,9 +81,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// inTxWant is the query log we expect if we're in a transation.
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
-		// errorWantCode is the vtrpcpb error code we expect to get, if any, and should be if vtrpc.Code_OK (default/0) if no error should be returned
+		// errorWantCode is the vtrpcpb.Code we expect to get, if any, and should be vtrpc.Code_OK (the default/0) if no error should be returned
 		errorWantCode vtrpcpb.Code
-		// errorContains and errorContainsInTx contains are strings we expect to get in errors, if any, and should be nil if no error should be returned
+		// errorContains and errorContainsInTx are strings we expect to get in errors, if any, and should be "" if no error should be returned
 		errorContains, errorContainsInTx string
 		// TxThrottler allows the test case to override the transaction throttler
 		txThrottler txthrottler.TxThrottler
