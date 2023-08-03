@@ -810,51 +810,61 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	bw := newBackupWriter(fe.Name, builtinBackupStorageWriteBufferSize, fi.Size(), timedDest)
 
-	var reader io.Reader = br
-	var writer io.Writer = bw
+	// We create the following inner function because:
+	// - we must `defer` the compressor's Close() function
+	// - but it must take place before we close the pipe reader&writer
+	createAndCopy := func() (createAndCopyErr error) {
+		var reader io.Reader = br
+		var writer io.Writer = bw
 
-	// Create the gzip compression pipe, if necessary.
-	if backupStorageCompress {
-		var compressor io.WriteCloser
-		if ExternalCompressorCmd != "" {
-			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
-		} else {
-			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
-		}
-		if err != nil {
-			return vterrors.Wrap(err, "can't create compressor")
-		}
-		closer := ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout)
-
-		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
-		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
-
-		defer func() {
-			// Close gzip to flush it, after that all data is sent to writer.
-			closeCompressorAt := time.Now()
-			params.Logger.Infof("closing compressor")
-			if cerr := closer.Close(); err != nil {
-				cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
-				params.Logger.Error(cerr)
-				finalErr = errors.Join(finalErr, cerr)
+		// Create the gzip compression pipe, if necessary.
+		if backupStorageCompress {
+			var compressor io.WriteCloser
+			if ExternalCompressorCmd != "" {
+				compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
+			} else {
+				compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
 			}
-			params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
-		}()
+			if err != nil {
+				return vterrors.Wrap(err, "can't create compressor")
+			}
+
+			compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
+			writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
+
+			closer := ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout)
+			defer func() {
+				// Close gzip to flush it, after that all data is sent to writer.
+				closeCompressorAt := time.Now()
+				params.Logger.Infof("closing compressor")
+				if cerr := closer.Close(); err != nil {
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
+					params.Logger.Error(cerr)
+					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
+				}
+				params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
+			}()
+		}
+
+		if builtinBackupFileReadBufferSize > 0 {
+			reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
+		}
+
+		// Copy from the source file to writer (optional gzip,
+		// optional pipe, tee, output file and hasher).
+		_, err = io.Copy(writer, reader)
+		if err != nil {
+			return vterrors.Wrap(err, "cannot copy data")
+		}
+		return nil
 	}
 
-	if builtinBackupFileReadBufferSize > 0 {
-		reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
-	}
-
-	// Copy from the source file to writer (optional gzip,
-	// optional pipe, tee, output file and hasher).
-	_, err = io.Copy(writer, reader)
-	if err != nil {
-		return vterrors.Wrap(err, "cannot copy data")
+	if err := createAndCopy(); err != nil {
+		return err
 	}
 
 	// Close the backupPipe to finish writing on destination.
-	if err := bw.Close(); err != nil {
+	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
 
