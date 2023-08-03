@@ -93,11 +93,22 @@ func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstrain
 
 // CrossShardParentFKs returns all the parent fk constraints on this table that are not shard scoped.
 func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
-	if !t.Keyspace.Sharded || len(t.ParentForeignKeys) == 0 {
+	if len(t.ParentForeignKeys) == 0 {
 		return
 	}
 	primaryVindex := t.ColumnVindexes[0]
 	for _, fk := range t.ParentForeignKeys {
+		// If the keyspaces are different, then the fk definition
+		// is going to go across shards.
+		if fk.Table.Keyspace.Name != t.Keyspace.Name {
+			crossShardFKs = append(crossShardFKs, fk)
+			continue
+		}
+		// If the keyspaces match and they are unsharded, then the fk defintion
+		// is shard-scoped.
+		if !t.Keyspace.Sharded {
+			continue
+		}
 		// If the primary vindexes don't match between the parent and child table,
 		// we cannot infer that the fk constraint in shard scoped.
 		if fk.Table.ColumnVindexes[0].Vindex != primaryVindex.Vindex {

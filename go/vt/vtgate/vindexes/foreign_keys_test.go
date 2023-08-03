@@ -35,6 +35,10 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 					{
 						Table: &Table{
 							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks",
+								Sharded: false,
+							},
 							ColumnVindexes: []*ColumnVindex{
 								{
 									Name:   "v2",
@@ -71,6 +75,46 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 			},
 			wantCrossShardFKTables: []string{},
 		}, {
+			name: "Keyspaces don't match",
+			table: &Table{
+				ColumnVindexes: []*ColumnVindex{
+					{
+						Name:   "v1",
+						Vindex: binVindex,
+						Columns: []sqlparser.IdentifierCI{
+							sqlparser.NewIdentifierCI("col1"),
+						},
+					},
+				},
+				Keyspace: &Keyspace{
+					Name:    "ks",
+					Sharded: false,
+				},
+				ParentForeignKeys: []ParentFKInfo{
+					{
+						Table: &Table{
+							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks2",
+								Sharded: false,
+							},
+							ColumnVindexes: []*ColumnVindex{
+								{
+									Name:   "v2",
+									Vindex: binVindex,
+									Columns: []sqlparser.IdentifierCI{
+										sqlparser.NewIdentifierCI("col4"),
+									},
+								},
+							},
+						},
+						ChildColumns:  sqlparser.MakeColumns("col1"),
+						ParentColumns: sqlparser.MakeColumns("col4"),
+					},
+				},
+			},
+			wantCrossShardFKTables: []string{"t1"},
+		}, {
 			name: "Column Vindexes don't match",
 			table: &Table{
 				ColumnVindexes: []*ColumnVindex{
@@ -90,6 +134,10 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 					{
 						Table: &Table{
 							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks",
+								Sharded: true,
+							},
 							ColumnVindexes: []*ColumnVindex{
 								{
 									Name:   "v2",
@@ -128,6 +176,10 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 					{
 						Table: &Table{
 							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks",
+								Sharded: true,
+							},
 							ColumnVindexes: []*ColumnVindex{
 								{
 									Name:   "v2",
@@ -168,6 +220,10 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 					{
 						Table: &Table{
 							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks",
+								Sharded: true,
+							},
 							ColumnVindexes: []*ColumnVindex{
 								{
 									Name:   "v2",
@@ -208,6 +264,10 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 					{
 						Table: &Table{
 							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks",
+								Sharded: true,
+							},
 							ColumnVindexes: []*ColumnVindex{
 								{
 									Name:   "v2",
@@ -248,6 +308,10 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 					{
 						Table: &Table{
 							Name: sqlparser.NewIdentifierCS("t1"),
+							Keyspace: &Keyspace{
+								Name:    "ks",
+								Sharded: true,
+							},
 							ColumnVindexes: []*ColumnVindex{
 								{
 									Name:   "v2",
