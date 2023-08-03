@@ -590,7 +590,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplySchema",
 				method: commandApplySchema,
-				params: "[--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
+				params: "[--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} [--batch-size=<n>] <keyspace>",
 				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
 			},
 			{
