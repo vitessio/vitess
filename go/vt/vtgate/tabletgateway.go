@@ -201,7 +201,9 @@ func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletTyp
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
 func (gw *TabletGateway) Close(_ context.Context) error {
-	gw.buffer.Shutdown()
+	if gw.buffer != nil {
+		gw.buffer.Shutdown()
+	}
 	return gw.hc.Close()
 }
 
