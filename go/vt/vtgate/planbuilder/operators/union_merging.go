@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -119,17 +120,29 @@ func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, l
 		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
 	case a == dual:
 		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
-
 	case a == anyShard && sameKeyspace:
 		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
 	case b == anyShard && sameKeyspace:
 		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
-
 	case a == sharded && b == sharded && sameKeyspace:
-		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
-	default:
-		return nil, nil, nil
+		// If the two routes fully match, they can be merged together.
+		tblA := routingA.(*ShardedRouting)
+		tblB := routingB.(*ShardedRouting)
+		if tblA.RouteOpCode == engine.Scatter && tblB.RouteOpCode == engine.Scatter {
+			return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+		}
+		if tblA.RouteOpCode != engine.EqualUnique || tblB.RouteOpCode != engine.EqualUnique {
+			break
+		}
+		aVdx := tblA.SelectedVindex()
+		bVdx := tblB.SelectedVindex()
+		aExpr := tblA.VindexExpressions()
+		bExpr := tblB.VindexExpressions()
+		if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
+			return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+		}
 	}
+	return nil, nil, nil
 }
 
 func createMergedUnion(
@@ -145,3 +158,29 @@ func createMergedUnion(
 		Routing:    routing,
 	}, selectExprs, nil
 }
+
+/*
+
+func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *route) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.EqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.EqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
+	case engine.Scatter:
+		return b.eroute.Opcode == engine.Scatter
+	case engine.Next:
+		return false
+	}
+	return false
+}
+*/
