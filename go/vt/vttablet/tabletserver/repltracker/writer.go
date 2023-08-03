@@ -17,14 +17,13 @@ limitations under the License.
 package repltracker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"

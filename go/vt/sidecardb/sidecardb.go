@@ -26,8 +26,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 
@@ -45,7 +45,6 @@ import (
 )
 
 const (
-	DefaultName          = "_vt"
 	createSidecarDBQuery = "create database if not exists %s"
 	sidecarDBExistsQuery = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
 	showCreateTableQuery = "show create table %s.%s"
@@ -70,8 +69,6 @@ const (
 )
 
 var (
-	// This should be accessed via GetName()
-	sidecarDBName atomic.Value
 	sidecarTables []*sidecarTable
 
 	// All tables needed in the sidecar database have
@@ -100,7 +97,6 @@ type ddlError struct {
 }
 
 func init() {
-	sidecarDBName.Store(DefaultName)
 	ddlCount = stats.NewCounter(StatsKeyQueryCount, "Number of queries executed")
 	ddlErrorCount = stats.NewCounter(StatsKeyErrorCount, "Number of errors during sidecar schema upgrade")
 	ddlErrorHistory = history.New(maxDDLErrorHistoryLength)
@@ -134,7 +130,7 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 	if qualifier != "" {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "database qualifier of %s specified for the %s table when there should not be one", qualifier, name)
 	}
-	createTable.Table.Qualifier = sqlparser.NewIdentifierCS(GetName())
+	createTable.Table.Qualifier = sqlparser.NewIdentifierCS(sidecar.GetName())
 	if !strings.EqualFold(tableName, name) {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table name of %s does not match the table name specified within the file: %s", name, tableName)
 	}
@@ -193,7 +189,7 @@ func printCallerDetails() {
 	pc, _, line, ok := runtime.Caller(2)
 	details := runtime.FuncForPC(pc)
 	if ok && details != nil {
-		log.Infof("%s schema init called from %s:%d\n", GetName(), details.Name(), line)
+		log.Infof("%s schema init called from %s:%d\n", sidecar.GetName(), details.Name(), line)
 	}
 }
 
@@ -207,19 +203,11 @@ type schemaInit struct {
 // execute the specified query within the database.
 type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
 
-func SetName(name string) {
-	sidecarDBName.Store(name)
-}
-
-func GetName() string {
-	return sidecarDBName.Load().(string)
-}
-
 // GetIdentifier returns the sidecar database name as an SQL
 // identifier string, most importantly this means that it will
 // be properly escaped if/as needed.
 func GetIdentifier() string {
-	ident := sqlparser.NewIdentifierCS(GetName())
+	ident := sqlparser.NewIdentifierCS(sidecar.GetName())
 	return sqlparser.String(ident)
 }
 
@@ -325,7 +313,7 @@ func (si *schemaInit) setPermissiveSQLMode() (func(), error) {
 }
 
 func (si *schemaInit) doesSidecarDBExist() (bool, error) {
-	query, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	query, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	if err != nil {
 		return false, err
 	}
@@ -337,10 +325,10 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 
 	switch len(rs.Rows) {
 	case 0:
-		log.Infof("doesSidecarDBExist: %s not found", GetName())
+		log.Infof("doesSidecarDBExist: %s not found", sidecar.GetName())
 		return false, nil
 	case 1:
-		log.Infof("doesSidecarDBExist: found %s", GetName())
+		log.Infof("doesSidecarDBExist: found %s", sidecar.GetName())
 		return true, nil
 	default:
 		// This should never happen.
@@ -354,7 +342,7 @@ func (si *schemaInit) createSidecarDB() error {
 		log.Error(err)
 		return err
 	}
-	log.Infof("createSidecarDB: %s", GetName())
+	log.Infof("createSidecarDB: %s", sidecar.GetName())
 	return nil
 }
 
@@ -460,7 +448,7 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 		ddlCount.Add(1)
 		return nil
 	}
-	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, GetName())
+	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, sidecar.GetName())
 	return nil
 }
 
@@ -510,7 +498,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	for _, q := range sidecarDBInitQueries {
 		db.AddQuery(sqlparser.BuildParsedQuery(q, GetIdentifier()).Query, result)
 	}
-	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	db.AddQuery(sdbe, result)
 	for _, table := range sidecarTables {
 		result = &sqltypes.Result{}
@@ -545,7 +533,7 @@ func MatchesInitQuery(query string) bool {
 			return true
 		}
 	}
-	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	if strings.EqualFold(sdbe, query) {
 		return true
 	}

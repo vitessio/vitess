@@ -23,11 +23,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sidecardb"
-
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
