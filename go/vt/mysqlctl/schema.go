@@ -35,7 +35,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
@@ -207,7 +206,7 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string, 
 		var dataLength uint64
 		if !row[2].IsNull() {
 			// dataLength is NULL for views, then we use 0
-			dataLength, err = evalengine.ToUint64(row[2])
+			dataLength, err = row[2].ToCastUint64()
 			if err != nil {
 				return nil, err
 			}
@@ -216,7 +215,7 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string, 
 		// get row count
 		var rowCount uint64
 		if !row[3].IsNull() {
-			rowCount, err = evalengine.ToUint64(row[3])
+			rowCount, err = row[3].ToCastUint64()
 			if err != nil {
 				return nil, err
 			}

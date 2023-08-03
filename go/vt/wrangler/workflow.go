@@ -12,14 +12,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/workflow"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 )
 
 // VReplicationWorkflowType specifies whether workflow is MoveTables or Reshard
@@ -637,11 +635,11 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for i := 0; i < len(qr.Rows); i++ {
 			table := qr.Rows[i][0].ToString()
-			rowCount, err := evalengine.ToInt64(qr.Rows[i][1])
+			rowCount, err := qr.Rows[i][1].ToCastInt64()
 			if err != nil {
 				return err
 			}
-			tableSize, err := evalengine.ToInt64(qr.Rows[i][2])
+			tableSize, err := qr.Rows[i][2].ToCastInt64()
 			if err != nil {
 				return err
 			}

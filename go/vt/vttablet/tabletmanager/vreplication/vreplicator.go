@@ -37,8 +37,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -427,7 +425,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
 		return settings, numTablesToCopy, fmt.Errorf("unexpected result from %s: %v", query, qr)
 	}
-	numTablesToCopy, err = evalengine.ToInt64(qr.Rows[0][0])
+	numTablesToCopy, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
@@ -493,7 +491,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
 		return fmt.Errorf("unable to select @@foreign_key_checks")
 	}
-	vr.originalFKCheckSetting, err = evalengine.ToInt64(qr.Rows[0][0])
+	vr.originalFKCheckSetting, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return err
 	}

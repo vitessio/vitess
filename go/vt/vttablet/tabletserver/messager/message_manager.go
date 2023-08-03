@@ -36,7 +36,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -906,28 +905,28 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	mr := &MessageRow{Row: row[4:]}
 	if !row[0].IsNull() {
-		v, err := evalengine.ToInt64(row[0])
+		v, err := row[0].ToCastInt64()
 		if err != nil {
 			return nil, err
 		}
 		mr.Priority = v
 	}
 	if !row[1].IsNull() {
-		v, err := evalengine.ToInt64(row[1])
+		v, err := row[1].ToCastInt64()
 		if err != nil {
 			return nil, err
 		}
 		mr.TimeNext = v
 	}
 	if !row[2].IsNull() {
-		v, err := evalengine.ToInt64(row[2])
+		v, err := row[2].ToCastInt64()
 		if err != nil {
 			return nil, err
 		}
 		mr.Epoch = v
 	}
 	if !row[3].IsNull() {
-		v, err := evalengine.ToInt64(row[3])
+		v, err := row[3].ToCastInt64()
 		if err != nil {
 			return nil, err
 		}

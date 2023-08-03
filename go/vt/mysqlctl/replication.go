@@ -30,8 +30,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -183,7 +181,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	if len(qr.Rows) != 1 {
 		return 0, errors.New("no port variable in mysql")
 	}
-	utemp, err := evalengine.ToUint64(qr.Rows[0][1])
+	utemp, err := qr.Rows[0][1].ToCastUint64()
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +197,7 @@ func (mysqld *Mysqld) GetServerID(ctx context.Context) (uint32, error) {
 	if len(qr.Rows) != 1 {
 		return 0, errors.New("no server_id in mysql")
 	}
-	utemp, err := evalengine.ToUint64(qr.Rows[0][0])
+	utemp, err := qr.Rows[0][0].ToCastUint64()
 	if err != nil {
 		return 0, err
 	}

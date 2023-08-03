@@ -22,12 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -172,10 +171,10 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	var tableData *sqltypes.Result
 	if h.lastID == 0 && h.schemaMaxAgeSeconds > 0 { // only at vttablet start
 		schemaMaxAge := time.Now().UTC().Add(time.Duration(-h.schemaMaxAgeSeconds) * time.Second)
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecardb.GetIdentifier(),
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecar.GetIdentifier(),
 			schemaMaxAge.Unix()).Query, 10000, true)
 	} else {
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecardb.GetIdentifier(),
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecar.GetIdentifier(),
 			h.lastID).Query, 10000, true)
 	}
 
@@ -205,7 +204,7 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 
 // readRow converts a row from the schema_version table to a trackedSchema
 func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error) {
-	id, _ := evalengine.ToInt64(row[0])
+	id, _ := row[0].ToCastInt64()
 	rowBytes, err := row[1].ToBytes()
 	if err != nil {
 		return nil, 0, err
@@ -219,7 +218,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 		return nil, 0, err
 	}
 	ddl := string(rowBytes)
-	timeUpdated, err := evalengine.ToInt64(row[3])
+	timeUpdated, err := row[3].ToCastInt64()
 	if err != nil {
 		return nil, 0, err
 	}

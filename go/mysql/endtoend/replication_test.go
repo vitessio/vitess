@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // connectForReplication is a helper method to connect for replication
@@ -72,7 +71,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
 	file := result.Rows[0][0].ToString()
-	position, err := evalengine.ToUint64(result.Rows[0][1])
+	position, err := result.Rows[0][1].ToCastUint64()
 	require.NoError(t, err, "SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 
 	// Tell the server that we understand the format of events

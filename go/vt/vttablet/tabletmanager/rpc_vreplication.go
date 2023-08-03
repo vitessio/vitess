@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -83,7 +82,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			"workflowSubType":    sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
 			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
 		}
-		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecardb.GetIdentifier(),
+		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecar.GetIdentifier(),
 			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType", ":deferSecondaryKeys",
 		)
 		stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -109,7 +108,7 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlDeleteVReplicationWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
+	parsed := sqlparser.BuildParsedQuery(sqlDeleteVReplicationWorkflow, sidecar.GetIdentifier(), ":wf", ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -132,7 +131,7 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
+	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflow, sidecar.GetIdentifier(), ":wf", ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -242,7 +241,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecardb.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -310,7 +309,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		"tt": sqltypes.StringBindVariable(tabletTypesStr),
 		"id": sqltypes.Int64BindVariable(id),
 	}
-	parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowConfig, sidecardb.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+	parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
 	stmt, err = parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

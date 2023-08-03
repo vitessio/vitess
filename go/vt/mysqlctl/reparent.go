@@ -24,8 +24,8 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
@@ -36,7 +36,7 @@ import (
 // can set it as the starting position for replicas to start MySQL
 // Replication from.
 func GenerateInitialBinlogEntry() string {
-	return sidecardb.GetCreateQuery()
+	return sidecar.GetCreateQuery()
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
@@ -49,7 +49,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 	}
 	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%d, '%s', '%s', '%s')", sidecardb.GetIdentifier(),
+		"VALUES (%d, '%s', '%s', '%s')", sidecar.GetIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr).Query
 }
 
@@ -57,7 +57,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
 	return sqlparser.BuildParsedQuery("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%d",
-		sidecardb.GetIdentifier(), timeCreatedNS).Query
+		sidecar.GetIdentifier(), timeCreatedNS).Query
 }
 
 // WaitForReparentJournal will wait until the context is done for

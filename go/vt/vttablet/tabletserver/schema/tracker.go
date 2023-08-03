@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -171,7 +171,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 	}
 	defer conn.Recycle()
 	result, err := conn.Exec(ctx, sqlparser.BuildParsedQuery("select id from %s.schema_version limit 1",
-		sidecardb.GetIdentifier()).Query, 1, false)
+		sidecar.GetIdentifier()).Query, 1, false)
 	if err != nil {
 		return false, err
 	}
@@ -232,7 +232,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 
 	query := sqlparser.BuildParsedQuery("insert into %s.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
-		"values (%s, %s, %s, %d)", sidecardb.GetIdentifier(), encodeString(gtid),
+		"values (%s, %s, %s, %d)", sidecar.GetIdentifier(), encodeString(gtid),
 		encodeString(ddl), encodeString(string(blob)), timestamp).Query
 	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {
