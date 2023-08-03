@@ -32,11 +32,11 @@ import (
 	"time"
 	"unicode"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
