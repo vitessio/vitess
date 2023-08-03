@@ -331,10 +331,11 @@ func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, t
 	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
 
+	var err error
 	ts.topologyWatchers = make(
 		map[string]TopologyWatcherInterface, len(ts.healthCheckCells))
 	for _, cell := range ts.healthCheckCells {
-		ts.topologyWatchers[cell] = topologyWatcherFactory(
+		ts.topologyWatchers[cell], err = topologyWatcherFactory(
 			topoServer,
 			ts.healthCheck,
 			cell,
@@ -344,7 +345,8 @@ func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, t
 			discovery.DefaultTopoReadConcurrency,
 		)
 		if err != nil {
-			return nil, err
+			log.Errorf("Failed to start topology watcher for cell %s: %v", err)
+			continue
 		}
 		ts.txThrottler.topoWatchers.Add(cell, 1)
 	}
