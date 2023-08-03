@@ -2884,6 +2884,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	requestContext := subFlags.String("request_context", "", "synonym for --migration_context")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	skipPreflight := subFlags.Bool("skip_preflight", false, "Deprecated. Always assumed to be 'true'")
+	batchSize := subFlags.Int64("batch_size", 0, "How many queries to batch together")
 
 	callerID := subFlags.String("caller_id", "", "This is the effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used)")
 	if err := subFlags.Parse(args); err != nil {
@@ -2930,6 +2931,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		MigrationContext:    *migrationContext,
 		WaitReplicasTimeout: protoutil.DurationToProto(*waitReplicasTimeout),
 		CallerId:            cID,
+		BatchSize:           *batchSize,
 	})
 
 	if err != nil {

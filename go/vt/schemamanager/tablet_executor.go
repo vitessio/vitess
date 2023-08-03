@@ -19,6 +19,7 @@ package schemamanager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,10 +52,11 @@ type TabletExecutor struct {
 	waitReplicasTimeout time.Duration
 	ddlStrategySetting  *schema.DDLStrategySetting
 	uuids               []string
+	batchSize           int64
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration) *TabletExecutor {
+func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration, batchSize int64) *TabletExecutor {
 	return &TabletExecutor{
 		ts:                  ts,
 		tmc:                 tmc,
@@ -62,6 +64,7 @@ func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.Ta
 		isClosed:            true,
 		waitReplicasTimeout: waitReplicasTimeout,
 		migrationContext:    migrationContext,
+		batchSize:           batchSize,
 	}
 }
 
@@ -161,14 +164,22 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) error {
 	return nil
 }
 
+// isDirectStrategy returns 'true' when the ddl_strategy configuration implies 'direct'
+func (exec *TabletExecutor) isDirectStrategy() (isDirect bool) {
+	if exec.ddlStrategySetting == nil {
+		return true
+	}
+	if exec.ddlStrategySetting.Strategy.IsDirect() {
+		return true
+	}
+	return false
+}
+
 // IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
 func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnline bool) {
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
-		if exec.ddlStrategySetting == nil {
-			return false
-		}
-		if exec.ddlStrategySetting.Strategy.IsDirect() {
+		if exec.isDirectStrategy() {
 			return false
 		}
 		switch stmt.GetAction() {
@@ -184,6 +195,15 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnlin
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
 func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) (executedAsynchronously bool, err error) {
+	executeViaFetch := func() (bool, error) {
+		exec.executeOnAllTablets(ctx, execResult, sql, false)
+		return false, nil
+	}
+	if exec.batchSize > 1 {
+		// Batched writes only ever work with 'direct' strategy and appleid directly to the mysql servers
+		return executeViaFetch()
+	}
+	// Analyze what type of query this is:
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return false, err
@@ -220,17 +240,58 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 		exec.executeOnAllTablets(ctx, execResult, sql, true)
 		return true, nil
 	}
-	exec.executeOnAllTablets(ctx, execResult, sql, false)
-	return false, nil
+	// Got here? The statement needs to be executed directly.
+	return executeViaFetch()
+}
+
+// batchSQLs combines SQLs into batches, delimited by ';'
+func batchSQLs(sqls []string, batchSize int) (batchedSQLs []string) {
+	if batchSize <= 1 {
+		return sqls
+	}
+	for len(sqls) > 0 {
+		nextBatchSize := batchSize
+		if nextBatchSize > len(sqls) {
+			nextBatchSize = len(sqls)
+		}
+		nextBatch := sqls[0:nextBatchSize]
+		nextBatchSql := strings.Join(nextBatch, ";")
+		batchedSQLs = append(batchedSQLs, nextBatchSql)
+		sqls = sqls[nextBatchSize:]
+	}
+	return batchedSQLs
+}
+
+func allSQLsAreCreateQueries(sqls []string) (bool, error) {
+	for _, sql := range sqls {
+		stmt, err := sqlparser.Parse(sql)
+		if err != nil {
+			return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to parse sql: %s, got error: %v", sql, err)
+		}
+		switch stmt.(type) {
+		case *sqlparser.CreateTable, *sqlparser.CreateView:
+		default:
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // Execute applies schema changes
 func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *ExecuteResult {
 	execResult := ExecuteResult{}
+
+	// errorExecResult is a utility function that populates the execResult with the given error, and returns it. Used to quickly bail out of
+	// this function.
+	errorExecResult := func(err error) *ExecuteResult {
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+		}
+		return &execResult
+	}
 	execResult.Sqls = sqls
 	if exec.isClosed {
-		execResult.ExecutorErr = "executor is closed"
-		return &execResult
+		return errorExecResult(fmt.Errorf("executor is closed"))
 	}
 	startTime := time.Now()
 	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
@@ -239,8 +300,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// keyspace-wide operations like resharding migrations.
 	ctx, unlock, lockErr := exec.ts.LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
-		execResult.ExecutorErr = vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
-		return &execResult
+		return errorExecResult(vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace))
 	}
 	defer func() {
 		// This is complicated because execResult.ExecutorErr
@@ -253,8 +313,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}()
 
 	if exec.hasProvidedUUIDs() && len(exec.uuids) != len(sqls) {
-		execResult.ExecutorErr = fmt.Sprintf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))
-		return &execResult
+		return errorExecResult(fmt.Errorf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls)))
 	}
 	providedUUID := ""
 
@@ -307,11 +366,28 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		wg.Wait()
 	}()
 
+	if exec.batchSize > 1 {
+		// Before we proceed to batch, we need to validate there's no conflicts.
+		if !exec.isDirectStrategy() {
+			return errorExecResult(fmt.Errorf("--batch-size requires 'direct' ddl-strategy"))
+		}
+		if exec.hasProvidedUUIDs() {
+			return errorExecResult(fmt.Errorf("--batch-size conflicts with --uuid-list. Batching does not support UUIDs."))
+		}
+		allSQLsAreCreate, err := allSQLsAreCreateQueries(sqls)
+		if err != nil {
+			return errorExecResult(err)
+		}
+		if !allSQLsAreCreate {
+			return errorExecResult(fmt.Errorf("--batch-size only allowed when all queries are CREATE TABLE|VIEW"))
+		}
+
+		sqls = batchSQLs(sqls, int(exec.batchSize))
+	}
 	for index, sql := range sqls {
 		// Attempt to renew lease:
 		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
-			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
-			return &execResult
+			return errorExecResult(vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace))
 		}
 		execResult.CurSQLIndex = index
 		if exec.hasProvidedUUIDs() {
@@ -319,8 +395,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
 		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return &execResult
+			return errorExecResult(err)
 		}
 		if !executedAsynchronously {
 			syncOperationExecuted = true
