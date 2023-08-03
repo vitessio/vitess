@@ -402,7 +402,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	eins := &engine.Insert{
 		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
 		Keyspace:          op.Routing.Keyspace(),
-		Table:             ins.VTable,
+		TableName:         ins.VTable.Name.String(),
 		Ignore:            ins.Ignore,
 		ForceNonStreaming: ins.ForceNonStreaming,
 		Generate:          autoIncGenerate(ins.AutoIncrement),
@@ -508,10 +508,9 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query: generateQuery(ast),
-		Table: []*vindexes.Table{
-			upd.VTable,
-		},
+		Query:             generateQuery(ast),
+		TableNames:        []string{upd.VTable.Name.String()},
+		Vindexes:          upd.VTable.ColumnVindexes,
 		OwnedVindexQuery:  upd.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
@@ -535,10 +534,9 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query: generateQuery(ast),
-		Table: []*vindexes.Table{
-			del.VTable,
-		},
+		Query:             generateQuery(ast),
+		TableNames:        []string{del.VTable.Name.String()},
+		Vindexes:          del.VTable.Owned,
 		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}

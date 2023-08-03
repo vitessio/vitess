@@ -234,6 +234,14 @@ func init() {
 	Register("mcfu", newMCFU)
 }
 
+func buildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
+	vs := BuildVSchema(source)
+	if vs != nil {
+		vs.ResetCreated()
+	}
+	return vs
+}
+
 func TestUnshardedVSchemaValid(t *testing.T) {
 	_, err := BuildKeyspace(&vschemapb.Keyspace{
 		Sharded:  false,
@@ -377,6 +385,76 @@ func TestVSchemaViews(t *testing.T) {
     "v1": "select c1 + c2 as added from t1"
   }
 }`
+	require.JSONEq(t, want, got)
+}
+
+func TestVSchemaForeignKeys(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}},
+			"main": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}}}}
+	vschema := BuildVSchema(&good)
+	require.NoError(t, vschema.Keyspaces["main"].Error)
+
+	// add fk containst a keyspace.
+	vschema.addForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
+		Source: sqlparser.Columns{sqlparser.NewIdentifierCI("c2")},
+		ReferenceDefinition: &sqlparser.ReferenceDefinition{
+			ReferencedTable:   sqlparser.NewTableName("t1"),
+			ReferencedColumns: sqlparser.Columns{sqlparser.NewIdentifierCI("c1")},
+		},
+	})
+
+	out, err := json.MarshalIndent(vschema.Keyspaces["main"], "", "  ")
+	require.NoError(t, err)
+	want := `
+{
+  "foreignKeyMode": "FK_UNMANAGED",
+  "tables": {
+    "t1": {
+      "name": "t1",
+      "columns": [
+        {
+          "name": "c1",
+          "type": "NULL_TYPE"
+        },
+        {
+          "name": "c2",
+          "type": "VARCHAR"
+        }
+      ],
+      "parent_foreign_keys": [
+        {
+          "parent_table": "t1",
+          "parent_columns": ["c1"],
+          "child_columns": ["c2"]
+        }
+      ],
+      "child_foreign_keys": [
+        {
+          "child_table": "t1",
+          "child_columns": ["c2"],
+          "parent_columns": ["c1"]
+        }
+      ]
+    }
+  }
+}`
+	got := string(out)
 	require.JSONEq(t, want, got)
 }
 
@@ -1037,7 +1115,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 							Columns: []string{"c1", "c2"},
 							Name:    "stfu1"}}}}}}}
 
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -1106,7 +1184,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 							Name:   "stlu1"}, {
 							Column: "c2",
 							Name:   "stfu1"}}}}}}}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -1236,7 +1314,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Name: "ksa"}
 	ksb := &Keyspace{
 		Name: "ksb"}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	t1a := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
@@ -1291,7 +1369,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	ksa := &Keyspace{
 		Name: "ksa",
 	}
@@ -1383,7 +1461,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["ksa"].Error
 	err1 := got.Keyspaces["ksb"].Error
 	require.NoError(t, err)
@@ -1959,7 +2037,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	err1 := got.Keyspaces["unsharded"].Error

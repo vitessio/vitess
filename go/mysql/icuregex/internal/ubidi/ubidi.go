@@ -21,14 +21,6 @@ limitations under the License.
 
 package ubidi
 
-import (
-	"errors"
-
-	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
-	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
-	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
-)
-
 const (
 	ixIndexTop = iota
 	ixLength
@@ -43,72 +35,6 @@ const (
 	maxValuesIndex
 	ixTop
 )
-
-var ubidi struct {
-	indexes []int32
-	trie    *utrie.UTrie2
-	mirrors []uint32
-	jg      []uint8
-	jg2     []uint8
-}
-
-func readData(bytes *udata.Bytes) error {
-	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.DataFormat[0] == 0x42 &&
-			info.DataFormat[1] == 0x69 &&
-			info.DataFormat[2] == 0x44 &&
-			info.DataFormat[3] == 0x69 &&
-			info.FormatVersion[0] == 2
-	})
-	if err != nil {
-		return err
-	}
-
-	count := int32(bytes.Uint32())
-	if count < ixTop {
-		return errors.New("indexes[0] too small in ucase.icu")
-	}
-
-	ubidi.indexes = make([]int32, count)
-	ubidi.indexes[0] = count
-
-	for i := int32(1); i < count; i++ {
-		ubidi.indexes[i] = int32(bytes.Uint32())
-	}
-
-	ubidi.trie, err = utrie.UTrie2FromBytes(bytes)
-	if err != nil {
-		return err
-	}
-
-	expectedTrieLength := ubidi.indexes[ixTrieSize]
-	trieLength := ubidi.trie.SerializedLength()
-
-	if trieLength > expectedTrieLength {
-		return errors.New("ucase.icu: not enough bytes for the trie")
-	}
-
-	bytes.Skip(expectedTrieLength - trieLength)
-
-	if n := ubidi.indexes[ixMirrorLength]; n > 0 {
-		ubidi.mirrors = bytes.Uint32Slice(n)
-	}
-	if n := ubidi.indexes[ixJgLimit] - ubidi.indexes[ixJgStart]; n > 0 {
-		ubidi.jg = bytes.Uint8Slice(n)
-	}
-	if n := ubidi.indexes[ixJgLimit2] - ubidi.indexes[ixJgStart2]; n > 0 {
-		ubidi.jg2 = bytes.Uint8Slice(n)
-	}
-
-	return nil
-}
-
-func init() {
-	b := udata.NewBytes(icudata.UBidi)
-	if err := readData(b); err != nil {
-		panic(err)
-	}
-}
 
 const (
 	/* UBIDI_CLASS_SHIFT=0, */ /* bidi class: 5 bits (4..0) */
@@ -362,22 +288,24 @@ type propertySet interface {
 
 func AddPropertyStarts(sa propertySet) {
 	/* add the start code point of each same-value range of the trie */
-	ubidi.trie.Enum(nil, func(start, _ rune, _ uint32) bool {
+	trie().Enum(nil, func(start, _ rune, _ uint32) bool {
 		sa.AddRune(start)
 		return true
 	})
 
+	idxs := indexes()
+	mrs := mirrors()
 	/* add the code points from the bidi mirroring table */
-	length := ubidi.indexes[ixMirrorLength]
+	length := idxs[ixMirrorLength]
 	for i := int32(0); i < length; i++ {
-		c := mirrorCodePoint(rune(ubidi.mirrors[i]))
+		c := mirrorCodePoint(rune(mrs[i]))
 		sa.AddRuneRange(c, c+1)
 	}
 
 	/* add the code points from the Joining_Group array where the value changes */
-	start := ubidi.indexes[ixJgStart]
-	limit := ubidi.indexes[ixJgLimit]
-	jgArray := ubidi.jg[:]
+	start := idxs[ixJgStart]
+	limit := idxs[ixJgLimit]
+	jgArray := jg()
 	for {
 		prev := uint8(0)
 		for start < limit {
@@ -393,11 +321,11 @@ func AddPropertyStarts(sa propertySet) {
 			/* add the limit code point if the last value was not 0 (it is now start==limit) */
 			sa.AddRune(limit)
 		}
-		if limit == ubidi.indexes[ixJgLimit] {
+		if limit == idxs[ixJgLimit] {
 			/* switch to the second Joining_Group range */
-			start = ubidi.indexes[ixJgStart2]
-			limit = ubidi.indexes[ixJgLimit2]
-			jgArray = ubidi.jg2[:]
+			start = idxs[ixJgStart2]
+			limit = idxs[ixJgLimit2]
+			jgArray = jg2()
 		} else {
 			break
 		}
@@ -417,45 +345,46 @@ func mirrorCodePoint(m rune) rune {
 }
 
 func IsJoinControl(c rune) bool {
-	props := ubidi.trie.Get16(c)
+	props := trie().Get16(c)
 	return HasFlag(props, joinControlShift)
 }
 
 func JoinType(c rune) JoiningType {
-	props := ubidi.trie.Get16(c)
+	props := trie().Get16(c)
 	return JoiningType((props & jtMask) >> jtShift)
 }
 
 func JoinGroup(c rune) JoiningGroup {
-	start := ubidi.indexes[ixJgStart]
-	limit := ubidi.indexes[ixJgLimit]
+	idxs := indexes()
+	start := idxs[ixJgStart]
+	limit := idxs[ixJgLimit]
 	if start <= c && c < limit {
-		return JoiningGroup(ubidi.jg[c-start])
+		return JoiningGroup(jg()[c-start])
 	}
-	start = ubidi.indexes[ixJgStart2]
-	limit = ubidi.indexes[ixJgLimit2]
+	start = idxs[ixJgStart2]
+	limit = idxs[ixJgLimit2]
 	if start <= c && c < limit {
-		return JoiningGroup(ubidi.jg2[c-start])
+		return JoiningGroup(jg2()[c-start])
 	}
 	return JgNoJoiningGroup
 }
 
 func IsMirrored(c rune) bool {
-	props := ubidi.trie.Get16(c)
+	props := trie().Get16(c)
 	return HasFlag(props, isMirroredShift)
 }
 
 func IsBidiControl(c rune) bool {
-	props := ubidi.trie.Get16(c)
+	props := trie().Get16(c)
 	return HasFlag(props, bidiControlShift)
 }
 
 func PairedBracketType(c rune) UPairedBracketType {
-	props := ubidi.trie.Get16(c)
+	props := trie().Get16(c)
 	return UPairedBracketType((props & bptMask) >> bptShift)
 }
 
 func Class(c rune) CharDirection {
-	props := ubidi.trie.Get16(c)
+	props := trie().Get16(c)
 	return CharDirection(props & classMask)
 }

@@ -203,10 +203,8 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 			}
 			// Remove the tablet record for this tablet
 		}
-		err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
-		if err != nil {
-			return err
-		}
+		// Ignoring error here because some tests delete tablets themselves.
+		_ = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 	}
 	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	return nil
@@ -304,6 +302,13 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	}
 	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)
+	// VTOrc now uses shard record too, so we need to clear that as well for correct testing.
+	_, err = clusterInfo.Ts.UpdateShardFields(context.Background(), keyspaceName, shardName, func(info *topo.ShardInfo) error {
+		info.PrimaryTermStartTime = nil
+		info.PrimaryAlias = nil
+		return nil
+	})
+	require.NoError(t, err)
 
 	// start vtorc
 	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
@@ -430,8 +435,8 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
-			confirmReplication(t, primary, replicas, time.Until(endTime), clusterInfo.lastUsedValue)
 			clusterInfo.lastUsedValue++
+			confirmReplication(t, primary, replicas, time.Until(endTime), clusterInfo.lastUsedValue)
 			validateTopology(t, clusterInfo, true, time.Until(endTime))
 			return
 		}
@@ -442,8 +447,8 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 // Call this function only after CheckReplication has been executed once, since that function creates the table that this function uses.
 func VerifyWritesSucceed(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	t.Helper()
-	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 	clusterInfo.lastUsedValue++
+	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 }
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
@@ -476,6 +481,12 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 			return
 		}
 	}
+}
+
+// CheckTabletUptoDate verifies that the tablet has all the writes so far
+func CheckTabletUptoDate(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet) {
+	err := checkInsertedValues(t, tablet, clusterInfo.lastUsedValue)
+	require.NoError(t, err)
 }
 
 func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) error {

@@ -35,11 +35,9 @@ import (
 // TestGatewayBufferingWhenPrimarySwitchesServingState is used to test that the buffering mechanism buffers the queries when a primary goes to a non serving state and
 // stops buffering when the primary is healthy again
 func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
-	bufferImplementation = "keyspace_events"
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
-		bufferImplementation = "healthcheck"
 	}()
 
 	keyspace := "ks1"
@@ -119,11 +117,9 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 // TestGatewayBufferingWhileReparenting is used to test that the buffering mechanism buffers the queries when a PRS happens
 // the healthchecks that happen during a PRS are simulated in this test
 func TestGatewayBufferingWhileReparenting(t *testing.T) {
-	bufferImplementation = "keyspace_events"
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
-		bufferImplementation = "healthcheck"
 	}()
 
 	keyspace := "ks1"
@@ -249,11 +245,9 @@ outer:
 // This is inconsistent and we want to fail properly. This scenario used to panic since no error and no results were
 // returned.
 func TestInconsistentStateDetectedBuffering(t *testing.T) {
-	bufferImplementation = "keyspace_events"
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
-		bufferImplementation = "healthcheck"
 	}()
 
 	keyspace := "ks1"

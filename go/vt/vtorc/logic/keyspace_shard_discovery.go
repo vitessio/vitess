@@ -28,8 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-// RefreshAllKeyspaces reloads the keyspace information for the keyspaces that vtorc is concerned with.
-func RefreshAllKeyspaces() {
+// RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
+func RefreshAllKeyspacesAndShards() {
 	var keyspaces []string
 	if len(clustersToWatch) == 0 { // all known keyspaces
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
@@ -72,30 +72,81 @@ func RefreshAllKeyspaces() {
 		if idx != 0 && keyspace == keyspaces[idx-1] {
 			continue
 		}
-		wg.Add(1)
+		wg.Add(2)
 		go func(keyspace string) {
 			defer wg.Done()
-			_ = refreshKeyspace(refreshCtx, keyspace)
+			_ = refreshKeyspaceHelper(refreshCtx, keyspace)
+		}(keyspace)
+		go func(keyspace string) {
+			defer wg.Done()
+			_ = refreshAllShards(refreshCtx, keyspace)
 		}(keyspace)
 	}
 	wg.Wait()
 }
 
-// RefreshKeyspace refreshes the keyspace's information for the given keyspace from the topo
-func RefreshKeyspace(keyspaceName string) error {
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer refreshCancel()
-	return refreshKeyspace(refreshCtx, keyspaceName)
+// RefreshKeyspaceAndShard refreshes the keyspace record and shard record for the given keyspace and shard.
+func RefreshKeyspaceAndShard(keyspaceName string, shardName string) error {
+	err := refreshKeyspace(keyspaceName)
+	if err != nil {
+		return err
+	}
+	return refreshShard(keyspaceName, shardName)
 }
 
-// refreshKeyspace is a helper function which reloads the given keyspace's information
-func refreshKeyspace(ctx context.Context, keyspaceName string) error {
+// refreshKeyspace refreshes the keyspace's information for the given keyspace from the topo
+func refreshKeyspace(keyspaceName string) error {
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer refreshCancel()
+	return refreshKeyspaceHelper(refreshCtx, keyspaceName)
+}
+
+// refreshShard refreshes the shard's information for the given keyspace/shard from the topo
+func refreshShard(keyspaceName, shardName string) error {
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer refreshCancel()
+	return refreshSingleShardHelper(refreshCtx, keyspaceName, shardName)
+}
+
+// refreshKeyspaceHelper is a helper function which reloads the given keyspace's information
+func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspaceName)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 	err = inst.SaveKeyspace(keyspaceInfo)
+	if err != nil {
+		log.Error(err)
+	}
+	return err
+}
+
+// refreshAllShards refreshes all the shard records in the given keyspace.
+func refreshAllShards(ctx context.Context, keyspaceName string) error {
+	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	for _, shardInfo := range shardInfos {
+		err = inst.SaveShard(shardInfo)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+	}
+	return nil
+}
+
+// refreshSingleShardHelper is a helper function that refreshes the shard record of the given keyspace/shard.
+func refreshSingleShardHelper(ctx context.Context, keyspaceName string, shardName string) error {
+	shardInfo, err := ts.GetShard(ctx, keyspaceName, shardName)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	err = inst.SaveShard(shardInfo)
 	if err != nil {
 		log.Error(err)
 	}
