@@ -2040,7 +2040,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	tablesFound := 0                                                      // Used to short circuit the search
 	searchCompleted := make(chan struct{})                                // The search has completed
 	searchKeyspace := func(sctx context.Context, keyspace string) error { // The function used to search each keyspace
-		kvs, kerr := ts.TopoServer().GetVSchema(ctx, keyspace)
+		kvs, kerr := ts.TopoServer().GetVSchema(sctx, keyspace)
 		if kerr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
 				keyspace, kerr)
