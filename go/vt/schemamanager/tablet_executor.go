@@ -262,6 +262,9 @@ func batchSQLs(sqls []string, batchSize int) (batchedSQLs []string) {
 	return batchedSQLs
 }
 
+// allSQLsAreCreateQueries returns 'true' when all given queries are CREATE TABLE|VIEW
+// This function runs pretty fast even for thousands of tables (its overhead is insignificant compared with
+// the time it would take to apply the changes).
 func allSQLsAreCreateQueries(sqls []string) (bool, error) {
 	for _, sql := range sqls {
 		stmt, err := sqlparser.Parse(sql)
