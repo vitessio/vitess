@@ -71,8 +71,8 @@ func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) Chil
 	}
 }
 
-// addForeignKey is for testing only.
-func (vschema *VSchema) addForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
+// AddForeignKey is for testing only.
+func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
 	ks, ok := vschema.Keyspaces[ksname]
 	if !ok {
 		return fmt.Errorf("keyspace %s not found in vschema", ksname)

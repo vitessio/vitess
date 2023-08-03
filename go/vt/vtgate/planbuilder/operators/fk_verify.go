@@ -4,6 +4,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -71,7 +72,13 @@ func NewFkVerify(ctx *plancontext.PlanningContext, parentFKs []vindexes.ParentFK
 				),
 			),
 		}
-		op, err := PlanQuery(ctx, query)
+
+		newSemTable, err := semantics.Analyze(query, fk.Table.Keyspace.Name, ctx.VSchema)
+		if err != nil {
+			return nil, err
+		}
+		newCtx := plancontext.NewPlanningContext(nil, newSemTable, ctx.VSchema, ctx.PlannerVersion)
+		op, err := PlanQuery(newCtx, query)
 		if err != nil {
 			return nil, err
 		}
