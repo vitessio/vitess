@@ -467,23 +467,13 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 			Tags:    tagArray,
 		}
-		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
-		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
+
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
 		}
 
 		span.Annotate("num_copy_states", len(stream.CopyStates))
-
-		switch {
-		case strings.Contains(strings.ToLower(stream.Message), "error"):
-			stream.State = binlogdatapb.VReplicationWorkflowState_Error.String()
-		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
-			stream.State = binlogdatapb.VReplicationWorkflowState_Copying.String()
-		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && int64(time.Now().Second())-timeUpdatedSeconds > 10:
-			stream.State = binlogdatapb.VReplicationWorkflowState_Lagging.String()
-		}
 
 		// At this point, we're going to start modifying the maps defined
 		// outside this function, as well as fields on the passed-in Workflow
@@ -493,6 +483,18 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		// here shouldn't hurt too badly, performance-wise.
 		m.Lock()
 		defer m.Unlock()
+
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
+
+		switch {
+		case strings.Contains(strings.ToLower(stream.Message), "error"):
+			stream.State = binlogdatapb.VReplicationWorkflowState_Error.String()
+		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
+			stream.State = binlogdatapb.VReplicationWorkflowState_Copying.String()
+		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && int64(time.Now().Second())-timeUpdatedSeconds > 10:
+			stream.State = binlogdatapb.VReplicationWorkflowState_Lagging.String()
+		}
 
 		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
 		shardStream, ok := workflow.ShardStreams[shardStreamKey]

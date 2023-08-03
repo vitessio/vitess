@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"math"
 	"runtime/debug"
 	"testing"
 
@@ -392,12 +393,15 @@ func TestMoveTables(t *testing.T) {
 					"maxval",
 					"int64",
 				),
-				"5",
+				fmt.Sprintf("%d", ftc.tablet.Alias.Uid), // Use the tablet's UID as the max value
 			),
 		)
 	}
 
-	tenv.tmc.setVReplicationExecResults(globalTablet.tablet, sqlparser.BuildParsedQuery(initSequenceTable, sqlescape.EscapeID("vt_global"), sqlescape.EscapeID("t1_seq"), 6, 6, 6).Query,
+	// We use the tablet's UID in the mocked results for the max value used on each target shard.
+	nextSeqVal := int(math.Max(float64(targetShards["-80"].tablet.Alias.Uid), float64(targetShards["80-"].tablet.Alias.Uid))) + 1
+	tenv.tmc.setVReplicationExecResults(globalTablet.tablet,
+		sqlparser.BuildParsedQuery(initSequenceTable, sqlescape.EscapeID(fmt.Sprintf("vt_%s", globalKs)), sqlescape.EscapeID("t1_seq"), nextSeqVal, nextSeqVal, nextSeqVal).Query,
 		&sqltypes.Result{RowsAffected: 0},
 	)
 

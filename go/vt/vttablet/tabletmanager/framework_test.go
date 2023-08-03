@@ -435,10 +435,11 @@ func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-		Workflow:     req.Workflow,
-		WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
-		TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-		Streams:      make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.sourceShards)),
+		Workflow:        req.Workflow,
+		WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType_None,
+		WorkflowType:    binlogdatapb.VReplicationWorkflowType_MoveTables,
+		TabletTypes:     []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		Streams:         make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.sourceShards)),
 	}
 	rules := make([]*binlogdatapb.Rule, len(defaultSchema.TableDefinitions))
 	for i, table := range defaultSchema.TableDefinitions {
