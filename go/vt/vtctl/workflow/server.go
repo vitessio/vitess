@@ -327,7 +327,8 @@ func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string) (*v
 		return nil, err
 	}
 	if len(res.Workflows) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of workflows returned; expected 1, got %d", len(res.Workflows))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of workflows returned for %s.%s; expected 1, got %d",
+			keyspace, workflow, len(res.Workflows))
 	}
 	return res.Workflows[0], nil
 }

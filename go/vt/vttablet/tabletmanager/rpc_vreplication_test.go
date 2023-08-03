@@ -204,7 +204,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // MoveTablesCreate request to ensure that the VReplication
 // stream(s) are created correctly. Followed by ensuring that
 // SwitchTraffic and ReverseTraffic work as expected.
-// TODO: figure out why this fails the -race tests in GetWorkflows.
 func TestMoveTables(t *testing.T) {
 	ctx := context.Background()
 	sourceKs := "sourceks"
@@ -215,7 +214,11 @@ func TestMoveTables(t *testing.T) {
 	globalKs := "global"
 	globalShard := "0"
 	wf := "testwf"
-	tabletTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
+	tabletTypes := []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
 
 	tenv := newTestEnv(t, sourceKs, []string{sourceShard})
 	defer tenv.close()
@@ -305,7 +308,7 @@ func TestMoveTables(t *testing.T) {
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getLatestCopyState, &sqltypes.Result{})
 
 		ftc.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
 			insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, ftc.tablet.Shard, tenv.cells[0], tenv.dbName)
 		ftc.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: 1}, nil)
 		ftc.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
@@ -420,7 +423,6 @@ func TestMoveTables(t *testing.T) {
 		Keyspace:                  targetKs,
 		Workflow:                  wf,
 		Cells:                     tenv.cells,
-		TabletTypes:               tabletTypes,
 		MaxReplicationLagAllowed:  &vttime.Duration{Seconds: 922337203},
 		EnableReverseReplication:  true,
 		InitializeTargetSequences: true,
@@ -428,19 +430,25 @@ func TestMoveTables(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	/*
-		// TODO: figure out why this fails with "one or more tables are already present in the denylist"
-		_, err = ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
-			Keyspace:                 targetKs,
-			Workflow:                 wf,
-			Cells:                    tenv.cells,
-			TabletTypes:              tabletTypes,
-			MaxReplicationLagAllowed: &vttime.Duration{Seconds: 922337203},
-			EnableReverseReplication: true,
-			Direction:                int32(workflow.DirectionBackward),
-		})
-		require.NoError(t, err)
-	*/
+	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, fmt.Sprintf(getWorkflowStatus, workflow.ReverseWorkflowName(wf), sourceKs),
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type",
+				"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64",
+			),
+			fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0", workflow.ReverseWorkflowName(wf), bls, position, sourceKs),
+		),
+	)
+
+	_, err = ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:                 targetKs,
+		Workflow:                 wf,
+		Cells:                    tenv.cells,
+		MaxReplicationLagAllowed: &vttime.Duration{Seconds: 922337203},
+		EnableReverseReplication: true,
+		Direction:                int32(workflow.DirectionBackward),
+	})
+	require.NoError(t, err)
 }
 
 func TestUpdateVReplicationWorkflow(t *testing.T) {
