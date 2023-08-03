@@ -111,10 +111,6 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 
 	switch ddl := ddlStatement.(type) {
 	case *sqlparser.AlterTable, *sqlparser.CreateTable, *sqlparser.TruncateTable:
-		err = checkFKError(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
 		// For ALTER TABLE and TRUNCATE TABLE, the table must already exist
 		//
 		// For CREATE TABLE, the table may (in the case of --declarative)
@@ -122,6 +118,10 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		//
 		// We should find the target of the query from this tables location.
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
@@ -162,12 +162,8 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		}, nil
 }
 
-func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) error {
-	_, ks, _, err := vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
-	if err != nil {
-		return err
-	}
-	fkMode, err := vschema.ForeignKeyMode(ks.Name)
+func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement, keyspace *vindexes.Keyspace) error {
+	fkMode, err := vschema.ForeignKeyMode(keyspace.Name)
 	if err != nil {
 		return err
 	}
