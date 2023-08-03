@@ -11,7 +11,8 @@ jobs:
   get_next_release:
     if: always()
     name: Get Previous Release - Backups - Manual - Next Release
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
@@ -33,7 +34,8 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
     needs:
       - get_next_release
 

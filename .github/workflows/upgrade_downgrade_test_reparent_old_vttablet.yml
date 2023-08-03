@@ -14,7 +14,8 @@ jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Reparent Old VTTablet
-    runs-on: ubuntu-latest
+    runs-on:
+      group: vitess-ubuntu20
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -34,7 +35,8 @@ jobs:
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Reparent Old VTTablet
-    runs-on: ubuntu-latest
+    runs-on:
+      group: vitess-ubuntu20
     needs:
       - get_previous_release
 

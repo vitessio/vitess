@@ -4,7 +4,8 @@ on: [push, pull_request]
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
 
     steps:
     - name: Check if workflow needs to be skipped
