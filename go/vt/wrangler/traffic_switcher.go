@@ -1947,7 +1947,7 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if vschema == nil || vschema.Tables == nil || len(vschema.Tables) == 0 {
+	if vschema == nil || len(vschema.Tables) == 0 {
 		return false, nil
 	}
 	sequenceFound := false
@@ -1974,7 +1974,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
 			ts.targetKeyspace, err)
 	}
-	if vschema == nil || vschema.Tables == nil || len(vschema.Tables) == 0 { // Nothing to do
+	if vschema == nil || len(vschema.Tables) == 0 { // Nothing to do
 		return nil, nil
 	}
 
@@ -2045,7 +2045,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
 				keyspace, kerr)
 		}
-		if kvs == nil || kvs.Sharded || kvs.Tables == nil || len(kvs.Tables) == 0 {
+		if kvs == nil || kvs.Sharded || len(kvs.Tables) == 0 {
 			return nil
 		}
 		for tableName, tableDef := range kvs.Tables {
