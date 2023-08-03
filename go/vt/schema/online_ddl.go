@@ -28,6 +28,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 
+	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema/internal/hooks"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -130,7 +131,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 				if strings.EqualFold(mapKey, fieldName) {
 					return true
 				} else if strings.EqualFold(camelcase(mapKey), camelcase(fieldName)) {
-					// TODO: log warning here
+					log.Warningf("Use of legacy camel-cased field %s treated as %s. This will break in a future release.", fieldName, camelcase(mapKey))
 					return true
 				}
 			}
@@ -146,27 +147,32 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	}
 
 	if onlineDDL.TabletAlias != "" {
+		msg := "Parsed legacy field 'tablet', which has been replaced by 'tablet_alias'."
 		var err error
 		switch onlineDDL.OnlineDDL.TabletAlias {
 		case nil:
-			// TODO: log warning
 			onlineDDL.OnlineDDL.TabletAlias, err = topoproto.ParseTabletAlias(onlineDDL.TabletAlias)
 		default:
-			// TODO: log warning
+			msg += fmt.Sprintf(" 'tablet_alias' was also provided, so using %s instead.", topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias))
 		}
 
 		if err != nil {
 			return onlineDDL, err
 		}
+
+		log.Warningf(msg)
 	}
 	onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
 
 	if onlineDDL.MigrationContext != "" {
+		msg := "Parsed legacy field 'context', which has been replaced by 'migration_context'."
 		if onlineDDL.OnlineDDL.MigrationContext == "" {
 			onlineDDL.OnlineDDL.MigrationContext = onlineDDL.MigrationContext
+		} else {
+			msg += fmt.Sprintf(" 'migration_context' was also provided, so using %s instead.", onlineDDL.OnlineDDL.MigrationContext)
 		}
 
-		// TODO: log warning
+		log.Warningf(msg)
 	}
 	onlineDDL.MigrationContext = onlineDDL.OnlineDDL.MigrationContext
 
@@ -182,7 +188,7 @@ func ParseOnlineDDLStatus(name string) (tabletmanagerdatapb.OnlineDDL_Status, er
 	}
 
 	if name != key {
-		// TODO: deprecation warning
+		log.Warningf("legacy status name %s parsed as %s. this will break in a future release.", name, key)
 	}
 
 	return tabletmanagerdatapb.OnlineDDL_Status(val), nil

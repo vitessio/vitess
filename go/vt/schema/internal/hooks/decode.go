@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -77,7 +78,7 @@ func DecodeStatus(from, to reflect.Type, data any) (any, error) {
 		}
 
 		if name != data {
-			// TODO: deprecation warning here
+			log.Warningf("legacy status name %s parsed as %s. this will break in a future release.", data, name)
 		}
 
 		return val, nil
@@ -122,7 +123,7 @@ func DecodeStrategy(from, to reflect.Type, data any) (any, error) {
 		}
 
 		if name != data {
-			// TODO: deprecation warning here
+			log.Warningf("detected legacy strategy name syntax; parsed %q as %q. this break in the next version.", data, name)
 		}
 
 		return val, nil
