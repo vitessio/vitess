@@ -269,7 +269,10 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	case sqlparser.DDLStatement:
 		comments = stmt.GetParsedComments()
 	case *sqlparser.RevertMigration:
-		comments = stmt.Comments
+		// We clone the comments because they will end up being cached by the query planner. Then, the Directive() function actually modifies the comments.
+		// If comments are shared in cache, and Directive() modifies it, then we have a concurrency issue when someone else wants to read the comments.
+		// By cloning the comments we remove the concurrency problem.
+		comments = sqlparser.CloneRefOfParsedComments(stmt.Comments)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 	}
