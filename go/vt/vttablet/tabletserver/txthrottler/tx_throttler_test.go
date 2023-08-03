@@ -126,6 +126,8 @@ func TestEnabledThrottler(t *testing.T) {
 	})
 
 	assert.Nil(t, throttlerImpl.Open())
+	throttlerStateImpl := throttlerImpl.state.(*txThrottlerStateImpl)
+	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttlerImpl.topoWatchers.Counts())
 
@@ -174,33 +176,6 @@ func TestFetchKnownCells(t *testing.T) {
 	}
 }
 
-func TestNewTxThrottler(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, t.Name())
-
-	{
-		// disabled
-		config.EnableTxThrottler = false
-		throttler := NewTxThrottler(env, nil)
-		throttlerImpl, _ := throttler.(*txThrottler)
-		assert.NotNil(t, throttlerImpl)
-		assert.NotNil(t, throttlerImpl.config)
-		assert.False(t, throttlerImpl.config.enabled)
-	}
-	{
-		// enabled
-		config.EnableTxThrottler = true
-		config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
-		config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
-		throttler := NewTxThrottler(env, nil)
-		throttlerImpl, _ := throttler.(*txThrottler)
-		assert.NotNil(t, throttlerImpl)
-		assert.NotNil(t, throttlerImpl.config)
-		assert.True(t, throttlerImpl.config.enabled)
-		assert.Equal(t, []string{"cell1", "cell2"}, throttlerImpl.config.healthCheckCells)
-	}
-}
-
 func TestDryRunThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, t.Name())
@@ -222,9 +197,9 @@ func TestDryRunThrottler(t *testing.T) {
 
 		t.Run(theTestCase.Name, func(t *testing.T) {
 			aTxThrottler := &txThrottler{
-				config: &txThrottlerConfig{
-					enabled: true,
-					dryRun:  theTestCase.throttlerDryRun,
+				config: &tabletenv.TabletConfig{
+					EnableTxThrottler: true,
+					TxThrottlerDryRun: theTestCase.throttlerDryRun,
 				},
 				state:             &mockTxThrottlerState{shouldThrottle: theTestCase.txThrottlerStateShouldThrottle},
 				throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
