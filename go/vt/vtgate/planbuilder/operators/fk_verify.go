@@ -87,11 +87,11 @@ func NewFkVerify(ctx *plancontext.PlanningContext, parentFKs []vindexes.ParentFK
 		// Build the offsets
 		var offsets []int
 	outer:
-		for _, column := range fk.ParentColumns {
+		for _, column := range fk.ChildColumns {
 			for idx, insertColumn := range insertColumns {
 				if column.Equal(insertColumn) {
 					offsets = append(offsets, idx)
-					goto outer
+					continue outer
 				}
 			}
 			offsets = append(offsets, -1)
