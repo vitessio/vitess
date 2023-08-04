@@ -29,7 +29,8 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,7 +46,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -412,7 +412,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		span.Annotate("workflow", workflow.Name)
 		span.Annotate("tablet_alias", tablet.AliasString())
 
-		id, err := evalengine.ToInt64(row["id"])
+		id, err := row["id"].ToCastInt64()
 		if err != nil {
 			return err
 		}
@@ -431,12 +431,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		state := row["state"].ToString()
 		dbName := row["db_name"].ToString()
 
-		timeUpdatedSeconds, err := evalengine.ToInt64(row["time_updated"])
+		timeUpdatedSeconds, err := row["time_updated"].ToCastInt64()
 		if err != nil {
 			return err
 		}
 
-		transactionTimeSeconds, err := evalengine.ToInt64(row["transaction_timestamp"])
+		transactionTimeSeconds, err := row["transaction_timestamp"].ToCastInt64()
 		if err != nil {
 			return err
 		}
@@ -657,13 +657,13 @@ ORDER BY
 			}
 
 			for _, row := range qr.Rows {
-				id, err := evalengine.ToInt64(row[0])
+				id, err := row[0].ToCastInt64()
 				if err != nil {
 					markErrors(err)
 					continue
 				}
 
-				streamID, err := evalengine.ToInt64(row[1])
+				streamID, err := row[1].ToCastInt64()
 				if err != nil {
 					markErrors(err)
 					continue
@@ -685,7 +685,7 @@ ORDER BY
 					continue
 				}
 
-				count, err := evalengine.ToInt64(row[7])
+				count, err := row[7].ToCastInt64()
 				if err != nil {
 					markErrors(err)
 					continue
@@ -1420,11 +1420,11 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for i := 0; i < len(qr.Rows); i++ {
 			table := qr.Rows[i][0].ToString()
-			rowCount, err := evalengine.ToInt64(qr.Rows[i][1])
+			rowCount, err := qr.Rows[i][1].ToCastInt64()
 			if err != nil {
 				return err
 			}
-			tableSize, err := evalengine.ToInt64(qr.Rows[i][2])
+			tableSize, err := qr.Rows[i][2].ToCastInt64()
 			if err != nil {
 				return err
 			}
@@ -1608,7 +1608,7 @@ func (s *Server) collectTargetStreams(ctx context.Context, mz *materializer) ([]
 		}
 		qr := sqltypes.Proto3ToResult(qrproto)
 		for i := 0; i < len(qr.Rows); i++ {
-			id, err = evalengine.ToInt64(qr.Rows[i][0])
+			id, err = qr.Rows[i][0].ToCastInt64()
 			if err != nil {
 				return err
 			}
@@ -1682,7 +1682,7 @@ func (s *Server) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb
 		Query:   []byte(query),
 		MaxRows: uint64(rows),
 	}); err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num != sqlerror.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
 			log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 		}
 	}
@@ -1722,7 +1722,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			Query:   []byte(sqlOptimizeTable),
 			MaxRows: uint64(100), // always produces 1+rows with notes and status
 		}); err != nil {
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.ERNoSuchTable { // the table may not exist
 				return
 			}
 			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)

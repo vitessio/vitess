@@ -70,10 +70,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -359,7 +360,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Stats:               backupstats.RestoreStats(),
 	}
 	backupManifest, err := mysqlctl.Restore(ctx, params)
-	var restorePos mysql.Position
+	var restorePos replication.Position
 	switch err {
 	case nil:
 		// if err is nil, we expect backupManifest to be non-nil
@@ -370,7 +371,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if !allowFirstBackup {
 			return fmt.Errorf("no backup found; not starting up empty since --initial_backup flag was not enabled")
 		}
-		restorePos = mysql.Position{}
+		restorePos = replication.Position{}
 	default:
 		return fmt.Errorf("can't restore from backup: %v", err)
 	}
@@ -408,7 +409,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	tmc := tmclient.NewTabletManagerClient()
 	// Keep retrying if we can't contact the primary. The primary might be
 	// changing, moving, or down temporarily.
-	var primaryPos mysql.Position
+	var primaryPos replication.Position
 	err = retryOnError(ctx, func() error {
 		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
 		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
@@ -516,7 +517,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	return nil
 }
 
-func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.MysqlDaemon) error {
+func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {
 	cmds := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget replication source host:port.
@@ -563,27 +564,27 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	return nil
 }
 
-func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (mysql.Position, error) {
+func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, initKeyspace, initShard)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
+		return replication.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
 	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		// Normal tablets will sit around waiting to be reparented in this case.
 		// Since vtbackup is a batch job, we just have to fail.
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", initKeyspace, initShard)
+		return replication.Position{}, fmt.Errorf("shard %v/%v has no primary", initKeyspace, initShard)
 	}
 	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
+		return replication.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
 	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
+		return replication.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
-	pos, err := mysql.DecodePosition(posStr)
+	pos, err := replication.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
+		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }
