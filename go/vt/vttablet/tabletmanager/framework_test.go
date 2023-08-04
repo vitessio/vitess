@@ -26,8 +26,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -112,7 +112,7 @@ func newTestEnv(t *testing.T, sourceKeyspace string, sourceShards []string) *tes
 
 	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	var err error
-	tenv.mysqld.CurrentPrimaryPosition, err = mysql.ParsePosition(gtidFlavor, gtidPosition)
+	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
 	require.NoError(t, err)
 
 	return tenv
