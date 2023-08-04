@@ -27,11 +27,10 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -208,15 +207,15 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, err error, serving bool) {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimestamp time.Time, lag time.Duration, err error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
 	hs.state.Target.TabletType = tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		hs.state.TabletExternallyReparentedTimestamp = terTimestamp.Unix()
+		hs.state.PrimaryTermStartTimestamp = ptsTimestamp.Unix()
 	} else {
-		hs.state.TabletExternallyReparentedTimestamp = 0
+		hs.state.PrimaryTermStartTimestamp = 0
 	}
 	if err != nil {
 		hs.state.RealtimeStats.HealthError = err.Error()

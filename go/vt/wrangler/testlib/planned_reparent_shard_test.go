@@ -631,9 +631,10 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE",
 		"START SLAVE",
+		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceError = errors.New("Slave failed to initialize relay log info structure from the repository")
+	goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -801,6 +802,9 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
+		// We call a SetReplicationSource explicitly
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// extra SetReplicationSource call due to retry
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -825,7 +829,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"START SLAVE",
 		// extra SetReplicationSource call due to retry
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
@@ -839,8 +842,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
-		"FAKE SET MASTER",
-		// extra SetReplicationSource call due to retry
 		"FAKE SET MASTER",
 	}
 	goodReplica2.StartActionLoop(t, wr)
@@ -856,6 +857,13 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// when promote fails, we don't call UndoDemotePrimary, so the old primary should be read-only
 	assert.True(t, newPrimary.FakeMysqlDaemon.ReadOnly, "newPrimary.FakeMysqlDaemon.ReadOnly")
 	assert.True(t, oldPrimary.FakeMysqlDaemon.ReadOnly, "oldPrimary.FakeMysqlDaemon.ReadOnly")
+
+	// After the first call to PRS has failed, we don't know whether `SetReplicationSource` RPC has succeeded on the oldPrimary or not.
+	// This causes the test to become non-deterministic. To prevent this, we call `SetReplicationSource` on the oldPrimary again, and make sure it has succeeded.
+	// We also wait until the oldPrimary has demoted itself to a replica type.
+	err = wr.TabletManagerClient().SetReplicationSource(context.Background(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false)
+	require.NoError(t, err)
+	waitForTabletType(t, wr, oldPrimary.Tablet.Alias, topodatapb.TabletType_REPLICA)
 
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
@@ -920,7 +928,6 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)

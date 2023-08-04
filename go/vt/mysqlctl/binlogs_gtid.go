@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -230,6 +231,151 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 	findPaths(fullBackup.Position.GTIDSet, sortedManifests[0:1], sortedManifests[1:])
 	if len(validRestorePaths) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no path found that leads to GTID %v", restoreToGTIDSet)
+	}
+	// Now find a shortest path
+	for i := range validRestorePaths {
+		path := validRestorePaths[i]
+		if shortestPath == nil {
+			shortestPath = path
+			continue
+		}
+		if len(path) < len(shortestPath) {
+			shortestPath = path
+		}
+	}
+	return shortestPath, nil
+}
+
+// FindPITRToTimePath evaluates the shortest path to recover a restoreToGTIDSet. The past is composed of:
+// - a full backup, followed by:
+// - zero or more incremental backups
+// The path ends with restoreToGTIDSet or goes beyond it. No shorter path will do the same.
+// The function returns an error when a path cannot be found.
+func FindPITRToTimePath(restoreToTime time.Time, manifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
+	restoreToTimeStr := FormatRFC3339(restoreToTime)
+	sortedManifests := make([](*BackupManifest), 0, len(manifests))
+	for _, m := range manifests {
+		if m != nil {
+			sortedManifests = append(sortedManifests, m)
+		}
+	}
+	sort.SliceStable(sortedManifests, func(i, j int) bool {
+		return sortedManifests[j].Position.GTIDSet.Union(sortedManifests[i].PurgedPosition.GTIDSet).Contains(sortedManifests[i].Position.GTIDSet)
+	})
+	mostRelevantFullBackupIndex := -1 // an invalid value
+	for i, manifest := range sortedManifests {
+		if manifest.Incremental {
+			continue
+		}
+		startTime, err := ParseRFC3339(manifest.BackupTime)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "parsing manifest BackupTime %s", manifest.BackupTime)
+		}
+		finishedTime, err := ParseRFC3339(manifest.FinishedTime)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "parsing manifest FinishedTime %s", manifest.FinishedTime)
+		}
+		var compareWithTime time.Time
+		switch manifest.BackupMethod {
+		case xtrabackupEngineName:
+			// Xtrabackup backups are true to the time they complete (the snapshot is taken at the very end).
+			// Therefore the finish time best represents the backup time.
+			compareWithTime = finishedTime
+		case builtinBackupEngineName:
+			// Builtin takes down the MySQL server. Hence the _start time_ represents the backup time best
+			compareWithTime = startTime
+		default:
+			compareWithTime = startTime
+		}
+		if restoreToTime.Before(compareWithTime) {
+			// We want a bfull backup whose time is _before_ restore-to-time, and we will top it with
+			// inremental restore via binlogs.
+			continue
+		}
+		mostRelevantFullBackupIndex = i
+	}
+
+	if mostRelevantFullBackupIndex < 0 {
+		// No full backup prior to desired restore point...
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no full backup found before timestmap %v", restoreToTimeStr)
+	}
+	// All that interests us starts with mostRelevantFullBackupIndex: that's where the full backup is,
+	// and any relevant incremental backups follow that point (because manifests are sorted by backup pos, ascending)
+	sortedManifests = sortedManifests[mostRelevantFullBackupIndex:]
+	// Of all relevant backups, we take the most recent one.
+	fullBackup := sortedManifests[0]
+	purgedGTIDSet := fullBackup.PurgedPosition.GTIDSet
+
+	timeIsInRange := func(t, from, to time.Time) bool {
+		// integrity:
+		if to.Before(from) {
+			return false // bad input
+		}
+		if t.Before(from) {
+			return false
+		}
+		if t.After(to) {
+			return false
+		}
+		return true
+	}
+
+	var validRestorePaths []BackupManifestPath
+	// recursive function that searches for all possible paths:
+	var findPaths func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) error
+	findPaths = func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) error {
+		// The algorithm was first designed to find all possible paths. But then we recognized that it will be
+		// doing excessive work. At this time we choose to end the search once we find the first valid path, even if
+		// it's not the most optimal. The next "if" statement is the addition to the algorithm, where we suffice with
+		// a single result.
+		if len(validRestorePaths) > 0 {
+			return nil
+		}
+		// remove the above if you wish to explore all paths.
+		lastManifest := pathManifests[len(pathManifests)-1]
+		if lastManifest.Incremental {
+			lastManifestIncrementalDetails := lastManifest.IncrementalDetails
+
+			firstTimestamp, err := ParseRFC3339(lastManifestIncrementalDetails.FirstTimestamp)
+			if err != nil {
+				return err
+			}
+			if restoreToTime.Before(firstTimestamp) {
+				// the restore-to-time falls between previous manifest's timestamp (whether previous manifest is a
+				// full backup or incremental backup is not important), and this manifest's first-timestamp.
+				// This means the previous manifest is the end of a valid restore path. We couldn't know it back then.
+				validRestorePaths = append(validRestorePaths, pathManifests[0:len(pathManifests)-1])
+				return nil
+			}
+			lastTimestamp, err := ParseRFC3339(lastManifestIncrementalDetails.LastTimestamp)
+			if err != nil {
+				return err
+			}
+			if timeIsInRange(restoreToTime, firstTimestamp, lastTimestamp) {
+				// successful end of path. Update list of successful paths
+				validRestorePaths = append(validRestorePaths, pathManifests)
+				return nil
+			}
+		}
+		if len(remainingManifests) == 0 {
+			// end of the road. No possibilities from here.
+			return nil
+		}
+		// if the next manifest is eligible to be part of the path, try it out
+		if IsValidIncrementalBakcup(baseGTIDSet, purgedGTIDSet, remainingManifests[0]) {
+			nextGTIDSet := baseGTIDSet.Union(remainingManifests[0].Position.GTIDSet)
+			findPaths(nextGTIDSet, append(pathManifests, remainingManifests[0]), remainingManifests[1:])
+		}
+		// also, try without the next manifest
+		findPaths(baseGTIDSet, pathManifests, remainingManifests[1:])
+		return nil
+	}
+	// find all paths, entry point
+	if err := findPaths(fullBackup.Position.GTIDSet, sortedManifests[0:1], sortedManifests[1:]); err != nil {
+		return nil, err
+	}
+	if len(validRestorePaths) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no path found that leads to timestamp %v", restoreToTimeStr)
 	}
 	// Now find a shortest path
 	for i := range validRestorePaths {

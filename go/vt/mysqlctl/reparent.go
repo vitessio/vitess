@@ -21,6 +21,7 @@ This file contains the reparenting methods for mysqlctl.
 */
 
 import (
+	"context"
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -28,8 +29,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
 )
 
 // GenerateInitialBinlogEntry is used to create a binlog entry when

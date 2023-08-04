@@ -41,9 +41,9 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
 		if cpk.collation == nil {
-			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationBinaryID}
+			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID}
 		} else {
-			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()}
+			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation.ID()}
 		}
 	}
 	return &engine.MergeSort{
@@ -64,7 +64,7 @@ func encodeString(in string) string {
 func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: sqltypes.Unknown})
 	}
 	return res
 }

@@ -17,12 +17,10 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -132,7 +130,7 @@ const (
 type MatchAction int
 
 const (
-	// DefaultAction indicates no action was explicitly specified.
+	// DefaultMatch indicates no action was explicitly specified.
 	DefaultMatch MatchAction = iota
 	Full
 	Partial
@@ -535,7 +533,7 @@ func NewTimestampLiteral(in string) *Literal {
 
 // NewArgument builds a new ValArg.
 func NewArgument(in string) *Argument {
-	return &Argument{Name: in, Type: -1}
+	return &Argument{Name: in, Type: sqltypes.Unknown}
 }
 
 func parseBindVariable(yylex yyLexer, bvar string) *Argument {
@@ -592,38 +590,6 @@ func (node *Literal) SQLType() sqltypes.Type {
 	default:
 		return -1
 	}
-}
-
-// encodeHexOrBitValToMySQLQueryFormat encodes the hexval or bitval back into the query format
-// for passing on to MySQL as a bind var
-func (node *Literal) encodeHexOrBitValToMySQLQueryFormat() ([]byte, error) {
-	nb := node.Bytes()
-	if node.Type != HexVal && node.Type != BitVal {
-		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
-	}
-
-	prefix := 'x'
-	regex := "^x'.*'$"
-	if node.Type == BitVal {
-		prefix = 'b'
-		regex = "^b'.*'$"
-	}
-	// Let's make this idempotent in case it's called more than once
-	match, err := regexp.Match(regex, nb)
-	if err != nil {
-		return nb, err
-	}
-	if match {
-		return nb, nil
-	}
-
-	var bb bytes.Buffer
-	bb.WriteByte(byte(prefix))
-	bb.WriteByte('\'')
-	bb.WriteString(string(nb))
-	bb.WriteByte('\'')
-	nb = bb.Bytes()
-	return nb, nil
 }
 
 // Equal returns true if the column names match.
@@ -2251,6 +2217,11 @@ func convertStringToInt(integer string) int {
 	return val
 }
 
+func convertStringToUInt64(integer string) uint64 {
+	val, _ := strconv.ParseUint(integer, 10, 64)
+	return val
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -2512,4 +2483,14 @@ func IsDistinct(f AggrFunc) bool {
 		return false
 	}
 	return da.IsDistinct()
+}
+
+// ToString returns the type as a string
+func (ty KillType) ToString() string {
+	switch ty {
+	case QueryType:
+		return QueryStr
+	default:
+		return ConnectionStr
+	}
 }

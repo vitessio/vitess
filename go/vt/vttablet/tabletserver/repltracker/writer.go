@@ -17,14 +17,13 @@ limitations under the License.
 package repltracker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
@@ -74,7 +73,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
 		return &heartbeatWriter{}
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()

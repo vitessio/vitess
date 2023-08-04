@@ -87,7 +87,7 @@ func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 			if err != nil {
 				return err
 			}
-			intEvalResult, err := evalResult.Value().ToInt64()
+			intEvalResult, err := evalResult.Value(vcursor.ConnCollation()).ToInt64()
 			if err != nil {
 				return err
 			}

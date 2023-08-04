@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
@@ -60,8 +59,6 @@ type Env struct {
 	DBMinorVersion int
 	DBPatchVersion int
 }
-
-var versionRegex = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 // Init initializes an Env.
 func Init() (*Env, error) {
@@ -118,25 +115,18 @@ func Init() (*Env, error) {
 		// MySQL and Percona are equivalent for the tests
 		te.DBType = string(mysqlctl.FlavorMySQL)
 	}
-	dbVersionStr := te.Mysqld.GetVersionString(context.Background())
-	dbVersionStrParts := versionRegex.FindStringSubmatch(dbVersionStr)
-	if len(dbVersionStrParts) != 4 {
-		return nil, fmt.Errorf("could not parse server version from: %s", dbVersionStr)
+	dbVersionStr, err := te.Mysqld.GetVersionString(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("could not get server version: %w", err)
+	}
+	_, version, err := mysqlctl.ParseVersionString(dbVersionStr)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse server version %q: %w", dbVersionStr, err)
 	}
 
-	var err error
-	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[1])
-	if err != nil {
-		return nil, fmt.Errorf("could not parse database major version from '%s': %v", dbVersionStr, err)
-	}
-	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[2])
-	if err != nil {
-		return nil, fmt.Errorf("could not parse database minor version from '%s': %v", dbVersionStr, err)
-	}
-	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[3])
-	if err != nil {
-		return nil, fmt.Errorf("could not parse database patch version from '%s': %v", dbVersionStr, err)
-	}
+	te.DBMajorVersion = version.Major
+	te.DBMinorVersion = version.Minor
+	te.DBPatchVersion = version.Patch
 
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())

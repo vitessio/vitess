@@ -373,6 +373,17 @@ CREATE TABLE vitess_keyspace (
 	PRIMARY KEY (keyspace)
 )`,
 	`
+DROP TABLE IF EXISTS vitess_shard
+`,
+	`
+CREATE TABLE vitess_shard (
+	keyspace varchar(128) NOT NULL,
+	shard varchar(128) NOT NULL,
+	primary_alias varchar(512) NOT NULL,
+	primary_timestamp varchar(512) NOT NULL,
+	PRIMARY KEY (keyspace, shard)
+)`,
+	`
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
 	`,
 	`

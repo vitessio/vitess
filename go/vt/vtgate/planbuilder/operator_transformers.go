@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
@@ -77,10 +78,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(plan),
-			weightStrings:     make(map[*resultColumn]int),
-		},
+		resultsBuilder: newResultsBuilder(plan, nil),
 	}
 
 	for _, aggr := range op.Aggregations {
@@ -92,15 +90,17 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
-		aggrParam.CollationID = aggr.GetCollation(ctx)
+		aggrParam.Type, aggrParam.CollationID = aggr.GetTypeCollation(ctx)
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
+		typ, col, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
-			CollationID:     ctx.SemTable.CollationForExpr(groupBy.SimplifiedExpr),
+			Type:            typ,
+			CollationID:     col,
 		})
 	}
 
@@ -133,21 +133,18 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 		TruncateColumnCount: ordering.ResultColumns,
 	}
 	ms := &memorySort{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(src),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         primitive,
-		},
-		eMemorySort: primitive,
+		resultsBuilder: newResultsBuilder(src, primitive),
+		eMemorySort:    primitive,
 	}
 
 	for idx, order := range ordering.Order {
-		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
+		typ, collationID, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               ordering.Offset[idx],
 			WeightStringCol:   ordering.WOffset[idx],
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: ordering.Offset[idx],
+			Type:              typ,
 			CollationID:       collationID,
 		})
 	}
@@ -177,12 +174,8 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		case operators.Eval:
 			return e.EExpr
 		case operators.Offset:
-			t := ctx.SemTable.ExprTypes[e.Expr]
-			return &evalengine.Column{
-				Offset:    e.Offset,
-				Type:      t.Type,
-				Collation: collations.TypedCollation{},
-			}
+			typ, col, _ := ctx.SemTable.TypeForExpr(e.Expr)
+			return evalengine.NewColumn(e.Offset, typ, col)
 		default:
 			failed = true
 			return nil
@@ -251,6 +244,7 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 	// this might already have been done on the operators
 	if predicate == nil {
 		predicate, err = evalengine.Translate(ast, &evalengine.Config{
+			ResolveType:   ctx.SemTable.TypeForExpr,
 			ResolveColumn: resolveFromPlan(ctx, plan, true),
 			Collation:     ctx.SemTable.Collation,
 		})
@@ -290,7 +284,7 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 		return planLimit(node.Limit, plan)
 	case *sqlparser.Union:
 		var err error
-		rb, isRoute := source.(*routeGen4)
+		rb, isRoute := source.(*route)
 		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 			return nil, ctx.SemTable.NotSingleRouteErr
 		}
@@ -324,7 +318,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 		opCode = engine.LeftJoin
 	}
 
-	return &joinGen4{
+	return &join{
 		Left:       lhs,
 		Right:      rhs,
 		Cols:       n.Columns,
@@ -383,18 +377,19 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	replaceSubQuery(ctx, sel)
 	eroute, err := routeToEngineRoute(ctx, op)
 	for _, order := range op.Ordering {
-		collation := ctx.SemTable.CollationForExpr(order.AST)
+		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
+			Type:            typ,
 			CollationID:     collation,
 		})
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &routeGen4{
+	return &route{
 		eroute:    eroute,
 		Select:    sel,
 		tables:    operators.TableID(op),
@@ -407,7 +402,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	eins := &engine.Insert{
 		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
 		Keyspace:          op.Routing.Keyspace(),
-		Table:             ins.VTable,
+		TableName:         ins.VTable.Name.String(),
 		Ignore:            ins.Ignore,
 		ForceNonStreaming: ins.ForceNonStreaming,
 		Generate:          autoIncGenerate(ins.AutoIncrement),
@@ -513,10 +508,9 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query: generateQuery(ast),
-		Table: []*vindexes.Table{
-			upd.VTable,
-		},
+		Query:             generateQuery(ast),
+		TableNames:        []string{upd.VTable.Name.String()},
+		Vindexes:          upd.VTable.ColumnVindexes,
 		OwnedVindexQuery:  upd.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
@@ -540,10 +534,9 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query: generateQuery(ast),
-		Table: []*vindexes.Table{
-			del.VTable,
-		},
+		Query:             generateQuery(ast),
+		TableNames:        []string{del.VTable.Name.String()},
+		Vindexes:          del.VTable.Owned,
 		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
@@ -663,7 +656,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 	var result logicalPlan
 	if len(sources) == 1 {
 		src := sources[0]
-		if rb, isRoute := src.(*routeGen4); isRoute && rb.isSingleShard() {
+		if rb, isRoute := src.(*route); isRoute && rb.isSingleShard() {
 			// if we have a single shard route, we don't need to do anything to make it distinct
 			// TODO
 			// rb.Select.SetLimit(op.limit)
@@ -675,7 +668,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if len(op.Ordering) > 0 {
 			return nil, vterrors.VT12001("ORDER BY on top of UNION")
 		}
-		result = &concatenateGen4{sources: sources}
+		result = &concatenate{sources: sources}
 	}
 	if op.Distinct {
 		colls := getCollationsFor(ctx, op)
@@ -697,11 +690,11 @@ func getWeightStringForSelectExpr(selectExpr sqlparser.SelectExpr) (*sqlparser.A
 	return &sqlparser.AliasedExpr{Expr: weightStringFor(expr.Expr)}, nil
 }
 
-func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, colls []collations.ID) ([]engine.CheckCol, error) {
+func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, colls []collationInfo) ([]engine.CheckCol, error) {
 	checkCols := make([]engine.CheckCol, 0, len(colls))
 	for i, coll := range colls {
-		checkCol := engine.CheckCol{Col: i, Collation: coll}
-		if coll != collations.Unknown {
+		checkCol := engine.CheckCol{Col: i, Type: coll.typ, Collation: coll.col}
+		if coll.typ >= 0 {
 			checkCols = append(checkCols, checkCol)
 			continue
 		}
@@ -721,7 +714,7 @@ func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, 
 // pushWeightStringForDistinct adds a weight_string projection
 func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalPlan, offset int) (newOffset int, err error) {
 	switch node := plan.(type) {
-	case *routeGen4:
+	case *route:
 		allSelects := sqlparser.GetAllSelects(node.Select)
 		for _, sel := range allSelects {
 			expr, err := getWeightStringForSelectExpr(sel.SelectExprs[offset])
@@ -736,7 +729,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		// we leave the responsibility of truncating to distinct
 		node.eroute.TruncateColumnCount = 0
-	case *concatenateGen4:
+	case *concatenate:
 		for _, source := range node.sources {
 			newOffset, err = pushWeightStringForDistinct(ctx, source, offset)
 			if err != nil {
@@ -744,7 +737,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 			}
 		}
 		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
-	case *joinGen4:
+	case *join:
 		joinOffset := node.Cols[offset]
 		switch {
 		case joinOffset < 0:
@@ -839,9 +832,14 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Un
 	return sources, nil
 }
 
-func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collations.ID {
+type collationInfo struct {
+	typ sqltypes.Type
+	col collations.ID
+}
+
+func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collationInfo {
 	// TODO: coerce selects' select expressions' collations
-	var colls []collations.ID
+	var colls []collationInfo
 
 	sel, err := n.GetSelectFor(0)
 	if err != nil {
@@ -852,13 +850,8 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []co
 		if !ok {
 			return nil
 		}
-		typ := ctx.SemTable.CollationForExpr(aliasedE.Expr)
-		if typ == collations.Unknown {
-			if t, hasT := ctx.SemTable.ExprTypes[aliasedE.Expr]; hasT && sqltypes.IsNumber(t.Type) {
-				typ = collations.CollationBinaryID
-			}
-		}
-		colls = append(colls, typ)
+		typ, col, _ := ctx.SemTable.TypeForExpr(aliasedE.Expr)
+		colls = append(colls, collationInfo{typ: typ, col: col})
 	}
 	return colls
 }
@@ -880,7 +873,7 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizo
 		return nil, err
 	}
 
-	rb, isRoute := plan.(*routeGen4)
+	rb, isRoute := plan.(*route)
 	if !isRoute {
 		return &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
@@ -941,9 +934,9 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 
 func pushDistinct(plan logicalPlan) {
 	switch n := plan.(type) {
-	case *routeGen4:
+	case *route:
 		n.Select.MakeDistinct()
-	case *concatenateGen4:
+	case *concatenate:
 		for _, source := range n.sources {
 			pushDistinct(source)
 		}
@@ -951,11 +944,11 @@ func pushDistinct(plan logicalPlan) {
 }
 
 func mergeUnionLogicalPlans(ctx *plancontext.PlanningContext, left logicalPlan, right logicalPlan) logicalPlan {
-	lroute, ok := left.(*routeGen4)
+	lroute, ok := left.(*route)
 	if !ok {
 		return nil
 	}
-	rroute, ok := right.(*routeGen4)
+	rroute, ok := right.(*route)
 	if !ok {
 		return nil
 	}
@@ -967,7 +960,7 @@ func mergeUnionLogicalPlans(ctx *plancontext.PlanningContext, left logicalPlan, 
 	return nil
 }
 
-func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool {
+func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -994,7 +987,7 @@ func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool 
 	return false
 }
 
-func canSelectDBAMerge(a, b *routeGen4) bool {
+func canSelectDBAMerge(a, b *route) bool {
 	if a.eroute.Opcode != engine.DBA {
 		return false
 	}
@@ -1077,6 +1070,24 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 				return a.Val == b.Val
 			}
 		}
+	}
+	return false
+}
+
+func hexEqual(a, b *sqlparser.Literal) bool {
+	v, err := a.HexDecode()
+	if err != nil {
+		return false
+	}
+	switch b.Type {
+	case sqlparser.StrVal:
+		return bytes.Equal(v, b.Bytes())
+	case sqlparser.HexVal:
+		v2, err := b.HexDecode()
+		if err != nil {
+			return false
+		}
+		return bytes.Equal(v, v2)
 	}
 	return false
 }

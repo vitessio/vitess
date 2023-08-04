@@ -156,6 +156,12 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // MoveTablesCreate creates a workflow which moves one or more tables from a
+  // source keyspace to a target keyspace.
+  rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
+  // MoveTablesComplete completes the move and cleans up the workflow and
+  // its related artifacts.
+  rpc MoveTablesComplete(vtctldata.MoveTablesCompleteRequest) returns (vtctldata.MoveTablesCompleteResponse) {};
   // PingTablet checks that the specified tablet is awake and responding to RPCs.
   // This command can be blocked by other in-flight operations.
   rpc PingTablet(vtctldata.PingTabletRequest) returns (vtctldata.PingTabletResponse) {};
@@ -293,6 +299,10 @@ service Vtctld {
   rpc ValidateVersionShard(vtctldata.ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
+  // WorkflowDelete deletes a vreplication workflow.
+  rpc WorkflowDelete(vtctldata.WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
+  rpc WorkflowStatus(vtctldata.WorkflowStatusRequest) returns (vtctldata.WorkflowStatusResponse) {};
+  rpc WorkflowSwitchTraffic(vtctldata.WorkflowSwitchTrafficRequest) returns (vtctldata.WorkflowSwitchTrafficResponse) {};
   // WorkflowUpdate updates the configuration of a vreplication workflow
   // using the provided updated parameters.
   rpc WorkflowUpdate(vtctldata.WorkflowUpdateRequest) returns (vtctldata.WorkflowUpdateResponse) {};

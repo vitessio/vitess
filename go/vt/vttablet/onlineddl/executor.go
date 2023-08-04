@@ -40,6 +40,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -55,7 +56,6 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -292,7 +292,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	defer conn.Recycle()
 
 	// Replace any provided sidecar DB qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +327,7 @@ func (e *Executor) Open() error {
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 
-	if sidecardb.GetName() != sidecardb.DefaultName {
+	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
 	} else {
 		e.execQuery = e.executeQuery
@@ -1316,7 +1316,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 			}
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
 	return v, nil
 }
 
@@ -1370,7 +1370,7 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "")
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", false)
 	v.pos = revertStream.pos
 	return v, nil
 }
@@ -2115,7 +2115,7 @@ func (e *Executor) validateThrottleParams(ctx context.Context, expireString stri
 			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
 		}
 	}
-	ratio = 1.0
+	ratio = throttle.DefaultThrottleRatio
 	if ratioLiteral != nil {
 		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
 		if err != nil || ratio < 0 || ratio > 1 {
@@ -2134,7 +2134,7 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
+	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio, false)
 	return emptyResult, nil
 }
 
@@ -2147,7 +2147,7 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio)
+	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio, false)
 	return emptyResult, nil
 }
 
@@ -3371,7 +3371,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		timeThrottled:        row.AsInt64("time_throttled", 0),
 		componentThrottled:   row.AsString("component_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
-		state:                row.AsString("state", ""),
+		state:                binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row.AsString("state", "")]),
 		message:              row.AsString("message", ""),
 		rowsCopied:           row.AsInt64("rows_copied", 0),
 		bls:                  &binlogdatapb.BinlogSource{},
@@ -3450,9 +3450,9 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 		return false, s, nil
 	}
 	switch s.state {
-	case binlogplayer.BlpError:
+	case binlogdatapb.VReplicationWorkflowState_Error:
 		return false, s, nil
-	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+	case binlogdatapb.VReplicationWorkflowState_Init, binlogdatapb.VReplicationWorkflowState_Copying, binlogdatapb.VReplicationWorkflowState_Running:
 		return true, s, nil
 	}
 	if strings.Contains(strings.ToLower(s.message), "error") {
@@ -3481,7 +3481,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		}
 	}
 
-	var throttlerOnce sync.Once
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -3591,26 +3590,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							return countRunnning, cancellable, err
 						}
 					}
-					go throttlerOnce.Do(func() {
-						if !e.lagThrottler.IsRunning() {
-							return
-						}
-						// Self healing: in the following scenario:
-						// - a vitess migration
-						// - with on demand heartbeats
-						// - the streamer running on a replica
-						// - the streamer was throttled for long enough
-						// - then vplayer and vcopier are locked, waiting for the streamer to do something
-						// - since they are blocked, they're not running throttler checks
-						// - since streamer runs on replica, it only checks that replica
-						// - therefore no one asking for on-demand heartbeats
-						// - then, if the conditions for the streamer's throttling are done, the streamer then thinks there's replication lag, with nothing to remediate it.
-						// - it's a deadlock.
-						// And so, once per reviewRunningMigrations(), and assuming there _are_ running migrations, we ensure to hit a throttler check. This will kick
-						// on-demand heartbeats, unlocking the deadlock.
-						e.lagThrottler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", throttleCheckFlags, throttle.ThrottleCheckPrimaryWrite)
-					})
-
 				}
 			}
 		case schema.DDLStrategyPTOSC:
@@ -4207,6 +4186,7 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 
 func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid string, rowsCopied int64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgressByRowsCopied,
+		sqltypes.Int64BindVariable(rowsCopied),
 		sqltypes.Int64BindVariable(rowsCopied),
 		sqltypes.StringBindVariable(uuid),
 	)

@@ -74,7 +74,7 @@ func TestStateManagerServePrimary(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, false, sm.lameduck)
-	assert.Equal(t, testNow, sm.terTimestamp)
+	assert.Equal(t, testNow, sm.ptsTimestamp)
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
 

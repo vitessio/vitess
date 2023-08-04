@@ -93,6 +93,18 @@ func init() {
 	}
 }
 
+func FormatRFC3339(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
+func ParseRFC3339(timestamp string) (time.Time, error) {
+	return time.Parse(time.RFC3339, timestamp)
+}
+
+func ParseBinlogTimestamp(timestamp string) (time.Time, error) {
+	return time.Parse("060102 15:04:05", timestamp)
+}
+
 func registerBackupFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
 	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")

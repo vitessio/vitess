@@ -28,14 +28,13 @@ package buffer
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -67,12 +66,61 @@ const (
 // currently retried.
 type RetryDoneFunc context.CancelFunc
 
+const (
+	ClusterEventReshardingInProgress = "current keyspace is being resharded"
+	ClusterEventReparentInProgress   = "primary is not serving, there may be a reparent operation in progress"
+	ClusterEventMoveTables           = "disallowed due to rule"
+)
+
+var ClusterEvents []string
+
+func init() {
+	ClusterEvents = []string{
+		ClusterEventReshardingInProgress,
+		ClusterEventReparentInProgress,
+		ClusterEventMoveTables,
+	}
+}
+
 // CausedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL
 func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
-	return vterrors.Code(err) == vtrpcpb.Code_CLUSTER_EVENT
+	reason, isFailover := isFailoverError(err)
+	if isFailover {
+		log.Infof("CausedByFailover signalling failover for reason: %s", reason)
+	}
+	return isFailover
+}
+
+// for debugging purposes
+func getReason(err error) string {
+	for _, ce := range ClusterEvents {
+		if strings.Contains(err.Error(), ce) {
+			return ce
+		}
+	}
+	return ""
+}
+
+// isFailoverError looks at the error returned by the sql query execution to check if there is a cluster event
+// (caused by resharding or reparenting) or a denied tables error seen during switch writes in MoveTables
+func isFailoverError(err error) (string, bool) {
+	var reason string
+	var isFailover bool
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_CLUSTER_EVENT:
+		isFailover = true
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		if strings.Contains(err.Error(), ClusterEventMoveTables) {
+			isFailover = true
+		}
+	}
+	if isFailover {
+		reason = getReason(err)
+	}
+	return reason, isFailover
 }
 
 // Buffer is used to track ongoing PRIMARY tablet failovers and buffer
@@ -140,36 +188,14 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 		requestsSkipped.Add([]string{keyspace, shard, skippedDisabled}, 1)
 		return nil, nil
 	}
-
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
-}
-
-// ProcessPrimaryHealth notifies the buffer to record a new primary
-// and end any failover buffering that may be in progress
-func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
-	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non-PRIMARY TabletHealth object must not be forwarded: %#v", th))
-	}
-	timestamp := th.PrimaryTermStartTime
-	if timestamp == 0 {
-		// Primarys where TabletExternallyReparented was never called will return 0.
-		// Ignore them.
-		return
-	}
-
-	sb := b.getOrCreateBuffer(th.Target.Keyspace, th.Target.Shard)
-	if sb == nil {
-		// Buffer is shut down. Ignore all calls.
-		return
-	}
-	sb.recordExternallyReparentedTimestamp(timestamp, th.Tablet.Alias)
 }
 
 func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
 	for _, shard := range ksevent.Shards {
 		sb := b.getOrCreateBuffer(shard.Target.Keyspace, shard.Target.Shard)
 		if sb != nil {
-			sb.recordKeyspaceEvent(shard.Tablet, shard.Serving)
+			sb.recordKeyspaceEvent(shard.Tablet, shard.Serving, ksevent)
 		}
 	}
 }

@@ -145,6 +145,25 @@ func DecodePosition(s string) (rp Position, err error) {
 	return ParsePosition(flav, gtid)
 }
 
+// DecodePositionDefaultFlavor converts a string in the format returned by
+// EncodePosition back into a Position value with the
+// correct underlying flavor. If the string does not indicate a flavor, then the 'flavor' argument
+// is used. For example:
+// - DecodePositionDefaultFlavor("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", "foo"): "MySQL56" explicitly indicated, this is the flavor.
+// - DecodePositionDefaultFlavor("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", "MySQL56"): No flavor indicated in `s`, therefore using "MySQL56"
+func DecodePositionDefaultFlavor(s string, flavor string) (rp Position, err error) {
+	if s == "" {
+		return rp, nil
+	}
+
+	flav, gtid, ok := strings.Cut(s, "/")
+	if !ok {
+		gtid = s
+		flav = flavor
+	}
+	return ParsePosition(flav, gtid)
+}
+
 // ParsePosition calls the parser for the specified flavor.
 func ParsePosition(flavor, value string) (rp Position, err error) {
 	parser := gtidSetParsers[flavor]

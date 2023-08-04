@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -85,7 +86,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != sidecar.GetName() && tableName.Qualifier.String() != sidecar.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
@@ -154,7 +155,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != sidecar.GetName() && tableName.Qualifier.String() != sidecar.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
@@ -211,7 +212,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != sidecar.GetName() && tableName.Qualifier.String() != sidecar.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
@@ -285,7 +286,7 @@ func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+	if tableName.Qualifier.String() != sidecar.GetName() && tableName.Qualifier.String() != sidecar.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {

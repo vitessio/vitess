@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -325,6 +326,90 @@ func TestReadProblemInstances(t *testing.T) {
 	}
 }
 
+// TestReadInstancesWithErrantGTIds is used to test the functionality of ReadInstancesWithErrantGTIds and verify its failure modes and successes.
+func TestReadInstancesWithErrantGTIds(t *testing.T) {
+	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
+	tests := []struct {
+		name              string
+		keyspace          string
+		shard             string
+		sql               []string
+		instancesRequired []string
+	}{
+		{
+			name:              "No instances with errant GTID",
+			sql:               nil,
+			instancesRequired: nil,
+		}, {
+			name: "errant GTID",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name:     "keyspace filtering - success",
+			keyspace: "ks",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name:     "keyspace filtering - failure",
+			keyspace: "unknown",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: nil,
+		}, {
+			name:     "shard filtering - success",
+			keyspace: "ks",
+			shard:    "0",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name:     "shard filtering - failure",
+			keyspace: "ks",
+			shard:    "unknown",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: nil,
+		},
+	}
+
+	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
+	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
+	oldVal := config.Config.InstancePollSeconds
+	defer func() {
+		config.Config.InstancePollSeconds = oldVal
+	}()
+	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each test should clear the database. The easiest way to do that is to run all the initialization commands again
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+
+			for _, query := range append(initialSQL, tt.sql...) {
+				_, err := db.ExecVTOrc(query)
+				require.NoError(t, err)
+			}
+
+			instances, err := ReadInstancesWithErrantGTIds(tt.keyspace, tt.shard)
+			require.NoError(t, err)
+			var tabletAliases []string
+			for _, instance := range instances {
+				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+			}
+			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
+		})
+	}
+}
+
 // TestReadInstancesByCondition is used to test the functionality of readInstancesByCondition and verify its failure modes and successes.
 func TestReadInstancesByCondition(t *testing.T) {
 	tests := []struct {
@@ -395,7 +480,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			name: "One instance is outdated",
 			sql: []string{
 				"update database_instance set last_checked = now()",
-				"update database_instance set last_checked = time(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = datetime(now(), '-1 hour') where alias = 'zone1-0000000100'",
 			},
 			instancesRequired: []string{"zone1-0000000100"},
 		}, {
@@ -409,19 +494,25 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			name: "One instance doesn't have myql data and one is outdated",
 			sql: []string{
 				"update database_instance set last_checked = now()",
-				"update database_instance set last_checked = time(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = datetime(now(), '-1 hour') where alias = 'zone1-0000000100'",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
 			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
 		},
 	}
 
+	// wait for the forgetAliases cache to be initialized to prevent data race.
+	waitForCacheInitialization()
+
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
 	oldVal := config.Config.InstancePollSeconds
+	oldCache := forgetAliases
 	defer func() {
+		forgetAliases = oldCache
 		config.Config.InstancePollSeconds = oldVal
 	}()
-	config.Config.InstancePollSeconds = 60 * 59
+	config.Config.InstancePollSeconds = 60 * 25
+	forgetAliases = cache.New(time.Minute, time.Minute)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -436,6 +527,19 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			}
 
 			tabletAliases, err := ReadOutdatedInstanceKeys()
+
+			errInDataCollection := db.QueryVTOrcRowsMap(`select alias, 
+last_checked, 
+last_attempted_check, 
+ROUND((JULIANDAY(now()) - JULIANDAY(last_checked)) * 86400) AS difference,
+last_attempted_check <= last_checked as use1,
+last_checked < now() - interval 1500 second as is_outdated1,
+last_checked < now() - interval 3000 second as is_outdated2
+from database_instance`, func(rowMap sqlutils.RowMap) error {
+				log.Errorf("Row in database_instance - %+v", rowMap)
+				return nil
+			})
+			require.NoError(t, errInDataCollection)
 			require.NoError(t, err)
 			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
 		})
@@ -569,6 +673,9 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 		},
 	}
 
+	// wait for the forgetAliases cache to be initialized to prevent data race.
+	waitForCacheInitialization()
+
 	oldCache := forgetAliases
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
@@ -627,4 +734,15 @@ func TestSnapshotTopologies(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"}, tabletAliases)
+}
+
+// waitForCacheInitialization waits for the cache to be initialized to prevent data race in tests
+// that alter the cache or depend on its behaviour.
+func waitForCacheInitialization() {
+	for {
+		if cacheInitializationCompleted.Load() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }

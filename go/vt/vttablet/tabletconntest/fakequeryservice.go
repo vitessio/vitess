@@ -655,7 +655,7 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	},
 	Serving: true,
 
-	TabletExternallyReparentedTimestamp: 1234589,
+	PrimaryTermStartTimestamp: 1234589,
 
 	RealtimeStats: &querypb.RealtimeStats{
 		CpuUsage:                      1.0,
@@ -704,6 +704,11 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 
 // QueryServiceByAlias satisfies the Gateway interface
 func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+	panic("not implemented")
+}
+
+// GetServingKeyspaces returns list of serving keyspaces.
+func (f *FakeQueryService) GetServingKeyspaces() []string {
 	panic("not implemented")
 }
 

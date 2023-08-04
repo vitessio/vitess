@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -142,9 +143,9 @@ func TestMiscSidecarDB(t *testing.T) {
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"dbexists",
 		"int64"),
-		GetName(),
+		sidecar.GetName(),
 	)
-	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	require.NoError(t, err)
 	db.AddQuery(dbeq, result)
 	db.AddQuery(sqlparser.BuildParsedQuery(createSidecarDBQuery, GetIdentifier()).Query, &sqltypes.Result{})

@@ -321,7 +321,7 @@ func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
 	if i == 0 {
 		return dt, true
 	}
-	if t == 0 || d == 0 {
+	if d == 0 {
 		return dt, false
 	}
 	dt.Time, ok = ParseTimeInt64(t)
@@ -398,6 +398,11 @@ func ParseTimeDecimal(d decimal.Decimal, l int32, prec int) (Time, int, bool) {
 		prec = int(l)
 	} else {
 		t = t.Round(prec)
+	}
+	// We only support a maximum of nanosecond precision,
+	// so if the decimal has any larger precision we truncate it.
+	if prec > 9 {
+		prec = 9
 	}
 	return t, prec, ok
 }

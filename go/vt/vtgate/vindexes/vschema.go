@@ -23,6 +23,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/sqlescape"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -69,6 +70,9 @@ type VSchema struct {
 	uniqueVindexes    map[string]Vindex
 	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
 	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
+	// created is the time when the VSchema object was created. Used to detect if a cached
+	// copy of the vschema is stale.
+	created time.Time
 }
 
 // RoutingRule represents one routing rule.
@@ -111,6 +115,9 @@ type Table struct {
 	// Source is a keyspace-qualified table name that points to the source of a
 	// reference table. Only applicable for tables with Type set to "reference".
 	Source *Source `json:"source,omitempty"`
+
+	ChildForeignKeys  []ChildFKInfo  `json:"child_foreign_keys,omitempty"`
+	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -129,6 +136,77 @@ type ColumnVindex struct {
 	isUnique bool
 	cost     int
 	partial  bool
+	backfill bool
+}
+
+// ParentFKInfo contains the parent foreign key info for the table.
+type ParentFKInfo struct {
+	Table         *Table
+	ParentColumns sqlparser.Columns
+	ChildColumns  sqlparser.Columns
+}
+
+// MarshalJSON returns a JSON representation of ParentFKInfo.
+func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name          string            `json:"parent_table"`
+		ParentColumns sqlparser.Columns `json:"parent_columns"`
+		ChildColumns  sqlparser.Columns `json:"child_columns"`
+	}{
+		Name:          fk.Table.Name.String(),
+		ChildColumns:  fk.ChildColumns,
+		ParentColumns: fk.ParentColumns,
+	})
+}
+
+// NewParentFkInfo creates a new ParentFKInfo.
+func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ParentFKInfo {
+	return ParentFKInfo{
+		Table:         parentTbl,
+		ChildColumns:  fkDef.Source,
+		ParentColumns: fkDef.ReferenceDefinition.ReferencedColumns,
+	}
+}
+
+// ChildFKInfo contains the child foreign key info for the table.
+type ChildFKInfo struct {
+	Table         *Table
+	ChildColumns  sqlparser.Columns
+	ParentColumns sqlparser.Columns
+	Match         sqlparser.MatchAction
+	OnDelete      sqlparser.ReferenceAction
+	OnUpdate      sqlparser.ReferenceAction
+}
+
+// MarshalJSON returns a JSON representation of ChildFKInfo.
+func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name          string            `json:"child_table"`
+		ChildColumns  sqlparser.Columns `json:"child_columns"`
+		ParentColumns sqlparser.Columns `json:"parent_columns"`
+	}{
+		Name:          fk.Table.Name.String(),
+		ChildColumns:  fk.ChildColumns,
+		ParentColumns: fk.ParentColumns,
+	})
+}
+
+// NewChildFkInfo creates a new ChildFKInfo.
+func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
+	return ChildFKInfo{
+		Table:         childTbl,
+		ChildColumns:  fkDef.Source,
+		ParentColumns: fkDef.ReferenceDefinition.ReferencedColumns,
+		Match:         fkDef.ReferenceDefinition.Match,
+		OnDelete:      fkDef.ReferenceDefinition.OnDelete,
+		OnUpdate:      fkDef.ReferenceDefinition.OnUpdate,
+	}
+}
+
+// TableInfo contains column and foreign key info for a table.
+type TableInfo struct {
+	Columns     []Column
+	ForeignKeys []*sqlparser.ForeignKeyDefinition
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -147,6 +225,11 @@ func (c *ColumnVindex) Cost() int {
 // IsPartialVindex is used to let planner and engine know that this is a composite vindex missing one or more columns
 func (c *ColumnVindex) IsPartialVindex() bool {
 	return c.partial
+}
+
+// IsBackfilling returns true if the vindex is in the process of backfilling the rows.
+func (c *ColumnVindex) IsBackfilling() bool {
+	return c.backfill
 }
 
 // Column describes a column.
@@ -169,19 +252,21 @@ func (col *Column) MarshalJSON() ([]byte, error) {
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
-	Keyspace *Keyspace
-	Tables   map[string]*Table
-	Vindexes map[string]Vindex
-	Views    map[string]sqlparser.SelectStatement
-	Error    error
+	Keyspace       *Keyspace
+	ForeignKeyMode vschemapb.Keyspace_ForeignKeyMode
+	Tables         map[string]*Table
+	Vindexes       map[string]Vindex
+	Views          map[string]sqlparser.SelectStatement
+	Error          error
 }
 
 type ksJSON struct {
-	Sharded  bool              `json:"sharded,omitempty"`
-	Tables   map[string]*Table `json:"tables,omitempty"`
-	Vindexes map[string]Vindex `json:"vindexes,omitempty"`
-	Views    map[string]string `json:"views,omitempty"`
-	Error    string            `json:"error,omitempty"`
+	Sharded        bool              `json:"sharded,omitempty"`
+	ForeignKeyMode string            `json:"foreignKeyMode,omitempty"`
+	Tables         map[string]*Table `json:"tables,omitempty"`
+	Vindexes       map[string]Vindex `json:"vindexes,omitempty"`
+	Views          map[string]string `json:"views,omitempty"`
+	Error          string            `json:"error,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -210,9 +295,10 @@ func (ks *KeyspaceSchema) findTable(
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
 func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 	ksJ := ksJSON{
-		Sharded:  ks.Keyspace.Sharded,
-		Tables:   ks.Tables,
-		Vindexes: ks.Vindexes,
+		Sharded:        ks.Keyspace.Sharded,
+		Tables:         ks.Tables,
+		ForeignKeyMode: ks.ForeignKeyMode.String(),
+		Vindexes:       ks.Vindexes,
 	}
 	if ks.Error != nil {
 		ksJ.Error = ks.Error.Error()
@@ -250,6 +336,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 		globalTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
+		created:        time.Now(),
 	}
 	buildKeyspaces(source, vschema)
 	// buildGlobalTables before buildReferences so that buildReferences can
@@ -298,12 +385,41 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			Tables:   make(map[string]*Table),
-			Vindexes: make(map[string]Vindex),
+			ForeignKeyMode: replaceDefaultForeignKeyMode(ks.ForeignKeyMode),
+			Tables:         make(map[string]*Table),
+			Vindexes:       make(map[string]Vindex),
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema)
 	}
+}
+
+// replaceDefaultForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
+func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
+	if fkMode == vschemapb.Keyspace_FK_DEFAULT {
+		return vschemapb.Keyspace_FK_UNMANAGED
+	}
+	return fkMode
+}
+
+// addForeignKey is for testing only.
+func (vschema *VSchema) addForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	cTbl, ok := ks.Tables[childTableName]
+	if !ok {
+		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
+	}
+	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
+	pTbl, ok := ks.Tables[parentTableName]
+	if !ok {
+		return fmt.Errorf("parent table %s not found in keyspace %s", parentTableName, ksname)
+	}
+	pTbl.ChildForeignKeys = append(pTbl.ChildForeignKeys, NewChildFkInfo(cTbl, fkConstraint))
+	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
+	return nil
 }
 
 func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
@@ -616,6 +732,10 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 					columns = append(columns, sqlparser.NewIdentifierCI(indCol))
 				}
 			}
+			backfill := false
+			if lkpBackfill, ok := vindex.(LookupBackfill); ok {
+				backfill = lkpBackfill.IsBackfilling()
+			}
 			columnVindex := &ColumnVindex{
 				Columns:  columns,
 				Type:     vindexInfo.Type,
@@ -624,6 +744,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				Vindex:   vindex,
 				isUnique: vindex.IsUnique(),
 				cost:     vindex.Cost(),
+				backfill: backfill,
 			}
 			if i == 0 {
 				// Perform Primary vindex check.
@@ -676,13 +797,14 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				columnSubset := columns[:i]
 				cost++
 				columnVindex = &ColumnVindex{
-					Columns: columnSubset,
-					Type:    vindexInfo.Type,
-					Name:    ind.Name,
-					Owned:   owned,
-					Vindex:  vindex,
-					cost:    cost,
-					partial: true,
+					Columns:  columnSubset,
+					Type:     vindexInfo.Type,
+					Name:     ind.Name,
+					Owned:    owned,
+					Vindex:   vindex,
+					cost:     cost,
+					partial:  true,
+					backfill: backfill,
 				}
 				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			}
@@ -1121,6 +1243,17 @@ func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) 
 		return ks, nil
 	}
 	return keyspace, nil
+}
+
+// GetCreated returns the time when the VSchema was created.
+func (vschema *VSchema) GetCreated() time.Time {
+	return vschema.created
+}
+
+// ResetCreated resets the created time to zero value.
+// Used only in tests where vschema protos are compared.
+func (vschema *VSchema) ResetCreated() {
+	vschema.created = time.Time{}
 }
 
 // ByCost provides the interface needed for ColumnVindexes to

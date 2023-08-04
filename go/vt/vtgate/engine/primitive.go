@@ -29,6 +29,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -54,7 +55,6 @@ type (
 		// if the max memory rows override directive is set to true
 		ExceedsMaxMemoryRows(numRows int) bool
 
-		// V3 functions.
 		Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
 
@@ -111,6 +111,8 @@ type (
 		ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 		// SetExec takes in k,v pair and use executor to set them in topo metadata.
 		SetExec(ctx context.Context, name string, value string) error
+		// ThrottleApp sets a ThrottlerappRule in topo
+		ThrottleApp(ctx context.Context, throttleAppRule *topodatapb.ThrottledAppRule) error
 
 		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
 		CanUseSetVar() bool
@@ -234,12 +236,6 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
-
-	// Gen4Comparer interfaces all Primitive used to compare Gen4 with other planners (V3, MySQL, ...).
-	Gen4Comparer interface {
-		Primitive
-		GetGen4Primitive() Primitive
-	}
 )
 
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned

@@ -24,9 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
@@ -253,6 +252,91 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 			utils.MustMatch(t, tcase.expResult, results)
 		})
 	}
+}
+
+// TestScalarDistinctAggr tests distinct aggregation on engine.
+func TestScalarDistinctAggrOnEngine(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"value|value",
+		"int64|int64",
+	)
+
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(
+		fields,
+		"100|100",
+		"200|200",
+		"200|200",
+		"400|400",
+		"400|400",
+		"600|600",
+	)}}
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{
+			NewAggregateParam(AggregateCountDistinct, 0, "count(distinct value)"),
+			NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct value)"),
+		},
+		Input: fp,
+	}
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(4) DECIMAL(1300)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(4) DECIMAL(1300)]]`, fmt.Sprintf("%v", results.Rows))
+}
+
+func TestScalarDistinctPushedDown(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"count(distinct value)|sum(distinct value)",
+		"int64|decimal",
+	)
+
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(
+		fields,
+		"2|200",
+		"6|400",
+		"3|700",
+		"1|10",
+		"7|30",
+		"8|90",
+	)}}
+
+	countAggr := NewAggregateParam(AggregateSum, 0, "count(distinct value)")
+	countAggr.OrigOpcode = AggregateCountDistinct
+	sumAggr := NewAggregateParam(AggregateSum, 1, "sum(distinct value)")
+	sumAggr.OrigOpcode = AggregateSumDistinct
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{
+			countAggr,
+			sumAggr,
+		},
+		Input: fp,
+	}
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(27) DECIMAL(1430)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(27) DECIMAL(1430)]]`, fmt.Sprintf("%v", results.Rows))
 }
 
 // TestScalarGroupConcat tests group_concat with partial aggregation on engine.
