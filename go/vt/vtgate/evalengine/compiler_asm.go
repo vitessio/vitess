@@ -33,13 +33,7 @@ import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/slice"
-
 	"github.com/google/uuid"
-
-	"vitess.io/vitess/go/mysql/hex"
-
-	"vitess.io/vitess/go/mysql/icuregex"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -47,7 +41,10 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/hex"
+	"vitess.io/vitess/go/mysql/icuregex"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"

@@ -171,9 +171,6 @@ func (dt *DerivedTable) getExprFor(s string) (sqlparser.Expr, error) {
 	}
 	for i, colName := range dt.columnNames {
 		if colName == s {
-			if i >= len(dt.cols) {
-				panic("oops")
-			}
 			return dt.cols[i], nil
 		}
 	}

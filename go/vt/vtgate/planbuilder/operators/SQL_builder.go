@@ -123,7 +123,7 @@ func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) error {
 		}
 
 	}
-	return vterrors.VT13001("switch should be exhaustive")
+	return vterrors.VT13001(fmt.Sprintf("unknown select statement type: %T", qb.sel))
 }
 
 func (qb *queryBuilder) pushUnionInsideDerived() {
@@ -414,7 +414,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		qb.sel.MakeDistinct()
 		return nil
 	default:
-		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
+		return vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op))
 	}
 	return nil
 }
@@ -601,10 +601,8 @@ func buildDerived(op *Horizon, qb *queryBuilder) error {
 		return buildDerivedSelect(op, qb, sel)
 	case *sqlparser.Union:
 		return buildDerivedUnion(op, qb, sel)
-
-	default:
-		panic(fmt.Sprintf("what is this? %v", stmt))
 	}
+	panic(fmt.Sprintf("unknown select statement type: %T", stmt))
 }
 
 func buildDerivedUnion(op *Horizon, qb *queryBuilder, union *sqlparser.Union) error {

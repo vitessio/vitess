@@ -158,29 +158,3 @@ func createMergedUnion(
 		Routing:    routing,
 	}, selectExprs, nil
 }
-
-/*
-
-func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *route) bool {
-	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
-	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
-		return false
-	}
-	switch a.eroute.Opcode {
-	case engine.EqualUnique:
-		// Check if they target the same shard.
-		if b.eroute.Opcode == engine.EqualUnique &&
-			a.eroute.Vindex == b.eroute.Vindex &&
-			a.condition != nil &&
-			b.condition != nil &&
-			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
-			return true
-		}
-	case engine.Scatter:
-		return b.eroute.Opcode == engine.Scatter
-	case engine.Next:
-		return false
-	}
-	return false
-}
-*/

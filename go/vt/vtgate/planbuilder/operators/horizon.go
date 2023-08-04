@@ -229,16 +229,6 @@ func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
 	return h.QP.OrderExprs, nil
 }
 
-func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
-	for idx, val := range columnOffset {
-		if val == valToAdd {
-			return columnOffset, idx
-		}
-	}
-	columnOffset = append(columnOffset, valToAdd)
-	return columnOffset, len(columnOffset) - 1
-}
-
 // TODO: REMOVE
 func (h *Horizon) selectStatement() sqlparser.SelectStatement {
 	return h.Query

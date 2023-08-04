@@ -155,7 +155,7 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
 	if !found {
-		panic("what the what")
+		return vterrors.VT13001("information about union is not available")
 	}
 
 	tableInfo := createDerivedTableForExpressions(info.exprs, node.Columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)

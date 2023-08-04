@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -148,10 +150,9 @@ func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectE
 		if found {
 			return exprs
 		}
-		panic("what the what")
+		panic("BUG: union not found in semantic table for select expressions")
 	}
-
-	return nil
+	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
 }
 
 func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sqlparser.SelectExprs) {

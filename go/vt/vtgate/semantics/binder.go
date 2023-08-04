@@ -118,6 +118,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.bindCountStar(node)
 	case *sqlparser.Union:
 		info := b.tc.unionInfo[node]
+		// TODO: this check can be removed and available type information should be used.
 		if !info.isAuthoritative {
 			return nil
 		}

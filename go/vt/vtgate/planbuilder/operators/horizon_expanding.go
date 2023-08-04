@@ -27,15 +27,14 @@ import (
 )
 
 func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
-
-	switch sel := horizon.selectStatement().(type) {
+	statement := horizon.selectStatement()
+	switch sel := statement.(type) {
 	case *sqlparser.Select:
 		return expandSelectHorizon(ctx, horizon, sel)
 	case *sqlparser.Union:
 		return expandUnionHorizon(ctx, horizon, sel)
 	}
-
-	panic("the switch should be exhaustive")
+	return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement))
 }
 
 func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (ops.Operator, *rewrite.ApplyResult, error) {

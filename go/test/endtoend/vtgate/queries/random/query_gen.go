@@ -21,10 +21,9 @@ import (
 	"math/rand"
 	"time"
 
-	"vitess.io/vitess/go/slice"
-
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/slice"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

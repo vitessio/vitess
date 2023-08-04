@@ -109,9 +109,6 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 			if err != nil {
 				return nil, err
 			}
-			if op == nil {
-				panic("got nil op back")
-			}
 		}
 		if rewrite.DebugOperatorTree {
 			fmt.Printf("PHASE: %s\n", phase.Name)
@@ -120,16 +117,10 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 		if err != nil {
 			return nil, err
 		}
-		if op == nil {
-			panic("got nil op back")
-		}
 
 		op, err = compact(ctx, op)
 		if err != nil {
 			return nil, err
-		}
-		if op == nil {
-			panic("got nil op back")
 		}
 	}
 
@@ -696,11 +687,7 @@ func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator
 	if len(sources) == len(op.Sources) {
 		return op, rewrite.SameTree, nil
 	}
-
-	// TODO: this is a hack
-	columns := op.unionColumns
-
-	return newUnion(sources, selects, columns, op.distinct), rewrite.NewTree("merged union inputs", op), nil
+	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merged union inputs", op), nil
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
