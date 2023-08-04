@@ -2000,13 +2000,13 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 			// If the sequence table is fully qualified in the vschema then
 			// we don't need to find it later.
 			if strings.Contains(vs.AutoIncrement.Sequence, ".") {
-				parts := strings.Split(vs.AutoIncrement.Sequence, ".")
-				if len(parts) != 2 {
+				keyspace, tableName, found := strings.Cut(vs.AutoIncrement.Sequence, ".")
+				if !found {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
 						vs.AutoIncrement.Sequence, ts.targetKeyspace)
 				}
-				sm.backingTableName = parts[1]
-				sm.backingTableKeyspace = parts[0]
+				sm.backingTableName = tableName
+				sm.backingTableKeyspace = keyspace
 			}
 			sequencesByBackingTable[sm.backingTableName] = sm
 		}
