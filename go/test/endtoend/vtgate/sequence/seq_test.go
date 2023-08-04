@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -289,8 +290,8 @@ func TestDotTableSeq(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("insert into `dotted.tablename` (c1,c2) values (10,10)", 1000, true)
 	require.Error(t, err)
-	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, mysql.ERDupEntry, mysqlErr.Num)
+	mysqlErr := err.(*sqlerror.SQLError)
+	assert.Equal(t, sqlerror.ERDupEntry, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
 	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
 }

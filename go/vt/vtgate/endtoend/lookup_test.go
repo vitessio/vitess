@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -61,8 +63,8 @@ func TestConsistentLookup(t *testing.T) {
 	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(1, 4)", 1000, false)
 	exec(t, conn, "rollback")
 	require.Error(t, err)
-	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, mysql.ERDupEntry, mysqlErr.Num)
+	mysqlErr := err.(*sqlerror.SQLError)
+	assert.Equal(t, sqlerror.ERDupEntry, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
 
 	// Simple delete.

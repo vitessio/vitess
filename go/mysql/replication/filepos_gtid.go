@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"fmt"
@@ -38,9 +38,9 @@ func parseFilePosGTID(s string) (GTID, error) {
 		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", s)
 	}
 
-	return filePosGTID{
-		file: parts[0],
-		pos:  uint32(pos),
+	return FilePosGTID{
+		File: parts[0],
+		Pos:  uint32(pos),
 	}, nil
 }
 
@@ -50,69 +50,69 @@ func ParseFilePosGTIDSet(s string) (GTIDSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return gtid.(filePosGTID), err
+	return gtid.(FilePosGTID), err
 }
 
-// filePosGTID implements GTID.
-type filePosGTID struct {
-	file string
-	pos  uint32
+// FilePosGTID implements GTID.
+type FilePosGTID struct {
+	File string
+	Pos  uint32
 }
 
 // String implements GTID.String().
-func (gtid filePosGTID) String() string {
-	return fmt.Sprintf("%s:%d", gtid.file, gtid.pos)
+func (gtid FilePosGTID) String() string {
+	return fmt.Sprintf("%s:%d", gtid.File, gtid.Pos)
 }
 
 // Flavor implements GTID.Flavor().
-func (gtid filePosGTID) Flavor() string {
+func (gtid FilePosGTID) Flavor() string {
 	return FilePosFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
-func (gtid filePosGTID) SequenceDomain() any {
+func (gtid FilePosGTID) SequenceDomain() any {
 	return nil
 }
 
 // SourceServer implements GTID.SourceServer().
-func (gtid filePosGTID) SourceServer() any {
+func (gtid FilePosGTID) SourceServer() any {
 	return nil
 }
 
 // SequenceNumber implements GTID.SequenceNumber().
-func (gtid filePosGTID) SequenceNumber() any {
+func (gtid FilePosGTID) SequenceNumber() any {
 	return nil
 }
 
 // GTIDSet implements GTID.GTIDSet().
-func (gtid filePosGTID) GTIDSet() GTIDSet {
+func (gtid FilePosGTID) GTIDSet() GTIDSet {
 	return gtid
 }
 
 // ContainsGTID implements GTIDSet.ContainsGTID().
-func (gtid filePosGTID) ContainsGTID(other GTID) bool {
+func (gtid FilePosGTID) ContainsGTID(other GTID) bool {
 	if other == nil {
 		return true
 	}
-	filePosOther, ok := other.(filePosGTID)
+	filePosOther, ok := other.(FilePosGTID)
 	if !ok {
 		return false
 	}
-	if filePosOther.file < gtid.file {
+	if filePosOther.File < gtid.File {
 		return true
 	}
-	if filePosOther.file > gtid.file {
+	if filePosOther.File > gtid.File {
 		return false
 	}
-	return filePosOther.pos <= gtid.pos
+	return filePosOther.Pos <= gtid.Pos
 }
 
 // Contains implements GTIDSet.Contains().
-func (gtid filePosGTID) Contains(other GTIDSet) bool {
+func (gtid FilePosGTID) Contains(other GTIDSet) bool {
 	if other == nil {
 		return false
 	}
-	filePosOther, ok := other.(filePosGTID)
+	filePosOther, ok := other.(FilePosGTID)
 	if !ok {
 		return false
 	}
@@ -120,8 +120,8 @@ func (gtid filePosGTID) Contains(other GTIDSet) bool {
 }
 
 // Equal implements GTIDSet.Equal().
-func (gtid filePosGTID) Equal(other GTIDSet) bool {
-	filePosOther, ok := other.(filePosGTID)
+func (gtid FilePosGTID) Equal(other GTIDSet) bool {
+	filePosOther, ok := other.(FilePosGTID)
 	if !ok {
 		return false
 	}
@@ -129,8 +129,8 @@ func (gtid filePosGTID) Equal(other GTIDSet) bool {
 }
 
 // AddGTID implements GTIDSet.AddGTID().
-func (gtid filePosGTID) AddGTID(other GTID) GTIDSet {
-	filePosOther, ok := other.(filePosGTID)
+func (gtid FilePosGTID) AddGTID(other GTID) GTIDSet {
+	filePosOther, ok := other.(FilePosGTID)
 	if !ok {
 		return gtid
 	}
@@ -138,8 +138,8 @@ func (gtid filePosGTID) AddGTID(other GTID) GTIDSet {
 }
 
 // Union implements GTIDSet.Union().
-func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
-	filePosOther, ok := other.(filePosGTID)
+func (gtid FilePosGTID) Union(other GTIDSet) GTIDSet {
+	filePosOther, ok := other.(FilePosGTID)
 	if !ok || gtid.Contains(other) {
 		return gtid
 	}
@@ -150,12 +150,11 @@ func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
 // Last returns last filePosition
 // For filePos based GTID we have only one position
 // here we will just return the current filePos
-func (gtid filePosGTID) Last() string {
+func (gtid FilePosGTID) Last() string {
 	return gtid.String()
 }
 
 func init() {
 	gtidParsers[FilePosFlavorID] = parseFilePosGTID
 	gtidSetParsers[FilePosFlavorID] = ParseFilePosGTIDSet
-	flavors[FilePosFlavorID] = newFilePosFlavor
 }

@@ -17,14 +17,13 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"context"
-
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -52,7 +51,7 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(cp dbconfigs.Connector, se *schema.Engine, startPos mysql.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(cp dbconfigs.Connector, se *schema.Engine, startPos replication.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}

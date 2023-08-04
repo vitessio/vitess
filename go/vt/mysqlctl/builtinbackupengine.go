@@ -35,6 +35,8 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -211,15 +213,15 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // getIncrementalFromPosGTIDSet turns the given string into a valid Mysql56GTIDSet
-func getIncrementalFromPosGTIDSet(incrementalFromPos string) (mysql.Mysql56GTIDSet, error) {
-	pos, err := mysql.DecodePositionDefaultFlavor(incrementalFromPos, mysql.Mysql56FlavorID)
+func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql56GTIDSet, error) {
+	pos, err := replication.DecodePositionDefaultFlavor(incrementalFromPos, replication.Mysql56FlavorID)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", incrementalFromPos)
 	}
-	if !pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+	if !pos.MatchesFlavor(replication.Mysql56FlavorID) {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", incrementalFromPos)
 	}
-	ifPosGTIDSet, ok := pos.GTIDSet.(mysql.Mysql56GTIDSet)
+	ifPosGTIDSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
 	}
@@ -242,12 +244,12 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	}
 
 	// @@gtid_purged
-	getPurgedGTIDSet := func() (mysql.Position, mysql.Mysql56GTIDSet, error) {
+	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
 		if err != nil {
 			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
 		}
-		purgedGTIDSet, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
+		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
 		if !ok {
 			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
 		}
@@ -277,7 +279,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		if err != nil {
 			return false, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
 		}
-		params.IncrementalFromPos = mysql.EncodePosition(manifest.Position)
+		params.IncrementalFromPos = replication.EncodePosition(manifest.Position)
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
 
@@ -320,11 +322,11 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
 	}
-	incrementalBackupFromPosition, err := mysql.ParsePosition(mysql.Mysql56FlavorID, incrementalBackupFromGTID)
+	incrementalBackupFromPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupFromGTID)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupFromGTID)
 	}
-	incrementalBackupToPosition, err := mysql.ParsePosition(mysql.Mysql56FlavorID, incrementalBackupToGTID)
+	incrementalBackupToPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupToGTID)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
@@ -378,7 +380,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	sourceIsPrimary := false
 	superReadOnly := true //nolint
 	readOnly := true      //nolint
-	var replicationPosition mysql.Position
+	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
@@ -470,7 +472,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID, mysqlVersion, nil)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, replication.Position{}, nil, serverUUID, mysqlVersion, nil)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -550,9 +552,9 @@ func (be *BuiltinBackupEngine) backupFiles(
 	ctx context.Context,
 	params BackupParams,
 	bh backupstorage.BackupHandle,
-	replicationPosition mysql.Position,
-	purgedPosition mysql.Position,
-	fromPosition mysql.Position,
+	replicationPosition replication.Position,
+	purgedPosition replication.Position,
+	fromPosition replication.Position,
 	binlogFiles []string,
 	serverUUID string,
 	mysqlVersion string,
@@ -1139,25 +1141,25 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
 	return true
 }
 
-func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
+func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
+		return replication.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
 	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
+		return replication.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
 	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
+		return replication.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
 	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
+		return replication.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
-	pos, err := mysql.DecodePosition(posStr)
+	pos, err := replication.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
+		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }
