@@ -31,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
@@ -304,7 +306,7 @@ func TestBasicPackets(t *testing.T) {
 	assert.EqualValues(78, packetOk.warnings)
 
 	// Write error packet, read it, compare.
-	err = sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason")
+	err = sConn.writeErrorPacket(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied: %v", "reason")
 	require.NoError(err)
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
@@ -312,10 +314,10 @@ func TestBasicPackets(t *testing.T) {
 	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
 
 	err = ParseErrorPacket(data)
-	utils.MustMatch(t, err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason"), "")
+	utils.MustMatch(t, err, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied: reason"), "")
 
 	// Write error packet from error, read it, compare.
-	err = sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"))
+	err = sConn.writeErrorPacketFromError(sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied"))
 	require.NoError(err)
 
 	data, err = cConn.ReadPacket()
@@ -324,7 +326,7 @@ func TestBasicPackets(t *testing.T) {
 	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
 
 	err = ParseErrorPacket(data)
-	utils.MustMatch(t, err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"), "")
+	utils.MustMatch(t, err, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied"), "")
 
 	// Write EOF packet, read it, compare first byte. Payload is always ignored.
 	err = sConn.writeEOFPacket(0x8912, 0xabba)
@@ -840,7 +842,7 @@ func TestMultiStatement(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{t: t, err: NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")}
+	handler := &testRun{t: t, err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
 	res := sConn.handleNextCommand(handler)
 	// The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
 	require.True(t, res, "we should not break the connection in case of no errors")
@@ -1108,7 +1110,7 @@ func (t testRun) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error 
 	panic("implement me")
 }
 
-func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error {
+func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	panic("implement me")
 }
 

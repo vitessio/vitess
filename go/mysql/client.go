@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
@@ -94,11 +95,11 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 			// should return a 2003.
 			if netProto == "tcp" {
 				status <- connectResult{
-					err: NewSQLError(CRConnHostError, SSUnknownSQLState, "net.Dial(%v) failed: %v", addr, err),
+					err: sqlerror.NewSQLError(sqlerror.CRConnHostError, sqlerror.SSUnknownSQLState, "net.Dial(%v) failed: %v", addr, err),
 				}
 			} else {
 				status <- connectResult{
-					err: NewSQLError(CRConnectionError, SSUnknownSQLState, "net.Dial(%v) to local server failed: %v", addr, err),
+					err: sqlerror.NewSQLError(sqlerror.CRConnectionError, sqlerror.SSUnknownSQLState, "net.Dial(%v) to local server failed: %v", addr, err),
 				}
 			}
 			return
@@ -178,11 +179,11 @@ func (c *Conn) Ping() error {
 	data[pos] = ComPing
 
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	data, err := c.readEphemeralPacket()
 	if err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 	switch data[0] {
@@ -207,7 +208,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
-		return NewSQLError(CRServerLost, "", "initial packet read failed: %v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, "", "initial packet read failed: %v", err)
 	}
 	capabilities, salt, err := c.parseInitialHandshakePacket(data)
 	if err != nil {
@@ -218,7 +219,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 
 	// Sanity check.
 	if capabilities&CapabilityClientProtocol41 == 0 {
-		return NewSQLError(CRVersionError, SSUnknownSQLState, "cannot connect to servers earlier than 4.1")
+		return sqlerror.NewSQLError(sqlerror.CRVersionError, sqlerror.SSUnknownSQLState, "cannot connect to servers earlier than 4.1")
 	}
 
 	// Remember a subset of the capabilities, so we can use them
@@ -238,7 +239,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		// If client asked for SSL, but server doesn't support it,
 		// stop right here.
 		if params.SslRequired() && capabilities&CapabilityClientSSL == 0 {
-			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
+			return sqlerror.NewSQLError(sqlerror.CRSSLConnectionError, sqlerror.SSUnknownSQLState, "server doesn't support SSL but client asked for it")
 		}
 
 		// The ServerName to verify depends on what the hostname is.
@@ -259,13 +260,13 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 
 		tlsVersion, err := vttls.TLSVersionToNumber(params.TLSMinVersion)
 		if err != nil {
-			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error parsing minimal TLS version: %v", err)
+			return sqlerror.NewSQLError(sqlerror.CRSSLConnectionError, sqlerror.SSUnknownSQLState, "error parsing minimal TLS version: %v", err)
 		}
 
 		// Build the TLS config.
 		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, params.SslCrl, serverName, tlsVersion)
 		if err != nil {
-			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
+			return sqlerror.NewSQLError(sqlerror.CRSSLConnectionError, sqlerror.SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}
 
 		// Send the SSLRequest packet.
@@ -296,7 +297,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 	} else if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		// If client asked for ClientSessionTrack, but server doesn't support it,
 		// stop right here.
-		return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
+		return sqlerror.NewSQLError(sqlerror.CRSSLConnectionError, sqlerror.SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
 	}
 
 	// Build and send our handshake response 41.
@@ -321,7 +322,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		// Wait for response, should be OK.
 		response, err := c.readPacket()
 		if err != nil {
-			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+			return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		switch response[0] {
 		case OKPacket:
@@ -331,7 +332,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 			return ParseErrorPacket(response)
 		default:
 			// FIXME(alainjobart) handle extra auth cases and so on.
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response is asking for more information, not implemented yet: %v", response)
+			return sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "initial server response is asking for more information, not implemented yet: %v", response)
 		}
 	}
 
@@ -346,7 +347,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	// Protocol version.
 	pver, pos, ok := readByte(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRVersionError, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no protocol version")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRVersionError, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no protocol version")
 	}
 
 	// Server is allowed to immediately send ERR packet
@@ -355,41 +356,41 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 		// Normally there would be a 1-byte sql_state_marker field and a 5-byte
 		// sql_state field here, but docs say these will not be present in this case.
 		errorMsg, _, _ := readEOFString(data, pos)
-		return 0, nil, NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "immediate error from server errorCode=%v errorMsg=%v", errorCode, errorMsg)
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "immediate error from server errorCode=%v errorMsg=%v", errorCode, errorMsg)
 	}
 
 	if pver != protocolVersion {
-		return 0, nil, NewSQLError(CRVersionError, SSUnknownSQLState, "bad protocol version: %v", pver)
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRVersionError, sqlerror.SSUnknownSQLState, "bad protocol version: %v", pver)
 	}
 
 	// Read the server version.
 	c.ServerVersion, pos, ok = readNullString(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no server version")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no server version")
 	}
 
 	// Read the connection id.
 	c.ConnectionID, pos, ok = readUint32(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no connection id")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no connection id")
 	}
 
 	// Read the first part of the auth-plugin-data
 	authPluginData, pos, ok := readBytes(data, pos, 8)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no auth-plugin-data-part-1")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no auth-plugin-data-part-1")
 	}
 
 	// One byte filler, 0. We don't really care about the value.
 	_, pos, ok = readByte(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no filler")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no filler")
 	}
 
 	// Lower 2 bytes of the capability flags.
 	capLower, pos, ok := readUint16(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no capability flags (lower 2 bytes)")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no capability flags (lower 2 bytes)")
 	}
 	var capabilities = uint32(capLower)
 
@@ -401,20 +402,20 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	// Character set.
 	characterSet, pos, ok := readByte(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no character set")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no character set")
 	}
 	c.CharacterSet = collations.ID(characterSet)
 
 	// Status flags. Ignored.
 	_, pos, ok = readUint16(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no status flags")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no status flags")
 	}
 
 	// Upper 2 bytes of the capability flags.
 	capUpper, pos, ok := readUint16(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no capability flags (upper 2 bytes)")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no capability flags (upper 2 bytes)")
 	}
 	capabilities += uint32(capUpper) << 16
 
@@ -424,13 +425,13 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if capabilities&CapabilityClientPluginAuth != 0 {
 		authPluginDataLength, pos, ok = readByte(data, pos)
 		if !ok {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no length of auth-plugin-data")
+			return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no length of auth-plugin-data")
 		}
 	} else {
 		// One byte filler, 0. We don't really care about the value.
 		_, pos, ok = readByte(data, pos)
 		if !ok {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no length of auth-plugin-data filler")
+			return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no length of auth-plugin-data filler")
 		}
 	}
 
@@ -447,12 +448,12 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 		var authPluginDataPart2 []byte
 		authPluginDataPart2, pos, ok = readBytes(data, pos, l)
 		if !ok {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no auth-plugin-data-part-2")
+			return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no auth-plugin-data-part-2")
 		}
 
 		// The last byte has to be 0, and is not part of the data.
 		if authPluginDataPart2[l-1] != 0 {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: auth-plugin-data-part-2 is not 0 terminated")
+			return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: auth-plugin-data-part-2 is not 0 terminated")
 		}
 		authPluginData = append(authPluginData, authPluginDataPart2[0:l-1]...)
 	}
@@ -509,7 +510,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 	// And send it as is.
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "cannot send SSLRequest: %v", err)
 	}
 	return nil
 }
@@ -606,11 +607,11 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// Sanity-check the length.
 	if pos != len(data) {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
 	}
 
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
 	}
 	return nil
 }
@@ -620,7 +621,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 func (c *Conn) handleAuthResponse(params *ConnParams) error {
 	response, err := c.readPacket()
 	if err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 
 	switch response[0] {
@@ -640,7 +641,7 @@ func (c *Conn) handleAuthResponse(params *ConnParams) error {
 	case ErrPacket:
 		return ParseErrorPacket(response)
 	default:
-		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+		return sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
 	}
 
 	return nil
@@ -652,7 +653,7 @@ func (c *Conn) handleAuthSwitchPacket(params *ConnParams, response []byte) error
 	var salt []byte
 	c.authPluginName, salt, err = parseAuthSwitchRequest(response)
 	if err != nil {
-		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "cannot parse auth switch request: %v", err)
 	}
 	if salt != nil {
 		c.salt = salt
@@ -673,7 +674,7 @@ func (c *Conn) handleAuthSwitchPacket(params *ConnParams, response []byte) error
 			return err
 		}
 	default:
-		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", c.authPluginName)
+		return sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "server asked for unsupported auth method: %v", c.authPluginName)
 	}
 
 	// The response could be an OKPacket, AuthMoreDataPacket or ErrPacket
@@ -715,7 +716,7 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 		// Next packet should either be an OKPacket or ErrPacket
 		return c.handleAuthResponse(params)
 	default:
-		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse AuthMoreDataPacket: %v", data)
+		return sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "cannot parse AuthMoreDataPacket: %v", data)
 	}
 }
 
@@ -745,7 +746,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 
 	response, err := c.readPacket()
 	if err != nil {
-		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 
 	// Server should respond with a AuthMoreDataPacket containing the public key

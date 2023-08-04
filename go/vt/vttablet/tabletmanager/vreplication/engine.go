@@ -29,7 +29,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/constants/sidecar"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -38,7 +41,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -376,7 +378,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetIdentifier()), 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), 1); err != nil {
 		return nil, err
 	}
 
@@ -779,7 +781,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			// The full error we get back from MySQL in that case is:
 			// Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)
 			// Docs: https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html#error_er_lock_deadlock
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock {
 				log.Infof("Deadlock detected waiting for pos %s: %v; will retry", pos, err)
 			} else {
 				return err

@@ -129,7 +129,7 @@ func TestReverseBitsVerify(t *testing.T) {
 
 	// Failure test
 	_, err = reverseBits.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	require.EqualError(t, err, "could not parse value: 'aa'")
+	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
 func TestReverseBitsReverseMap(t *testing.T) {

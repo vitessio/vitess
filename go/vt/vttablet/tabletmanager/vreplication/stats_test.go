@@ -25,7 +25,8 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 
@@ -74,7 +75,7 @@ VReplication state: Open</br>
 `
 
 func TestStatusHtml(t *testing.T) {
-	pos, err := mysql.DecodePosition("MariaDB/1-2-3")
+	pos, err := replication.DecodePosition("MariaDB/1-2-3")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"fmt"
@@ -62,8 +62,8 @@ func parseMariadbGTID(s string) (GTID, error) {
 	}, nil
 }
 
-// parseMariadbGTIDSet is registered as a GTIDSet parser.
-func parseMariadbGTIDSet(s string) (GTIDSet, error) {
+// ParseMariadbGTIDSet is registered as a GTIDSet parser.
+func ParseMariadbGTIDSet(s string) (GTIDSet, error) {
 	gtidStrings := strings.Split(s, ",")
 	gtidSet := make(MariadbGTIDSet, len(gtidStrings))
 	for _, gtidString := range gtidStrings {
@@ -272,5 +272,5 @@ func (gtidSet MariadbGTIDSet) addGTID(otherGTID MariadbGTID) {
 
 func init() {
 	gtidParsers[MariadbFlavorID] = parseMariadbGTID
-	gtidSetParsers[MariadbFlavorID] = parseMariadbGTIDSet
+	gtidSetParsers[MariadbFlavorID] = ParseMariadbGTIDSet
 }

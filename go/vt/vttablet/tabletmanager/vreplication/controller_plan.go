@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -178,7 +177,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, upd.Where)
+	buf1.Myprintf("select id from %s.%s%v", sidecar.GetIdentifier(), vreplicationTableName, upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -236,7 +235,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, del.Where)
+	buf1.Myprintf("select id from %s.%s%v", sidecar.GetIdentifier(), vreplicationTableName, del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -258,10 +257,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
-	buf3.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), copyStateTableName, copyStateWhere)
+	buf3.Myprintf("delete from %s.%s%v", sidecar.GetIdentifier(), copyStateTableName, copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
-	buf4.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), postCopyActionTableName, copyStateWhere)
+	buf4.Myprintf("delete from %s.%s%v", sidecar.GetIdentifier(), postCopyActionTableName, copyStateWhere)
 
 	return &controllerPlan{
 		opcode:            deleteQuery,

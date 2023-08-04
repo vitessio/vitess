@@ -36,6 +36,8 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/constants/sidecar"
+
 	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
@@ -528,7 +530,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 func (db *LocalCluster) createVTSchema() error {
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecardb.GetIdentifier())}, ""); err != nil {
+			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecar.GetIdentifier())}, ""); err != nil {
 				return nil, err
 			}
 		}
