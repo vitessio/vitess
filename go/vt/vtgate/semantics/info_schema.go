@@ -1671,16 +1671,25 @@ type infoSchemaWithColumns struct {
 	infoSchemaData map[string][]vindexes.Column
 }
 
+// We cache this information. If the registered mysql version is changed, we flush the cache
+var cacheSchemaInfo map[string][]vindexes.Column
+var cachedVersion string
+
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {
 	version := servenv.MySQLServerVersion()
-	var infoSchema map[string][]vindexes.Column
-	if strings.HasPrefix(version, "5.7") {
-		infoSchema = getInfoSchema57()
-	} else {
-		infoSchema = getInfoSchema80()
+
+	if version != cachedVersion || cacheSchemaInfo == nil {
+		// we don't have a valid cached info_schema map with column information
+		if strings.HasPrefix(version, "5.7") {
+			cacheSchemaInfo = getInfoSchema57()
+		} else {
+			cacheSchemaInfo = getInfoSchema80()
+		}
+		cachedVersion = version
 	}
-	return &infoSchemaWithColumns{inner: inner, infoSchemaData: infoSchema}
+
+	return &infoSchemaWithColumns{inner: inner, infoSchemaData: cacheSchemaInfo}
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
