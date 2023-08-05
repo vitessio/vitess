@@ -2093,6 +2093,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(ctx context.Context, vsch
 				}
 				sm.backingTableName = tableName
 				sm.backingTableKeyspace = keyspace
+				sm.backingTableDBName = "vt_" + keyspace
 			} else {
 				allFullyQualified = false
 			}
