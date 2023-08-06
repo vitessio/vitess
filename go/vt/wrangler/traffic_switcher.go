@@ -1983,8 +1983,8 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		return nil, err
 	}
 	// If all of the sequence tables were defined using qualified table
-	// names then we don't need to search for them in the other keyspaces.
-	if backingTablesFound {
+	// names then we don't need to search for them in other keyspaces.
+	if len(sequencesByBackingTable) == 0 || backingTablesFound {
 		return sequencesByBackingTable, nil
 	}
 
@@ -2056,14 +2056,12 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 }
 
 // findSequenceUsageInKeyspace searches the keyspace's vschema for usage
-// of sequence tables. It returns a map of sequence metadata keyed by the
-// backing sequence table name -- if any usage is found -- along with a
-// boolean to indicate if all of the backing sequence tables were defined
-// using qualified table names (so we know where they all live and don't
-// need to go looking) along with an error if any is seen.
+// of sequences. It returns a map of sequence metadata keyed by the backing
+// sequence table name -- if any usage is found -- along with a boolean to
+// indicate if all of the backing sequence tables were defined using
+// qualified table names (so we know where they all live) along with an
+// error if any is seen.
 func (ts *trafficSwitcher) findSequenceUsageInKeyspace(ctx context.Context, vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
-	// If all of the sequence tables were defined using qualified table
-	// names in the vschema, then we don't need to look for them.
 	allFullyQualified := true
 	targets := maps.Values(ts.Targets())
 	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
@@ -2071,6 +2069,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(ctx context.Context, vsch
 	}
 	targetDBName := targets[0].GetPrimary().DbName()
 	sequencesByBackingTable := make(map[string]*sequenceMetadata)
+
 	for _, table := range ts.Tables() {
 		vs, ok := vschema.Tables[table]
 		if !ok || vs == nil {
@@ -2099,9 +2098,6 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(ctx context.Context, vsch
 			}
 			sequencesByBackingTable[sm.backingTableName] = sm
 		}
-	}
-	if len(sequencesByBackingTable) == 0 { // Nothing to do
-		return nil, false, nil
 	}
 
 	if err := ctx.Err(); err != nil {
