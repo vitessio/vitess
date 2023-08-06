@@ -110,7 +110,7 @@ func (compareGE) compare(left, right eval) (boolean, error) {
 func (compareNullSafeEQ) String() string { return "<=>" }
 func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 	cmp, err := evalCompareNullSafe(left, right)
-	return makeboolean(cmp), err
+	return makeboolean(cmp == 0), err
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
@@ -164,15 +164,21 @@ func compareAsJSON(l, r sqltypes.Type) bool {
 	return l == sqltypes.TypeJSON || r == sqltypes.TypeJSON
 }
 
-func evalCompareNullSafe(lVal, rVal eval) (bool, error) {
-	if lVal == nil || rVal == nil {
-		return lVal == rVal, nil
+func evalCompareNullSafe(lVal, rVal eval) (int, error) {
+	if lVal == nil {
+		if rVal == nil {
+			return 0, nil
+		}
+		return -1, nil
+	}
+	if rVal == nil {
+		return 1, nil
 	}
 	if left, right, ok := compareAsTuples(lVal, rVal); ok {
 		return evalCompareTuplesNullSafe(left.t, right.t)
 	}
 	n, err := evalCompare(lVal, rVal)
-	return n == 0, err
+	return n, err
 }
 
 func evalCompareMany(left, right []eval, fulleq bool) (int, bool, error) {
@@ -263,20 +269,20 @@ func fallbackBinary(t sqltypes.Type) bool {
 	return false
 }
 
-func evalCompareTuplesNullSafe(left, right []eval) (bool, error) {
+func evalCompareTuplesNullSafe(left, right []eval) (int, error) {
 	if len(left) != len(right) {
 		panic("did not typecheck cardinality")
 	}
 	for idx, lResult := range left {
 		res, err := evalCompareNullSafe(lResult, right[idx])
 		if err != nil {
-			return false, err
+			return 0, err
 		}
-		if !res {
-			return false, nil
+		if res != 0 {
+			return res, nil
 		}
 	}
-	return true, nil
+	return 0, nil
 }
 
 // eval implements the Expr interface

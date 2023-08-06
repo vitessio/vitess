@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"strings"
@@ -140,4 +140,16 @@ func TestMysql56GTIDGTIDSet(t *testing.T) {
 	if got := input.GTIDSet(); !got.Equal(want) {
 		t.Errorf("%#v.GTIDSet() = %#v, want %#v", input, got, want)
 	}
+}
+
+func TestMysql56ParseGTID(t *testing.T) {
+	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
+	want := Mysql56GTID{
+		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		Sequence: 56789,
+	}
+
+	got, err := parseMysql56GTID(input)
+	require.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, want, got, "(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
 }

@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -62,7 +63,7 @@ func TestInitErrors(t *testing.T) {
 
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetIdentifier()), maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
@@ -132,7 +133,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetIdentifier()), maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
@@ -142,12 +143,12 @@ func TestMiscSidecarDB(t *testing.T) {
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"dbexists",
 		"int64"),
-		GetName(),
+		sidecar.GetName(),
 	)
-	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	require.NoError(t, err)
 	db.AddQuery(dbeq, result)
-	db.AddQuery(sqlparser.BuildParsedQuery(createSidecarDBQuery, GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sidecar.GetCreateQuery(), &sqltypes.Result{})
 	AddSchemaInitQueries(db, false)
 
 	// tests init on empty db
@@ -173,7 +174,7 @@ func TestMiscSidecarDB(t *testing.T) {
 		exec: exec,
 	}
 
-	err = si.setCurrentDatabase(GetIdentifier())
+	err = si.setCurrentDatabase(sidecar.GetIdentifier())
 	require.NoError(t, err)
 
 	require.False(t, MatchesInitQuery("abc"))

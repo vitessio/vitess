@@ -22,8 +22,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -116,7 +114,7 @@ func (vind *Numeric) UnknownParams() []string {
 }
 
 func (*Numeric) Hash(id sqltypes.Value) ([]byte, error) {
-	num, err := evalengine.ToUint64(id)
+	num, err := id.ToCastUint64()
 	if err != nil {
 		return nil, err
 	}

@@ -295,6 +295,11 @@ func (v Value) ToInt64() (int64, error) {
 	return fastparse.ParseInt64(v.RawStr(), 10)
 }
 
+// ToCastInt64 returns the best effort value as MySQL would return it as a int64.
+func (v Value) ToCastInt64() (int64, error) {
+	return fastparse.ParseInt64(v.RawStr(), 10)
+}
+
 func (v Value) ToInt32() (int32, error) {
 	if !v.IsIntegral() {
 		return 0, ErrIncompatibleTypeCast
@@ -338,6 +343,11 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
+	return fastparse.ParseUint64(v.RawStr(), 10)
+}
+
+// ToCastUint64 returns the best effort value as MySQL would return it as a uint64.
+func (v Value) ToCastUint64() (uint64, error) {
 	return fastparse.ParseUint64(v.RawStr(), 10)
 }
 
@@ -484,6 +494,16 @@ func (v Value) IsBinary() bool {
 // IsDateTime returns true if Value is datetime.
 func (v Value) IsDateTime() bool {
 	return v.typ == querypb.Type_DATETIME
+}
+
+// IsTimestamp returns true if Value is date.
+func (v Value) IsTimestamp() bool {
+	return v.typ == querypb.Type_TIMESTAMP
+}
+
+// IsDate returns true if Value is date.
+func (v Value) IsDate() bool {
+	return v.typ == querypb.Type_DATE
 }
 
 // IsTime returns true if Value is time.

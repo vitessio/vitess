@@ -19,6 +19,7 @@ package mysql
 import (
 	"encoding/binary"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -59,22 +60,22 @@ func (ev mysql56BinlogEvent) IsGTID() bool {
 //	1         flags
 //	16        SID (server UUID)
 //	8         GNO (sequence number, signed int)
-func (ev mysql56BinlogEvent) GTID(f BinlogFormat) (GTID, bool, error) {
+func (ev mysql56BinlogEvent) GTID(f BinlogFormat) (replication.GTID, bool, error) {
 	data := ev.Bytes()[f.HeaderLength:]
-	var sid SID
+	var sid replication.SID
 	copy(sid[:], data[1:1+16])
 	gno := int64(binary.LittleEndian.Uint64(data[1+16 : 1+16+8]))
-	return Mysql56GTID{Server: sid, Sequence: gno}, false /* hasBegin */, nil
+	return replication.Mysql56GTID{Server: sid, Sequence: gno}, false /* hasBegin */, nil
 }
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
-func (ev mysql56BinlogEvent) PreviousGTIDs(f BinlogFormat) (Position, error) {
+func (ev mysql56BinlogEvent) PreviousGTIDs(f BinlogFormat) (replication.Position, error) {
 	data := ev.Bytes()[f.HeaderLength:]
-	set, err := NewMysql56GTIDSetFromSIDBlock(data)
+	set, err := replication.NewMysql56GTIDSetFromSIDBlock(data)
 	if err != nil {
-		return Position{}, err
+		return replication.Position{}, err
 	}
-	return Position{
+	return replication.Position{
 		GTIDSet: set,
 	}, nil
 }
