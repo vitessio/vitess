@@ -921,6 +921,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
 		go func() {
+			defer close(renameCompleteChan)
 			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
 		}()
