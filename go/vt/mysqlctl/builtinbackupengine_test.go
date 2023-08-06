@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql"
@@ -487,7 +489,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		Keyspace:            "test",
 		Shard:               "-",
 		StartTime:           time.Now(),
-		RestoreToPos:        mysql.Position{},
+		RestoreToPos:        replication.Position{},
 		RestoreToTimestamp:  time.Time{},
 		DryRun:              false,
 		Stats:               fakeStats,

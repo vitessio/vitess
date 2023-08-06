@@ -25,8 +25,9 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -376,7 +377,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	type tabletPos struct {
 		alias  string
 		tablet *topodatapb.Tablet
-		pos    mysql.Position
+		pos    replication.Position
 	}
 
 	positions := make(chan tabletPos, len(tabletMap))
@@ -423,7 +424,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 				return
 			}
 
-			pos, err := mysql.DecodePosition(primaryStatus.Position)
+			pos, err := replication.DecodePosition(primaryStatus.Position)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for demoted tablet %v", primaryStatus.Position, alias))
 

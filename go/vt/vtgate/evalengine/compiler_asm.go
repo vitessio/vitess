@@ -2100,8 +2100,8 @@ func (asm *assembler) Fn_UNHEX_b(tt sqltypes.Type) {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		decoded := make([]byte, hex.DecodedLen(arg.bytes))
 
-		ok := hex.DecodeBytes(decoded, arg.bytes)
-		if !ok {
+		err := hex.DecodeBytes(decoded, arg.bytes)
+		if err != nil {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}

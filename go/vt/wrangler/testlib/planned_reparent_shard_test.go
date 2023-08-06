@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	"github.com/stretchr/testify/assert"
@@ -61,18 +62,18 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []mysql.Position{{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
 			},
 		},
 	}}
-	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -176,18 +177,18 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []mysql.Position{{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
 			},
 		},
 	}}
-	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -309,9 +310,9 @@ func TestPlannedReparentInitialization(t *testing.T) {
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -393,18 +394,18 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []mysql.Position{{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
 			},
 		},
 	}}
-	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -500,18 +501,18 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.TimeoutHook = func() error { return context.DeadlineExceeded }
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []mysql.Position{{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
 			},
 		},
 	}}
-	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -602,9 +603,9 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -681,9 +682,9 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -766,18 +767,18 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.Replicating = true
 	// make promote fail
 	newPrimary.FakeMysqlDaemon.PromoteError = errors.New("some error")
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []mysql.Position{{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
 			},
 		},
 	}}
-	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -902,9 +903,9 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReadOnly = true
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			7: mysql.MariadbGTID{
+	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			7: replication.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,

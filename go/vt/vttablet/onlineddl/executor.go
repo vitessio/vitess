@@ -36,10 +36,14 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -55,7 +59,6 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -77,7 +80,7 @@ var (
 )
 
 var emptyResult = &sqltypes.Result{}
-var acceptableDropTableIfExistsErrorCodes = []mysql.ErrorCode{mysql.ERCantFindFile, mysql.ERNoSuchTable}
+var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
 var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
@@ -292,7 +295,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	defer conn.Recycle()
 
 	// Replace any provided sidecar DB qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +330,7 @@ func (e *Executor) Open() error {
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 
-	if sidecardb.GetName() != sidecardb.DefaultName {
+	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
 	} else {
 		e.execQuery = e.executeQuery
@@ -620,7 +623,7 @@ func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.Onli
 }
 
 // executeDirectly runs a DDL query directly on the backend MySQL server
-func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...mysql.ErrorCode) (acceptableErrorCodeFound bool, err error) {
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...sqlerror.ErrorCode) (acceptableErrorCodeFound bool, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return false, err
@@ -638,7 +641,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 
 	if err != nil {
 		// let's see if this error is actually acceptable
-		if merr, ok := err.(*mysql.SQLError); ok {
+		if merr, ok := err.(*sqlerror.SQLError); ok {
 			for _, acceptableCode := range acceptableMySQLErrorCodes {
 				if merr.Num == acceptableCode {
 					// we don't consider this to be an error.
@@ -716,7 +719,7 @@ func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *s
 }
 
 // primaryPosition returns the MySQL/MariaDB position (typically GTID pos) on the tablet
-func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err error) {
+func (e *Executor) primaryPosition(ctx context.Context) (pos replication.Position, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return pos, err
@@ -787,11 +790,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	migrationCutOverThreshold := getMigrationCutOverThreshold(onlineDDL)
 
-	waitForPos := func(s *VReplStream, pos mysql.Position) error {
+	waitForPos := func(s *VReplStream, pos replication.Position) error {
 		ctx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, mysql.EncodePosition(pos)); err != nil {
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, replication.EncodePosition(pos)); err != nil {
 			return err
 		}
 		// Target is now in sync with source!
@@ -845,7 +848,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if err != nil {
 			return err
 		}
-		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-sentry pos: %v", mysql.EncodePosition(postSentryPos))
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-sentry pos: %v", replication.EncodePosition(postSentryPos))
 		if err := waitForPos(s, postSentryPos); err != nil {
 			return err
 		}
@@ -860,7 +863,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
-	defer close(renameCompleteChan)
 	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
@@ -969,6 +971,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
 		go func() {
+			defer close(renameCompleteChan)
 			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
 		}()
@@ -998,12 +1001,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
-	e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-lock pos: %v", mysql.EncodePosition(postWritesPos))
+	e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-lock pos: %v", replication.EncodePosition(postWritesPos))
 	if err := waitForPos(s, postWritesPos); err != nil {
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "timeout while waiting for post-lock pos: %v", err)
 		return err
 	}
-	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
+	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, replication.EncodePosition(postWritesPos))
 	// Stop vreplication
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "stopping vreplication")
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(s.id, "stopped for online DDL cutover")); err != nil {
@@ -2704,7 +2707,7 @@ func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL 
 		return err
 	}
 
-	acceptableErrorCodes := []mysql.ErrorCode{}
+	acceptableErrorCodes := []sqlerror.ErrorCode{}
 	if ddlStmt.GetIfExists() {
 		acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
 	}
@@ -3581,9 +3584,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
 							_ = e.updateMigrationMessage(ctx, uuid, err.Error())
 							log.Errorf("cutOverVReplMigration failed: err=%v", err)
-							if merr, ok := err.(*mysql.SQLError); ok {
+							if merr, ok := err.(*sqlerror.SQLError); ok {
 								switch merr.Num {
-								case mysql.ERTooLongIdent:
+								case sqlerror.ERTooLongIdent:
 									go e.CancelMigration(ctx, uuid, err.Error(), false)
 								}
 							}
