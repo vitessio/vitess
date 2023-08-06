@@ -375,52 +375,6 @@
     "plan": "VT12001: unsupported: WITH expression in UNION statement"
   },
   {
-    "comment": "aggregation on union",
-    "query": "select sum(col) from (select col from user union all select col from unsharded) t",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select sum(col) from (select col from user union all select col from unsharded) t",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(col)",
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select col from unsharded where 1 != 1",
-                "Query": "select col from unsharded",
-                "Table": "unsharded"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.unsharded",
-        "user.user"
-      ]
-    }
-  },
-  {
     "comment": "insert having subquery in row values",
     "query": "insert into user(id, name) values ((select 1 from user where id = 1), 'A')",
     "plan": "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
@@ -469,5 +423,85 @@
     "comment": "extremum on input from both sides",
     "query": "insert into music(user_id, id) select foo, bar from music on duplicate key update id = id+1",
     "plan": "VT12001: unsupported: DML cannot update vindex column"
+  },
+  {
+    "comment": "drop table with incompatible tables",
+    "query": "drop table user, unsharded_a",
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
+  },
+  {
+    "comment": "drop view with incompatible views",
+    "query": "drop view user, unsharded_a",
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
+  },
+  {
+    "comment": "Rename table with different keyspace tables",
+    "query": "rename table user_extra to b, main.a to b",
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
+  },
+  {
+    "comment": "correlated subquery with different keyspace tables involved",
+    "query": "select id from user where id in (select col from unsharded where col = user.id)",
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+  },
+  {
+    "comment": "ORDER BY on select t.*",
+    "query": "select t.*, t.col from user t order by t.col",
+    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+  },
+  {
+    "comment": "ORDER BY on select *",
+    "query": "select *, col from user order by col",
+    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+  },
+  {
+    "comment": "ORDER BY on select multi t.*",
+    "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
+    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+  },
+  {
+    "comment": "ORDER BY on select multi *",
+    "query": "select *, name, *, col from user order by col",
+    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+  },
+  {
+    "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
+    "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+  },
+  {
+    "comment": "correlated subquery part of an OR clause",
+    "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
+    "plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
+  },
+  {
+    "comment": "cant switch sides for outer joins",
+    "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
+    "plan": "VT12001: unsupported: LEFT JOIN with derived tables"
+  },
+  {
+    "comment": "limit on both sides means that we can't evaluate this at all",
+    "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
+    "plan": "VT12001: unsupported: JOIN between derived tables"
+  },
+  {
+    "comment": "multi-shard union",
+    "query": "select 1 from music union (select id from user union all select name from unsharded)",
+    "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
+  },
+  {
+    "comment": "multi-shard union",
+    "query": "select 1 from music union (select id from user union select name from unsharded)",
+    "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
+  },
+  {
+    "comment": "UNION with repeating column on the LHS",
+    "query": "select foo, foo, foo from user union select bar, baz, toto from music",
+    "plan": "VT12001: unsupported: unable to plan the distinct query as not able to align the columns"
+  },
+  {
+    "comment": "Cannot have more than one aggr(distinct...",
+    "query": "select count(distinct a), count(distinct b) from user",
+    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
   }
 ]

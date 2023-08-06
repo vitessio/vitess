@@ -2162,11 +2162,6 @@
     }
   },
   {
-    "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
-  },
-  {
     "comment": "plan test for a natural character set string",
     "query": "select N'string' from dual",
     "plan": {
@@ -2437,11 +2432,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "correlated subquery part of an OR clause",
-    "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
   },
   {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
@@ -4276,16 +4266,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "cant switch sides for outer joins",
-    "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": "VT12001: unsupported: LEFT JOIN with derived tables"
-  },
-  {
-    "comment": "limit on both sides means that we can't evaluate this at all",
-    "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "plan": "VT12001: unsupported: JOIN between derived tables"
   },
   {
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",

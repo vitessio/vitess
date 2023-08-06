@@ -402,16 +402,6 @@
     }
   },
   {
-    "comment": "multi-shard union",
-    "query": "select 1 from music union (select id from user union all select name from unsharded)",
-    "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
-  },
-  {
-    "comment": "multi-shard union",
-    "query": "select 1 from music union (select id from user union select name from unsharded)",
-    "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
-  },
-  {
     "comment": "union with the same target shard because of vindex",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
     "plan": {
@@ -1478,11 +1468,6 @@
         "user.user"
       ]
     }
-  },
-  {
-    "comment": "UNION with repeating column on the LHS",
-    "query": "select foo, foo, foo from user union select bar, baz, toto from music",
-    "plan": "VT12001: unsupported: unable to plan the distinct query as not able to align the columns"
   },
   {
     "comment": "UNION with repeating column on the RHS",

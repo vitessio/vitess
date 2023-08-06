@@ -233,26 +233,6 @@
     }
   },
   {
-    "comment": "ORDER BY on select t.*",
-    "query": "select t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
-    "comment": "ORDER BY on select *",
-    "query": "select *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
-    "comment": "ORDER BY on select multi t.*",
-    "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
-    "comment": "ORDER BY on select multi *",
-    "query": "select *, name, *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
     "comment": "ORDER BY works for select * from authoritative table",
     "query": "select * from authoritative order by user_id",
     "plan": {
