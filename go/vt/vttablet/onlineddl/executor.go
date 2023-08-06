@@ -863,7 +863,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
-	defer close(renameCompleteChan)
 	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
@@ -974,6 +973,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		go func() {
 			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
+			close(renameCompleteChan)
 		}()
 		// the rename should block, because of the LOCK. Wait for it to show up.
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for RENAME to block")
