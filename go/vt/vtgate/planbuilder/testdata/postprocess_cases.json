@@ -1575,33 +1575,42 @@
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,L:0",
-        "TableName": "`user`_music",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select `name`, weight_string(`name`) from `user` order by `name` asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from music where 1 != 1",
-            "Query": "select 1 from music",
-            "Table": "music"
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_music",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `name`, weight_string(`name`) from `user` order by `name` asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music where 1 != 1",
+                "Query": "select 1 from music",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },

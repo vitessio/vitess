@@ -87,12 +87,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		return nil, err
 	}
 
-	output, err = addTruncationOrProjectionToReturnOutput(ctx, root, output)
-	if err != nil {
-		return nil, err
-	}
-
-	return compact(ctx, output)
+	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
 }
 
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
