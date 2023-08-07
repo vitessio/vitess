@@ -54,12 +54,14 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 	var wsExprs []*sqlparser.AliasedExpr
 	var addToGroupBy []bool
-	for _, col := range columns {
+	wsNeeded := make([]bool, len(columns))
+	for idx, col := range columns {
 		addToGroupBy = append(addToGroupBy, false)
 		e := d.QP.GetSimplifiedExpr(col.Expr)
 		if ctx.SemTable.NeedsWeightString(e) {
 			wsExprs = append(wsExprs, aeWrap(weightStringFor(e)))
 			addToGroupBy = append(addToGroupBy, false)
+			wsNeeded[idx] = true
 		}
 	}
 	offsets, err := d.Source.AddColumns(ctx, true, addToGroupBy, append(columns, wsExprs...))
@@ -76,13 +78,13 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	n := len(columns)
 	wsOffset := 0
 	for i, col := range columns {
-		e := d.QP.GetSimplifiedExpr(col.Expr)
-		typ, coll, found := ctx.SemTable.TypeForExpr(e)
 		var wsCol *int
-		if !found {
+		if wsNeeded[i] {
 			wsCol = &offsets[n+wsOffset]
 			wsOffset++
 		}
+		e := d.QP.GetSimplifiedExpr(col.Expr)
+		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:       i,
 			WsCol:     wsCol,
