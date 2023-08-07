@@ -951,13 +951,13 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		if ct.Options.Default != nil {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[DEFAULT])
-			if defaultRequiresParens(ct) {
+			if ct.Options.DefaultLiteral {
+				buf.WriteByte(' ')
+				ct.Options.Default.formatFast(buf)
+			} else {
 				buf.WriteString(" (")
 				ct.Options.Default.formatFast(buf)
 				buf.WriteByte(')')
-			} else {
-				buf.WriteByte(' ')
-				ct.Options.Default.formatFast(buf)
 			}
 		}
 		if ct.Options.OnUpdate != nil {
@@ -2986,8 +2986,14 @@ func (node *AlterColumn) formatFast(buf *TrackedBuffer) {
 	if node.DropDefault {
 		buf.WriteString(" drop default")
 	} else if node.DefaultVal != nil {
-		buf.WriteString(" set default ")
-		node.DefaultVal.formatFast(buf)
+		if node.DefaultLiteral {
+			buf.WriteString(" set default ")
+			node.DefaultVal.formatFast(buf)
+		} else {
+			buf.WriteString(" set default (")
+			node.DefaultVal.formatFast(buf)
+			buf.WriteByte(')')
+		}
 	}
 	if node.Invisible != nil {
 		if *node.Invisible {

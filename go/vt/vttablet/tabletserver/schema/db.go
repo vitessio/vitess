@@ -19,9 +19,9 @@ package schema
 import (
 	"context"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
@@ -164,7 +164,7 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.DBConn, tables []*
 // generateFullQuery generates the full query from the query as a string.
 func generateFullQuery(query string) (*sqlparser.ParsedQuery, error) {
 	stmt, err := sqlparser.Parse(
-		sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), sidecardb.GetIdentifier()).Query)
+		sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier(), sidecar.GetIdentifier()).Query)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func getChangedViewNames(ctx context.Context, conn *connpool.DBConn, isServingPr
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
 
-	viewChangeQuery := sqlparser.BuildParsedQuery(detectViewChange, sidecardb.GetIdentifier()).Query
+	viewChangeQuery := sqlparser.BuildParsedQuery(detectViewChange, sidecar.GetIdentifier()).Query
 	err := conn.Stream(ctx, viewChangeQuery, callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err
@@ -337,7 +337,7 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.DB
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	readTableCreateTimesQuery := sqlparser.BuildParsedQuery(readTableCreateTimes, sidecardb.GetIdentifier()).Query
+	readTableCreateTimesQuery := sqlparser.BuildParsedQuery(readTableCreateTimes, sidecar.GetIdentifier()).Query
 	err := conn.Stream(ctx, readTableCreateTimesQuery, callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err

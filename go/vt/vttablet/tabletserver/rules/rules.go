@@ -26,8 +26,6 @@ import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -832,7 +830,7 @@ func getuint64(val *querypb.BindVariable) (uv uint64, status int) {
 	if err != nil {
 		return 0, QROutOfRange
 	}
-	v, err := evalengine.ToUint64(bv)
+	v, err := bv.ToCastUint64()
 	if err != nil {
 		return 0, QROutOfRange
 	}
@@ -845,7 +843,7 @@ func getint64(val *querypb.BindVariable) (iv int64, status int) {
 	if err != nil {
 		return 0, QROutOfRange
 	}
-	v, err := evalengine.ToInt64(bv)
+	v, err := bv.ToCastInt64()
 	if err != nil {
 		return 0, QROutOfRange
 	}

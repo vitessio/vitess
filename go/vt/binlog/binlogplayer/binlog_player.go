@@ -35,6 +35,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
@@ -71,7 +74,7 @@ type Stats struct {
 
 	// Last saved status
 	lastPositionMutex sync.Mutex
-	lastPosition      mysql.Position
+	lastPosition      replication.Position
 
 	heartbeatMutex sync.Mutex
 	heartbeat      int64
@@ -114,14 +117,14 @@ func (bps *Stats) Heartbeat() int64 {
 }
 
 // SetLastPosition sets the last replication position.
-func (bps *Stats) SetLastPosition(pos mysql.Position) {
+func (bps *Stats) SetLastPosition(pos replication.Position) {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	bps.lastPosition = pos
 }
 
 // LastPosition gets the last replication position.
-func (bps *Stats) LastPosition() mysql.Position {
+func (bps *Stats) LastPosition() replication.Position {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	return bps.lastPosition
@@ -175,8 +178,8 @@ type BinlogPlayer struct {
 
 	// common to all
 	uid            int32
-	position       mysql.Position
-	stopPosition   mysql.Position
+	position       replication.Position
+	stopPosition   replication.Position
 	blplStats      *Stats
 	defaultCharset *binlogdatapb.Charset
 	currentCharset *binlogdatapb.Charset
@@ -337,9 +340,9 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 
 	var stream BinlogTransactionStream
 	if len(blp.tables) > 0 {
-		stream, err = blplClient.StreamTables(ctx, mysql.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
+		stream, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		stream, err = blplClient.StreamKeyRange(ctx, mysql.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
+		stream, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
@@ -434,7 +437,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock {
 			// Deadlock: ask for retry
 			log.Infof("Deadlock: %v", err)
 			if err = blp.dbClient.Rollback(); err != nil {
@@ -520,8 +523,8 @@ func (blp *BinlogPlayer) setVReplicationState(state binlogdatapb.VReplicationWor
 
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
-	StartPos           mysql.Position
-	StopPos            mysql.Position
+	StartPos           replication.Position
+	StopPos            replication.Position
 	MaxTPS             int64
 	MaxReplicationLag  int64
 	State              binlogdatapb.VReplicationWorkflowState
@@ -557,7 +560,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
 	}
-	stopPos, err := mysql.DecodePosition(vrRow.AsString("stop_pos", ""))
+	stopPos, err := replication.DecodePosition(vrRow.AsString("stop_pos", ""))
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
@@ -609,8 +612,8 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 }
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
-func GenerateUpdatePos(uid int32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
-	strGTID := encodeString(mysql.EncodePosition(pos))
+func GenerateUpdatePos(uid int32, pos replication.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
+	strGTID := encodeString(replication.EncodePosition(pos))
 	if compress {
 		strGTID = fmt.Sprintf("compress(%s)", strGTID)
 	}
@@ -731,12 +734,12 @@ func MysqlUncompress(input string) []byte {
 }
 
 // DecodePosition attempts to uncompress the passed value first and if it fails tries to decode it as a valid GTID
-func DecodePosition(gtid string) (mysql.Position, error) {
+func DecodePosition(gtid string) (replication.Position, error) {
 	b := MysqlUncompress(gtid)
 	if b != nil {
 		gtid = string(b)
 	}
-	return mysql.DecodePosition(gtid)
+	return replication.DecodePosition(gtid)
 }
 
 // StatsHistoryRecord is used to store a Message with timestamp

@@ -137,7 +137,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 
 			offset := updColValues.Offset
 			if !row[offset].IsNull() {
-				val, err := evalengine.ToInt64(row[offset])
+				val, err := row[offset].ToCastInt64()
 				if err != nil {
 					return err
 				}

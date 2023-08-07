@@ -1729,6 +1729,7 @@ func (cmp *Comparator) RefOfAlterColumn(a, b *AlterColumn) bool {
 		return false
 	}
 	return a.DropDefault == b.DropDefault &&
+		a.DefaultLiteral == b.DefaultLiteral &&
 		cmp.RefOfColName(a.Column, b.Column) &&
 		cmp.Expr(a.DefaultVal, b.DefaultVal) &&
 		cmp.RefOfBool(a.Invisible, b.Invisible)
@@ -7203,6 +7204,7 @@ func (cmp *Comparator) RefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		return false
 	}
 	return a.Autoincrement == b.Autoincrement &&
+		a.DefaultLiteral == b.DefaultLiteral &&
 		a.Collate == b.Collate &&
 		cmp.RefOfBool(a.Null, b.Null) &&
 		cmp.Expr(a.Default, b.Default) &&

@@ -130,14 +130,14 @@ func convertRow(
 				break
 			}
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], fields[aggr.Col].Type)
+			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
 		case AggregateSumDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], fields[aggr.Col].Type)
+			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}

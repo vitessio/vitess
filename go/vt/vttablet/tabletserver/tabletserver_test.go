@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -1605,7 +1606,7 @@ func TestTerseErrors(t *testing.T) {
 	defer tl.Close()
 
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
-	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
 	err := tsv.convertAndLogError(
 		ctx,
@@ -1637,7 +1638,7 @@ func TestSanitizeLogMessages(t *testing.T) {
 	defer tl.Close()
 
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
-	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where xyz = 'this is pretty rad my doo, getting swole'"
 	err := tsv.convertAndLogError(
 		ctx,
@@ -1713,7 +1714,7 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 	tl := newTestLogger()
 	defer tl.Close()
 
-	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where a = 1"
 
 	err := tsv.convertAndLogError(
@@ -1784,7 +1785,7 @@ func TestTruncateMessages(t *testing.T) {
 
 	sqlparser.SetTruncateErrLen(52)
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
-	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
 	err := tsv.convertAndLogError(
 		ctx,
@@ -1837,7 +1838,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(1227, mysql.SSClientError, "failover in progress"),
+		sqlerror.NewSQLError(1227, sqlerror.SSClientError, "failover in progress"),
 		nil,
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; !strings.HasPrefix(got, want) {

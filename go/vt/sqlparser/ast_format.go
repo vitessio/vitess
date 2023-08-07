@@ -717,10 +717,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		}
 		if ct.Options.Default != nil {
 			buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-			if defaultRequiresParens(ct) {
-				buf.astPrintf(ct, " (%v)", ct.Options.Default)
-			} else {
+			if ct.Options.DefaultLiteral {
 				buf.astPrintf(ct, " %v", ct.Options.Default)
+			} else {
+				buf.astPrintf(ct, " (%v)", ct.Options.Default)
 			}
 		}
 		if ct.Options.OnUpdate != nil {
@@ -2250,7 +2250,11 @@ func (node *AlterColumn) Format(buf *TrackedBuffer) {
 	if node.DropDefault {
 		buf.astPrintf(node, " drop default")
 	} else if node.DefaultVal != nil {
-		buf.astPrintf(node, " set default %v", node.DefaultVal)
+		if node.DefaultLiteral {
+			buf.astPrintf(node, " set default %v", node.DefaultVal)
+		} else {
+			buf.astPrintf(node, " set default (%v)", node.DefaultVal)
+		}
 	}
 	if node.Invisible != nil {
 		if *node.Invisible {

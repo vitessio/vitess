@@ -1483,6 +1483,7 @@ column_attribute_list_opt:
 | column_attribute_list_opt DEFAULT now_or_signed_literal
   {
     $1.Default = $3
+    $1.DefaultLiteral = true
     $$ = $1
   }
 | column_attribute_list_opt ON UPDATE function_call_nonkeyword
@@ -2992,9 +2993,9 @@ alter_option:
   {
     $$ = &AlterColumn{Column: $3, DropDefault:true}
   }
-| ALTER column_opt column_name SET DEFAULT signed_literal_or_null
+| ALTER column_opt column_name SET DEFAULT now_or_signed_literal
   {
-    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6}
+    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6, DefaultLiteral: true}
   }
 | ALTER column_opt column_name SET DEFAULT openb expression closeb
   {
