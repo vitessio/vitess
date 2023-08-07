@@ -2,7 +2,7 @@
   {
     "comment": "Insertion in a table with cross-shard foreign keys disallowed",
     "query": "insert into tbl3 (col3, coly) values (1, 3)",
-    "plan": "VT12002: unsupported cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
     "comment": "Insertion in a table with shard-scoped foreign keys is allowed",
