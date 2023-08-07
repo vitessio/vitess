@@ -48,13 +48,19 @@ var (
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (now()))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime(6) DEFAULT (now()))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime(6) default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (now() + 1))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now() + 1)\n)",
 	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
@@ -93,52 +99,52 @@ var (
 		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb BLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
-		output: "create table t2 (\n\tb blob default ('abc')\n)",
+		output: "create table t2 (\n\tb blob default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
@@ -147,16 +153,16 @@ var (
 		output: "create table t2 (\n\tb JSON default null\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
-		output: "create table t2 (\n\tb JSON default null\n)",
+		output: "create table t2 (\n\tb JSON default (null)\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
-		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+		output: "create table t2 (\n\tb JSON default '{name:abc}'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT 7.0)",
-		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+		output: "create table x (\n\tlocation POINT default 7.0\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT (7.0))",
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
@@ -5001,7 +5007,7 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t (
 	time1 timestamp default now(),
 	time2 timestamp default now(),
-	time3 timestamp default now(),
+	time3 timestamp default (now()),
 	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
