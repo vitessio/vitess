@@ -717,54 +717,38 @@
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Distinct",
-                "Collations": [
-                  "0"
-                ],
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS s",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Scalar",
-                    "Aggregates": "sum_count_star(0) AS s",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) as s from `user` where 1 != 1",
-                        "Query": "select count(*) as s from `user`",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) as s from `user` where 1 != 1",
+                    "Query": "select count(*) as s from `user`",
+                    "Table": "`user`"
                   }
                 ]
               },
               {
-                "OperatorType": "Distinct",
-                "Collations": [
-                  "0"
-                ],
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS s",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Scalar",
-                    "Aggregates": "sum_count_star(0) AS s",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) as s from music where 1 != 1",
-                        "Query": "select count(*) as s from music",
-                        "Table": "music"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) as s from music where 1 != 1",
+                    "Query": "select count(*) as s from music",
+                    "Table": "music"
                   }
                 ]
               }

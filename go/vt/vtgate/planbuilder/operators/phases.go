@@ -60,6 +60,18 @@ func getPhases() []Phase {
 		// add the necessary Ordering operators for them
 		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		action: addOrderBysForAggregations,
+	}, {
+		Name: "remove Distinct operator that are not required and still above a route",
+		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+				d, ok := innerOp.(*Distinct)
+				if !ok || d.Required {
+					return innerOp, rewrite.SameTree, nil
+				}
+
+				return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
+			}, stopAtRoute)
+		},
 	}}
 }
 
