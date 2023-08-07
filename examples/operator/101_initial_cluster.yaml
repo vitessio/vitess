@@ -8,14 +8,14 @@ metadata:
   name: example
 spec:
   images:
-    vtctld: frouioui/lite:mysql57
+    vtctld: frouioui/lite:mysql80
     vtadmin: vitess/vtadmin:v17.0.1
-    vtgate: frouioui/lite:mysql57
-    vttablet: frouioui/lite:mysql57
-    vtbackup: frouioui/lite:mysql57
-    vtorc: frouioui/lite:mysql57
+    vtgate: frouioui/lite:mysql80
+    vttablet: frouioui/lite:mysql80
+    vtbackup: frouioui/lite:mysql80
+    vtorc: frouioui/lite:mysql80
     mysqld:
-      mysql56Compatible: frouioui/lite:mysql57
+      mysql56Compatible: frouioui/lite:mysql80
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1
