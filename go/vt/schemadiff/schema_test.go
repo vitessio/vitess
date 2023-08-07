@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"testing"
@@ -764,7 +765,7 @@ func TestMassiveSchema(t *testing.T) {
 	var schema1 *Schema
 	var err error
 	numTables := 8192
-	modifyTables := 20
+	modifyTables := 500
 	countModifiedTables := 0
 	tableNames := map[string]bool{}
 
@@ -772,14 +773,20 @@ func TestMassiveSchema(t *testing.T) {
 
 	// Load thousands of tables into each schema
 	t.Run(fmt.Sprintf("load %d tables into schemas", numTables), func(t *testing.T) {
+		modifiedTableIndexes := map[int]bool{}
+		for i, index := range rand.Perm(numTables) {
+			if i >= modifyTables {
+				break
+			}
+			modifiedTableIndexes[index] = true
+		}
 		queries0 := make([]string, 0, numTables) // to be loaded into schema0
 		queries1 := make([]string, 0, numTables) // to be loaded into schema1
-		divisor := numTables / modifyTables
 		for i := 0; i < numTables; i++ {
 			tableName := fmt.Sprintf("tbl_%05d", i)
 			query := strings.Replace(tableBase, "placeholder", tableName, -1)
 			queries0 = append(queries0, query)
-			if i%divisor == 0 {
+			if modifiedTableIndexes[i] {
 				// Some tables in schema1 are changed
 				query = strings.Replace(modifiedTable, "placeholder", tableName, -1)
 				countModifiedTables++
@@ -792,8 +799,7 @@ func TestMassiveSchema(t *testing.T) {
 		schema1, err = NewSchemaFromQueries(queries1)
 		require.NoError(t, err)
 
-		require.GreaterOrEqual(t, countModifiedTables, modifyTables-1)
-		require.LessOrEqual(t, countModifiedTables, modifyTables+1)
+		require.Equal(t, countModifiedTables, modifyTables)
 	})
 	t.Run(fmt.Sprintf("validate loaded %d tables", numTables), func(t *testing.T) {
 		for _, schema := range []*Schema{schema0, schema1} {
