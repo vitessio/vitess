@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/crc32"
@@ -760,6 +761,8 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
@@ -797,12 +800,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
 		if rerr := dest.Close(); rerr != nil {
-			if finalErr != nil {
-				// We already have an error, just log this one.
-				params.Logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
-			} else {
-				finalErr = rerr
-			}
+			rerr = vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name)
+			params.Logger.Error(rerr)
+			finalErr = errors.Join(finalErr, rerr)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
@@ -812,43 +812,57 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	bw := newBackupWriter(fe.Name, builtinBackupStorageWriteBufferSize, fi.Size(), timedDest)
 
-	var reader io.Reader = br
-	var writer io.Writer = bw
+	// We create the following inner function because:
+	// - we must `defer` the compressor's Close() function
+	// - but it must take place before we close the pipe reader&writer
+	createAndCopy := func() (createAndCopyErr error) {
+		var reader io.Reader = br
+		var writer io.Writer = bw
 
-	// Create the gzip compression pipe, if necessary.
-	var compressor io.WriteCloser
-	if backupStorageCompress {
-		if ExternalCompressorCmd != "" {
-			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
-		} else {
-			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
+		// Create the gzip compression pipe, if necessary.
+		if backupStorageCompress {
+			var compressor io.WriteCloser
+			if ExternalCompressorCmd != "" {
+				compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
+			} else {
+				compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
+			}
+			if err != nil {
+				return vterrors.Wrap(err, "can't create compressor")
+			}
+
+			compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
+			writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
+
+			closer := ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout)
+			defer func() {
+				// Close gzip to flush it, after that all data is sent to writer.
+				closeCompressorAt := time.Now()
+				params.Logger.Infof("closing compressor")
+				if cerr := closer.Close(); err != nil {
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
+					params.Logger.Error(cerr)
+					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
+				}
+				params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
+			}()
 		}
+
+		if builtinBackupFileReadBufferSize > 0 {
+			reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
+		}
+
+		// Copy from the source file to writer (optional gzip,
+		// optional pipe, tee, output file and hasher).
+		_, err = io.Copy(writer, reader)
 		if err != nil {
-			return vterrors.Wrap(err, "can't create compressor")
+			return vterrors.Wrap(err, "cannot copy data")
 		}
-
-		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
-		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
+		return nil
 	}
 
-	if builtinBackupFileReadBufferSize > 0 {
-		reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
-	}
-
-	// Copy from the source file to writer (optional gzip,
-	// optional pipe, tee, output file and hasher).
-	_, err = io.Copy(writer, reader)
-	if err != nil {
-		return vterrors.Wrap(err, "cannot copy data")
-	}
-
-	// Close gzip to flush it, after that all data is sent to writer.
-	if compressor != nil {
-		closeCompressorAt := time.Now()
-		if err = compressor.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close compressor")
-		}
-		params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
+	if err := createAndCopy(); err != nil {
+		return err
 	}
 
 	// Close the backupPipe to finish writing on destination.
@@ -1017,6 +1031,8 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 // restoreFile restores an individual file.
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, name)
@@ -1049,12 +1065,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	defer func() {
 		closeDestAt := time.Now()
 		if cerr := dest.Close(); cerr != nil {
-			if finalErr != nil {
-				// We already have an error, just log this one.
-				log.Errorf("failed to close file %v: %v", name, cerr)
-			} else {
-				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
-			}
+			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
@@ -1093,27 +1104,25 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		if err != nil {
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
+		closer := ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout)
 
 		decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
 		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 		defer func() {
 			closeDecompressorAt := time.Now()
-			if cerr := decompressor.Close(); cerr != nil {
-				params.Logger.Errorf("failed to close decompressor: %v", cerr)
-				if finalErr != nil {
-					// We already have an error, just log this one.
-					log.Errorf("failed to close decompressor %v: %v", name, cerr)
-				} else {
-					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
-				}
+			params.Logger.Infof("closing decompressor")
+			if cerr := closer.Close(); err != nil {
+				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
+				params.Logger.Error(cerr)
+				finalErr = errors.Join(finalErr, cerr)
 			}
 			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
 	}
 
 	// Copy the data. Will also write to the hasher.
-	if _, err = io.Copy(bufferedDest, reader); err != nil {
+	if _, err := io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
