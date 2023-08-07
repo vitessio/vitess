@@ -27,7 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -654,9 +655,9 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 
 func (tme *testMigraterEnv) setPrimaryPositions() {
 	for _, primary := range tme.sourcePrimaries {
-		primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTIDSet{
-				5: mysql.MariadbGTID{
+		primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+			GTIDSet: replication.MariadbGTIDSet{
+				5: replication.MariadbGTID{
 					Domain:   5,
 					Server:   456,
 					Sequence: 892,
@@ -665,9 +666,9 @@ func (tme *testMigraterEnv) setPrimaryPositions() {
 		}
 	}
 	for _, primary := range tme.targetPrimaries {
-		primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTIDSet{
-				5: mysql.MariadbGTID{
+		primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+			GTIDSet: replication.MariadbGTIDSet{
+				5: replication.MariadbGTID{
 					Domain:   5,
 					Server:   456,
 					Sequence: 893,

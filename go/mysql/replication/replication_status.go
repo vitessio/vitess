@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"fmt"
+	"strconv"
 
+	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -218,4 +220,125 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 	}
 
 	return diffSet, nil
+}
+
+func ParseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
+	status := ParseReplicationStatus(resultMap)
+	uuidString := resultMap["Master_UUID"]
+	if uuidString != "" {
+		sid, err := ParseSID(uuidString)
+		if err != nil {
+			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode SourceUUID")
+		}
+		status.SourceUUID = sid
+	}
+
+	var err error
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	if err != nil {
+		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+	}
+	relayLogGTIDSet, err := ParseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	if err != nil {
+		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
+	}
+	// We take the union of the executed and retrieved gtidset, because the retrieved gtidset only represents GTIDs since
+	// the relay log has been reset. To get the full Position, we need to take a union of executed GTIDSets, since these would
+	// have been in the relay log's GTIDSet in the past, prior to a reset.
+	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
+
+	return status, nil
+}
+
+func ParseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
+	status := ParseReplicationStatus(resultMap)
+
+	var err error
+	status.Position.GTIDSet, err = ParseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
+	if err != nil {
+		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
+	}
+
+	return status, nil
+}
+
+func ParseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
+	status := ParseReplicationStatus(resultMap)
+
+	status.Position = status.FilePosition
+	status.RelayLogPosition = status.RelayLogSourceBinlogEquivalentPosition
+
+	return status, nil
+}
+
+func ParseFilePosPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
+	status := ParsePrimaryStatus(resultMap)
+
+	status.Position = status.FilePosition
+
+	return status, nil
+}
+
+// ParseReplicationStatus parses the common (non-flavor-specific) fields of ReplicationStatus
+func ParseReplicationStatus(fields map[string]string) ReplicationStatus {
+	// The field names in the map are identical to what we receive from the database
+	// Hence the names still contain Master
+	status := ReplicationStatus{
+		SourceHost:            fields["Master_Host"],
+		SourceUser:            fields["Master_User"],
+		SSLAllowed:            fields["Master_SSL_Allowed"] == "Yes",
+		AutoPosition:          fields["Auto_Position"] == "1",
+		UsingGTID:             fields["Using_Gtid"] != "No" && fields["Using_Gtid"] != "",
+		HasReplicationFilters: (fields["Replicate_Do_DB"] != "") || (fields["Replicate_Ignore_DB"] != "") || (fields["Replicate_Do_Table"] != "") || (fields["Replicate_Ignore_Table"] != "") || (fields["Replicate_Wild_Do_Table"] != "") || (fields["Replicate_Wild_Ignore_Table"] != ""),
+		// These fields are returned from the underlying DB and cannot be renamed
+		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
+		LastIOError:  fields["Last_IO_Error"],
+		SQLState:     ReplicationStatusToState(fields["Slave_SQL_Running"]),
+		LastSQLError: fields["Last_SQL_Error"],
+	}
+	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 32)
+	status.SourcePort = int32(parseInt)
+	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 32)
+	status.ConnectRetry = int32(parseInt)
+	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 32)
+	if err != nil {
+		// we could not parse the value into a valid uint32 -- most commonly because the value is NULL from the
+		// database -- so let's reflect that the underlying value was unknown on our last check
+		status.ReplicationLagUnknown = true
+	} else {
+		status.ReplicationLagUnknown = false
+		status.ReplicationLagSeconds = uint32(parseUint)
+	}
+	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 32)
+	status.SourceServerID = uint32(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 32)
+	status.SQLDelay = uint32(parseUint)
+
+	executedPosStr := fields["Exec_Master_Log_Pos"]
+	file := fields["Relay_Master_Log_File"]
+	if file != "" && executedPosStr != "" {
+		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, executedPosStr))
+		if err != nil {
+			log.Warningf("Error parsing GTID set %s:%s: %v", file, executedPosStr, err)
+		}
+	}
+
+	readPosStr := fields["Read_Master_Log_Pos"]
+	file = fields["Master_Log_File"]
+	if file != "" && readPosStr != "" {
+		status.RelayLogSourceBinlogEquivalentPosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, readPosStr))
+		if err != nil {
+			log.Warningf("Error parsing GTID set %s:%s: %v", file, readPosStr, err)
+		}
+	}
+
+	relayPosStr := fields["Relay_Log_Pos"]
+	file = fields["Relay_Log_File"]
+	if file != "" && relayPosStr != "" {
+		status.RelayLogFilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, relayPosStr))
+		if err != nil {
+			log.Warningf("Error parsing GTID set %s:%s: %v", file, relayPosStr, err)
+		}
+	}
+	return status
 }

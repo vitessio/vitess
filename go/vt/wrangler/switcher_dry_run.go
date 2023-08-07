@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -166,7 +166,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 	dr.drLog.Log(fmt.Sprintf("Migrate streams to %s:", dr.ts.TargetKeyspaceName()))
 	for key, streams := range sm.Streams() {
 		for _, stream := range streams {
-			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, mysql.EncodePosition(stream.Position), stream.BinlogSource))
+			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, replication.EncodePosition(stream.Position), stream.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -178,7 +178,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 		tabletStreams := templates
 		for _, vrs := range tabletStreams {
 			logs = append(logs, fmt.Sprintf("\t Keyspace %s, Shard %s, Tablet %d, Workflow %s, Id %d, Pos %v, BinLogSource %s",
-				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, mysql.EncodePosition(vrs.Position), vrs.BinlogSource))
+				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, replication.EncodePosition(vrs.Position), vrs.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {

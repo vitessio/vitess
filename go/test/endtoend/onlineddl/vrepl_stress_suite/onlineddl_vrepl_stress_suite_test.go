@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -706,9 +707,9 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}
-			if sqlErr, ok := err.(*mysql.SQLError); ok {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok {
 				switch sqlErr.Number() {
-				case mysql.ERLockDeadlock:
+				case sqlerror.ERLockDeadlock:
 					// That's fine. We create a lot of contention; some transactions will deadlock and
 					// rollback. It happens, and we can ignore those and keep on going.
 					err = nil

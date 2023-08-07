@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"strings"
@@ -81,9 +81,9 @@ func TestParseMariaGTIDSet(t *testing.T) {
 		11: MariadbGTID{Domain: 11, Server: 22, Sequence: 3333},
 	}
 
-	got, err := parseMariadbGTIDSet(input)
+	got, err := ParseMariadbGTIDSet(input)
 	assert.NoError(t, err, "%v", err)
-	assert.True(t, got.Equal(want), "parseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
+	assert.True(t, got.Equal(want), "ParseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
 
 }
 
@@ -91,13 +91,13 @@ func TestParseInvalidMariaGTIDSet(t *testing.T) {
 	input := "12-34-5678,11-22-33e33"
 	want := "invalid MariaDB GTID Sequence number"
 
-	_, err := parseMariadbGTIDSet(input)
+	_, err := ParseMariadbGTIDSet(input)
 	if err == nil {
 		t.Errorf("expected error for invalid input (%#v)", input)
 		return
 	}
 	if got := err.Error(); !strings.HasPrefix(got, want) {
-		t.Errorf("parseMariadbGTIDSet(%#v) error = %#v, want %#v", input, got, want)
+		t.Errorf("ParseMariadbGTIDSet(%#v) error = %#v, want %#v", input, got, want)
 	}
 }
 
@@ -621,7 +621,7 @@ func TestMariaGTIDSetLast(t *testing.T) {
 		"12-34-5678":                       "12-34-5678",
 	}
 	for input, want := range testCases {
-		got, err := parseMariadbGTIDSet(input)
+		got, err := ParseMariadbGTIDSet(input)
 		require.NoError(t, err)
 		assert.Equal(t, want, got.Last())
 	}

@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -126,8 +128,8 @@ func TestConsistentLookup(t *testing.T) {
 	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(1, 4)", 1000, false)
 	utils.Exec(t, conn, "rollback")
 	require.Error(t, err)
-	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, mysql.ERDupEntry, mysqlErr.Num)
+	mysqlErr := err.(*sqlerror.SQLError)
+	assert.Equal(t, sqlerror.ERDupEntry, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
 	assert.Contains(t, mysqlErr.Message, "reverted partial DML execution")
 

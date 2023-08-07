@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -140,7 +142,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					},
 					"zone1-0000000200": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -258,7 +260,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					},
 					"zone1-0000000200": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",

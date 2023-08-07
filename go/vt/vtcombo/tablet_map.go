@@ -394,6 +394,10 @@ func CreateKs(
 				return 0, fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
 			}
 
+			_, err = vindexes.BuildKeyspace(formal)
+			if err != nil {
+				return 0, fmt.Errorf("BuildKeyspace(%v) failed: %v", keyspace, err)
+			}
 			if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}

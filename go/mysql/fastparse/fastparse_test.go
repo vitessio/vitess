@@ -162,6 +162,12 @@ func TestParseInt64(t *testing.T) {
 			err:      `cannot parse int64 from "18446744073709551616": overflow`,
 		},
 		{
+			input:    "31415926535897932384",
+			base:     10,
+			expected: 9223372036854775807,
+			err:      `cannot parse int64 from "31415926535897932384": overflow`,
+		},
+		{
 			input:    "1.1",
 			base:     10,
 			expected: 1,
@@ -296,6 +302,12 @@ func TestParseUint64(t *testing.T) {
 			base:     10,
 			expected: 18446744073709551615,
 			err:      `cannot parse uint64 from "18446744073709551616": overflow`,
+		},
+		{
+			input:    "31415926535897932384",
+			base:     10,
+			expected: 18446744073709551615,
+			err:      `cannot parse uint64 from "31415926535897932384": overflow`,
 		},
 		{
 			input:    "1.1",

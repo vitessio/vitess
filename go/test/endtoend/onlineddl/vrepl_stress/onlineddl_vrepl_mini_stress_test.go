@@ -372,6 +372,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
+
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 		require.Nil(t, err)
@@ -382,10 +383,14 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 		select {
 		case <-time.After(time.Second):
+			continue // Keep looping
 		case <-ctx.Done():
-			break
+			// Break below to the assertion
 		}
+
+		break
 	}
+
 	assert.Equal(t, expectCount, rowcount)
 }
 

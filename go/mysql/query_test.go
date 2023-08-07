@@ -24,6 +24,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"github.com/stretchr/testify/assert"
@@ -378,7 +380,7 @@ func TestSQLErrorOnServerClose(t *testing.T) {
 	// We should be getting a Connection lost error.
 	_, _, _, err = cConn.ReadQueryResult(100, true)
 	require.Error(t, err)
-	require.True(t, IsConnLostDuringQuery(err), err.Error())
+	require.True(t, sqlerror.IsConnLostDuringQuery(err), err.Error())
 }
 
 func TestQueries(t *testing.T) {
