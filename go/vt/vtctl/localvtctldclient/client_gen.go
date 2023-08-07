@@ -281,6 +281,11 @@ func (client *localVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.
 	return client.s.GetSchema(ctx, in)
 }
 
+// GetSchemaMigrations is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	return client.s.GetSchemaMigrations(ctx, in)
+}
+
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	return client.s.GetShard(ctx, in)

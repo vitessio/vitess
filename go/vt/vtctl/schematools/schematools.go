@@ -18,13 +18,17 @@ package schematools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -42,4 +46,67 @@ func GetSchema(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerC
 	}
 
 	return sd, nil
+}
+
+// ParseSchemaMigrationStrategy parses the given strategy into the underlying enum type.
+func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Strategy, error) {
+	if name == "" {
+		// backward compatiblity and to handle unspecified values
+		return vtctldatapb.SchemaMigration_DIRECT, nil
+
+	}
+
+	upperName := strings.ToUpper(name)
+	switch upperName {
+	case "GH-OST", "PT-OSC":
+		// more backward compatibility since the protobuf message names don't
+		// have the dash.
+		upperName = strings.ReplaceAll(upperName, "-", "")
+	default:
+	}
+
+	strategy, ok := vtctldatapb.SchemaMigration_Strategy_value[upperName]
+	if !ok {
+		return 0, fmt.Errorf("unknown schema migration strategy: '%v'", name)
+	}
+
+	if upperName != name {
+		// TODO (andrew): Remove special handling for lower/uppercase and
+		// gh-ost=>ghost/pt-osc=>ptosc support. (file issue for this).
+		log.Warningf("detected legacy strategy name syntax; parsed %q as %q. this break in the next version.", upperName, name)
+	}
+
+	return vtctldatapb.SchemaMigration_Strategy(strategy), nil
+
+}
+
+// ParseSchemaMigrationStatus parses the given status into the underlying enum type.
+func ParseSchemaMigrationStatus(name string) (vtctldatapb.SchemaMigration_Status, error) {
+	key := strings.ToUpper(name)
+
+	val, ok := vtctldatapb.SchemaMigration_Status_value[key]
+	if !ok {
+		return 0, fmt.Errorf("unknown enum name for SchemaMigration_Status: %s", name)
+	}
+
+	if name != key {
+		log.Warningf("legacy status name %s parsed as %s. this will break in a future release.", name, key)
+	}
+
+	return vtctldatapb.SchemaMigration_Status(val), nil
+}
+
+// SchemaMigrationStrategyName returns the text-based form of the strategy.
+func SchemaMigrationStrategyName(strategy vtctldatapb.SchemaMigration_Strategy) string {
+	name, ok := vtctldatapb.SchemaMigration_Strategy_name[int32(strategy)]
+	if !ok {
+		return "unknown"
+	}
+
+	return strings.ToLower(name)
+}
+
+// SchemaMigrationStatusName returns the text-based form of the status.
+func SchemaMigrationStatusName(status vtctldatapb.SchemaMigration_Status) string {
+	return strings.ToLower(vtctldatapb.SchemaMigration_Status_name[int32(status)])
 }

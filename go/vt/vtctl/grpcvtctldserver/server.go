@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -1450,6 +1451,99 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 	return &vtctldatapb.GetSchemaResponse{
 		Schema: sd,
 	}, nil
+}
+
+func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest) (resp *vtctldatapb.GetSchemaMigrationsResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShard")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	var condition string
+	switch {
+	case req.Uuid != "":
+		span.Annotate("uuid", req.Uuid)
+		if !schema.IsOnlineDDLUUID(req.Uuid) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a valid UUID", req.Uuid)
+		}
+
+		condition, err = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(req.Uuid))
+	case req.MigrationContext != "":
+		condition, err = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(req.MigrationContext))
+	case req.Status != vtctldatapb.SchemaMigration_UNKNOWN:
+		condition, err = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(schematools.SchemaMigrationStatusName(req.Status)))
+	case req.Recent != nil:
+		var d time.Duration
+		d, _, err = protoutil.DurationFromProto(req.Recent)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing duration: %s", err)
+		}
+
+		condition = fmt.Sprintf("requested_timestamp > now() - interval %0.f second", d.Seconds())
+	default:
+		condition = "migration_uuid like '%'"
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("Error generating OnlineDDL query: %+v", err)
+	}
+
+	order := " order by `id` "
+	switch req.Order {
+	case vtctldatapb.QueryOrdering_DESCENDING:
+		order += "DESC"
+	default:
+		order += "ASC"
+	}
+
+	var skipLimit string
+	if req.Limit > 0 {
+		skipLimit = fmt.Sprintf("LIMIT %v,%v", req.Skip, req.Limit)
+	}
+
+	query := selectSchemaMigrationsQuery(condition, order, skipLimit)
+
+	tabletsResp, err := s.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		Cells:      nil,
+		Strict:     false,
+		Keyspace:   req.Keyspace,
+		TabletType: topodatapb.TabletType_PRIMARY,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	results := map[string]*sqltypes.Result{}
+	for _, tablet := range tabletsResp.Tablets {
+		alias := topoproto.TabletAliasString(tablet.Alias)
+
+		fetchResp, err := s.ExecuteFetchAsDBA(ctx, &vtctldatapb.ExecuteFetchAsDBARequest{
+			TabletAlias: tablet.Alias,
+			Query:       query,
+			MaxRows:     10_000,
+		})
+		if err != nil {
+			return nil, err
+		}
+		results[alias] = sqltypes.Proto3ToResult(fetchResp.Result)
+	}
+	// combine results. This loses sorting if there's more then 1 tablet
+	combinedResults := queryResultForTabletResults(results)
+
+	resp = new(vtctldatapb.GetSchemaMigrationsResponse)
+	for _, row := range combinedResults.Rows {
+		var m *vtctldatapb.SchemaMigration
+		m, err = rowToSchemaMigration(row)
+		if err != nil {
+			return nil, err
+		}
+
+		resp.Migrations = append(resp.Migrations, m)
+	}
+
+	return resp, err
 }
 
 // GetShard is part of the vtctlservicepb.VtctldServer interface.
