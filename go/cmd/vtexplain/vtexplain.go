@@ -104,6 +104,7 @@ func main() {
 	defer logutil.Flush()
 
 	servenv.ParseFlags("vtexplain")
+	servenv.Init()
 	err := parseAndRun()
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)

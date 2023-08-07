@@ -801,6 +801,9 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
+		// We call a SetReplicationSource explicitly
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// extra SetReplicationSource call due to retry
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -856,6 +859,13 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// when promote fails, we don't call UndoDemotePrimary, so the old primary should be read-only
 	assert.True(t, newPrimary.FakeMysqlDaemon.ReadOnly, "newPrimary.FakeMysqlDaemon.ReadOnly")
 	assert.True(t, oldPrimary.FakeMysqlDaemon.ReadOnly, "oldPrimary.FakeMysqlDaemon.ReadOnly")
+
+	// After the first call to PRS has failed, we don't know whether `SetReplicationSource` RPC has succeeded on the oldPrimary or not.
+	// This causes the test to become non-deterministic. To prevent this, we call `SetReplicationSource` on the oldPrimary again, and make sure it has succeeded.
+	// We also wait until the oldPrimary has demoted itself to a replica type.
+	err = wr.TabletManagerClient().SetReplicationSource(context.Background(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false)
+	require.NoError(t, err)
+	waitForTabletType(t, wr, oldPrimary.Tablet.Alias, topodatapb.TabletType_REPLICA)
 
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
