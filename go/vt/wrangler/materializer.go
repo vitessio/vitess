@@ -212,39 +212,6 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		}
 	}
-	if externalTopo == nil {
-		// Save routing rules before vschema. If we save vschema first, and routing rules
-		// fails to save, we may generate duplicate table errors.
-		rules, err := topotools.GetRoutingRules(ctx, wr.ts)
-		if err != nil {
-			return err
-		}
-		for _, table := range tables {
-			toSource := []string{sourceKeyspace + "." + table}
-			rules[table] = toSource
-			rules[table+"@replica"] = toSource
-			rules[table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[targetKeyspace+"."+table+"@replica"] = toSource
-			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[sourceKeyspace+"."+table+"@replica"] = toSource
-			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-		}
-		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
-			return err
-		}
-
-		if vschema != nil {
-			// We added to the vschema.
-			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-				return err
-			}
-		}
-	}
-	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		return err
-	}
 	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
 	if err != nil {
 		return err
@@ -287,6 +254,42 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 	mz, err := wr.prepareMaterializerStreams(ctx, ms)
 	if err != nil {
+		return err
+	}
+
+	// Now that we know the streams could be created, let's put the associated routing
+	// rules in place.
+	if externalTopo == nil {
+		// Save routing rules before vschema. If we save vschema first, and routing rules
+		// fails to save, we may generate duplicate table errors.
+		rules, err := topotools.GetRoutingRules(ctx, wr.ts)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			toSource := []string{sourceKeyspace + "." + table}
+			rules[table] = toSource
+			rules[table+"@replica"] = toSource
+			rules[table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[targetKeyspace+"."+table+"@replica"] = toSource
+			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[sourceKeyspace+"."+table+"@replica"] = toSource
+			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+		}
+		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
+			return err
+		}
+
+		if vschema != nil {
+			// We added to the vschema.
+			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return err
+			}
+		}
+	}
+	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
 	}
 
