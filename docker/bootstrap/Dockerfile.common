@@ -1,7 +1,8 @@
 FROM --platform=linux/amd64 golang:1.20.5-buster
 
 # Install Vitess build dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     # TODO(mberlin): Group these to make it easier to understand which library actually requires them.
     ant \
     chromium \
