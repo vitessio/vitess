@@ -303,19 +303,22 @@ func (p *Projection) ShortDescription() string {
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
-	if !p.isDerived() {
-		// for projections that are not derived tables, we can check if it is safe to remove or not
-		needed := false
-		for i, projection := range p.Projections {
-			e, ok := projection.(Offset)
-			if !ok || e.Offset != i {
-				needed = true
-				break
-			}
+	if p.isDerived() {
+		return p, rewrite.SameTree, nil
+	}
+
+	// for projections that are not derived tables, we can check if it is safe to remove or not
+	needed := false
+	for i, projection := range p.Projections {
+		e, ok := projection.(Offset)
+		if !ok || e.Offset != i {
+			needed = true
+			break
 		}
-		if !needed {
-			return p.Source, rewrite.NewTree("removed projection only passing through the input", p), nil
-		}
+	}
+
+	if !needed {
+		return p.Source, rewrite.NewTree("removed projection only passing through the input", p), nil
 	}
 
 	switch src := p.Source.(type) {
@@ -427,6 +430,9 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 			EExpr: eexpr,
 		}
 	}
+
+	p.TableID = nil
+	p.Alias = ""
 
 	return nil
 }
