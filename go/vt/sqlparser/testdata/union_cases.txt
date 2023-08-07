@@ -1004,7 +1004,7 @@ INPUT
 SELECT 1 FOR SHARE UNION SELECT 2;
 END
 ERROR
-syntax error at position 19 near 'SHARE'
+syntax error at position 25 near 'UNION'
 END
 INPUT
 SELECT ST_AsText(ST_Union(shore, boundary))  FROM lakes, named_places  WHERE lakes.name = 'Blue Lake'  AND named_places.name = 'Goose Island';
