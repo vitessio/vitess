@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -180,6 +181,17 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			},
 		},
 	}
+	schema := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name: "t1",
+			},
+			{
+				Name: "t2",
+			},
+		},
+	}
+	tme.setPrimarySchemas(schema)
 	if len(sourceShards) != 1 {
 		if err := tme.ts.SaveVSchema(ctx, "ks1", vs); err != nil {
 			t.Fatal(err)
@@ -675,6 +687,15 @@ func (tme *testMigraterEnv) setPrimaryPositions() {
 				},
 			},
 		}
+	}
+}
+
+func (tme *testMigraterEnv) setPrimarySchemas(schema *tabletmanagerdatapb.SchemaDefinition) {
+	for _, primary := range tme.sourcePrimaries {
+		primary.FakeMysqlDaemon.Schema = schema
+	}
+	for _, primary := range tme.targetPrimaries {
+		primary.FakeMysqlDaemon.Schema = schema
 	}
 }
 
