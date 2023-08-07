@@ -12,7 +12,7 @@ kubectl apply -f operator.yaml
 # Example:
 #  images:
 #    vtctld: vitess/lite:mysql80
-#    vtadmin: vitess/vtadmin:v17.0.1-bullseye
+#    vtadmin: vitess/vtadmin:latest
 #    vtgate: vitess/lite:mysql80
 #    vttablet: vitess/lite:mysql80
 #    vtbackup: vitess/lite:mysql80
