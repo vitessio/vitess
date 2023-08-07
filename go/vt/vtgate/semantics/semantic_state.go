@@ -299,6 +299,10 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID,
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
 func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
+	_, isWs := e.(*sqlparser.WeightStringFuncExpr)
+	if isWs {
+		return false
+	}
 	typ, found := st.ExprTypes[e]
 	if !found {
 		return true
