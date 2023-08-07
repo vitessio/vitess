@@ -372,7 +372,17 @@ var (
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
+		input: "select /* for share */ 1 from t for share",
+	}, {
+		input: "select /* for share */ 1 from t for share nowait",
+	}, {
+		input: "select /* for share */ 1 from t for share skip locked",
+	}, {
 		input: "select /* for update */ 1 from t for update",
+	}, {
+		input: "select /* for update */ 1 from t for update nowait",
+	}, {
+		input: "select /* for update */ 1 from t for update skip locked",
 	}, {
 		input: "select /* lock in share mode */ 1 from t lock in share mode",
 	}, {
