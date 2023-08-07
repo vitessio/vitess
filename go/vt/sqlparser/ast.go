@@ -412,9 +412,9 @@ func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*DBDDL) iStatement()             {}
-func (*DDL) iStatement()        {}
-func (*AlterTable) iStatement() {}
-func (*Explain) iStatement()    {}
+func (*DDL) iStatement()               {}
+func (*AlterTable) iStatement()        {}
+func (*Explain) iStatement()           {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
@@ -3001,7 +3001,7 @@ type JSONTableColOpts struct {
 func (opt JSONTableColOpts) Format(buf *TrackedBuffer) {
 	buf.Myprintf("\"%s\"", opt.Path)
 	if opt.ValOnEmpty != nil {
-        buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
+		buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
 	}
 	if opt.ValOnError != nil {
 		buf.Myprintf(" %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
@@ -3520,7 +3520,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 	}
 
-	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
+	if strings.EqualFold(node.Type, "collation") && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", node.ShowCollationFilterOpt)
 	}
 	if node.HasTable() {
@@ -3630,7 +3630,7 @@ type Begin struct {
 
 // Format formats the node.
 func (node *Begin) Format(buf *TrackedBuffer) {
-	buf.WriteString("begin")
+	buf.WriteString("start transaction")
 
 	if node.TransactionCharacteristic != "" {
 		buf.Myprintf(" %s", node.TransactionCharacteristic)
@@ -3883,9 +3883,10 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 		if !node.As.IsEmpty() {
 			// The AS is omitted here because it gets captured by the InputExpression. A bug, but not a major one since
 			// we use the alias expression for the column in the return schema.
-			buf.Myprintf("%s %v", node.InputExpression, node.As)
+			buf.Myprintf("%v %v", node.Expr, node.As)
 		} else {
-			buf.Myprintf("%s", node.InputExpression)
+			//buf.Myprintf("%s", node.InputExpression)
+			node.Expr.Format(buf)
 		}
 	} else if !node.As.IsEmpty() {
 		buf.Myprintf("%v as %v", node.Expr, node.As)
@@ -4082,12 +4083,12 @@ type AliasedTableExpr struct {
 }
 
 type AsOf struct {
-	Time Expr
-	Start Expr
-	End Expr
+	Time           Expr
+	Start          Expr
+	End            Expr
 	StartInclusive bool
-	EndInclusive bool
-	All bool
+	EndInclusive   bool
+	All            bool
 }
 
 func (node *AsOf) Format(buf *TrackedBuffer) {
@@ -7058,8 +7059,8 @@ func (node *Deallocate) Format(buf *TrackedBuffer) {
 }
 
 type CreateSpatialRefSys struct {
-	SRID 	    *SQLVal
-	OrReplace	bool
+	SRID        *SQLVal
+	OrReplace   bool
 	IfNotExists bool
 	SrsAttr     *SrsAttribute
 }
@@ -7087,7 +7088,7 @@ type SrsAttribute struct {
 	Name         string
 	Definition   string
 	Organization string
-	OrgID	     *SQLVal
+	OrgID        *SQLVal
 	Description  string
 }
 
