@@ -14,20 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package foreign_keys
+package foreignkey
 
 import (
+	"context"
 	_ "embed"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -36,7 +34,6 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	mysqlParams     mysql.ConnParams
 	shardedKs       = "ks"
 	shardedKsShards = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
 	Cell            = "test"
@@ -68,8 +65,6 @@ func TestMain(m *testing.M) {
 			VSchema:   shardedVSchema,
 		}
 
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1
@@ -81,7 +76,6 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4 // enable Gen4 planner.
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -91,35 +85,27 @@ func TestMain(m *testing.M) {
 			Port: clusterInstance.VtgateMySQLPort,
 		}
 
-		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		defer closer()
-		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (*mysql.Conn, func()) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
-	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
+	deleteAll := func() {
 		tables := []string{"t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
 		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+			_ = utils.Exec(t, conn, "delete from "+table)
 		}
 	}
 
 	deleteAll()
 
-	return mcmp, func() {
+	return conn, func() {
 		deleteAll()
-		mcmp.Close()
+		conn.Close()
 		cluster.PanicHandler(t)
 	}
 }

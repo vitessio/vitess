@@ -2495,8 +2495,8 @@ func (ty KillType) ToString() string {
 	}
 }
 
-// Indexes returns if the list of columns contains all the elements in the other list provided.
-// If it does, then it also returns the indexes of the columns.
+// Indexes returns true,
+// if the list of columns contains all the elements in the other list provided along with their indexes.
 func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
 	var indexes []int
 	for _, subSetCol := range subSetCols {
@@ -2515,8 +2515,8 @@ func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
 	return true, indexes
 }
 
-// MakeColumns is to used to make a list of columns from a list of strings.
-// This function is meeant to be used in testing code.
+// MakeColumns is used to make a list of columns from a list of strings.
+// This function is meant to be used in testing code.
 func MakeColumns(colNames ...string) Columns {
 	var cols Columns
 	for _, name := range colNames {

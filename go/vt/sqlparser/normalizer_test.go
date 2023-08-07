@@ -444,7 +444,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 		output: "",
 	}
 	if testOne.input == "" {
-		return
+		t.Skip("empty test case")
 	}
 	tree, err := Parse(testOne.input)
 	require.NoError(t, err, testOne.input)
