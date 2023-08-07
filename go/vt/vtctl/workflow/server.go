@@ -1049,8 +1049,8 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 
-	// Now that we know the streams could be created, let's put the associated routing
-	// rules in place.
+	// Now that the streams have been successfully created, let's put the associated
+	// routing rules in place.
 	if externalTopo == nil {
 		// Save routing rules before vschema. If we save vschema first, and routing rules
 		// fails to save, we may generate duplicate table errors.
