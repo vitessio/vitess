@@ -245,6 +245,8 @@ message ApplySchemaRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 9;
+  // BatchSize indicates how many queries to apply together
+  int64 batch_size = 10;
 }
 
 message ApplySchemaResponse {

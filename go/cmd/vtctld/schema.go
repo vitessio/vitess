@@ -78,7 +78,7 @@ func initSchema() {
 			_, err = schemamanager.Run(
 				ctx,
 				controller,
-				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout),
+				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0),
 			)
 			if err != nil {
 				log.Errorf("Schema change failed, error: %v", err)
