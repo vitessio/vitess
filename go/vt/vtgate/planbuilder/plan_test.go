@@ -102,8 +102,13 @@ func TestPlan(t *testing.T) {
 
 func TestSystemTables57(t *testing.T) {
 	// first we move everything to use 5.7 logic
+	oldVer := servenv.MySQLServerVersion()
 	servenv.SetMySQLServerVersionForTest("5.7")
-	defer servenv.SetMySQLServerVersionForTest("")
+	semantics.ClearCachedInfoSchemaInfo()
+	defer func() {
+		servenv.SetMySQLServerVersionForTest(oldVer)
+		semantics.ClearCachedInfoSchemaInfo()
+	}()
 	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
@@ -193,8 +198,13 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 
 func TestOneWith57Version(t *testing.T) {
 	// first we move everything to use 5.7 logic
+	oldVer := servenv.MySQLServerVersion()
 	servenv.SetMySQLServerVersionForTest("5.7")
-	defer servenv.SetMySQLServerVersionForTest("")
+	semantics.ClearCachedInfoSchemaInfo()
+	defer func() {
+		servenv.SetMySQLServerVersionForTest(oldVer)
+		semantics.ClearCachedInfoSchemaInfo()
+	}()
 	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 
 	testFile(t, "onecase.json", "", vschema, false)

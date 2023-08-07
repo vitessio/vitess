@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -56,6 +58,7 @@ func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
 	servenv.SetMySQLServerVersionForTest(mySQLVersion)
+	semantics.ClearCachedInfoSchemaInfo()
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 }
 
