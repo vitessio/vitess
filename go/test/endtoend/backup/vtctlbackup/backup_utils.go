@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -885,6 +887,7 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	} else if tablet.Type == "rdonly" {
 		verifySemiSyncStatus(t, tablet, "OFF")
 	}
+	verifyRestorePositionAndTimeStats(t, primary.VttabletProcess.GetVars())
 }
 
 func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
@@ -1047,4 +1050,17 @@ func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectEr
 		return
 	}
 	require.NoErrorf(t, err, "output: %v", output)
+}
+
+func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
+	log.Infof("vars %v", vars)
+	backupPosition := vars["RestorePosition"].(string)
+	backupTime := vars["RestoredBackupTime"].(string)
+	require.Contains(t, vars, "RestoredBackupTime")
+	require.Contains(t, vars, "RestorePosition")
+	require.NotEqual(t, "", backupPosition)
+	require.NotEqual(t, "", backupTime)
+	rp, err := mysql.DecodePosition(backupPosition)
+	require.NoError(t, err)
+	require.False(t, rp.IsZero())
 }
