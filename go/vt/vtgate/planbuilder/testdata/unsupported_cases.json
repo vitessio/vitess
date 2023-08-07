@@ -495,11 +495,6 @@
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
   },
   {
-    "comment": "UNION with repeating column on the LHS",
-    "query": "select foo, foo, foo from user union select bar, baz, toto from music",
-    "plan": "VT12001: unsupported: unable to plan the distinct query as not able to align the columns"
-  },
-  {
     "comment": "Cannot have more than one aggr(distinct...",
     "query": "select count(distinct a), count(distinct b) from user",
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"

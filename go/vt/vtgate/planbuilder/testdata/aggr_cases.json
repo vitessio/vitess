@@ -2881,8 +2881,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
+                    "FieldQuery": "select sum(col), 32 from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
+                    "Query": "select sum(col), 32 from (select `user`.col as col, 32 from `user`) as t",
                     "Table": "`user`"
                   },
                   {
@@ -3493,19 +3493,27 @@
         "Aggregates": "count(0) AS count(city)",
         "Inputs": [
           {
-            "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              2
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                "Query": "select city from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
-                "Table": "`user`"
+                "OperatorType": "Limit",
+                "Count": "INT64(10)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select phone, id, city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select phone, id, city from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }
@@ -3528,19 +3536,27 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              3
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                "Query": "select 1 from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
-                "Table": "`user`"
+                "OperatorType": "Limit",
+                "Count": "INT64(10)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select phone, id, city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select phone, id, city, 1 from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }
@@ -3623,20 +3639,30 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Limit",
-            "Count": "INT64(2)",
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              1,
+              2,
+              3
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select val1, 1, weight_string(val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select val1, 1, weight_string(val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
-                "Table": "`user`"
+                "OperatorType": "Limit",
+                "Count": "INT64(2)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, val1, 1, weight_string(val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
+                    "OrderBy": "(1|3) ASC",
+                    "Query": "select id, val1, 1, weight_string(val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }
@@ -5838,8 +5864,8 @@
           {
             "OperatorType": "SimpleProjection",
             "Columns": [
-              0,
-              0
+              1,
+              1
             ],
             "Inputs": [
               {
@@ -5853,8 +5879,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select val2 from (select id, val2 from `user` where val2 is null) as x limit :__upper_limit",
+                    "FieldQuery": "select id, val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select id, val2 from (select id, val2 from `user` where val2 is null) as x limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]

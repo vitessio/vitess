@@ -261,9 +261,6 @@ func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 }
 
 func (p *Projection) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	if p.TableID != nil {
-		return nil, nil
-	}
 	return p.Columns, nil
 }
 
