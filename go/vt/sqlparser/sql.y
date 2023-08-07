@@ -6988,6 +6988,26 @@ FOR UPDATE
   {
     $$ = ForUpdateLock
   }
+| FOR UPDATE NOWAIT
+  {
+    $$ = ForUpdateLockNoWait
+  }
+| FOR UPDATE SKIP LOCKED
+  {
+    $$ = ForUpdateLockSkipLocked
+  }
+| FOR SHARE
+  {
+    $$ = ForShareLock
+  }
+| FOR SHARE NOWAIT
+  {
+    $$ = ForShareLockNoWait
+  }
+| FOR SHARE SKIP LOCKED
+  {
+    $$ = ForShareLockSkipLocked
+  }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeLock
