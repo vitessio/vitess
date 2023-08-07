@@ -19,6 +19,7 @@ package newfeaturetest
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -205,7 +206,7 @@ func TestFullStatus(t *testing.T) {
 
 // fileNameFromPosition gets the file name from the position
 func fileNameFromPosition(pos string) string {
-	return pos[0 : len(pos)-4]
+	return strings.Split(pos, ":")[0]
 }
 
 // rowNumberFromPosition gets the row number from the position
