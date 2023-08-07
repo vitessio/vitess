@@ -269,10 +269,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
 		parentFKs := vindexTable.CrossShardParentFKs()
 		if len(parentFKs) > 0 {
-			insOp.FKVerify, err = NewFkVerify(ctx, parentFKs, ins.Columns)
-			if err != nil {
-				return nil, err
-			}
+			return nil, vterrors.VT12002()
 		}
 	}
 

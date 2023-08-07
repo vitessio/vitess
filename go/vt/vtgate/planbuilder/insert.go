@@ -101,9 +101,8 @@ func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tabl
 }
 
 type insert struct {
-	eInsert  *engine.Insert
-	source   logicalPlan
-	fkVerify logicalPlan
+	eInsert *engine.Insert
+	source  logicalPlan
 }
 
 var _ logicalPlan = (*insert)(nil)

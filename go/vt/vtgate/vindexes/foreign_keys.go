@@ -112,7 +112,6 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 	if len(t.ParentForeignKeys) == 0 {
 		return
 	}
-	primaryVindex := t.ColumnVindexes[0]
 	for _, fk := range t.ParentForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
@@ -125,8 +124,10 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 		if !t.Keyspace.Sharded {
 			continue
 		}
+
 		// If the primary vindexes don't match between the parent and child table,
 		// we cannot infer that the fk constraint in shard scoped.
+		primaryVindex := t.ColumnVindexes[0]
 		if fk.Table.ColumnVindexes[0].Vindex != primaryVindex.Vindex {
 			crossShardFKs = append(crossShardFKs, fk)
 			continue
