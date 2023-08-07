@@ -543,8 +543,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -553,8 +554,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1",
-            "Query": "select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`",
+            "FieldQuery": "select `1`, weight_string(`1`) from (select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select `1`, weight_string(`1`) from (select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`) as dt",
             "Table": "`user`, dual"
           }
         ]
@@ -786,14 +787,13 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "Columns": [
-          1
+          0
         ],
         "Inputs": [
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "(0:2)",
-              "(1:3)"
+              "(0:1)"
             ],
             "Inputs": [
               {
@@ -803,8 +803,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id), weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
-                "Query": "select id, weight_string(id), weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
+                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
+                "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
                 "Table": "`user`, user_extra"
               }
             ]

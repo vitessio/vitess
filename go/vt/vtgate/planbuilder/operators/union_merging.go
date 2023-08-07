@@ -117,19 +117,19 @@ func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, l
 	switch {
 	// if either side is a dual query, we can always merge them together
 	case b == dual:
-		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
 	case a == dual:
-		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
 	case a == anyShard && sameKeyspace:
-		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
 	case b == anyShard && sameKeyspace:
-		return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
 	case a == sharded && b == sharded && sameKeyspace:
 		// If the two routes fully match, they can be merged together.
 		tblA := routingA.(*ShardedRouting)
 		tblB := routingB.(*ShardedRouting)
 		if tblA.RouteOpCode == engine.Scatter && tblB.RouteOpCode == engine.Scatter {
-			return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+			return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
 		}
 		if tblA.RouteOpCode != engine.EqualUnique || tblB.RouteOpCode != engine.EqualUnique {
 			break
@@ -139,18 +139,47 @@ func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, l
 		aExpr := tblA.VindexExpressions()
 		bExpr := tblB.VindexExpressions()
 		if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-			return createMergedUnion(lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+			return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
 		}
 	}
 	return nil, nil, nil
 }
 
 func createMergedUnion(
+	ctx *plancontext.PlanningContext,
 	lhsRoute, rhsRoute *Route,
 	lhsExprs, rhsExprs sqlparser.SelectExprs,
 	distinct bool,
 	routing Routing) (ops.Operator, sqlparser.SelectExprs, error) {
-	union := newUnion([]ops.Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, lhsExprs, distinct)
+
+	// if there are `*` on either side, or a different number of SelectExpr items,
+	// we give up aligning the expressions and trust that we can push everything down
+	cols := make(sqlparser.SelectExprs, len(lhsExprs))
+	noDeps := len(lhsExprs) != len(rhsExprs)
+	for idx, col := range lhsExprs {
+		ae, ok := col.(*sqlparser.AliasedExpr)
+		if !ok {
+			cols[idx] = col
+			noDeps = true
+			continue
+		}
+		col := sqlparser.NewColName(ae.ColumnName())
+		cols[idx] = aeWrap(col)
+		if noDeps {
+			continue
+		}
+
+		deps := ctx.SemTable.RecursiveDeps(ae.Expr)
+		ae, ok = rhsExprs[idx].(*sqlparser.AliasedExpr)
+		if !ok {
+			noDeps = true
+			continue
+		}
+		deps = deps.Merge(ctx.SemTable.RecursiveDeps(ae.Expr))
+		ctx.SemTable.Recursive[col] = deps
+	}
+
+	union := newUnion([]ops.Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
 		Source:     union,
