@@ -2844,7 +2844,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 			Select:      viewStmt.Select,
 			CheckOption: viewStmt.CheckOption,
 			IsReplace:   true,
-			Comments:    viewStmt.Comments,
+			Comments:    sqlparser.CloneRefOfParsedComments(viewStmt.Comments),
 		}
 		stmt.SetTable("", artifactViewName)
 	default:
