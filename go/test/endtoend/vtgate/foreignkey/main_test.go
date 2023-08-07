@@ -35,8 +35,8 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	shardedKs       = "ks"
-	shardedKsShards = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
 	Cell            = "test"
+
 	//go:embed sharded_schema.sql
 	shardedSchemaSQL string
 
@@ -65,12 +65,7 @@ func TestMain(m *testing.M) {
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
+		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}

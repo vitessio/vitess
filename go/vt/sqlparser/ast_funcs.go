@@ -2495,8 +2495,8 @@ func (ty KillType) ToString() string {
 	}
 }
 
-// Indexes returns true,
-// if the list of columns contains all the elements in the other list provided along with their indexes.
+// Indexes returns true, if the list of columns contains all the elements in the other list.
+// It also returns the indexes of the columns in the list.
 func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
 	var indexes []int
 	for _, subSetCol := range subSetCols {

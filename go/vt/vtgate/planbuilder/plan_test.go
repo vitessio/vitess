@@ -112,7 +112,7 @@ func TestForeignKeyPlanning(t *testing.T) {
 	}
 	testOutputTempDir := makeTestOutput(t)
 
-	testFile(t, "fk_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "foreignkey_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
