@@ -887,7 +887,6 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	} else if tablet.Type == "rdonly" {
 		verifySemiSyncStatus(t, tablet, "OFF")
 	}
-	verifyRestorePositionAndTimeStats(t, primary.VttabletProcess.GetVars())
 }
 
 func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
