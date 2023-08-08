@@ -113,6 +113,46 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			expectError: "Mismatching GTID entries",
 		},
 		{
+			name: "empty previous GTIDs in first binlog with gap, with good backup pos",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+			expectBinlogs: []string{"vt-bin.000004", "vt-bin.000005"},
+		},
+		{
+			name: "empty previous GTIDs in first binlog with gap, and without gtid_purged",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:   "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			expectError: "Mismatching GTID entries",
+		},
+		{
+			name: "empty previous GTIDs in first binlog but with proper gtid_purged",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			gtidPurged:    "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-40",
+			expectBinlogs: []string{"vt-bin.000004", "vt-bin.000005"},
+		},
+		{
 			name: "empty previous GTIDs in first binlog covering backup pos",
 			previousGTIDs: map[string]string{
 				"vt-bin.000001": "",
