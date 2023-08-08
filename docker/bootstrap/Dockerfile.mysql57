@@ -1,5 +1,5 @@
 ARG bootstrap_version
-ARG image="vitess/bootstrap:${bootstrap_version}-common-mysql57"
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM --platform=linux/amd64 "${image}"
 
