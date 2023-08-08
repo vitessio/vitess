@@ -26,8 +26,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -95,7 +93,7 @@ func (vind *Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value
 func (vind *Hash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		num, err := evalengine.ToUint64(ids[i])
+		num, err := ids[i].ToCastUint64()
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +126,7 @@ func (vind *Hash) Hash(id sqltypes.Value) ([]byte, error) {
 		ival, err = strconv.ParseInt(str, 10, 64)
 		num = uint64(ival)
 	} else {
-		num, err = evalengine.ToUint64(id)
+		num, err = id.ToCastUint64()
 	}
 
 	if err != nil {

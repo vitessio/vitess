@@ -27,7 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
@@ -87,7 +88,7 @@ func TestDBConnExec(t *testing.T) {
 	startCounts = mysqlTimings.Counts()
 
 	// Exec fail due to client side error
-	db.AddRejectedQuery(sql, &mysql.SQLError{
+	db.AddRejectedQuery(sql, &sqlerror.SQLError{
 		Num:     2012,
 		Message: "connection fail",
 		Query:   "",
@@ -159,7 +160,7 @@ func TestDBConnExecLost(t *testing.T) {
 
 	// Exec fail due to server side error (e.g. query kill)
 	startCounts = mysqlTimings.Counts()
-	db.AddRejectedQuery(sql, &mysql.SQLError{
+	db.AddRejectedQuery(sql, &sqlerror.SQLError{
 		Num:     2013,
 		Message: "Lost connection to MySQL server during query",
 		Query:   "",

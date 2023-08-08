@@ -29,20 +29,6 @@ type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
 
-func (cached *AutoIncrement) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field Column vitess.io/vitess/go/vt/sqlparser.IdentifierCI
-	size += cached.Column.CachedSize(false)
-	// field Sequence *vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	size += cached.Sequence.CachedSize(true)
-	return size
-}
 func (cached *Binary) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -93,20 +79,6 @@ func (cached *CFC) CachedSize(alloc bool) int64 {
 	size += cached.cfcCommon.CachedSize(true)
 	// field prefixCFC *vitess.io/vitess/go/vt/vtgate/vindexes.prefixCFC
 	size += cached.prefixCFC.CachedSize(true)
-	return size
-}
-func (cached *Column) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(64)
-	}
-	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
-	size += cached.Name.CachedSize(false)
-	// field CollationName string
-	size += hack.RuntimeAllocSize(int64(len(cached.CollationName)))
 	return size
 }
 func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
@@ -515,87 +487,6 @@ func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	return size
-}
-func (cached *Source) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(32)
-	}
-	// field TableName vitess.io/vitess/go/vt/sqlparser.TableName
-	size += cached.TableName.CachedSize(false)
-	return size
-}
-
-//go:nocheckptr
-func (cached *Table) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(192)
-	}
-	// field Type string
-	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
-	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
-	size += cached.Name.CachedSize(false)
-	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
-	size += cached.Keyspace.CachedSize(true)
-	// field ColumnVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.ColumnVindexes)) * int64(8))
-		for _, elem := range cached.ColumnVindexes {
-			size += elem.CachedSize(true)
-		}
-	}
-	// field Ordered []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Ordered)) * int64(8))
-		for _, elem := range cached.Ordered {
-			size += elem.CachedSize(true)
-		}
-	}
-	// field Owned []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Owned)) * int64(8))
-		for _, elem := range cached.Owned {
-			size += elem.CachedSize(true)
-		}
-	}
-	// field AutoIncrement *vitess.io/vitess/go/vt/vtgate/vindexes.AutoIncrement
-	size += cached.AutoIncrement.CachedSize(true)
-	// field Columns []vitess.io/vitess/go/vt/vtgate/vindexes.Column
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(56))
-		for _, elem := range cached.Columns {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field Pinned []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Pinned)))
-	}
-	// field ReferencedBy map[string]*vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	if cached.ReferencedBy != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.ReferencedBy)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.ReferencedBy) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
-		for k, v := range cached.ReferencedBy {
-			size += hack.RuntimeAllocSize(int64(len(k)))
-			size += v.CachedSize(true)
-		}
-	}
-	// field Source *vitess.io/vitess/go/vt/vtgate/vindexes.Source
-	size += cached.Source.CachedSize(true)
 	return size
 }
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {

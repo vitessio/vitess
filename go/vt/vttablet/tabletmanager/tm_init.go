@@ -46,6 +46,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
@@ -61,7 +62,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -496,7 +496,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		// If the keyspace exists but this is the first tablet added, then
 		// update the keyspace record to the default.
 		if ks.SidecarDbName == "" {
-			ks.SidecarDbName = sidecardb.DefaultName
+			ks.SidecarDbName = sidecar.DefaultName
 			getlockctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 			defer cancel()
 			lockctx, unlock, lockErr := tm.TopoServer.LockKeyspace(getlockctx, tablet.Keyspace, "Setting sidecar database name")
@@ -513,7 +513,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 			}
 		}
 		// Have the tablet use the sidecar database that's set for the keyspace.
-		sidecardb.SetName(ks.SidecarDbName)
+		sidecar.SetName(ks.SidecarDbName)
 		return nil
 	}
 	if err := tm.withRetry(ctx, "setting sidecar database name", setSidecarDBName); err != nil {

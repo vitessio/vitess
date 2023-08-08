@@ -14,10 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // PrimaryStatus holds replication information from SHOW MASTER STATUS.
@@ -34,4 +38,33 @@ func PrimaryStatusToProto(s PrimaryStatus) *replicationdatapb.PrimaryStatus {
 		Position:     EncodePosition(s.Position),
 		FilePosition: EncodePosition(s.FilePosition),
 	}
+}
+
+func ParseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
+	status := ParsePrimaryStatus(resultMap)
+
+	var err error
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	if err != nil {
+		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+	}
+
+	return status, nil
+}
+
+// ParsePrimaryStatus parses the common fields of SHOW MASTER STATUS.
+func ParsePrimaryStatus(fields map[string]string) PrimaryStatus {
+	status := PrimaryStatus{}
+
+	fileExecPosStr := fields["Position"]
+	file := fields["File"]
+	if file != "" && fileExecPosStr != "" {
+		var err error
+		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, fileExecPosStr))
+		if err != nil {
+			log.Warningf("Error parsing GTID set %s:%s: %v", file, fileExecPosStr, err)
+		}
+	}
+
+	return status
 }

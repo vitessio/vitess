@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,11 +43,11 @@ var (
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code mysql.ErrorCode, sqlState string, subtext string, query string) {
+func assertSQLError(t *testing.T, err error, code sqlerror.ErrorCode, sqlState string, subtext string, query string) {
 	t.Helper()
 	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 
-	serr, ok := err.(*mysql.SQLError)
+	serr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
 	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
 	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)

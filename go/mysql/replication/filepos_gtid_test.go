@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package replication
 
 import (
 	"testing"
@@ -38,12 +38,12 @@ func Test_filePosGTID_String(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gtid := filePosGTID{
-				file: tt.fields.file,
-				pos:  tt.fields.pos,
+			gtid := FilePosGTID{
+				File: tt.fields.file,
+				Pos:  tt.fields.pos,
 			}
 			if got := gtid.String(); got != tt.want {
-				t.Errorf("filePosGTID.String() = %v, want %v", got, tt.want)
+				t.Errorf("FilePosGTID.String() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -66,36 +66,36 @@ func Test_filePosGTID_ContainsGTID(t *testing.T) {
 		{
 			"returns true when the position is equal",
 			fields{file: "testfile", pos: 1234},
-			args{other: filePosGTID{file: "testfile", pos: 1234}},
+			args{other: FilePosGTID{File: "testfile", Pos: 1234}},
 			true,
 		},
 		{
 			"returns true when the position is less than equal",
 			fields{file: "testfile", pos: 1234},
-			args{other: filePosGTID{file: "testfile", pos: 1233}},
+			args{other: FilePosGTID{File: "testfile", Pos: 1233}},
 			true,
 		},
 		{
 			"returns false when the position is less than equal",
 			fields{file: "testfile", pos: 1234},
-			args{other: filePosGTID{file: "testfile", pos: 1235}},
+			args{other: FilePosGTID{File: "testfile", Pos: 1235}},
 			false,
 		},
 		{
 			"it uses integer value for comparison (it is not lexicographical order)",
 			fields{file: "testfile", pos: 99761227},
-			args{other: filePosGTID{file: "testfile", pos: 103939867}},
+			args{other: FilePosGTID{File: "testfile", Pos: 103939867}},
 			false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gtid := filePosGTID{
-				file: tt.fields.file,
-				pos:  tt.fields.pos,
+			gtid := FilePosGTID{
+				File: tt.fields.file,
+				Pos:  tt.fields.pos,
 			}
 			if got := gtid.ContainsGTID(tt.args.other); got != tt.want {
-				t.Errorf("filePosGTID.ContainsGTID() = %v, want %v", got, tt.want)
+				t.Errorf("FilePosGTID.ContainsGTID() = %v, want %v", got, tt.want)
 			}
 		})
 	}

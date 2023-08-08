@@ -196,7 +196,7 @@ func TestNumericStaticMapVerify(t *testing.T) {
 
 	// Failure test
 	_, err = numericStaticMap.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	require.EqualError(t, err, "could not parse value: 'aa'")
+	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
 func TestNumericStaticMapWithJsonVdx(t *testing.T) {
@@ -313,5 +313,5 @@ func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 
 	// Failure test
 	_, err = singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	require.EqualError(t, err, "could not parse value: 'aa'")
+	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }

@@ -67,8 +67,8 @@ type (
 		// ColVindexes are the vindexes that will use the VindexValues
 		ColVindexes []*vindexes.ColumnVindex
 
-		// Table specifies the table for the insert.
-		Table *vindexes.Table
+		// TableName is the name of the table on which row will be inserted.
+		TableName string
 
 		// Generate is only set for inserts where a sequence must be generated.
 		Generate *Generate
@@ -135,16 +135,25 @@ func NewInsert(
 	mid []string,
 	suffix string,
 ) *Insert {
-	return &Insert{
+	ins := &Insert{
 		Opcode:       opcode,
 		Ignore:       ignore,
 		Keyspace:     keyspace,
 		VindexValues: vindexValues,
-		Table:        table,
 		Prefix:       prefix,
 		Mid:          mid,
 		Suffix:       suffix,
 	}
+	if table != nil {
+		ins.TableName = table.Name.String()
+		for _, colVindex := range table.ColumnVindexes {
+			if colVindex.IsPartialVindex() {
+				continue
+			}
+			ins.ColVindexes = append(ins.ColVindexes, colVindex)
+		}
+	}
+	return ins
 }
 
 // Generate represents the instruction to generate
@@ -208,10 +217,7 @@ func (ins *Insert) GetKeyspaceName() string {
 
 // GetTableName specifies the table that this primitive routes to.
 func (ins *Insert) GetTableName() string {
-	if ins.Table != nil {
-		return ins.Table.Name.String()
-	}
-	return ""
+	return ins.TableName
 }
 
 // TryExecute performs a non-streaming exec.
@@ -384,10 +390,6 @@ func (ins *Insert) getInsertSelectQueries(
 	rows []sqltypes.Row,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
 	colVindexes := ins.ColVindexes
-	if colVindexes == nil {
-		colVindexes = ins.Table.ColumnVindexes
-	}
-
 	if len(colVindexes) != len(ins.VindexValueOffset) {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex value offsets and vindex info do not match")
 	}
@@ -500,7 +502,7 @@ func shouldGenerate(v sqltypes.Value) bool {
 
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
 	// treats 0 as a value that should generate a new sequence.
-	n, err := evalengine.ToUint64(v)
+	n, err := v.ToCastUint64()
 	if err == nil && n == 0 {
 		return true
 	}
@@ -551,7 +553,7 @@ func (ins *Insert) processGenerateFromValues(
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will be caught and reported.
-		insertID, err = evalengine.ToInt64(qr.Rows[0][0])
+		insertID, err = qr.Rows[0][0].ToCastInt64()
 		if err != nil {
 			return 0, err
 		}
@@ -613,7 +615,7 @@ func (ins *Insert) processGenerateFromRows(
 	}
 	// If no rows are returned, it's an internal error, and the code
 	// must panic, which will be caught and reported.
-	insertID, err = evalengine.ToInt64(qr.Rows[0][0])
+	insertID, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return 0, err
 	}
@@ -656,9 +658,6 @@ func (ins *Insert) getInsertShardedRoute(
 	rowCount := 0
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	colVindexes := ins.ColVindexes
-	if colVindexes == nil {
-		colVindexes = ins.Table.ColumnVindexes
-	}
 	for vIdx, vColValues := range ins.VindexValues {
 		if len(vColValues) != len(colVindexes[vIdx].Columns) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, colVindexes[vIdx].Columns)
@@ -697,7 +696,7 @@ func (ins *Insert) getInsertShardedRoute(
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
 	if len(vindexRowsValues) == 0 || len(colVindexes) == 0 {
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.Table.Name)
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.TableName)
 	}
 	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, vindexRowsValues[0], colVindexes[0])
 	if err != nil {

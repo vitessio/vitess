@@ -109,8 +109,8 @@ func hexDecodeJSON(j *evalJSON) ([]byte, bool) {
 	default:
 		b := j.ToRawBytes()
 		decoded := make([]byte, hex.DecodedLen(b))
-		ok := hex.DecodeBytes(decoded, b)
-		if !ok {
+		err := hex.DecodeBytes(decoded, b)
+		if err != nil {
 			return nil, false
 		}
 		return decoded, true
@@ -130,8 +130,8 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 	switch arg := arg.(type) {
 	case *evalBytes:
 		decoded = make([]byte, hex.DecodedLen(arg.bytes))
-		ok := hex.DecodeBytes(decoded, arg.bytes)
-		if !ok {
+		err := hex.DecodeBytes(decoded, arg.bytes)
+		if err != nil {
 			return nil, nil
 		}
 	case *evalInt64:
@@ -144,8 +144,8 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 	case *evalDecimal:
 		b := arg.ToRawBytes()
 		decoded = make([]byte, hex.DecodedLen(b))
-		ok := hex.DecodeBytes(decoded, b)
-		if !ok {
+		err := hex.DecodeBytes(decoded, b)
+		if err != nil {
 			return nil, nil
 		}
 	case *evalFloat:
@@ -163,8 +163,8 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 	default:
 		b := evalToBinary(arg)
 		decoded = make([]byte, hex.DecodedLen(b.bytes))
-		ok := hex.DecodeBytes(decoded, b.bytes)
-		if !ok {
+		err := hex.DecodeBytes(decoded, b.bytes)
+		if err != nil {
 			return nil, nil
 		}
 	}

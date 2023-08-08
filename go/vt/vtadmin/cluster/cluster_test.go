@@ -29,7 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
@@ -2772,18 +2773,18 @@ func TestGetShardReplicationPositions(t *testing.T) {
 							Response: &vtctldatapb.ShardReplicationPositionsResponse{
 								ReplicationStatuses: map[string]*replicationdatapb.Status{
 									"zone1-001": {
-										IoState:  int32(mysql.ReplicationStateStopped),
-										SqlState: int32(mysql.ReplicationStateStopped),
+										IoState:  int32(replication.ReplicationStateStopped),
+										SqlState: int32(replication.ReplicationStateStopped),
 										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 									"zone1-002": { // Note: in reality other fields will be set on replicating hosts as well, but this is sufficient to illustrate in the testing.
-										IoState:  int32(mysql.ReplicationStateRunning),
-										SqlState: int32(mysql.ReplicationStateRunning),
+										IoState:  int32(replication.ReplicationStateRunning),
+										SqlState: int32(replication.ReplicationStateRunning),
 										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 									"zone1-003": {
-										IoState:  int32(mysql.ReplicationStateRunning),
-										SqlState: int32(mysql.ReplicationStateRunning),
+										IoState:  int32(replication.ReplicationStateRunning),
+										SqlState: int32(replication.ReplicationStateRunning),
 										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 								},
@@ -2835,18 +2836,18 @@ func TestGetShardReplicationPositions(t *testing.T) {
 					PositionInfo: &vtctldatapb.ShardReplicationPositionsResponse{
 						ReplicationStatuses: map[string]*replicationdatapb.Status{
 							"zone1-001": {
-								IoState:  int32(mysql.ReplicationStateStopped),
-								SqlState: int32(mysql.ReplicationStateStopped),
+								IoState:  int32(replication.ReplicationStateStopped),
+								SqlState: int32(replication.ReplicationStateStopped),
 								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 							"zone1-002": {
-								IoState:  int32(mysql.ReplicationStateRunning),
-								SqlState: int32(mysql.ReplicationStateRunning),
+								IoState:  int32(replication.ReplicationStateRunning),
+								SqlState: int32(replication.ReplicationStateRunning),
 								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 							"zone1-003": {
-								IoState:  int32(mysql.ReplicationStateRunning),
-								SqlState: int32(mysql.ReplicationStateRunning),
+								IoState:  int32(replication.ReplicationStateRunning),
+								SqlState: int32(replication.ReplicationStateRunning),
 								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 						},

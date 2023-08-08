@@ -15,7 +15,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/discovery"
@@ -199,7 +199,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				}
 			}
 			var err error
-			var currentPosition, stopPosition mysql.Position
+			var currentPosition, stopPosition replication.Position
 			currentPosition, err = binlogplayer.DecodePosition(gtid)
 			if err != nil {
 				fmt.Printf("Error decoding position for %s:%vs\n", gtid, err.Error())

@@ -24,8 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
@@ -142,7 +141,7 @@ func TestMain(m *testing.M) {
 		// For upgrade/downgrade tests.
 		if vtgateVer < 17 || vttabletVer < 17 {
 			// Then only the default sidecarDBName is supported.
-			sidecarDBName = sidecardb.DefaultName
+			sidecarDBName = sidecar.DefaultName
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")

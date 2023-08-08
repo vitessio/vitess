@@ -19,11 +19,11 @@ package vtgate
 import (
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/test/utils"
@@ -302,7 +302,7 @@ func TestReservedConnFail(t *testing.T) {
 	assert.Equal(t, 1, len(session.ShardSessions))
 	oldRId := session.Session.ShardSessions[0].ReservedId
 
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "lost connection")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 3, len(sbc0.Queries), "1 for the successful run, one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -310,7 +310,7 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 not found")
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 not found")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -318,7 +318,7 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -326,7 +326,7 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -410,27 +410,27 @@ func TestIsConnClosed(t *testing.T) {
 		conClosed bool
 	}{{
 		"server gone",
-		mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, ""),
+		sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSNetError, ""),
 		true,
 	}, {
 		"connection lost",
-		mysql.NewSQLError(mysql.CRServerLost, mysql.SSNetError, ""),
+		sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSNetError, ""),
 		true,
 	}, {
 		"tx ended",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 ended at ..."),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 111 ended at ..."),
 		true,
 	}, {
 		"tx not found",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 not found ..."),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 111 not found ..."),
 		true,
 	}, {
 		"tx not found missing tx id",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction not found"),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction not found"),
 		false,
 	}, {
 		"tx getting killed by tx killer",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 in use: for tx killer rollback"),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 111 in use: for tx killer rollback"),
 		true,
 	}}
 

@@ -22,12 +22,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -110,7 +108,7 @@ func (ge *RegionExperimental) Map(ctx context.Context, vcursor VCursor, rowsColV
 			continue
 		}
 		// Compute region prefix.
-		rn, err := evalengine.ToUint64(row[0])
+		rn, err := row[0].ToCastUint64()
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
@@ -126,7 +124,7 @@ func (ge *RegionExperimental) Map(ctx context.Context, vcursor VCursor, rowsColV
 		dest := r
 		if len(row) == 2 {
 			// Compute hash.
-			hn, err := evalengine.ToUint64(row[1])
+			hn, err := row[1].ToCastUint64()
 			if err != nil {
 				destinations = append(destinations, key.DestinationNone{})
 				continue

@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/sqltypes"
@@ -141,7 +143,7 @@ type Streamer struct {
 	extractPK       bool
 
 	clientCharset    *binlogdatapb.Charset
-	startPos         mysql.Position
+	startPos         replication.Position
 	timestamp        int64
 	sendTransaction  sendTransactionFunc
 	usePreviousGTIDs bool
@@ -157,7 +159,7 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(cp dbconfigs.Connector, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(cp dbconfigs.Connector, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos replication.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		cp:              cp,
 		se:              se,
@@ -245,10 +247,10 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
 // If the context is done, returns ctx.Err().
-func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent, errs <-chan error) (mysql.Position, error) {
+func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent, errs <-chan error) (replication.Position, error) {
 	var statements []FullBinlogStatement
 	var format mysql.BinlogFormat
-	var gtid mysql.GTID
+	var gtid replication.GTID
 	var pos = bls.startPos
 	var autocommit = true
 	var err error
@@ -273,7 +275,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		if int64(timestamp) >= bls.timestamp {
 			eventToken := &querypb.EventToken{
 				Timestamp: int64(timestamp),
-				Position:  mysql.EncodePosition(pos),
+				Position:  replication.EncodePosition(pos),
 			}
 			if err = bls.sendTransaction(eventToken, statements); err != nil {
 				if err == io.EOF {
@@ -347,7 +349,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
 			oldpos := pos
-			pos = mysql.AppendGTID(pos, gtid)
+			pos = replication.AppendGTID(pos, gtid)
 			// If the event is received outside of a transaction, it must
 			// be sent. Otherwise, it will get lost and the targets will go out
 			// of sync.
@@ -362,7 +364,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
-			pos = mysql.AppendGTID(pos, gtid)
+			pos = replication.AppendGTID(pos, gtid)
 			if hasBegin {
 				begin()
 			}

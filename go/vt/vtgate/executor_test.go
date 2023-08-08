@@ -35,10 +35,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
@@ -50,6 +49,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -978,8 +978,8 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show warnings"
 	session.Warnings = []*querypb.QueryWarning{
-		{Code: uint32(mysql.ERBadTable), Message: "bad table"},
-		{Code: uint32(mysql.EROutOfResources), Message: "ks/-40: query timed out"},
+		{Code: uint32(sqlerror.ERBadTable), Message: "bad table"},
+		{Code: uint32(sqlerror.EROutOfResources), Message: "ks/-40: query timed out"},
 	}
 	qr, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 	require.NoError(t, err)
@@ -991,8 +991,8 @@ func TestExecutorShow(t *testing.T) {
 		},
 
 		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(uint32(mysql.ERBadTable)), sqltypes.NewVarChar("bad table")},
-			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(uint32(mysql.EROutOfResources)), sqltypes.NewVarChar("ks/-40: query timed out")},
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(uint32(sqlerror.ERBadTable)), sqltypes.NewVarChar("bad table")},
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(uint32(sqlerror.EROutOfResources)), sqltypes.NewVarChar("ks/-40: query timed out")},
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -2074,6 +2074,9 @@ func TestExecutorClearsWarnings(t *testing.T) {
 
 // TestServingKeyspaces tests that the dual queries are routed to the correct keyspaces from the list of serving keyspaces.
 func TestServingKeyspaces(t *testing.T) {
+	buffer.EnableBuffering()
+	defer buffer.DisableBuffering()
+
 	executor, sbc1, _, sbclookup := createExecutorEnv()
 	executor.pv = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
