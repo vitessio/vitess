@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -741,7 +740,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
 	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
-	gotAcked, _ := evalengine.ToInt64(bvv)
+	gotAcked, _ := bvv.ToCastInt64()
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)

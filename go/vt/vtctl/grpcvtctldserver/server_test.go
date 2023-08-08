@@ -27,6 +27,7 @@ import (
 	"time"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/mysql/replication"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -913,6 +914,72 @@ func TestBackupShard(t *testing.T) {
 				Keyspace:     "ks",
 				Shard:        "-",
 				AllowPrimary: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+			},
+		},
+		{
+			name: "incremental-from-pos",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000100": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Position: "some-position",
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							ReplicationLagSeconds: 0,
+						},
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:           "ks",
+				Shard:              "-",
+				IncrementalFromPos: "auto",
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
@@ -3442,7 +3509,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 					},
 					"zone1-0000000200": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -6247,6 +6314,21 @@ func TestPlannedReparentShard(t *testing.T) {
 							Position: "primary-demotion position",
 						},
 						Error: nil,
+					},
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {

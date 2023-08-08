@@ -93,6 +93,10 @@ func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) er
 	panic("implement me")
 }
 
+func (t *noopVCursor) ThrottleApp(ctx context.Context, throttleAppRule *topodatapb.ThrottledAppRule) error {
+	panic("implement me")
+}
+
 func (t *noopVCursor) ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	panic("implement me")
 }
@@ -152,6 +156,14 @@ func (t *noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t *noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetMigrationContext(migrationContext string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetMigrationContext() string {
 	panic("implement me")
 }
 

@@ -594,7 +594,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		var ws builtinWeightString
 		var err error
 
-		ws.String, err = ast.translateExpr(call.Expr)
+		ws.Expr, err = ast.translateExpr(call.Expr)
 		if err != nil {
 			return nil, err
 		}

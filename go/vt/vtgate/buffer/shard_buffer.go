@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
 
 	"vitess.io/vitess/go/vt/log"
@@ -476,11 +478,12 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 	// Entry was already removed. Keep the queue as it is.
 }
 
-func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillServing bool) {
+func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillServing bool, keyspaceEvent *discovery.KeyspaceEvent) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.Infof("disruption in shard %s/%s resolved (serving: %v)", sb.keyspace, sb.shard, stillServing)
+	log.Infof("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
+		sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState)
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
 		if sb.currentPrimary != nil {
@@ -488,11 +491,26 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 		}
 		sb.currentPrimary = alias
 	}
-	if stillServing {
-		sb.stopBufferingLocked(stopFailoverEndDetected, "a primary promotion has been detected")
-	} else {
-		sb.stopBufferingLocked(stopShardMissing, "the keyspace has been resharded")
+	var reason stopReason
+	var msg string
+
+	// heuristically determine the reason why vtgate is currently buffering
+	moveTablesSwitched := false
+	if keyspaceEvent.MoveTablesState.State == discovery.MoveTablesSwitched {
+		moveTablesSwitched = true
 	}
+	switch {
+	case moveTablesSwitched:
+		reason = stopMoveTablesSwitchingTraffic
+		msg = stopMoveTablesSwitchingTrafficMessage
+	case stillServing:
+		reason = stopFailoverEndDetected
+		msg = stopFailoverEndDetectedMessage
+	default:
+		reason = stopShardMissing
+		msg = stopShardMissingMessage
+	}
+	sb.stopBufferingLocked(reason, msg)
 }
 
 func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias) {
@@ -569,7 +587,8 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	if sb.mode == bufferModeDryRun {
 		msg = "Dry-run: Would have stopped buffering"
 	}
-	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
+	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.",
+		msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
 
 	var clientEntryError error
 	if reason == stopShardMissing {

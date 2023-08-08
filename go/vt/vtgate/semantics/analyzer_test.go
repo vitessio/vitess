@@ -35,11 +35,11 @@ var T0 TableSet
 var (
 	// Just here to make outputs more readable
 	None = EmptyTableSet()
-	T1   = SingleTableSet(0)
-	T2   = SingleTableSet(1)
-	T3   = SingleTableSet(2)
-	T4   = SingleTableSet(3)
-	T5   = SingleTableSet(4)
+	TS0  = SingleTableSet(0)
+	TS1  = SingleTableSet(1)
+	TS2  = SingleTableSet(2)
+	TS3  = SingleTableSet(3)
+	TS4  = SingleTableSet(4)
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -68,8 +68,8 @@ func TestBindingSingleTablePositive(t *testing.T) {
 			assert.Equal(t, SingleTableSet(0), ts)
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
-			assert.Equal(t, T1, recursiveDeps, query)
-			assert.Equal(t, T1, semTable.DirectDeps(extract(sel, 0)), query)
+			assert.Equal(t, TS0, recursiveDeps, query)
+			assert.Equal(t, TS0, semTable.DirectDeps(extract(sel, 0)), query)
 			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
@@ -105,7 +105,7 @@ func TestBindingSingleAliasedTablePositive(t *testing.T) {
 			assert.Equal(t, SingleTableSet(0), ts)
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
-			require.Equal(t, T1, recursiveDeps, query)
+			require.Equal(t, TS0, recursiveDeps, query)
 			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
@@ -163,35 +163,35 @@ func TestBindingMultiTablePositive(t *testing.T) {
 	}
 	queries := []testCase{{
 		query:          "select t.col from t, s",
-		deps:           T1,
+		deps:           TS0,
 		numberOfTables: 1,
 	}, {
 		query:          "select s.col from t join s",
-		deps:           T2,
+		deps:           TS1,
 		numberOfTables: 1,
 	}, {
 		query:          "select max(t.col+s.col) from t, s",
-		deps:           MergeTableSets(T1, T2),
+		deps:           MergeTableSets(TS0, TS1),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(t.col+s.col) from t join s",
-		deps:           MergeTableSets(T1, T2),
+		deps:           MergeTableSets(TS0, TS1),
 		numberOfTables: 2,
 	}, {
 		query:          "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
-		deps:           MergeTableSets(T1, T2, T3, T5),
+		deps:           MergeTableSets(TS0, TS1, TS2, TS4),
 		numberOfTables: 4,
 		// }, {
 		// TODO: move to subquery
 		// make sure that we don't let sub-query dependencies leak out by mistake
 		// query: "select t.col + (select 42 from s) from t",
-		// deps:  T1,
+		// deps:  TS0,
 		// }, {
 		// 	query: "select (select 42 from s where r.id = s.id) from r",
-		// 	deps:  T1 | T2,
+		// 	deps:  TS0 | TS1,
 	}, {
 		query:          "select u1.a + u2.a from u1, u2",
-		deps:           MergeTableSets(T1, T2),
+		deps:           MergeTableSets(TS0, TS1),
 		numberOfTables: 2,
 	}}
 	for _, query := range queries {
@@ -213,19 +213,19 @@ func TestBindingMultiAliasedTablePositive(t *testing.T) {
 	}
 	queries := []testCase{{
 		query:          "select X.col from t as X, s as S",
-		deps:           T1,
+		deps:           TS0,
 		numberOfTables: 1,
 	}, {
 		query:          "select X.col+S.col from t as X, s as S",
-		deps:           MergeTableSets(T1, T2),
+		deps:           MergeTableSets(TS0, TS1),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(X.col+S.col) from t as X, s as S",
-		deps:           MergeTableSets(T1, T2),
+		deps:           MergeTableSets(TS0, TS1),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(X.col+s.col) from t as X, s",
-		deps:           MergeTableSets(T1, T2),
+		deps:           MergeTableSets(TS0, TS1),
 		numberOfTables: 2,
 	}}
 	for _, query := range queries {
@@ -487,13 +487,13 @@ func TestScopeForSubqueries(t *testing.T) {
 	}{
 		{
 			sql:  `select t.col1, (select t.col2 from z as t) from x as t`,
-			deps: T2,
+			deps: TS1,
 		}, {
 			sql:  `select t.col1, (select t.col2 from z) from x as t`,
-			deps: T1,
+			deps: TS0,
 		}, {
 			sql:  `select t.col1, (select (select z.col2 from y) from z) from x as t`,
-			deps: T2,
+			deps: TS1,
 		}, {
 			sql:  `select t.col1, (select (select y.col2 from y) from z) from x as t`,
 			deps: None,
@@ -502,7 +502,7 @@ func TestScopeForSubqueries(t *testing.T) {
 			deps: None,
 		}, {
 			sql:  `select t.col1, (select id from t) from x as t`,
-			deps: T2,
+			deps: TS1,
 		},
 	}
 	for _, tc := range tcases {
@@ -615,22 +615,22 @@ func TestSubqueryOrderByBinding(t *testing.T) {
 		expected TableSet
 	}{{
 		query:    "select * from user u where exists (select * from user order by col)",
-		expected: T2,
+		expected: TS1,
 	}, {
 		query:    "select * from user u where exists (select * from user order by user.col)",
-		expected: T2,
+		expected: TS1,
 	}, {
 		query:    "select * from user u where exists (select * from user order by u.col)",
-		expected: T1,
+		expected: TS0,
 	}, {
 		query:    "select * from dbName.user as u where exists (select * from dbName.user order by u.col)",
-		expected: T1,
+		expected: TS0,
 	}, {
 		query:    "select * from dbName.user where exists (select * from otherDb.user order by dbName.user.col)",
-		expected: T1,
+		expected: TS0,
 	}, {
 		query:    "select id from dbName.t1 where exists (select * from dbName.t2 order by dbName.t1.id)",
-		expected: T1,
+		expected: TS0,
 	}}
 
 	for _, tc := range queries {
@@ -655,52 +655,52 @@ func TestOrderByBindingTable(t *testing.T) {
 		deps TableSet
 	}{{
 		"select col from tabl order by col",
-		T1,
+		TS0,
 	}, {
 		"select tabl.col from d.tabl order by col",
-		T1,
+		TS0,
 	}, {
 		"select d.tabl.col from d.tabl order by col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl order by tabl.col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl order by d.tabl.col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl order by 1",
-		T1,
+		TS0,
 	}, {
 		"select col as c from tabl order by c",
-		T1,
+		TS0,
 	}, {
 		"select 1 as c from tabl order by c",
 		T0,
 	}, {
 		"select name, name from t1, t2 order by name",
-		T2,
+		TS1,
 	}, {
 		"(select id from t1) union (select uid from t2) order by id",
-		MergeTableSets(T1, T2),
+		MergeTableSets(TS0, TS1),
 	}, {
 		"select id from t1 union (select uid from t2) order by 1",
-		MergeTableSets(T1, T2),
+		MergeTableSets(TS0, TS1),
 	}, {
 		"select id from t1 union select uid from t2 union (select name from t) order by 1",
-		MergeTableSets(T1, T2, T3),
+		MergeTableSets(TS0, TS1, TS2),
 	}, {
 		"select a.id from t1 as a union (select uid from t2) order by 1",
-		MergeTableSets(T1, T2),
+		MergeTableSets(TS0, TS1),
 	}, {
 		"select b.id as a from t1 as b union (select uid as c from t2) order by 1",
-		MergeTableSets(T1, T2),
+		MergeTableSets(TS0, TS1),
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
-		MergeTableSets(T1, T2, T4),
+		MergeTableSets(TS0, TS1, TS3),
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
-		MergeTableSets(T1, T2, T4),
+		MergeTableSets(TS0, TS1, TS3),
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -727,49 +727,49 @@ func TestGroupByBinding(t *testing.T) {
 		deps TableSet
 	}{{
 		"select col from tabl group by col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl group by tabl.col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl group by d.tabl.col",
-		T1,
+		TS0,
 	}, {
 		"select tabl.col as x from tabl group by x",
-		T1,
+		TS0,
 	}, {
 		"select tabl.col as x from tabl group by col",
-		T1,
+		TS0,
 	}, {
 		"select d.tabl.col as x from tabl group by x",
-		T1,
+		TS0,
 	}, {
 		"select d.tabl.col as x from tabl group by col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl group by 1",
-		T1,
+		TS0,
 	}, {
 		"select col as c from tabl group by c",
-		T1,
+		TS0,
 	}, {
 		"select 1 as c from tabl group by c",
 		T0,
 	}, {
 		"select t1.id from t1, t2 group by id",
-		T1,
+		TS0,
 	}, {
 		"select id from t, t1 group by id",
-		T2,
+		TS1,
 	}, {
 		"select id from t, t1 group by id",
-		T2,
+		TS1,
 	}, {
 		"select a.id from t as a, t1 group by id",
-		T1,
+		TS0,
 	}, {
 		"select a.id from t, t1 as a group by id",
-		T2,
+		TS1,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -788,43 +788,43 @@ func TestHavingBinding(t *testing.T) {
 		deps TableSet
 	}{{
 		"select col from tabl having col = 1",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl having tabl.col = 1",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl having d.tabl.col = 1",
-		T1,
+		TS0,
 	}, {
 		"select tabl.col as x from tabl having x = 1",
-		T1,
+		TS0,
 	}, {
 		"select tabl.col as x from tabl having col",
-		T1,
+		TS0,
 	}, {
 		"select col from tabl having 1 = 1",
 		T0,
 	}, {
 		"select col as c from tabl having c = 1",
-		T1,
+		TS0,
 	}, {
 		"select 1 as c from tabl having c = 1",
 		T0,
 	}, {
 		"select t1.id from t1, t2 having id = 1",
-		T1,
+		TS0,
 	}, {
 		"select t.id from t, t1 having id = 1",
-		T1,
+		TS0,
 	}, {
 		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
-		MergeTableSets(T1, T2),
+		MergeTableSets(TS0, TS1),
 	}, {
 		"select t.id, sum(t2.name) as a from t, t2 group by t.id having a = 1",
-		T2,
+		TS1,
 	}, {
 		sql:  "select u2.a, u1.a from u1, u2 having u2.a = 2",
-		deps: T2,
+		deps: TS1,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -854,8 +854,8 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 
 	d1 := semTable.RecursiveDeps(extract(sel1, 0))
 	d2 := semTable.RecursiveDeps(extract(sel2, 0))
-	assert.Equal(t, T1, d1)
-	assert.Equal(t, T2, d2)
+	assert.Equal(t, TS0, d1)
+	assert.Equal(t, TS1, d2)
 }
 
 func TestUnionOrderByRewrite(t *testing.T) {
@@ -957,8 +957,8 @@ func TestUnionWithOrderBy(t *testing.T) {
 
 	d1 := semTable.RecursiveDeps(extract(sel1, 0))
 	d2 := semTable.RecursiveDeps(extract(sel2, 0))
-	assert.Equal(t, T1, d1)
-	assert.Equal(t, T2, d2)
+	assert.Equal(t, TS0, d1)
+	assert.Equal(t, TS1, d2)
 }
 
 func TestScopingWDerivedTables(t *testing.T) {
@@ -970,31 +970,31 @@ func TestScopingWDerivedTables(t *testing.T) {
 	}{
 		{
 			query:                "select id from (select x as id from user) as t",
-			recursiveExpectation: T1,
-			expectation:          T2,
+			recursiveExpectation: TS0,
+			expectation:          TS1,
 		}, {
 			query:                "select id from (select foo as id from user) as t",
-			recursiveExpectation: T1,
-			expectation:          T2,
+			recursiveExpectation: TS0,
+			expectation:          TS1,
 		}, {
 			query:                "select id from (select foo as id from (select x as foo from user) as c) as t",
-			recursiveExpectation: T1,
-			expectation:          T3,
+			recursiveExpectation: TS0,
+			expectation:          TS2,
 		}, {
 			query:                "select t.id from (select foo as id from user) as t",
-			recursiveExpectation: T1,
-			expectation:          T2,
+			recursiveExpectation: TS0,
+			expectation:          TS1,
 		}, {
 			query:        "select t.id2 from (select foo as id from user) as t",
 			errorMessage: "column 't.id2' not found",
 		}, {
 			query:                "select id from (select 42 as id) as t",
 			recursiveExpectation: T0,
-			expectation:          T2,
+			expectation:          TS1,
 		}, {
 			query:                "select t.id from (select 42 as id) as t",
 			recursiveExpectation: T0,
-			expectation:          T2,
+			expectation:          TS1,
 		}, {
 			query:        "select ks.t.id from (select 42 as id) as t",
 			errorMessage: "column 'ks.t.id' not found",
@@ -1003,24 +1003,24 @@ func TestScopingWDerivedTables(t *testing.T) {
 			errorMessage: "Duplicate column name 'id'",
 		}, {
 			query:                "select t.baz = 1 from (select id as baz from user) as t",
-			expectation:          T2,
-			recursiveExpectation: T1,
+			expectation:          TS1,
+			recursiveExpectation: TS0,
 		}, {
 			query:                "select t.id from (select * from user, music) as t",
-			expectation:          T3,
-			recursiveExpectation: MergeTableSets(T1, T2),
+			expectation:          TS2,
+			recursiveExpectation: MergeTableSets(TS0, TS1),
 		}, {
 			query:                "select t.id from (select * from user, music) as t order by t.id",
-			expectation:          T3,
-			recursiveExpectation: MergeTableSets(T1, T2),
+			expectation:          TS2,
+			recursiveExpectation: MergeTableSets(TS0, TS1),
 		}, {
 			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
-			expectation:          T2,
-			recursiveExpectation: T1,
+			expectation:          TS1,
+			recursiveExpectation: TS0,
 		}, {
 			query:                "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
-			expectation:          T4,
-			recursiveExpectation: T2,
+			expectation:          TS3,
+			recursiveExpectation: TS1,
 		}, {
 			query:        "select uu.test from (select id from t1) uu",
 			errorMessage: "column 'uu.test' not found",
@@ -1032,8 +1032,8 @@ func TestScopingWDerivedTables(t *testing.T) {
 			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			expectation:          T2,
-			recursiveExpectation: T1,
+			expectation:          TS1,
+			recursiveExpectation: TS0,
 		}, {
 			query:                "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
 			expectation:          T0,
@@ -1064,6 +1064,48 @@ func TestScopingWDerivedTables(t *testing.T) {
 	}
 }
 
+func TestJoinPredicateDependencies(t *testing.T) {
+	// create table t(<no column info>)
+	// create table t1(id bigint)
+	// create table t2(uid bigint, name varchar(255))
+
+	queries := []struct {
+		query           string
+		recursiveExpect TableSet
+		directExpect    TableSet
+	}{{
+		query:           "select 1 from t1 join t2 on t1.id = t2.uid",
+		recursiveExpect: MergeTableSets(TS0, TS1),
+		directExpect:    MergeTableSets(TS0, TS1),
+	}, {
+		query:           "select 1 from (select * from t1) x join t2 on x.id = t2.uid",
+		recursiveExpect: MergeTableSets(TS0, TS2),
+		directExpect:    MergeTableSets(TS1, TS2),
+	}, {
+		query:           "select 1 from (select id from t1) x join t2 on x.id = t2.uid",
+		recursiveExpect: MergeTableSets(TS0, TS2),
+		directExpect:    MergeTableSets(TS1, TS2),
+	}, {
+		query:           "select 1 from (select id from t1 union select id from t) x join t2 on x.id = t2.uid",
+		recursiveExpect: MergeTableSets(TS0, TS1, TS3),
+		directExpect:    MergeTableSets(TS2, TS3),
+	}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse, "user", fakeSchemaInfo())
+			require.NoError(t, err)
+
+			sel := parse.(*sqlparser.Select)
+			expr := sel.From[0].(*sqlparser.JoinTableExpr).Condition.On
+			assert.Equal(t, query.recursiveExpect, st.RecursiveDeps(expr), "RecursiveDeps")
+			assert.Equal(t, query.directExpect, st.DirectDeps(expr), "DirectDeps")
+		})
+	}
+}
+
 func TestDerivedTablesOrderClause(t *testing.T) {
 	queries := []struct {
 		query                string
@@ -1071,40 +1113,40 @@ func TestDerivedTablesOrderClause(t *testing.T) {
 		expectation          TableSet
 	}{{
 		query:                "select 1 from (select id from user) as t order by id",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select id from (select id from user) as t order by id",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select id from (select id from user) as t order by t.id",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select id as foo from (select id from user) as t order by foo",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select bar from (select id as bar from user) as t order by bar",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select bar as foo from (select id as bar from user) as t order by bar",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select bar as foo from (select id as bar from user) as t order by foo",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}, {
 		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
-		recursiveExpectation: T1,
-		expectation:          T2,
+		recursiveExpectation: TS0,
+		expectation:          TS1,
 	}}
 	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
 	for _, query := range queries {
@@ -1132,13 +1174,13 @@ func TestScopingWComplexDerivedTables(t *testing.T) {
 	}{
 		{
 			query:            "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			rightExpectation: T1,
-			leftExpectation:  T1,
+			rightExpectation: TS0,
+			leftExpectation:  TS0,
 		},
 		{
 			query:            "select 1 from user.user uu where exists (select 1 from user.user as uu where exists (select 1 from (select 1 from user.t1) uu where uu.user_id = uu.id))",
-			rightExpectation: T2,
-			leftExpectation:  T2,
+			rightExpectation: TS1,
+			leftExpectation:  TS1,
 		},
 	}
 	for _, query := range queries {
@@ -1174,12 +1216,12 @@ func TestScopingWVindexTables(t *testing.T) {
 	}{
 		{
 			query:                "select id from user_index where id = 1",
-			recursiveExpectation: T1,
-			expectation:          T1,
+			recursiveExpectation: TS0,
+			expectation:          TS0,
 		}, {
 			query:                "select u.id + t.id from t as t join user_index as u where u.id = 1 and u.id = t.id",
-			recursiveExpectation: MergeTableSets(T1, T2),
-			expectation:          MergeTableSets(T1, T2),
+			recursiveExpectation: MergeTableSets(TS0, TS1),
+			expectation:          MergeTableSets(TS0, TS1),
 		},
 	}
 	for _, query := range queries {
@@ -1536,6 +1578,9 @@ var ks3 = &vindexes.Keyspace{
 	Sharded: true,
 }
 
+// create table t(<no column info>)
+// create table t1(id bigint)
+// create table t2(uid bigint, name varchar(255))
 func fakeSchemaInfo() *FakeSI {
 	cols1 := []vindexes.Column{{
 		Name: sqlparser.NewIdentifierCI("id"),

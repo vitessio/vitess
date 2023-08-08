@@ -33,8 +33,7 @@ import (
 )
 
 // fakeVTGateService has the server side of this fake
-type fakeVTGateService struct {
-}
+type fakeVTGateService struct{}
 
 // queryExecute contains all the fields we use to test Execute
 type queryExecute struct {
@@ -280,6 +279,20 @@ var execMap = map[string]struct {
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
 			TargetString: "@primary",
+		},
+	},
+	"use @rdonly": {
+		execQuery: &queryExecute{
+			SQL: "use @rdonly",
+			Session: &vtgatepb.Session{
+				TargetString: "@primary",
+				Autocommit:   true,
+			},
+		},
+		result: &sqltypes.Result{},
+		session: &vtgatepb.Session{
+			TargetString: "@rdonly",
+			SessionUUID:  "1111",
 		},
 	},
 }

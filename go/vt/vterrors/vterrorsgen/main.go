@@ -22,7 +22,7 @@ import (
 	"strings"
 	"text/template"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -44,8 +44,8 @@ const (
 func main() {
 	t := template.New("template")
 	t.Funcs(map[string]any{
-		"ConvertStateToMySQLErrorCode": mysql.ConvertStateToMySQLErrorCode,
-		"ConvertStateToMySQLState":     mysql.ConvertStateToMySQLState,
+		"ConvertStateToMySQLErrorCode": sqlerror.ConvertStateToMySQLErrorCode,
+		"ConvertStateToMySQLState":     sqlerror.ConvertStateToMySQLState,
 		"FormatError": func(err error) string {
 			s := err.Error()
 			return strings.TrimSpace(strings.Join(strings.Split(s, ":")[1:], ":"))

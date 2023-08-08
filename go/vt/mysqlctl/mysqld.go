@@ -42,6 +42,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -575,7 +577,6 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 // If input is not nil, pipe it to the command's stdin.
 func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, output string, err error) {
 	cmdPath, _ := exec.LookPath(name)
-	log.Infof("execCmd: %v %v %v", name, cmdPath, args)
 
 	cmd = exec.Command(cmdPath, args...)
 	cmd.Env = env
@@ -586,10 +587,9 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 	out, err := cmd.CombinedOutput()
 	output = string(out)
 	if err != nil {
-		log.Infof("execCmd: %v failed: %v", name, err)
-		err = fmt.Errorf("%v: %v, output: %v", name, err, output)
+		log.Errorf("execCmd: %v failed: %v", name, err)
+		err = fmt.Errorf("%v: %w, output: %v", name, err, output)
 	}
-	log.Infof("execCmd: %v output: %v", name, output)
 	return cmd, output, err
 }
 
@@ -1246,7 +1246,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		log.Infof("ApplyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(false)
 		if err != nil {
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
 				log.Errorf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err)
@@ -1362,6 +1362,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		}
 		scanner := bufio.NewScanner(pipe)
 		scanComplete := make(chan error)
+		intentionalKill := false
 		scan := func() {
 			defer close(scanComplete)
 			// Read line by line and process it
@@ -1378,6 +1379,10 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 					matchFound = true
 				}
 				if found && stopAtFirst {
+					// Found the first timestamp and it's all we need. We won't scan any further and so we should also
+					// kill mysqlbinlog (otherwise it keeps waiting until we've read the entire pipe).
+					intentionalKill = true
+					mysqlbinlogCmd.Process.Kill()
 					return
 				}
 			}
@@ -1386,7 +1391,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			return matchedTime, false, err
 		}
 		go scan()
-		if err := mysqlbinlogCmd.Wait(); err != nil {
+		if err := mysqlbinlogCmd.Wait(); err != nil && !intentionalKill {
 			return matchedTime, false, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
 		}
 		if err := <-scanComplete; err != nil {

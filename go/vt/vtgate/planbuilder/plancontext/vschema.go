@@ -55,7 +55,7 @@ type VSchema interface {
 	PlannerWarning(message string)
 
 	// ForeignKeyMode returns the foreign_key flag value
-	ForeignKeyMode() string
+	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 
 	// GetVSchema returns the latest cached vindexes.VSchema
 	GetVSchema() *vindexes.VSchema

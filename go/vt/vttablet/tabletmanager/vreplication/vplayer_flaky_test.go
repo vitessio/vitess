@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	"vitess.io/vitess/go/vt/vttablet"
@@ -34,7 +35,6 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -1780,13 +1780,13 @@ func TestGTIDCompress(t *testing.T) {
 			require.NotNil(t, qr)
 			require.Equal(t, 1, len(qr.Rows))
 			gotGTID := qr.Rows[0][0].ToString()
-			pos, err := mysql.DecodePosition(gotGTID)
+			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
 				require.True(t, pos.IsZero())
 				pos, err = binlogplayer.DecodePosition(gotGTID)
 				require.NoError(t, err)
 				require.NotNil(t, pos)
-				tpos, err := mysql.DecodePosition(tCase.gtid)
+				tpos, err := replication.DecodePosition(tCase.gtid)
 				require.NoError(t, err)
 				require.Equal(t, tpos.String(), pos.String())
 			} else {

@@ -17,7 +17,9 @@ limitations under the License.
 package discovery
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"sort"
 	"strings"
@@ -25,20 +27,16 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"context"
-
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type TabletPickerCellPreference int
@@ -280,13 +278,12 @@ func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo
 	return candidates
 }
 
-// PickForStreaming picks an available tablet.
+// PickForStreaming picks a tablet that is healthy and serving.
 // Selection is based on CellPreference.
 // See prioritizeTablets for prioritization logic.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
-	rand.Seed(time.Now().UnixNano())
-	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found
-	// or the context is canceled
+	// Keep trying at intervals (tabletPickerRetryDelay) until a healthy
+	// serving tablet is found or the context is cancelled.
 	for {
 		select {
 		case <-ctx.Done():
@@ -319,15 +316,15 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		} else if tp.inOrder {
 			candidates = tp.orderByTabletType(candidates)
 		} else {
-			// Randomize candidates
+			// Randomize candidates.
 			rand.Shuffle(len(candidates), func(i, j int) {
 				candidates[i], candidates[j] = candidates[j], candidates[i]
 			})
 		}
 		if len(candidates) == 0 {
-			// if no candidates were found, sleep and try again
+			// If no viable candidates were found, sleep and try again.
 			tp.incNoTabletFoundStat()
-			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %.3f seconds",
+			log.Infof("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %.3f seconds.",
 				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0)
 			timer := time.NewTimer(GetTabletPickerRetryDelay())
 			select {
@@ -338,58 +335,49 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
-		for _, ti := range candidates {
-			// try to connect to tablet
-			if conn, err := tabletconn.GetDialer()(ti.Tablet, true); err == nil {
-				// OK to use ctx here because it is not actually used by the underlying Close implementation
-				_ = conn.Close(ctx)
-				log.Infof("tablet picker found tablet %s", ti.Tablet.String())
-				return ti.Tablet, nil
-			}
-			// err found
-			log.Warningf("unable to connect to tablet for alias %v", ti.Alias)
-		}
-		// Got here? Means we iterated all tablets and did not find a healthy one
-		tp.incNoTabletFoundStat()
+		log.Infof("Tablet picker found a healthy serving tablet for streaming: %s", candidates[0].Tablet.String())
+		return candidates[0].Tablet, nil
 	}
 }
 
-// GetMatchingTablets returns a list of TabletInfo for tablets
-// that match the cells, keyspace, shard and tabletTypes for this TabletPicker
+// GetMatchingTablets returns a list of TabletInfo for healthy
+// serving tablets that match the cells, keyspace, shard and
+// tabletTypes for this TabletPicker.
 func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletInfo {
-	// Special handling for PRIMARY tablet type
-	// Since there is only one primary, we ignore cell and find the primary
+	// Special handling for PRIMARY tablet type: since there is only
+	// one primary per shard, we ignore cell and find the primary.
 	aliases := make([]*topodatapb.TabletAlias, 0)
 	if len(tp.tabletTypes) == 1 && tp.tabletTypes[0] == topodatapb.TabletType_PRIMARY {
 		shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 		si, err := tp.ts.GetShard(shortCtx, tp.keyspace, tp.shard)
 		if err != nil {
-			log.Errorf("error getting shard %s/%s: %s", tp.keyspace, tp.shard, err.Error())
+			log.Errorf("Error getting shard %s/%s: %v", tp.keyspace, tp.shard, err)
 			return nil
 		}
 		aliases = append(aliases, si.PrimaryAlias)
 	} else {
 		actualCells := make([]string, 0)
 		for _, cell := range tp.cells {
-			// check if cell is actually an alias
-			// non-blocking read so that this is fast
+			// Check if cell is actually an alias; using a
+			// non-blocking read so that this is fast.
 			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 			_, err := tp.ts.GetCellInfo(shortCtx, cell, false)
 			if err != nil {
-				// not a valid cell, check whether it is a cell alias
+				// Not a valid cell, check whether it is a cell alias...
 				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()
 				alias, err := tp.ts.GetCellsAlias(shortCtx, cell, false)
-				// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
+				// If we get an error, either cellAlias doesn't exist or
+				// it isn't a cell alias at all; ignore and continue.
 				if err == nil {
 					actualCells = append(actualCells, alias.Cells...)
 				} else {
 					log.Infof("Unable to resolve cell %s, ignoring", cell)
 				}
 			} else {
-				// valid cell, add it to our list
+				// Valid cell, add it to our list.
 				actualCells = append(actualCells, cell)
 			}
 		}
@@ -397,12 +385,11 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 		for _, cell := range actualCells {
 			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
-			// match cell, keyspace and shard
+			// Match cell, keyspace, and shard.
 			sri, err := tp.ts.GetShardReplication(shortCtx, cell, tp.keyspace, tp.shard)
 			if err != nil {
 				continue
 			}
-
 			for _, node := range sri.Nodes {
 				aliases = append(aliases, node.TabletAlias)
 			}
@@ -412,33 +399,47 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 	if len(aliases) == 0 {
 		return nil
 	}
+
 	shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases)
 	if err != nil {
-		log.Warningf("error fetching tablets from topo: %v", err)
-		// If we get a partial result we can still use it, otherwise return
+		log.Warningf("Error fetching tablets from topo: %v", err)
+		// If we get a partial result we can still use it, otherwise return.
 		if len(tabletMap) == 0 {
 			return nil
 		}
 	}
+
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
 		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
-			// Either tablet disappeared on us, or we got a partial result (GetTabletMap ignores
-			// topo.ErrNoNode). Just log a warning
-			log.Warningf("failed to load tablet %v", tabletAlias)
+			// Either tablet disappeared on us, or we got a partial result
+			// (GetTabletMap ignores topo.ErrNoNode); just log a warning.
+			log.Warningf("Tablet picker failed to load tablet %v", tabletAlias)
 		} else if topoproto.IsTypeInList(tabletInfo.Type, tp.tabletTypes) {
-			tablets = append(tablets, tabletInfo)
+			// Try to connect to the tablet and confirm that it's usable.
+			if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
+				// Ensure that the tablet is healthy and serving.
+				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+				defer cancel()
+				if err := conn.StreamHealth(shortCtx, func(shr *querypb.StreamHealthResponse) error {
+					if shr != nil && shr.Serving && shr.RealtimeStats != nil && shr.RealtimeStats.HealthError == "" {
+						return io.EOF // End the stream
+					}
+					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")
+				}); err == nil || err == io.EOF {
+					tablets = append(tablets, tabletInfo)
+				}
+				_ = conn.Close(ctx)
+			}
 		}
 	}
 	return tablets
 }
 
 func init() {
-	// TODO(sougou): consolidate this call to be once per process.
-	rand.Seed(time.Now().UnixNano())
 	globalTPStats = newTabletPickerStats()
 }
 

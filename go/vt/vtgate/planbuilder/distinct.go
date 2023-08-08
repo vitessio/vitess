@@ -41,14 +41,6 @@ func newDistinct(source logicalPlan, checkCols []engine.CheckCol, truncateColumn
 	}
 }
 
-func newDistinctGen4Legacy(source logicalPlan, checkCols []engine.CheckCol, needToTruncate bool) logicalPlan {
-	return &distinct{
-		logicalPlanCommon: newBuilderCommon(source),
-		checkCols:         checkCols,
-		needToTruncate:    needToTruncate,
-	}
-}
-
 func (d *distinct) Primitive() engine.Primitive {
 	truncate := d.truncateColumn
 	if d.needToTruncate {

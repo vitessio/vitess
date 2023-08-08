@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -39,15 +39,15 @@ import (
 // vplayer replays binlog events by pulling them from a vstreamer.
 type vplayer struct {
 	vr        *vreplicator
-	startPos  mysql.Position
-	stopPos   mysql.Position
+	startPos  replication.Position
+	stopPos   replication.Position
 	saveStop  bool
 	copyState map[string]*sqltypes.Result
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
 
-	pos mysql.Position
+	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
 	// saving, which is on an empty commit.
 	// If nothing else happens for idleTimeout since timeLastSaved,
@@ -84,7 +84,7 @@ type vplayer struct {
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
 //
 //	This is used by the fastForward function during copying.
-func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos replication.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos
@@ -153,7 +153,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()

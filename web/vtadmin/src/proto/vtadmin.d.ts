@@ -15865,6 +15865,9 @@ export namespace topodata {
 
         /** ThrottledAppRule expires_at */
         expires_at?: (vttime.ITime|null);
+
+        /** ThrottledAppRule exempt */
+        exempt?: (boolean|null);
     }
 
     /** Represents a ThrottledAppRule. */
@@ -15884,6 +15887,9 @@ export namespace topodata {
 
         /** ThrottledAppRule expires_at. */
         public expires_at?: (vttime.ITime|null);
+
+        /** ThrottledAppRule exempt. */
+        public exempt: boolean;
 
         /**
          * Creates a new ThrottledAppRule instance using the specified properties.
@@ -19924,6 +19930,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest sql_mode */
         sql_mode?: (string|null);
+
+        /** ApplySchemaRequest batch_size */
+        batch_size?: (number|Long|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -19952,6 +19961,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest sql_mode. */
         public sql_mode: string;
+
+        /** ApplySchemaRequest batch_size. */
+        public batch_size: (number|Long);
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.
@@ -28336,6 +28348,230 @@ export namespace tabletmanagerdata {
 
         /**
          * Gets the default type url for ResetSequencesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CheckThrottlerRequest. */
+    interface ICheckThrottlerRequest {
+
+        /** CheckThrottlerRequest app_name */
+        app_name?: (string|null);
+    }
+
+    /** Represents a CheckThrottlerRequest. */
+    class CheckThrottlerRequest implements ICheckThrottlerRequest {
+
+        /**
+         * Constructs a new CheckThrottlerRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.ICheckThrottlerRequest);
+
+        /** CheckThrottlerRequest app_name. */
+        public app_name: string;
+
+        /**
+         * Creates a new CheckThrottlerRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CheckThrottlerRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.ICheckThrottlerRequest): tabletmanagerdata.CheckThrottlerRequest;
+
+        /**
+         * Encodes the specified CheckThrottlerRequest message. Does not implicitly {@link tabletmanagerdata.CheckThrottlerRequest.verify|verify} messages.
+         * @param message CheckThrottlerRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.ICheckThrottlerRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CheckThrottlerRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.CheckThrottlerRequest.verify|verify} messages.
+         * @param message CheckThrottlerRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.ICheckThrottlerRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CheckThrottlerRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CheckThrottlerRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.CheckThrottlerRequest;
+
+        /**
+         * Decodes a CheckThrottlerRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CheckThrottlerRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.CheckThrottlerRequest;
+
+        /**
+         * Verifies a CheckThrottlerRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CheckThrottlerRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CheckThrottlerRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.CheckThrottlerRequest;
+
+        /**
+         * Creates a plain object from a CheckThrottlerRequest message. Also converts values to other types if specified.
+         * @param message CheckThrottlerRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.CheckThrottlerRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CheckThrottlerRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CheckThrottlerRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CheckThrottlerResponse. */
+    interface ICheckThrottlerResponse {
+
+        /** CheckThrottlerResponse status_code */
+        status_code?: (number|null);
+
+        /** CheckThrottlerResponse value */
+        value?: (number|null);
+
+        /** CheckThrottlerResponse threshold */
+        threshold?: (number|null);
+
+        /** CheckThrottlerResponse error */
+        error?: (string|null);
+
+        /** CheckThrottlerResponse message */
+        message?: (string|null);
+
+        /** CheckThrottlerResponse recently_checked */
+        recently_checked?: (boolean|null);
+    }
+
+    /** Represents a CheckThrottlerResponse. */
+    class CheckThrottlerResponse implements ICheckThrottlerResponse {
+
+        /**
+         * Constructs a new CheckThrottlerResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.ICheckThrottlerResponse);
+
+        /** CheckThrottlerResponse status_code. */
+        public status_code: number;
+
+        /** CheckThrottlerResponse value. */
+        public value: number;
+
+        /** CheckThrottlerResponse threshold. */
+        public threshold: number;
+
+        /** CheckThrottlerResponse error. */
+        public error: string;
+
+        /** CheckThrottlerResponse message. */
+        public message: string;
+
+        /** CheckThrottlerResponse recently_checked. */
+        public recently_checked: boolean;
+
+        /**
+         * Creates a new CheckThrottlerResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CheckThrottlerResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.ICheckThrottlerResponse): tabletmanagerdata.CheckThrottlerResponse;
+
+        /**
+         * Encodes the specified CheckThrottlerResponse message. Does not implicitly {@link tabletmanagerdata.CheckThrottlerResponse.verify|verify} messages.
+         * @param message CheckThrottlerResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.ICheckThrottlerResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CheckThrottlerResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.CheckThrottlerResponse.verify|verify} messages.
+         * @param message CheckThrottlerResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.ICheckThrottlerResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CheckThrottlerResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CheckThrottlerResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.CheckThrottlerResponse;
+
+        /**
+         * Decodes a CheckThrottlerResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CheckThrottlerResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.CheckThrottlerResponse;
+
+        /**
+         * Verifies a CheckThrottlerResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CheckThrottlerResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CheckThrottlerResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.CheckThrottlerResponse;
+
+        /**
+         * Creates a plain object from a CheckThrottlerResponse message. Also converts values to other types if specified.
+         * @param message CheckThrottlerResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.CheckThrottlerResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CheckThrottlerResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CheckThrottlerResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -39202,8 +39438,8 @@ export namespace query {
         /** StreamHealthResponse serving */
         serving?: (boolean|null);
 
-        /** StreamHealthResponse tablet_externally_reparented_timestamp */
-        tablet_externally_reparented_timestamp?: (number|Long|null);
+        /** StreamHealthResponse primary_term_start_timestamp */
+        primary_term_start_timestamp?: (number|Long|null);
 
         /** StreamHealthResponse realtime_stats */
         realtime_stats?: (query.IRealtimeStats|null);
@@ -39227,8 +39463,8 @@ export namespace query {
         /** StreamHealthResponse serving. */
         public serving: boolean;
 
-        /** StreamHealthResponse tablet_externally_reparented_timestamp. */
-        public tablet_externally_reparented_timestamp: (number|Long);
+        /** StreamHealthResponse primary_term_start_timestamp. */
+        public primary_term_start_timestamp: (number|Long);
 
         /** StreamHealthResponse realtime_stats. */
         public realtime_stats?: (query.IRealtimeStats|null);
@@ -43815,6 +44051,9 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest caller_id */
         caller_id?: (vtrpc.ICallerID|null);
+
+        /** ApplySchemaRequest batch_size */
+        batch_size?: (number|Long|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -43849,6 +44088,9 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest caller_id. */
         public caller_id?: (vtrpc.ICallerID|null);
+
+        /** ApplySchemaRequest batch_size. */
+        public batch_size: (number|Long);
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.
@@ -44502,6 +44744,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
+
+        /** BackupShardRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -44527,6 +44772,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest upgrade_safe. */
         public upgrade_safe: boolean;
+
+        /** BackupShardRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

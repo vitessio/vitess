@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -26,10 +27,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -40,6 +43,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -138,6 +144,19 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		}
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
+
+	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		tme.mu.Lock()
+		defer tme.mu.Unlock()
+		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+			if ft.Tablet.Alias.Uid == tablet.Alias.Uid {
+				return ft, nil
+			}
+		}
+		return nil, nil
+	})
+	tabletconntest.SetProtocol("go.vt.wrangler.traffic_switcher_env_test", dialerName)
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -307,6 +326,19 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
+	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		tme.mu.Lock()
+		defer tme.mu.Unlock()
+		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+			if ft.Tablet.Alias.Uid == tablet.Alias.Uid {
+				return ft, nil
+			}
+		}
+		return nil, nil
+	})
+	tabletconntest.SetProtocol("go.vt.wrangler.traffic_switcher_env_test", dialerName)
+
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -451,6 +483,19 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		}
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
+
+	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		tme.mu.Lock()
+		defer tme.mu.Unlock()
+		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+			if ft.Tablet.Alias.Uid == tablet.Alias.Uid {
+				return ft, nil
+			}
+		}
+		return nil, nil
+	})
+	tabletconntest.SetProtocol("go.vt.wrangler.traffic_switcher_env_test", dialerName)
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -610,9 +655,9 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 
 func (tme *testMigraterEnv) setPrimaryPositions() {
 	for _, primary := range tme.sourcePrimaries {
-		primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTIDSet{
-				5: mysql.MariadbGTID{
+		primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+			GTIDSet: replication.MariadbGTIDSet{
+				5: replication.MariadbGTID{
 					Domain:   5,
 					Server:   456,
 					Sequence: 892,
@@ -621,9 +666,9 @@ func (tme *testMigraterEnv) setPrimaryPositions() {
 		}
 	}
 	for _, primary := range tme.targetPrimaries {
-		primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTIDSet{
-				5: mysql.MariadbGTID{
+		primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+			GTIDSet: replication.MariadbGTIDSet{
+				5: replication.MariadbGTID{
 					Domain:   5,
 					Server:   456,
 					Sequence: 893,

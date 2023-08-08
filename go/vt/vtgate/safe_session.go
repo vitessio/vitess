@@ -716,6 +716,20 @@ func (session *SafeSession) GetDDLStrategy() string {
 	return session.DDLStrategy
 }
 
+// SetMigrationContext set the migration_context setting.
+func (session *SafeSession) SetMigrationContext(migrationContext string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.MigrationContext = migrationContext
+}
+
+// GetMigrationContext returns the migration_context value.
+func (session *SafeSession) GetMigrationContext() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.MigrationContext
+}
+
 // GetSessionUUID returns the SessionUUID value.
 func (session *SafeSession) GetSessionUUID() string {
 	session.mu.Lock()

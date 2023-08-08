@@ -22,10 +22,10 @@ import (
 	"sync"
 	"testing"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -102,7 +102,7 @@ func FuzzEngine(data []byte) int {
 
 	// Fuzzer fails if this expectation is not made first:
 	dbClient.ExpectRequest(sqlparser.BuildParsedQuery("select * from %s.vreplication where db_name='db'",
-		sidecardb.GetIdentifier()).Query, &sqltypes.Result{}, nil)
+		sidecar.GetIdentifier()).Query, &sqltypes.Result{}, nil)
 	err = makeExpectations(dbClient, f)
 	if err != nil {
 		return 0

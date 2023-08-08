@@ -19,15 +19,11 @@ package sync_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
@@ -44,36 +40,17 @@ func TestWatchConfig(t *testing.T) {
 	}
 
 	writeConfig := func(tmp *os.File, a, b int) error {
-		stat, err := os.Stat(tmp.Name())
-		if err != nil {
-			return err
-		}
-
 		data, err := json.Marshal(&config{A: a, B: b})
 		if err != nil {
 			return err
 		}
 
-		err = os.WriteFile(tmp.Name(), data, stat.Mode())
-		if err != nil {
-			return err
-		}
-
-		data, err = os.ReadFile(tmp.Name())
-		if err != nil {
-			return err
-		}
-
-		var cfg config
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return err
-		}
-
-		if cfg.A != a || cfg.B != b {
-			return fmt.Errorf("config did not persist; want %+v got %+v", config{A: a, B: b}, cfg)
-		}
-
-		return nil
+		// In order to guarantee viper's watcher detects exactly one config
+		// change, we perform a write specific to the platform we're executing
+		// on.
+		//
+		// Consequently, this test only supports linux and macos for now.
+		return atomicWrite(tmp.Name(), data)
 	}
 	writeRandomConfig := func(tmp *os.File) error {
 		a, b := rand.Intn(100), rand.Intn(100)
@@ -109,19 +86,8 @@ func TestWatchConfig(t *testing.T) {
 	require.NoError(t, writeConfig(tmp, a+1, b+1))
 	<-wCh // wait for the update to finish
 
-	// temporary hack to fix flakiness where we seem to miss one update.
-	const permittedVariance = 1
-	closeEnoughTo := func(want, got int) bool {
-		if math.Abs(float64(want-got)) <= permittedVariance {
-			return true
-		}
-		log.Infof("TestWatchConfig: count not close enough: want %d, got %d, permitted variance %d",
-			want, got, permittedVariance)
-		return false
-	}
-
-	require.True(t, closeEnoughTo(a+1, v.GetInt("a")))
-	require.True(t, closeEnoughTo(b+1, v.GetInt("b")))
+	require.Equal(t, a+1, v.GetInt("a"))
+	require.Equal(t, b+1, v.GetInt("b"))
 
 	rCh <- struct{}{}
 

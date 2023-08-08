@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -47,6 +47,6 @@ func TestRandomExprWithTables(t *testing.T) {
 	}...)
 
 	seed := time.Now().UnixNano()
-	g := sqlparser.NewGenerator(seed, 3, slices2.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+	g := sqlparser.NewGenerator(seed, 3, slice.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 	g.Expression()
 }

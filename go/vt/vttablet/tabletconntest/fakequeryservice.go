@@ -655,7 +655,7 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	},
 	Serving: true,
 
-	TabletExternallyReparentedTimestamp: 1234589,
+	PrimaryTermStartTimestamp: 1234589,
 
 	RealtimeStats: &querypb.RealtimeStats{
 		CpuUsage:                      1.0,
