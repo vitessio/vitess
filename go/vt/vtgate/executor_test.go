@@ -2569,8 +2569,8 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 	ctx := context.Background()
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
 	require.NoError(t, err)
-	assert.Contains(t, sbc1.StringQueries(), "SELECT * FROM _vt.schema_migrations")
-	assert.Contains(t, sbc2.StringQueries(), "SELECT * FROM _vt.schema_migrations")
+	assert.Contains(t, sbc1.StringQueries(), "show vitess_migrations")
+	assert.Contains(t, sbc2.StringQueries(), "show vitess_migrations")
 }
 
 func TestExecutorDescHash(t *testing.T) {
