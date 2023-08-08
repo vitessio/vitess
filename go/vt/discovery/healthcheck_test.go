@@ -58,6 +58,7 @@ func testChecksum(t *testing.T, want, got int64) {
 
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
+	tabletconn.RegisterDialer("grpc", tabletDialer)
 	tabletconntest.SetProtocol("go.vt.discovery.healthcheck_test", "fake_gateway")
 	connMap = make(map[string]*fakeConn)
 	refreshInterval = time.Minute
