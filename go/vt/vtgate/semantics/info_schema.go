@@ -1671,30 +1671,22 @@ type infoSchemaWithColumns struct {
 	infoSchemaData map[string][]vindexes.Column
 }
 
-// We cache this information. If the version is changed in a test, this field also needs to be cleared
-var cacheSchemaInfo map[string][]vindexes.Column
+// We cache this information, since these are maps that are not changed
+var infoSchema57 = getInfoSchema57()
+var infoSchema80 = getInfoSchema80()
 
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {
-	if cacheSchemaInfo == nil {
-		// yes, this is slightly racy, but the worst that can happen is that we build it more times
-		// than needed. It's not going to lead to any actual issues
-		loadSchemaInfo()
-	}
-	return &infoSchemaWithColumns{inner: inner, infoSchemaData: cacheSchemaInfo}
+	return &infoSchemaWithColumns{inner: inner, infoSchemaData: loadSchemaInfo()}
 }
 
-func ClearCachedInfoSchemaInfo() {
-	cacheSchemaInfo = nil
-}
-
-func loadSchemaInfo() {
+func loadSchemaInfo() map[string][]vindexes.Column {
 	version := servenv.MySQLServerVersion()
 	if strings.HasPrefix(version, "5.7") {
-		cacheSchemaInfo = getInfoSchema57()
-	} else {
-		cacheSchemaInfo = getInfoSchema80()
+		return infoSchema57
 	}
+
+	return infoSchema80
 }
 
 // FindTableOrVindex implements the SchemaInformation interface

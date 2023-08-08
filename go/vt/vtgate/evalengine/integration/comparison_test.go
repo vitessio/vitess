@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/format"
@@ -258,7 +256,6 @@ func TestMySQL(t *testing.T) {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 
 	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
-	semantics.ClearCachedInfoSchemaInfo()
 	collationEnv = collations.NewEnvironment(conn.ServerVersion)
 	servenv.OnParse(registerFlags)
 	initTimezoneData(t, conn)

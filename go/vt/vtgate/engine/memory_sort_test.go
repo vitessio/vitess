@@ -28,14 +28,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
 	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	semantics.ClearCachedInfoSchemaInfo()
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 }
 

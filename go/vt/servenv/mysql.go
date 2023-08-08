@@ -40,7 +40,6 @@ func MySQLServerVersion() string {
 // flag. It is intended for use in tests that require a specific MySQL server
 // version (for example, collations) that cannot specify that via the command
 // line.
-// Please note that semantics.ClearCachedInfoSchemaInfo() should be called any time this method is called
 func SetMySQLServerVersionForTest(version string) {
 	mySQLServerVersion = version
 }

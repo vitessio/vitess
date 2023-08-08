@@ -104,10 +104,8 @@ func TestSystemTables57(t *testing.T) {
 	// first we move everything to use 5.7 logic
 	oldVer := servenv.MySQLServerVersion()
 	servenv.SetMySQLServerVersionForTest("5.7")
-	semantics.ClearCachedInfoSchemaInfo()
 	defer func() {
 		servenv.SetMySQLServerVersionForTest(oldVer)
-		semantics.ClearCachedInfoSchemaInfo()
 	}()
 	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 	testOutputTempDir := makeTestOutput(t)
@@ -200,10 +198,8 @@ func TestOneWith57Version(t *testing.T) {
 	// first we move everything to use 5.7 logic
 	oldVer := servenv.MySQLServerVersion()
 	servenv.SetMySQLServerVersionForTest("5.7")
-	semantics.ClearCachedInfoSchemaInfo()
 	defer func() {
 		servenv.SetMySQLServerVersionForTest(oldVer)
-		semantics.ClearCachedInfoSchemaInfo()
 	}()
 	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 
