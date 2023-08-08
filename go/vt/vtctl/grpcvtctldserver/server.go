@@ -1533,7 +1533,7 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 	combinedResults := queryResultForTabletResults(results)
 
 	resp = new(vtctldatapb.GetSchemaMigrationsResponse)
-	for _, row := range combinedResults.Rows {
+	for _, row := range combinedResults.Named().Rows {
 		var m *vtctldatapb.SchemaMigration
 		m, err = rowToSchemaMigration(row)
 		if err != nil {
