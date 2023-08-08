@@ -156,6 +156,8 @@ type (
 
 		SetDDLStrategy(string)
 		GetDDLStrategy() string
+		SetMigrationContext(string)
+		GetMigrationContext() string
 
 		GetSessionUUID() string
 
