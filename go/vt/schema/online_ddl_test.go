@@ -400,3 +400,30 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateMigrationContext(t *testing.T) {
+	tcases := []struct {
+		m           string
+		expectError bool
+	}{
+		{"", false},
+		{"abc", false},
+		{"abc-def", false},
+		{"abc-DEF", false},
+		{"abc-def-123", false},
+		{"under_score:abc-DEF-123", false},
+		{"~", true},
+		{",", true},
+		{"abc^def", true},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.m, func(t *testing.T) {
+			err := ValidateMigrationContext(tcase.m)
+			if tcase.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

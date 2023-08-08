@@ -34,6 +34,7 @@ var (
 	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
+	migrationContextValidatorRegexp   = regexp.MustCompile(`^[\w:-]*$`)
 )
 
 var (
@@ -51,6 +52,14 @@ const (
 	SchemaMigrationsTableName = "schema_migrations"
 	RevertActionStr           = "revert"
 )
+
+// ValidateMigrationContext validates that the given migration context only uses valid characters
+func ValidateMigrationContext(migrationContext string) error {
+	if migrationContextValidatorRegexp.MatchString(migrationContext) {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid characters in migration_context %v. Use alphanumeric, dash, underscore and colon only", migrationContext)
+}
 
 // when validateWalk returns true, then the child nodes are also visited
 func validateWalk(node sqlparser.SQLNode, allowForeignKeys bool) (kontinue bool, err error) {
