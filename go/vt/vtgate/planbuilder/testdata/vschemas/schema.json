@@ -602,6 +602,69 @@
           ]
         }
       }
+    },
+    "user_fk_allow": {
+      "sharded": true,
+      "foreignKeyMode": "FK_MANAGED",
+      "vindexes": {
+        "hash_vin": {
+          "type": "hash_test",
+          "owner": "user"
+        },
+        "multicolIdx": {
+          "type": "multiCol_test"
+        }
+      },
+      "tables": {
+        "multicol_tbl1": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "cola",
+                "colb",
+                "colc"
+              ],
+              "name": "multicolIdx"
+            }
+          ]
+        },
+        "multicol_tbl2": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "cola",
+                "colb",
+                "colc"
+              ],
+              "name": "multicolIdx"
+            }
+          ]
+        },
+        "tbl1": {
+          "column_vindexes": [
+            {
+              "column": "col1",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl2": {
+          "column_vindexes": [
+            {
+              "column": "col2",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl3": {
+          "column_vindexes": [
+            {
+              "column": "col3",
+              "name": "hash_vin"
+            }
+          ]
+        }
+      }
     }
   }
 }
