@@ -441,7 +441,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 	})
 }
 
-// ExecTestIncrementalBackupAndRestoreToPos runs a series of interleaved backups on two different replicas: full and incremental.
+// ExecTestIncrementalBackupOnTwoTablets runs a series of interleaved backups on two different replicas: full and incremental.
 // Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
 // one another.
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
