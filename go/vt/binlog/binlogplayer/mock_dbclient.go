@@ -37,6 +37,7 @@ type MockDBClient struct {
 	currentResult int
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
+	ignored       map[string]struct{}
 }
 
 type mockExpect struct {
@@ -56,6 +57,10 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 			"CREATE TABLE IF NOT EXISTS _vt.vreplication_log":           {},
 			"select id, type, state, message from _vt.vreplication_log": {},
 			"insert into _vt.vreplication_log":                          {},
+		},
+		// For some reason the following queries are not sent in a determinstic order.
+		ignored: map[string]struct{}{
+			"set foreign_key_checks=1": {},
 		},
 	}
 }
@@ -150,6 +155,10 @@ func (dc *MockDBClient) Close() {
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	dc.t.Helper()
 	dc.t.Logf("DBClient query: %v", query)
+
+	if _, ok := dc.ignored[query]; ok {
+		return qr, nil
+	}
 
 	for q, result := range dc.invariants {
 		if strings.Contains(query, q) {

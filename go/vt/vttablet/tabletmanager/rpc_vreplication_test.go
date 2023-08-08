@@ -62,7 +62,7 @@ const (
 	setStrictSQLMode         = "SET @@session.sql_mode='ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
 	getSQLMode               = "SELECT @@session.sql_mode AS sql_mode"
 	getFKChecks              = "select @@foreign_key_checks;"
-	disableFKChecks          = "set foreign_key_checks=1;"
+	enableFKChecks           = "set foreign_key_checks=1;"
 	sqlMode                  = "ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 	getBinlogRowImage        = "select @@binlog_row_image"
 	insertStreamsCreatedLog  = "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Stream Created', '', '%s'"
@@ -371,7 +371,7 @@ func TestMoveTables(t *testing.T) {
 			),
 			"FULL",
 		), nil)
-		ftc.vrdbClient.ExpectRequest(disableFKChecks, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(enableFKChecks, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setStrictSQLMode, &sqltypes.Result{}, nil)
 
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(insertStreamsCreatedLog, bls), &sqltypes.Result{}, nil)
