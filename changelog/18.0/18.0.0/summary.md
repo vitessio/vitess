@@ -112,10 +112,4 @@ Bullseye images will still be built and available as long as the OS build is cur
 
 Buster LTS supports will stop in June 2024, and Vitess v18.0 will be supported through October 2024. 
 To prevent supporting a deprecated buster build for several months after June 2024, we are preemptively
-removing Vitess support for MySQL 80 and Percona Docker images.
-
-The `vitess/bootstrap:mysql57` and `vitess/lite:mysql57` images are still available but will be built on Buster
-since MySQL 57 is not available on Bullseye and earlier versions of Debian. The Golang version used for those
-image will remain on `go1.20.5` as Golang does not provide a Buster image for `go1.20.6` and more recent Go versions.
-All other images will be built on Bullseye and/or Bookworm as explained in the [Bookworm added and made default](#debian-bookworm) section,
-and will continue to use the latest available Golang `go1.20` patch.
+removing Vitess support.
