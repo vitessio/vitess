@@ -351,11 +351,13 @@ func ParseFlags(cmd string) {
 	logutil.PurgeLogs()
 }
 
-// ParseFlagsForTests initializes flags but skips the filesystem args
-// and go flag related work.
-// Note: this should NOT be used outside of unit tests.
+// ParseFlagsForTests initializes flags but skips the version, filesystem
+// args and go flag related work.
+// Note: this should not be used outside of unit tests.
 func ParseFlagsForTests(cmd string) {
 	fs := GetFlagSetFor(cmd)
+	pflag.CommandLine = fs
+	pflag.Parse()
 	viperutil.BindFlags(fs)
 	loadViper(cmd)
 }
