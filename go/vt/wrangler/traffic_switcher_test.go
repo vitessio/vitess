@@ -2155,19 +2155,14 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 	// The target keyspace is sharded. Let's remove the vschema definitions so
 	// that we know the workflow creation will fail.
 	// Let's also be sure that the routing rules are empty.
-	if err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := tme.ts.SaveVSchema(ctx, "ks2", nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil)
+	require.NoError(t, err, "failed to save routing rules")
+	err = tme.ts.SaveVSchema(ctx, "ks2", nil)
+	require.NoError(t, err, "failed to save vschema")
+	err = tme.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err, "failed to rebuild serving vschema")
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
+	require.NoError(t, err, "failed to rebuild keyspace")
 
 	err = tme.wr.MoveTables(ctx, "testwf", "ks1", "ks2", "t1,t2", "cell1", "primary,replica", false, "", true, false, "", false, false, "", "", nil)
 	require.Error(t, err)
