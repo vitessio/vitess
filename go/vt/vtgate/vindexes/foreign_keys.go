@@ -146,6 +146,7 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 		switch fk.OnDelete {
 		case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
 			fks = append(fks, fk)
+			continue
 		}
 		// sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction
 		// all the actions means the same thing i.e. Restrict
@@ -159,6 +160,10 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 }
 
 func isShardScoped(pTable *Table, cTable *Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
+	if !pTable.Keyspace.Sharded {
+		return true
+	}
+
 	pPrimaryVdx := pTable.ColumnVindexes[0]
 	cPrimaryVdx := cTable.ColumnVindexes[0]
 
