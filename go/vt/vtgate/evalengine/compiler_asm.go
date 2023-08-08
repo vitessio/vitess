@@ -35,18 +35,16 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql/hex"
-
-	"vitess.io/vitess/go/mysql/icuregex"
-
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/hex"
+	"vitess.io/vitess/go/mysql/icuregex"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -2172,7 +2170,7 @@ func (asm *assembler) Fn_JSON_CONTAINS_PATH(match jsonMatch, paths []*json.Path)
 }
 
 func (asm *assembler) Fn_JSON_EXTRACT0(jp []*json.Path) {
-	multi := len(jp) > 1 || slices2.Any(jp, func(path *json.Path) bool { return path.ContainsWildcards() })
+	multi := len(jp) > 1 || slice.Any(jp, func(path *json.Path) bool { return path.ContainsWildcards() })
 
 	if multi {
 		asm.emit(func(env *ExpressionEnv) int {
