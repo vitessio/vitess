@@ -108,23 +108,50 @@ func AddPredicate(
 //
 // This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al.
 func canConvertToInner(ctx *plancontext.PlanningContext, expr sqlparser.Expr, rhs semantics.TableSet) bool {
-	isColNameFromRHS := func(e sqlparser.Expr) bool {
-		return sqlparser.IsColName(e) && ctx.SemTable.RecursiveDeps(e).IsSolvedBy(rhs)
-	}
-	switch expr := expr.(type) {
+	isRHS := func(col *sqlparser.ColName) bool { return ctx.SemTable.RecursiveDeps(col).IsSolvedBy(rhs) }
+	return notTrueWhenRootIsNULL(expr, isRHS)
+}
+
+// notTrueWhenRootIsNULL returns true if the expression is not true when the root is NULL.
+// not true here means that the expression is false or NULL.
+// This is used to check how NULL sensitive an expression is -
+// if this is a predicate on an outer table, and we know that it will never return true
+// if the outer table is missing, we can turn an outer join into an inner join.
+func notTrueWhenRootIsNULL(
+	e sqlparser.Expr, // this is the expression that will be checked
+	isRoot func(node *sqlparser.ColName) bool,
+) bool {
+	switch expr := e.(type) {
+
+	case *sqlparser.ColName:
+		return isRoot(expr)
+
+	case *sqlparser.BinaryExpr:
+		return notTrueWhenRootIsNULL(expr.Left, isRoot) || notTrueWhenRootIsNULL(expr.Right, isRoot)
+
 	case *sqlparser.ComparisonExpr:
 		if expr.Operator == sqlparser.NullSafeEqualOp {
 			return false
 		}
+		return notTrueWhenRootIsNULL(expr.Left, isRoot) || notTrueWhenRootIsNULL(expr.Right, isRoot)
 
-		return isColNameFromRHS(expr.Left) || isColNameFromRHS(expr.Right)
+	case *sqlparser.AndExpr:
+		return notTrueWhenRootIsNULL(expr.Left, isRoot) || notTrueWhenRootIsNULL(expr.Right, isRoot)
+
+	case *sqlparser.BetweenExpr:
+		return notTrueWhenRootIsNULL(expr.Left, isRoot) || notTrueWhenRootIsNULL(expr.From, isRoot) || notTrueWhenRootIsNULL(expr.To, isRoot)
 
 	case *sqlparser.IsExpr:
-		if expr.Right != sqlparser.IsNotNullOp {
+		if !notTrueWhenRootIsNULL(expr.Left, isRoot) {
 			return false
 		}
+		switch expr.Right {
+		case sqlparser.IsNotNullOp, sqlparser.IsTrueOp, sqlparser.IsFalseOp:
+			return true
 
-		return isColNameFromRHS(expr.Left)
+		default:
+			return false
+		}
 	default:
 		return false
 	}
