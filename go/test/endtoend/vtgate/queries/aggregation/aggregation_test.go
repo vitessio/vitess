@@ -78,12 +78,12 @@ func TestGroupBy(t *testing.T) {
 	mcmp.Exec("insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
 	// test ordering and group by int column
 	mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
+	mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
 
 	// Test the same queries in streaming mode
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
+	mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
 }
 
 func TestEqualFilterOnScatter(t *testing.T) {
@@ -378,7 +378,7 @@ func TestAggregateAnyValue(t *testing.T) {
 	mcmp.AssertMatches("SELECT t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
 
 	mcmp.Exec("set sql_mode=''")
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno", `[[NULL INT64(0)]]`)
+	mcmp.AssertMatches("select tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno", `[[NULL INT64(0)]]`)
 }
 
 // TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
@@ -443,16 +443,16 @@ func TestBuggyQueries(t *testing.T) {
 
 	mcmp.Exec("insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null)")
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(t1.a) from t10 as t1, t10 as t2",
+	mcmp.AssertMatches("select sum(t1.a) from t10 as t1, t10 as t2",
 		`[[DECIMAL(900)]]`)
 
-	mcmp.AssertMatches("selectt1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a",
+	mcmp.AssertMatches("select t1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a",
 		"[[NULL NULL INT64(3) NULL NULL INT64(3)] "+
 			"[INT32(100) DECIMAL(300) INT64(3) INT32(100) DECIMAL(300) INT64(3)] "+
 			"[INT32(200) DECIMAL(600) INT64(3) INT32(200) DECIMAL(600) INT64(3)]]")
 
-	mcmp.Exec("selectsum(tbl1.a), min(tbl0.b) from t10 as tbl0, t10 as tbl1 left join t10 as tbl2 on tbl1.a = tbl2.a and tbl1.b = tbl2.k")
-	mcmp.Exec("selectcount(*) from t10 left join t10 as t11 on t10.a = t11.b where t11.a")
+	mcmp.Exec("select sum(tbl1.a), min(tbl0.b) from t10 as tbl0, t10 as tbl1 left join t10 as tbl2 on tbl1.a = tbl2.a and tbl1.b = tbl2.k")
+	mcmp.Exec("select count(*) from t10 left join t10 as t11 on t10.a = t11.b where t11.a")
 }
 
 func TestMinMaxAcrossJoins(t *testing.T) {
