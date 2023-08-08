@@ -1208,7 +1208,7 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	if !incrementalFromPos.IsZero() {
 		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
 	}
-	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental_from_pos", incrementalFromPosArg, replica.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPosArg, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
