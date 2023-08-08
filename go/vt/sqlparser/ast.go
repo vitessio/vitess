@@ -138,10 +138,11 @@ type (
 
 	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
-		Column      *ColName
-		DropDefault bool
-		DefaultVal  Expr
-		Invisible   *bool
+		Column         *ColName
+		DropDefault    bool
+		DefaultVal     Expr
+		DefaultLiteral bool
+		Invisible      *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -1835,14 +1836,15 @@ type ColumnTypeOptions struct {
 	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
 	Therefore we do not know whether the column is nullable or not in case 3.
 	*/
-	Null          *bool
-	Autoincrement bool
-	Default       Expr
-	OnUpdate      Expr
-	As            Expr
-	Comment       *Literal
-	Storage       ColumnStorage
-	Collate       string
+	Null           *bool
+	Autoincrement  bool
+	Default        Expr
+	DefaultLiteral bool
+	OnUpdate       Expr
+	As             Expr
+	Comment        *Literal
+	Storage        ColumnStorage
+	Collate        string
 	// Reference stores a foreign key constraint for the given column
 	Reference *ReferenceDefinition
 

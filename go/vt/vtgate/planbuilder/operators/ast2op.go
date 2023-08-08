@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -259,6 +260,18 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	route := &Route{
 		Source:  insOp,
 		Routing: routing,
+	}
+
+	// Find the foreign key mode and store the ParentFKs that we need to verify.
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		parentFKs := vindexTable.CrossShardParentFKs()
+		if len(parentFKs) > 0 {
+			return nil, vterrors.VT12002()
+		}
 	}
 
 	// Table column list is nil then add all the columns

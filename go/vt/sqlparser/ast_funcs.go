@@ -2181,28 +2181,6 @@ func isExprLiteral(expr Expr) bool {
 	}
 }
 
-func defaultRequiresParens(ct *ColumnType) bool {
-	// in 5.7 null value should be without parenthesis, in 8.0 it is allowed either way.
-	// so it is safe to not keep parenthesis around null.
-	if _, isNullVal := ct.Options.Default.(*NullVal); isNullVal {
-		return false
-	}
-
-	switch strings.ToUpper(ct.Type) {
-	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
-		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
-		"LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
-		"MULTIPOLYGON", "GEOMETRYCOLLECTION":
-		return true
-	}
-
-	if isExprLiteral(ct.Options.Default) || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-		return false
-	}
-
-	return true
-}
-
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
 func RemoveKeyspaceFromColName(expr Expr) {
 	RemoveKeyspace(expr)
@@ -2503,6 +2481,36 @@ func (ty KillType) ToString() string {
 	default:
 		return ConnectionStr
 	}
+}
+
+// Indexes returns true, if the list of columns contains all the elements in the other list.
+// It also returns the indexes of the columns in the list.
+func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
+	var indexes []int
+	for _, subSetCol := range subSetCols {
+		colFound := false
+		for idx, col := range cols {
+			if col.Equal(subSetCol) {
+				colFound = true
+				indexes = append(indexes, idx)
+				break
+			}
+		}
+		if !colFound {
+			return false, nil
+		}
+	}
+	return true, indexes
+}
+
+// MakeColumns is used to make a list of columns from a list of strings.
+// This function is meant to be used in testing code.
+func MakeColumns(colNames ...string) Columns {
+	var cols Columns
+	for _, name := range colNames {
+		cols = append(cols, NewIdentifierCI(name))
+	}
+	return cols
 }
 
 func VisitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {

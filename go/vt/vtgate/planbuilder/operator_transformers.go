@@ -426,6 +426,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 			return
 		}
 	}
+
 	return
 }
 
