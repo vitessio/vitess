@@ -298,35 +298,15 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
       "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
-            "Table": "`user`",
-            "Values": [
-              "INT64(1)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1 union all select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1 union select id from `user` where id = 1 union all select id from `user`",
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"

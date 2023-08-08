@@ -157,8 +157,11 @@ func tryMergeUnionShardedRouting(
 	uniqueB := tblB.RouteOpCode == engine.EqualUnique
 
 	switch {
-	case scatterA && scatterB:
+	case scatterA:
 		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA)
+
+	case scatterB:
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblB)
 
 	case uniqueA && uniqueB:
 		aVdx := tblA.SelectedVindex()
@@ -167,20 +170,6 @@ func tryMergeUnionShardedRouting(
 		bExpr := tblB.VindexExpressions()
 		if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
 			return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA)
-		}
-
-	}
-
-	switch tblA.RouteOpCode {
-	case engine.EqualUnique:
-		if tblB.RouteOpCode == engine.EqualUnique {
-			aVdx := tblA.SelectedVindex()
-			bVdx := tblB.SelectedVindex()
-			aExpr := tblA.VindexExpressions()
-			bExpr := tblB.VindexExpressions()
-			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA)
-			}
 		}
 	}
 
