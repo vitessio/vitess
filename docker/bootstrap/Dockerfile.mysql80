@@ -1,5 +1,5 @@
 ARG bootstrap_version
-ARG image="frouioui/bootstrap:${bootstrap_version}-common"
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM --platform=linux/amd64 "${image}"
 
