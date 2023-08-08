@@ -435,25 +435,33 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 	}
 	if vschema.Keyspaces["user_fk_allow"] != nil {
 		// FK from multicol_tbl2 referencing multicol_tbl1 that is shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "multicol_tbl2", createFkDefinition([]string{"colb", "cola", "x", "colc", "y"}, "multicol_tbl1", []string{"colb", "cola", "y", "colc", "x"}))
+		err = vschema.AddForeignKey("user_fk_allow", "multicol_tbl2", createFkDefinition([]string{"colb", "cola", "x", "colc", "y"}, "multicol_tbl1", []string{"colb", "cola", "y", "colc", "x"}, sqlparser.Cascade, sqlparser.Cascade))
 		require.NoError(t, err)
 		// FK from tbl2 referencing tbl1 that is shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "tbl2", createFkDefinition([]string{"col2"}, "tbl1", []string{"col1"}))
+		err = vschema.AddForeignKey("user_fk_allow", "tbl2", createFkDefinition([]string{"col2"}, "tbl1", []string{"col1"}, sqlparser.Restrict, sqlparser.Restrict))
 		require.NoError(t, err)
 		// FK from tbl3 referencing tbl1 that is not shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "tbl3", createFkDefinition([]string{"coly"}, "tbl1", []string{"col1"}))
+		err = vschema.AddForeignKey("user_fk_allow", "tbl3", createFkDefinition([]string{"coly"}, "tbl1", []string{"col1"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
+		require.NoError(t, err)
+		// FK from tbl4 referencing tbl5 that is shard scoped.
+		err = vschema.AddForeignKey("user_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.SetNull))
+		require.NoError(t, err)
+		// FK from tbl6 referencing tbl7 that is shard scoped.
+		err = vschema.AddForeignKey("user_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		require.NoError(t, err)
 	}
 	return vschema
 }
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
-func createFkDefinition(childCols []string, parentTableName string, parentCols []string) *sqlparser.ForeignKeyDefinition {
+func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
 			ReferencedTable:   sqlparser.NewTableName(parentTableName),
 			ReferencedColumns: sqlparser.MakeColumns(parentCols...),
+			OnUpdate:          onUpdate,
+			OnDelete:          onDelete,
 		},
 	}
 }

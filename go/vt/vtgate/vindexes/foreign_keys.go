@@ -136,9 +136,6 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 // This can be either the foreign key is not shard scoped or the child tables needs cascading.
 func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 	for _, fk := range t.ChildForeignKeys {
-		if fk.OnDelete == sqlparser.NoAction {
-			continue
-		}
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
 		if fk.Table.Keyspace.Name != t.Keyspace.Name {
@@ -146,12 +143,14 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 			continue
 		}
 		// If the action is not Restrict, then it needs a cascade.
-		if fk.OnDelete != sqlparser.Restrict {
+		switch fk.OnDelete {
+		case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
 			fks = append(fks, fk)
-			continue
 		}
-
-		// Check if the fk restrict is shard scoped.
+		// sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction
+		// all the actions means the same thing i.e. Restrict
+		// do not allow modification if there is a child row.
+		// Check if the restrict is shard scoped.
 		if !isShardScoped(t, fk.Table, fk.ParentColumns, fk.ChildColumns) {
 			fks = append(fks, fk)
 		}

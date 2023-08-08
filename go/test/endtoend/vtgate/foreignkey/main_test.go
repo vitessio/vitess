@@ -90,10 +90,16 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
+		_ = utils.Exec(t, conn, "use `ks/-80`")
 		tables := []string{"t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
 		for _, table := range tables {
 			_ = utils.Exec(t, conn, "delete from "+table)
 		}
+		_ = utils.Exec(t, conn, "use `ks/80-`")
+		for _, table := range tables {
+			_ = utils.Exec(t, conn, "delete from "+table)
+		}
+		_ = utils.Exec(t, conn, "use `ks`")
 	}
 
 	deleteAll()
