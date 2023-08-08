@@ -36,11 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -49,6 +44,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 const (
@@ -511,26 +511,26 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
-		Vindexes: map[string]*vschema.Vindex{
+		Vindexes: map[string]*vschemapb.Vindex{
 			"thash": {
 				Type: "hash",
 			},
 		},
-		Tables: map[string]*vschema.Table{
+		Tables: map[string]*vschemapb.Table{
 			"t1": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
 			},
 			"t2": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
 			},
 			"t3": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
