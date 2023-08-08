@@ -164,7 +164,7 @@ func TestDistinct(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
 
 	// multi distinct
-	utils.AssertMatches(t, mcmp.VtConn, `select distinct tcol1, tcol2 from t2`,
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, `select distinct tcol1, tcol2 from t2`,
 		`[[VARCHAR("A") VARCHAR("A")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")]]`)
 }
 

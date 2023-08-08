@@ -34,10 +34,13 @@ The operators go through a few phases while planning:
 package operators
 
 import (
-	"vitess.io/vitess/go/slices2"
+	"fmt"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -59,6 +62,11 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 		return nil, err
 	}
 
+	if rewrite.DebugOperatorTree {
+		fmt.Println("Initial tree:")
+		fmt.Println(ops.ToTree(op))
+	}
+
 	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
@@ -72,10 +80,6 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 	}
 
 	if op, err = tryHorizonPlanning(ctx, op); err != nil {
-		return nil, err
-	}
-
-	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
 
@@ -105,11 +109,18 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr,
 	return nil, 0, vterrors.VT13001("noColumns operators have no column")
 }
 
-func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (noColumns) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }
 
-func (noColumns) GetSelectExprs() (sqlparser.SelectExprs, error) {
+func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
+}
+func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) (int, error) {
+	return 0, vterrors.VT13001("noColumns operators have no column")
+}
+
+func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }
 
@@ -145,12 +156,12 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	return tryTruncateColumnsAt(inputs[0], truncateAt)
 }
 
-func transformColumnsToSelectExprs(op ops.Operator) (sqlparser.SelectExprs, error) {
-	columns, err := op.GetColumns()
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {
+	columns, err := op.GetColumns(ctx)
 	if err != nil {
 		return nil, err
 	}
-	selExprs := slices2.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
+	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from
 	})
 	return selExprs, nil

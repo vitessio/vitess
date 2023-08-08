@@ -211,7 +211,7 @@ func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) 
 
 func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, error) {
 	if ast.cfg.ResolveColumn == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column (column access not supported here)")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column '%s' (column access not supported here)", sqlparser.String(colname))
 	}
 	idx, err := ast.cfg.ResolveColumn(colname)
 	if err != nil {
