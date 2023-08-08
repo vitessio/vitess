@@ -2157,6 +2157,10 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			return ictx.Err()
 		default:
 		}
+		if len(shardResults) == 0 { // This should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get any results for the max used sequence value for target table %s.%s in order to initialize the backing sequence table",
+				ts.targetKeyspace, sequenceMetadata.usingTableName)
+		}
 		// Sort the values to find the max value across all shards.
 		sort.Slice(shardResults, func(i, j int) bool {
 			return shardResults[i] < shardResults[j]
