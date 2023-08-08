@@ -478,6 +478,10 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 	return pos, nil
 }
 
+func (tmc *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
 // ----------------------------------------------
 // testVDiffEnv
 

@@ -352,7 +352,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	}
 
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
-	join.ColumnsAST = joinColumns
+	join.JoinColumns = joinColumns
 
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
@@ -559,7 +559,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// we are not going to see values multiple times, so we don't need to multiply with the count(*) from the other side
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	default:
-		return errHorizonNotPlanned()
+		return vterrors.VT12001(fmt.Sprintf("aggregation not planned: %s", aggr.OpCode.String()))
 	}
 }
 

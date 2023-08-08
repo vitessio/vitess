@@ -17,11 +17,11 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -44,7 +44,7 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 	}
 
 	if waitPosition != "" {
-		pos, err := mysql.DecodePosition(waitPosition)
+		pos, err := replication.DecodePosition(waitPosition)
 		if err != nil {
 			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}

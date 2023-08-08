@@ -33,19 +33,19 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -128,7 +128,7 @@ func shouldInclude(table string, excludes []string) bool {
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
+	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
@@ -245,18 +245,27 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
 	}
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
+	if err != nil {
+		return err
+	}
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:              workflow,
-		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
-		SourceKeyspace:        sourceKeyspace,
-		TargetKeyspace:        targetKeyspace,
-		Cell:                  cell,
-		TabletTypes:           tabletTypes,
-		StopAfterCopy:         stopAfterCopy,
-		ExternalCluster:       externalCluster,
-		SourceShards:          sourceShards,
-		OnDdl:                 onDDL,
-		DeferSecondaryKeys:    deferSecondaryKeys,
+		Workflow:                  workflow,
+		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:            sourceKeyspace,
+		TargetKeyspace:            targetKeyspace,
+		Cell:                      cell,
+		TabletTypes:               topoproto.MakeStringTypeCSV(tabletTypes),
+		TabletSelectionPreference: tsp,
+		StopAfterCopy:             stopAfterCopy,
+		ExternalCluster:           externalCluster,
+		SourceShards:              sourceShards,
+		OnDdl:                     onDDL,
+		DeferSecondaryKeys:        deferSecondaryKeys,
 	}
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
@@ -314,7 +323,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if autoStart {
 		return mz.startStreams(ctx)
 	}
-	wr.Logger().Infof("Streams will not be started since -auto_start is set to false")
+	wr.Logger().Infof("Streams will not be started since --auto_start is set to false")
 
 	return nil
 }
@@ -424,7 +433,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 }
 
 // CreateLookupVindex creates a lookup vindex and sets up the backfill.
-func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypes string, continueAfterCopyWithOwner bool) error {
+func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypesStr string, continueAfterCopyWithOwner bool) error {
 	ms, sourceVSchema, targetVSchema, err := wr.prepareCreateLookup(ctx, keyspace, specs, continueAfterCopyWithOwner)
 	if err != nil {
 		return err
@@ -433,7 +442,17 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 		return err
 	}
 	ms.Cell = cell
-	ms.TabletTypes = tabletTypes
+
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
+	if err != nil {
+		return err
+	}
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+	ms.TabletTypes = topoproto.MakeStringTypeCSV(tabletTypes)
+	ms.TabletSelectionPreference = tsp
 	if err := wr.Materialize(ctx, ms); err != nil {
 		return err
 	}
@@ -796,11 +815,11 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for _, row := range qr.Rows {
-			id, err := evalengine.ToInt64(row[0])
+			id, err := row[0].ToCastInt64()
 			if err != nil {
 				return err
 			}
-			state := row[1].ToString()
+			state := binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row[1].ToString()])
 			message := row[2].ToString()
 			var bls binlogdatapb.BinlogSource
 			sourceBytes, err := row[3].ToBytes()
@@ -813,12 +832,12 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 			if sourceVindex.Owner == "" || !bls.StopAfterCopy {
 				// If there's no owner or we've requested that the workflow NOT be stopped
 				// after the copy phase completes, then all streams need to be running.
-				if state != binlogplayer.BlpRunning {
+				if state != binlogdatapb.VReplicationWorkflowState_Running {
 					return fmt.Errorf("stream %d for %v.%v is not in Running state: %v", id, targetShard.Keyspace(), targetShard.ShardName(), state)
 				}
 			} else {
 				// If there is an owner, all streams need to be stopped after copy.
-				if state != binlogplayer.BlpStopped || !strings.Contains(message, "Stopped after copy") {
+				if state != binlogdatapb.VReplicationWorkflowState_Stopped || !strings.Contains(message, "Stopped after copy") {
 					return fmt.Errorf("stream %d for %v.%v is not in Stopped after copy state: %v, %v", id, targetShard.Keyspace(), targetShard.ShardName(), state, message)
 				}
 			}
@@ -873,7 +892,7 @@ func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) 
 		}
 		qr := sqltypes.Proto3ToResult(qrproto)
 		for i := 0; i < len(qr.Rows); i++ {
-			id, err = evalengine.ToInt64(qr.Rows[i][0])
+			id, err = qr.Rows[i][0].ToCastInt64()
 			if err != nil {
 				return err
 			}
@@ -1226,7 +1245,7 @@ func stripTableConstraints(ddl string) (string, error) {
 }
 
 func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
-	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{.dbname}}")
+	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "{{.dbname}}")
 
 	for _, sourceShard := range mz.sourceShards {
 		// Don't create streams from sources which won't contain data for the target shard.
@@ -1326,7 +1345,12 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 		}
 
-		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
+		tabletTypeStr := mz.ms.TabletTypes
+		if mz.ms.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+			tabletTypeStr = discovery.InOrderHint + tabletTypeStr
+		}
+
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, tabletTypeStr,
 			workflowType,
 			workflowSubType,
 			mz.ms.DeferSecondaryKeys,

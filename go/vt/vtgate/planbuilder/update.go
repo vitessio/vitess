@@ -94,8 +94,10 @@ func gen4UpdateStmtPlanner(
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
 	edml := engine.NewDML()
 	edml.Keyspace = ks
-	edml.Table = tables
 	edml.Opcode = engine.Unsharded
 	edml.Query = generateQuery(stmt)
+	for _, tbl := range tables {
+		edml.TableNames = append(edml.TableNames, tbl.Name.String())
+	}
 	return &primitiveWrapper{prim: &engine.Update{DML: edml}}
 }

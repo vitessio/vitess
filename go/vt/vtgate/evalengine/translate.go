@@ -183,14 +183,6 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 	}, nil
 }
 
-func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
-	return collations.TypedCollation{
-		Collation:    id,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireUnicode,
-	}
-}
-
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
 	bvar := NewBindVar(arg.Name, arg.Type, ast.cfg.Collation)
 
@@ -219,7 +211,7 @@ func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) 
 
 func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, error) {
 	if ast.cfg.ResolveColumn == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column (column access not supported here)")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column '%s' (column access not supported here)", sqlparser.String(colname))
 	}
 	idx, err := ast.cfg.ResolveColumn(colname)
 	if err != nil {

@@ -26,9 +26,11 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -223,7 +225,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options)) {
+	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options), qre.options.GetWorkloadName()) {
 		return nil, errTxThrottled
 	}
 
@@ -238,7 +240,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options)) {
+	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options), qre.options.GetWorkloadName()) {
 		return nil, errTxThrottled
 	}
 	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
@@ -554,7 +556,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 			// Instead of synchronously recalculating table size stats
 			// after every DDL, let them be outdated until the periodic
 			// schema reload fixes it.
-			if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
+			if err := qre.tsv.se.ReloadAtEx(qre.ctx, replication.Position{}, false); err != nil {
 				log.Errorf("failed to reload schema %v", err)
 			}
 		}()
@@ -632,7 +634,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := evalengine.ToInt64(qr.Rows[0][0])
+			nextID, err := qr.Rows[0][0].ToCastInt64()
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
@@ -647,7 +649,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				t.SequenceInfo.NextVal = nextID
 				t.SequenceInfo.LastVal = nextID
 			}
-			cache, err := evalengine.ToInt64(qr.Rows[0][1])
+			cache, err := qr.Rows[0][1].ToCastInt64()
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
@@ -849,11 +851,11 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 }
 
 func rewriteOUTParamError(err error) error {
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	if !ok {
 		return err
 	}
-	if sqlErr.Num == mysql.ErSPNotVarArg {
+	if sqlErr.Num == sqlerror.ErSPNotVarArg {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OUT and INOUT parameters are not supported")
 	}
 	return err

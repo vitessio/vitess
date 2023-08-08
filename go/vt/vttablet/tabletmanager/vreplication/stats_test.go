@@ -25,9 +25,12 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var wantOut = `
@@ -72,7 +75,7 @@ VReplication state: Open</br>
 `
 
 func TestStatusHtml(t *testing.T) {
-	pos, err := mysql.DecodePosition("MariaDB/1-2-3")
+	pos, err := replication.DecodePosition("MariaDB/1-2-3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,8 +110,14 @@ func TestStatusHtml(t *testing.T) {
 			done:     make(chan struct{}),
 		},
 	}
-	testStats.controllers[1].sourceTablet.Store("src1")
-	testStats.controllers[2].sourceTablet.Store("src2")
+	testStats.controllers[1].sourceTablet.Store(&topodatapb.TabletAlias{
+		Cell: "zone1",
+		Uid:  01,
+	})
+	testStats.controllers[2].sourceTablet.Store(&topodatapb.TabletAlias{
+		Cell: "zone1",
+		Uid:  02,
+	})
 	close(testStats.controllers[2].done)
 
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
@@ -135,7 +144,10 @@ func TestVReplicationStats(t *testing.T) {
 			done:     make(chan struct{}),
 		},
 	}
-	testStats.controllers[1].sourceTablet.Store("src1")
+	testStats.controllers[1].sourceTablet.Store(&topodatapb.TabletAlias{
+		Cell: "zone1",
+		Uid:  01,
+	})
 
 	sleepTime := 1 * time.Millisecond
 	record := func(phase string) {

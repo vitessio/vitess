@@ -44,6 +44,7 @@ type VtctlClientParams struct {
 	MigrationContext string
 	UUIDList         string
 	CallerID         string
+	BatchSize        int
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
@@ -87,7 +88,9 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 	if params.UUIDList != "" {
 		args = append(args, "--uuid_list", params.UUIDList)
 	}
-
+	if params.BatchSize > 0 {
+		args = append(args, "--batch_size", fmt.Sprintf("%d", params.BatchSize))
+	}
 	if params.CallerID != "" {
 		args = append(args, "--caller_id", params.CallerID)
 	}

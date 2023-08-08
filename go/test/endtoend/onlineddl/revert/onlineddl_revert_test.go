@@ -156,6 +156,14 @@ func TestMain(m *testing.M) {
 			"--migration_check_interval", "5s",
 			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--watch_replication_stream",
+			// The next flags are deprecated, and we incldue them to verify that they are nonetheless still allowed.
+			// The values are irrelevant. Just the fact that the flags are allowed in what's important.
+			// These should be included in v18, and removed in v19.
+			"--throttle_threshold", "1m",
+			"--throttle_metrics_query", "select 1 from dual",
+			"--throttle_metrics_threshold", "1.5",
+			"--throttle_check_as_check_self=false",
+			"--throttler-config-via-topo=true",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",

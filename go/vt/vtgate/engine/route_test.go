@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -36,7 +38,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -1441,7 +1442,7 @@ func TestExecFail(t *testing.T) {
 		expectResult(t, "sel.Execute", result, defaultSelectResult)
 
 		vc.Rewind()
-		vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
+		vc.resultErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, "", "query timeout -20")
 		// test when there is order by column
 		sel.OrderBy = []OrderByParams{{
 			WeightStringCol: -1,
@@ -1449,7 +1450,7 @@ func TestExecFail(t *testing.T) {
 		}}
 		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: uint32(mysql.ERQueryInterrupted), Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
+		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: uint32(sqlerror.ERQueryInterrupted), Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
 }
 

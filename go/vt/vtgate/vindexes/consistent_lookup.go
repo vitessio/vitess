@@ -22,8 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -347,10 +346,10 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 		return nil
 	}
 	// Try and convert the error to a MySQL error
-	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(origErr).(*mysql.SQLError)
+	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(origErr).(*sqlerror.SQLError)
 	// If it is a MySQL error and its code is of duplicate entry, then we would like to continue
 	// Otherwise, we return the error
-	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERDupEntry) {
+	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERDupEntry) {
 		return origErr
 	}
 	for i, row := range rowsColValues {
@@ -413,8 +412,7 @@ func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [
 func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		// TODO(king-11) make collation aware
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], collations.Unknown)
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.ConnCollation())
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false

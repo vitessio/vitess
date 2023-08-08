@@ -35,18 +35,16 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql/hex"
-
-	"vitess.io/vitess/go/mysql/icuregex"
-
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/hex"
+	"vitess.io/vitess/go/mysql/icuregex"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -734,10 +732,10 @@ func (asm *assembler) CmpTupleNullsafe() {
 		l := env.vm.stack[env.vm.sp-2].(*evalTuple)
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
-		var equals bool
+		var equals int
 		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t)
 
-		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals)
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals == 0)
 		env.vm.sp -= 1
 		return 1
 	}, "CMP NULLSAFE TUPLE(SP-2), TUPLE(SP-1)")
@@ -2102,8 +2100,8 @@ func (asm *assembler) Fn_UNHEX_b(tt sqltypes.Type) {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		decoded := make([]byte, hex.DecodedLen(arg.bytes))
 
-		ok := hex.DecodeBytes(decoded, arg.bytes)
-		if !ok {
+		err := hex.DecodeBytes(decoded, arg.bytes)
+		if err != nil {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
@@ -2172,7 +2170,7 @@ func (asm *assembler) Fn_JSON_CONTAINS_PATH(match jsonMatch, paths []*json.Path)
 }
 
 func (asm *assembler) Fn_JSON_EXTRACT0(jp []*json.Path) {
-	multi := len(jp) > 1 || slices2.Any(jp, func(path *json.Path) bool { return path.ContainsWildcards() })
+	multi := len(jp) > 1 || slice.Any(jp, func(path *json.Path) bool { return path.ContainsWildcards() })
 
 	if multi {
 		asm.emit(func(env *ExpressionEnv) int {
@@ -2732,22 +2730,17 @@ func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollatio
 	}, "FN TO_BASE64 VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_WEIGHT_STRING_b(length int) {
+func (asm *assembler) Fn_WEIGHT_STRING(typ sqltypes.Type, length int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		w := collations.Binary.WeightString(make([]byte, 0, length), str.bytes, collations.PadToMax)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(w)
+		input := env.vm.stack[env.vm.sp-1]
+		w, _, err := evalWeightString(nil, input, length, 0)
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(w, typ, collationBinary)
 		return 1
-	}, "FN WEIGHT_STRING VARBINARY(SP-1)")
-}
-
-func (asm *assembler) Fn_WEIGHT_STRING_c(col collations.Collation, length int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		w := col.WeightString(nil, str.bytes, length)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(w)
-		return 1
-	}, "FN WEIGHT_STRING VARCHAR(SP-1)")
+	}, "FN WEIGHT_STRING (SP-1)")
 }
 
 func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {

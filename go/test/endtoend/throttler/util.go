@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -57,7 +59,7 @@ var DefaultConfig = &Config{
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
+func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, enable bool, disable bool, threshold float64, metricsQuery string, appRule *topodatapb.ThrottledAppRule) (result string, err error) {
 	args := []string{}
 	args = append(args, "UpdateThrottlerConfig")
 	if enable {
@@ -74,6 +76,14 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 		args = append(args, "--check-as-check-self")
 	} else {
 		args = append(args, "--check-as-check-shard")
+	}
+	if appRule != nil {
+		args = append(args, "--throttle-app", appRule.Name)
+		args = append(args, "--throttle-app-duration", logutil.ProtoToTime(appRule.ExpiresAt).Sub(time.Now()).String())
+		args = append(args, "--throttle-app-ratio", fmt.Sprintf("%f", appRule.Ratio))
+		if appRule.Exempt {
+			args = append(args, "--throttle-app-exempt")
+		}
 	}
 	args = append(args, keyspaceName)
 
@@ -100,14 +110,14 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) (string, error) {
+func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string, appRule *topodatapb.ThrottledAppRule) (string, error) {
 	rec := concurrency.AllErrorRecorder{}
 	var (
 		err error
 		res strings.Builder
 	)
 	for _, ks := range clusterInstance.Keyspaces {
-		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, threshold, metricsQuery)
+		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, threshold, metricsQuery, appRule)
 		if err != nil {
 			rec.RecordError(err)
 		}
@@ -152,12 +162,11 @@ func WaitForSrvKeyspace(clusterInstance *cluster.LocalProcessCluster, cell, keys
 func throttleAppRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name, throttle bool) (result string, err error) {
 	args := []string{}
 	args = append(args, "UpdateThrottlerConfig")
-	args = append(args, "--throttle-app", throttlerApp.String())
-	args = append(args, "--throttle-app-duration")
 	if throttle {
-		args = append(args, "1h")
+		args = append(args, "--throttle-app", throttlerApp.String())
+		args = append(args, "--throttle-app-duration", "1h")
 	} else {
-		args = append(args, "-1h")
+		args = append(args, "--unthrottle-app", throttlerApp.String())
 	}
 	args = append(args, keyspaceName)
 
@@ -210,19 +219,23 @@ func UnthrottleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp th
 	return throttleApp(clusterInstance, throttlerApp, false)
 }
 
+func WaitUntilTabletsConfirmThrottledApp(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name, expectThrottled bool) {
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottledApp(t, tablet, throttlerApp, expectThrottled, ConfigTimeout)
+			}
+		}
+	}
+}
+
 // ThrottleAppAndWaitUntilTabletsConfirm
 func ThrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name) (string, error) {
 	res, err := throttleApp(clusterInstance, throttlerApp, true)
 	if err != nil {
 		return res, err
 	}
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				WaitForThrottledApp(t, tablet, throttlerApp, true, ConfigTimeout)
-			}
-		}
-	}
+	WaitUntilTabletsConfirmThrottledApp(t, clusterInstance, throttlerApp, true)
 	return res, nil
 }
 
@@ -232,13 +245,7 @@ func UnthrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *clus
 	if err != nil {
 		return res, err
 	}
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				WaitForThrottledApp(t, tablet, throttlerApp, false, ConfigTimeout)
-			}
-		}
-	}
+	WaitUntilTabletsConfirmThrottledApp(t, clusterInstance, throttlerApp, false)
 	return res, nil
 }
 
@@ -338,7 +345,7 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 // The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
 // to be running on all tablets.
 func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
-	_, err := UpdateThrottlerTopoConfig(clusterInstance, true, false, lag.Seconds(), "")
+	_, err := UpdateThrottlerTopoConfig(clusterInstance, true, false, lag.Seconds(), "", nil)
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {

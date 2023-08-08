@@ -42,6 +42,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -575,7 +577,6 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 // If input is not nil, pipe it to the command's stdin.
 func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, output string, err error) {
 	cmdPath, _ := exec.LookPath(name)
-	log.Infof("execCmd: %v %v %v", name, cmdPath, args)
 
 	cmd = exec.Command(cmdPath, args...)
 	cmd.Env = env
@@ -586,10 +587,9 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 	out, err := cmd.CombinedOutput()
 	output = string(out)
 	if err != nil {
-		log.Infof("execCmd: %v failed: %v", name, err)
-		err = fmt.Errorf("%v: %v, output: %v", name, err, output)
+		log.Errorf("execCmd: %v failed: %v", name, err)
+		err = fmt.Errorf("%v: %w, output: %v", name, err, output)
 	}
-	log.Infof("execCmd: %v output: %v", name, output)
 	return cmd, output, err
 }
 
@@ -1138,7 +1138,6 @@ func buildLdPaths() ([]string, error) {
 func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 	// Execute as remote action on mysqlctld to ensure we get the actual running MySQL version.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.VersionString() remotely via mysqlctld server: %v", socketFile)
 		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return "", fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -1247,7 +1246,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		log.Infof("ApplyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(false)
 		if err != nil {
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
 				log.Errorf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err)

@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"math/bits"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -117,7 +115,7 @@ func (vind *ReverseBits) UnknownParams() []string {
 }
 
 func (vind *ReverseBits) Hash(id sqltypes.Value) ([]byte, error) {
-	num, err := evalengine.ToUint64(id)
+	num, err := id.ToCastUint64()
 	if err != nil {
 		return nil, err
 	}

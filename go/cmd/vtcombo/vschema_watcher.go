@@ -26,6 +26,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func startVschemaWatcher(vschemaPersistenceDir string, keyspaces []*vttestpb.Keyspace, ts *topo.Server) {
@@ -61,6 +62,10 @@ func loadKeyspacesFromDir(dir string, keyspaces []*vttestpb.Keyspace, ts *topo.S
 				log.Fatalf("Unable to parse keyspace file %v: %v", ksFile, err)
 			}
 
+			_, err = vindexes.BuildKeyspace(keyspace)
+			if err != nil {
+				log.Fatalf("Invalid keyspace definition: %v", err)
+			}
 			ts.SaveVSchema(context.Background(), ks.Name, keyspace)
 			log.Infof("Loaded keyspace %v from %v\n", ks.Name, ksFile)
 		}

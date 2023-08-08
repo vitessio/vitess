@@ -17,15 +17,15 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
-	"context"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/throttler"
 
@@ -54,11 +54,11 @@ var (
 				sqltypes.NULL,                          // stop_pos
 				sqltypes.NewInt64(9223372036854775807), // max_tps
 				sqltypes.NewInt64(9223372036854775807), // max_replication_lag
-				sqltypes.NewVarBinary("Running"),       // state
-				sqltypes.NewInt64(1),                   // workflow_type
-				sqltypes.NewVarChar("wf"),              // workflow
-				sqltypes.NewInt64(0),                   // workflow_sub_type
-				sqltypes.NewInt64(0),                   // defer_secondary_keys
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),      // workflow_type
+				sqltypes.NewVarChar("wf"), // workflow
+				sqltypes.NewInt64(0),      // workflow_sub_type
+				sqltypes.NewInt64(0),      // defer_secondary_keys
 			},
 		},
 	}
@@ -171,15 +171,15 @@ func TestStopPosEqual(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -208,15 +208,15 @@ func TestStopPosLess(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1082"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1082"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -245,15 +245,15 @@ func TestStopPosGreater(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1085"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1085"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -286,15 +286,15 @@ func TestContextCancel(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1085"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1085"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -326,7 +326,7 @@ func TestRetryOnDeadlock(t *testing.T) {
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
-	deadlocked := &mysql.SQLError{Num: 1213, Message: "deadlocked"}
+	deadlocked := &sqlerror.SQLError{Num: 1213, Message: "deadlocked"}
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", nil, deadlocked)
 	dbClient.ExpectRequest("rollback", nil, nil)
@@ -400,24 +400,24 @@ func TestCreateVReplicationTables(t *testing.T) {
 }
 
 func TestUpdateVReplicationPos(t *testing.T) {
-	gtid := mysql.MustParseGTID("MariaDB", "0-1-8283")
+	gtid := replication.MustParseGTID("MariaDB", "0-1-8283")
 	want := "update _vt.vreplication " +
 		"set pos='MariaDB/0-1-8283', time_updated=88822, rows_copied=0, message='' " +
 		"where id=78522"
 
-	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
+	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
 	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
 
 func TestUpdateVReplicationTimestamp(t *testing.T) {
-	gtid := mysql.MustParseGTID("MariaDB", "0-2-582")
+	gtid := replication.MustParseGTID("MariaDB", "0-2-582")
 	want := "update _vt.vreplication " +
 		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828, rows_copied=0, message='' " +
 		"where id=78522"
 
-	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
+	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
 	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}

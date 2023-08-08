@@ -32,8 +32,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -1077,7 +1078,7 @@ func terminateRestore(t *testing.T) {
 func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
 	replica := getReplica(t, replicaIndex)
 
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica.Alias)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica.Alias)
 	require.Nil(t, err)
 
 	backups, err = localCluster.ListBackups(shardKsName)
@@ -1202,12 +1203,12 @@ func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.B
 	return readManifestFile(t, backupLocation)
 }
 
-func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	incrementalFromPosArg := "auto"
 	if !incrementalFromPos.IsZero() {
-		incrementalFromPosArg = mysql.EncodePosition(incrementalFromPos)
+		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
 	}
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", "--", "--incremental_from_pos", incrementalFromPosArg, replica.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental_from_pos", incrementalFromPosArg, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1223,7 +1224,7 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	return readManifestFile(t, backupLocation), backupName
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	replica := getReplica(t, replicaIndex)
 	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectError)
 }
@@ -1241,11 +1242,11 @@ func TestReplicaFullRestore(t *testing.T, replicaIndex int, expectError string) 
 	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
 }
 
-func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos mysql.Position, expectError string) {
+func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replication.Position, expectError string) {
 	replica := getReplica(t, replicaIndex)
 
 	require.False(t, restoreToPos.IsZero())
-	restoreToPosArg := mysql.EncodePosition(restoreToPos)
+	restoreToPosArg := replication.EncodePosition(restoreToPos)
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_pos", restoreToPosArg, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
@@ -1259,7 +1260,7 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos mysql.
 func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
 	require.False(t, restoreToTimestamp.IsZero())
 	restoreToTimestampArg := mysqlctl.FormatRFC3339(restoreToTimestamp)
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_timestamp", restoreToTimestampArg, replica1.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--restore-to-timestamp", restoreToTimestampArg, replica1.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1322,7 +1323,7 @@ func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
 	require.Contains(t, vars, "RestorePosition")
 	require.NotEqual(t, "", backupPosition)
 	require.NotEqual(t, "", backupTime)
-	rp, err := mysql.DecodePosition(backupPosition)
+	rp, err := replication.DecodePosition(backupPosition)
 	require.NoError(t, err)
 	require.False(t, rp.IsZero())
 }

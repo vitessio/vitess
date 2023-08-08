@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/crc32"
@@ -34,6 +35,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
+
+	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
@@ -211,15 +214,15 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // getIncrementalFromPosGTIDSet turns the given string into a valid Mysql56GTIDSet
-func getIncrementalFromPosGTIDSet(incrementalFromPos string) (mysql.Mysql56GTIDSet, error) {
-	pos, err := mysql.DecodePositionDefaultFlavor(incrementalFromPos, mysql.Mysql56FlavorID)
+func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql56GTIDSet, error) {
+	pos, err := replication.DecodePositionDefaultFlavor(incrementalFromPos, replication.Mysql56FlavorID)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", incrementalFromPos)
 	}
-	if !pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+	if !pos.MatchesFlavor(replication.Mysql56FlavorID) {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", incrementalFromPos)
 	}
-	ifPosGTIDSet, ok := pos.GTIDSet.(mysql.Mysql56GTIDSet)
+	ifPosGTIDSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
 	}
@@ -249,17 +252,17 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 			return false, err
 		}
 		fromBackupName = backupName
-		params.IncrementalFromPos = mysql.EncodePosition(pos)
+		params.IncrementalFromPos = replication.EncodePosition(pos)
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
 
 	// @@gtid_purged
-	getPurgedGTIDSet := func() (mysql.Position, mysql.Mysql56GTIDSet, error) {
+	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
 		if err != nil {
 			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
 		}
-		purgedGTIDSet, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
+		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
 		if !ok {
 			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
 		}
@@ -312,11 +315,11 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
 	}
-	incrementalBackupFromPosition, err := mysql.ParsePosition(mysql.Mysql56FlavorID, incrementalBackupFromGTID)
+	incrementalBackupFromPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupFromGTID)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupFromGTID)
 	}
-	incrementalBackupToPosition, err := mysql.ParsePosition(mysql.Mysql56FlavorID, incrementalBackupToGTID)
+	incrementalBackupToPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupToGTID)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
@@ -378,7 +381,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	sourceIsPrimary := false
 	superReadOnly := true //nolint
 	readOnly := true      //nolint
-	var replicationPosition mysql.Position
+	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
@@ -470,7 +473,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, "", nil, serverUUID, mysqlVersion, nil)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, replication.Position{}, "", nil, serverUUID, mysqlVersion, nil)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -550,9 +553,9 @@ func (be *BuiltinBackupEngine) backupFiles(
 	ctx context.Context,
 	params BackupParams,
 	bh backupstorage.BackupHandle,
-	backupPosition mysql.Position,
-	purgedPosition mysql.Position,
-	fromPosition mysql.Position,
+	backupPosition replication.Position,
+	purgedPosition replication.Position,
+	fromPosition replication.Position,
 	fromBackupName string,
 	binlogFiles []string,
 	serverUUID string,
@@ -761,6 +764,8 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
@@ -798,12 +803,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
 		if rerr := dest.Close(); rerr != nil {
-			if finalErr != nil {
-				// We already have an error, just log this one.
-				params.Logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
-			} else {
-				finalErr = rerr
-			}
+			rerr = vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name)
+			params.Logger.Error(rerr)
+			finalErr = errors.Join(finalErr, rerr)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
@@ -813,43 +815,57 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	bw := newBackupWriter(fe.Name, builtinBackupStorageWriteBufferSize, fi.Size(), timedDest)
 
-	var reader io.Reader = br
-	var writer io.Writer = bw
+	// We create the following inner function because:
+	// - we must `defer` the compressor's Close() function
+	// - but it must take place before we close the pipe reader&writer
+	createAndCopy := func() (createAndCopyErr error) {
+		var reader io.Reader = br
+		var writer io.Writer = bw
 
-	// Create the gzip compression pipe, if necessary.
-	var compressor io.WriteCloser
-	if backupStorageCompress {
-		if ExternalCompressorCmd != "" {
-			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
-		} else {
-			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
+		// Create the gzip compression pipe, if necessary.
+		if backupStorageCompress {
+			var compressor io.WriteCloser
+			if ExternalCompressorCmd != "" {
+				compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
+			} else {
+				compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
+			}
+			if err != nil {
+				return vterrors.Wrap(err, "can't create compressor")
+			}
+
+			compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
+			writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
+
+			closer := ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout)
+			defer func() {
+				// Close gzip to flush it, after that all data is sent to writer.
+				closeCompressorAt := time.Now()
+				params.Logger.Infof("closing compressor")
+				if cerr := closer.Close(); err != nil {
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
+					params.Logger.Error(cerr)
+					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
+				}
+				params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
+			}()
 		}
+
+		if builtinBackupFileReadBufferSize > 0 {
+			reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
+		}
+
+		// Copy from the source file to writer (optional gzip,
+		// optional pipe, tee, output file and hasher).
+		_, err = io.Copy(writer, reader)
 		if err != nil {
-			return vterrors.Wrap(err, "can't create compressor")
+			return vterrors.Wrap(err, "cannot copy data")
 		}
-
-		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
-		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
+		return nil
 	}
 
-	if builtinBackupFileReadBufferSize > 0 {
-		reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
-	}
-
-	// Copy from the source file to writer (optional gzip,
-	// optional pipe, tee, output file and hasher).
-	_, err = io.Copy(writer, reader)
-	if err != nil {
-		return vterrors.Wrap(err, "cannot copy data")
-	}
-
-	// Close gzip to flush it, after that all data is sent to writer.
-	if compressor != nil {
-		closeCompressorAt := time.Now()
-		if err = compressor.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close compressor")
-		}
-		params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
+	if err := createAndCopy(); err != nil {
+		return err
 	}
 
 	// Close the backupPipe to finish writing on destination.
@@ -1018,6 +1034,8 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 // restoreFile restores an individual file.
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, name)
@@ -1050,12 +1068,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	defer func() {
 		closeDestAt := time.Now()
 		if cerr := dest.Close(); cerr != nil {
-			if finalErr != nil {
-				// We already have an error, just log this one.
-				log.Errorf("failed to close file %v: %v", name, cerr)
-			} else {
-				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
-			}
+			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
@@ -1094,27 +1107,25 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		if err != nil {
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
+		closer := ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout)
 
 		decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
 		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 		defer func() {
 			closeDecompressorAt := time.Now()
-			if cerr := decompressor.Close(); cerr != nil {
-				params.Logger.Errorf("failed to close decompressor: %v", cerr)
-				if finalErr != nil {
-					// We already have an error, just log this one.
-					log.Errorf("failed to close decompressor %v: %v", name, cerr)
-				} else {
-					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
-				}
+			params.Logger.Infof("closing decompressor")
+			if cerr := closer.Close(); err != nil {
+				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
+				params.Logger.Error(cerr)
+				finalErr = errors.Join(finalErr, cerr)
 			}
 			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
 	}
 
 	// Copy the data. Will also write to the hasher.
-	if _, err = io.Copy(bufferedDest, reader); err != nil {
+	if _, err := io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
@@ -1142,25 +1153,25 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
 	return true
 }
 
-func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
+func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
+		return replication.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
 	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
+		return replication.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
 	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
+		return replication.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
 	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
+		return replication.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
-	pos, err := mysql.DecodePosition(posStr)
+	pos, err := replication.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
+		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }

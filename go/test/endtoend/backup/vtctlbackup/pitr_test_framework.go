@@ -26,7 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -103,7 +104,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			}
 		}
 
-		var fullBackupPos mysql.Position
+		var fullBackupPos replication.Position
 		t.Run("full backup", func(t *testing.T) {
 			InsertRowOnPrimary(t, "before-full-backup")
 			waitForReplica(t, 0)
@@ -113,7 +114,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			require.False(t, fullBackupPos.IsZero())
 			//
 			msgs := ReadRowsFromReplica(t, 0)
-			pos := mysql.EncodePosition(fullBackupPos)
+			pos := replication.EncodePosition(fullBackupPos)
 			backupPositions = append(backupPositions, pos)
 			rowsPerPosition[pos] = len(msgs)
 		})
@@ -182,7 +183,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// - auto
 				// - explicit last backup pos
 				// - back in history to the original full backup
-				var incrementalFromPos mysql.Position
+				var incrementalFromPos replication.Position
 				if !tc.autoPosition {
 					incrementalFromPos = lastBackupPos
 					if tc.fromFullPosition {
@@ -204,7 +205,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				require.NotEqual(t, manifest.Position, manifest.FromPosition)
 				require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
 
-				gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
+				gtidPurgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
 				require.NoError(t, err)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
@@ -221,7 +222,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				pos := backupPositions[r]
 				testName := fmt.Sprintf("%s, %d records", pos, rowsPerPosition[pos])
 				t.Run(testName, func(t *testing.T) {
-					restoreToPos, err := mysql.DecodePosition(pos)
+					restoreToPos, err := replication.DecodePosition(pos)
 					require.NoError(t, err)
 					TestReplicaRestoreToPos(t, 0, restoreToPos, "")
 					msgs := ReadRowsFromReplica(t, 0)
@@ -268,7 +269,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 
 		testedBackups := []testedBackupTimestampInfo{}
 
-		var fullBackupPos mysql.Position
+		var fullBackupPos replication.Position
 		t.Run("full backup", func(t *testing.T) {
 			insertRowOnPrimary(t, "before-full-backup")
 			waitForReplica(t, 0)
@@ -343,7 +344,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				// - auto
 				// - explicit last backup pos
 				// - back in history to the original full backup
-				var incrementalFromPos mysql.Position
+				var incrementalFromPos replication.Position
 				if !tc.autoPosition {
 					incrementalFromPos = lastBackupPos
 					if tc.fromFullPosition {
@@ -386,7 +387,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 					}
 				}
 
-				gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
+				gtidPurgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
 				require.NoError(t, err)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
@@ -464,7 +465,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 			}
 		}
 
-		var lastBackupPos mysql.Position
+		var lastBackupPos replication.Position
 		InsertRowOnPrimary(t, "before-incremental-backups")
 		waitForReplica(t, 0)
 		waitForReplica(t, 1)
@@ -588,12 +589,12 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 						require.False(t, fullBackupPos.IsZero())
 						//
 						msgs := ReadRowsFromReplica(t, tc.replicaIndex)
-						pos := mysql.EncodePosition(fullBackupPos)
+						pos := replication.EncodePosition(fullBackupPos)
 						rowsPerPosition[pos] = len(msgs)
 
 						lastBackupPos = fullBackupPos
 					case operationIncrementalBackup:
-						var incrementalFromPos mysql.Position // keep zero, we will use "auto"
+						var incrementalFromPos replication.Position // keep zero, we will use "auto"
 						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, incrementalFromPos, tc.expectError)
 						if tc.expectError != "" {
 							return
@@ -605,7 +606,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 						require.NotEqual(t, manifest.Position, manifest.FromPosition)
 						require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
 
-						gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, GetReplicaGtidPurged(t, tc.replicaIndex))
+						gtidPurgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, GetReplicaGtidPurged(t, tc.replicaIndex))
 						require.NoError(t, err)
 						fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 

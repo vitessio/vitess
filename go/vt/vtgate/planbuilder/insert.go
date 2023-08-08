@@ -94,7 +94,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
 	eIns := &engine.Insert{}
 	eIns.Keyspace = ks
-	eIns.Table = tables[0]
+	eIns.TableName = tables[0].Name.String()
 	eIns.Opcode = engine.InsertUnsharded
 	eIns.Query = generateQuery(stmt)
 	return &insert{eInsert: eIns}

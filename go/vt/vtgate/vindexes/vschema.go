@@ -23,6 +23,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/sqlescape"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -69,6 +70,9 @@ type VSchema struct {
 	uniqueVindexes    map[string]Vindex
 	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
 	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
+	// created is the time when the VSchema object was created. Used to detect if a cached
+	// copy of the vschema is stale.
+	created time.Time
 }
 
 // RoutingRule represents one routing rule.
@@ -111,6 +115,9 @@ type Table struct {
 	// Source is a keyspace-qualified table name that points to the source of a
 	// reference table. Only applicable for tables with Type set to "reference".
 	Source *Source `json:"source,omitempty"`
+
+	ChildForeignKeys  []ChildFKInfo  `json:"child_foreign_keys,omitempty"`
+	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -130,6 +137,12 @@ type ColumnVindex struct {
 	cost     int
 	partial  bool
 	backfill bool
+}
+
+// TableInfo contains column and foreign key info for a table.
+type TableInfo struct {
+	Columns     []Column
+	ForeignKeys []*sqlparser.ForeignKeyDefinition
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -259,6 +272,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 		globalTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
+		created:        time.Now(),
 	}
 	buildKeyspaces(source, vschema)
 	// buildGlobalTables before buildReferences so that buildReferences can
@@ -1145,6 +1159,17 @@ func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) 
 		return ks, nil
 	}
 	return keyspace, nil
+}
+
+// GetCreated returns the time when the VSchema was created.
+func (vschema *VSchema) GetCreated() time.Time {
+	return vschema.created
+}
+
+// ResetCreated resets the created time to zero value.
+// Used only in tests where vschema protos are compared.
+func (vschema *VSchema) ResetCreated() {
+	vschema.created = time.Time{}
 }
 
 // ByCost provides the interface needed for ColumnVindexes to

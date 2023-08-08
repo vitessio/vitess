@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -335,8 +335,8 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 			return ctx.Err()
 		default:
 		}
-		lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
-		if !mysql.IsEphemeralError(lastError) {
+		lastError := sqlerror.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
+		if !sqlerror.IsEphemeralError(lastError) {
 			continue
 		}
 		uuid := row.AsString("vdiff_uuid", "")
