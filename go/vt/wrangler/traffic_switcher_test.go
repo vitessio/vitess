@@ -36,7 +36,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -2159,8 +2158,7 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 	if err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil); err != nil {
 		t.Fatal(err)
 	}
-	emptyVschema := &vschemapb.Keyspace{}
-	if err := tme.ts.SaveVSchema(ctx, "ks2", emptyVschema); err != nil {
+	if err := tme.ts.SaveVSchema(ctx, "ks2", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
