@@ -594,7 +594,13 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	return tr.Selected.ValueExprs
 }
 
-func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
+func tryMergeJoinShardedRouting(
+	ctx *plancontext.PlanningContext,
+	routeA *Route,
+	routeB *Route,
+	m merger,
+	joinPredicates []sqlparser.Expr,
+) (ops.Operator, error) {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
