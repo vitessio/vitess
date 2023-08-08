@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -27,8 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
-
-	"time"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -53,7 +52,7 @@ type Controller interface {
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
-	SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, reason string) error
+	SetServingType(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error
 
 	// EnterLameduck causes tabletserver to enter the lameduck state.
 	EnterLameduck()

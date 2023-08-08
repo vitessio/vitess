@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql/binlog"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -149,7 +151,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	s.ServerID = 0x87654321
 
 	// With built-in begin.
-	event := NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
+	event := NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
 	require.True(t, event.IsValid(), "NewMariaDBGTIDEvent().IsValid() is false")
 	require.True(t, event.IsGTID(), "NewMariaDBGTIDEvent().IsGTID() if false")
 
@@ -160,7 +162,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.True(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
-	mgtid, ok := gtid.(MariadbGTID)
+	mgtid, ok := gtid.(replication.MariadbGTID)
 	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
 
 	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
@@ -168,7 +170,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	}
 
 	// Without built-in begin.
-	event = NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
+	event = NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
 	require.True(t, event.IsValid(), "NewMariaDBGTIDEvent().IsValid() is false")
 	require.True(t, event.IsGTID(), "NewMariaDBGTIDEvent().IsGTID() if false")
 
@@ -179,7 +181,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.False(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
-	mgtid, ok = gtid.(MariadbGTID)
+	mgtid, ok = gtid.(replication.MariadbGTID)
 	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
 
 	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {

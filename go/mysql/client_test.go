@@ -32,16 +32,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code ErrorCode, sqlState, subtext, query, pattern string) {
+func assertSQLError(t *testing.T, err error, code sqlerror.ErrorCode, sqlState, subtext, query, pattern string) {
 	t.Helper()
 
 	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
-	serr, ok := err.(*SQLError)
+	serr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
 	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
 	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
@@ -110,14 +112,14 @@ func TestConnectTimeout(t *testing.T) {
 	}()
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed", "", "")
+	assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "initial packet read failed", "", "")
 
 	// Now close the listener. Connect should fail right away,
 	// check the error.
 	listener.Close()
 	wg.Wait()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "", "")
+	assertSQLError(t, err, sqlerror.CRConnHostError, sqlerror.SSUnknownSQLState, "connection refused", "", "")
 
 	// Tests a connection where Dial to a unix socket fails
 	// properly returns the right error. To simulate exactly the
@@ -131,7 +133,7 @@ func TestConnectTimeout(t *testing.T) {
 	_, err = Connect(ctx, params)
 	os.Remove(name)
 	t.Log(err)
-	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "", "net\\.Dial\\(([a-z0-9A-Z_\\/]*)\\) to local server failed:")
+	assertSQLError(t, err, sqlerror.CRConnectionError, sqlerror.SSUnknownSQLState, "connection refused", "", "net\\.Dial\\(([a-z0-9A-Z_\\/]*)\\) to local server failed:")
 }
 
 // TestTLSClientDisabled creates a Server with TLS support, then connects

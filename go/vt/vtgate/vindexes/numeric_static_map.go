@@ -24,12 +24,10 @@ import (
 	"os"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -162,7 +160,7 @@ func (vind *NumericStaticMap) Map(ctx context.Context, vcursor VCursor, ids []sq
 }
 
 func (vind *NumericStaticMap) Hash(id sqltypes.Value) ([]byte, error) {
-	num, err := evalengine.ToUint64(id)
+	num, err := id.ToCastUint64()
 	if err != nil {
 		return nil, err
 	}

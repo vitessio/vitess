@@ -23,6 +23,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -139,7 +141,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(mpos), nil
+	return replication.EncodePosition(mpos), nil
 }
 
 // startSnapshotWithConsistentGTID performs the snapshotting without locking tables. This assumes
@@ -155,14 +157,14 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	}
 	// The "session_track_gtids = START_GTID" patch is only applicable to MySQL56 GTID, which is
 	// why we hardcode the position as mysql.Mysql56FlavorID
-	mpos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, result.SessionStateChanges)
+	mpos, err := replication.ParsePosition(replication.Mysql56FlavorID, result.SessionStateChanges)
 	if err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(mpos), nil
+	return replication.EncodePosition(mpos), nil
 }
 
 // Close rollsback any open transactions and closes the connection.

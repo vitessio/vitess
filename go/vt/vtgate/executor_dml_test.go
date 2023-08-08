@@ -25,7 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -2486,7 +2487,7 @@ func TestReservedConnDML(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "begin", nil)
 	require.NoError(t, err)
 
-	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, "connection gone")
+	sbc.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSNetError, "connection gone")
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},

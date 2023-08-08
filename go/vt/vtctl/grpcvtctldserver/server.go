@@ -60,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -263,7 +264,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		logstream = append(logstream, e)
 	})
 
-	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
+	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout, req.BatchSize)
 
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
 		err = vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
@@ -354,6 +355,12 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 
 	if req.DryRun { // we return what was passed in and parsed, rather than current
 		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
+	}
+
+	_, err = vindexes.BuildKeyspace(vs)
+	if err != nil {
+		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
+		return nil, err
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {

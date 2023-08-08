@@ -32,10 +32,11 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
-	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -56,12 +57,6 @@ const (
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
-var (
-	// Mutex to protect the access of the following variable
-	errantGtidMapMu = sync.Mutex{}
-	errantGtidMap   = make(map[string]string)
-)
-
 var forgetAliases *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
@@ -81,11 +76,6 @@ func init() {
 	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
-	stats.NewStringMapFuncWithMultiLabels("ErrantGtidMap", "Metric to track the errant GTIDs detected by VTOrc", []string{"TabletAlias"}, "ErrantGtid", func() map[string]string {
-		errantGtidMapMu.Lock()
-		defer errantGtidMapMu.Unlock()
-		return errantGtidMap
-	})
 
 	go initializeInstanceDao()
 }
@@ -154,6 +144,14 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 	}
 	log.Errorf(msg)
 	return fmt.Errorf(msg)
+}
+
+// RegisterStats registers stats from the inst package
+func RegisterStats() {
+	stats.NewGaugeFunc("ErrantGtidTabletCount", "Number of tablets with errant GTIDs", func() int64 {
+		instances, _ := ReadInstancesWithErrantGTIds("", "")
+		return int64(len(instances))
+	})
 }
 
 // ReadTopologyInstance collects information on the state of a MySQL
@@ -247,13 +245,13 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.GTIDMode = fullStatus.GtidMode
 			instance.ServerUUID = fullStatus.ServerUuid
 			if fullStatus.PrimaryStatus != nil {
-				GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
+				GtidExecutedPos, err := replication.DecodePosition(fullStatus.PrimaryStatus.Position)
 				errorChan <- err
 				if err == nil && GtidExecutedPos.GTIDSet != nil {
 					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
 				}
 			}
-			GtidPurgedPos, err := vitessmysql.DecodePosition(fullStatus.GtidPurged)
+			GtidPurgedPos, err := replication.DecodePosition(fullStatus.GtidPurged)
 			errorChan <- err
 			if err == nil && GtidPurgedPos.GTIDSet != nil {
 				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
@@ -271,8 +269,8 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	if fullStatus.ReplicationStatus != nil {
 		instance.HasReplicationCredentials = fullStatus.ReplicationStatus.SourceUser != ""
 
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.IoState))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.SqlState))
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.SqlState))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
 
@@ -382,15 +380,9 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
-				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
-		// update the errant gtid map
-		go func() {
-			errantGtidMapMu.Lock()
-			defer errantGtidMapMu.Unlock()
-			errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
-		}()
 	}
 
 	latency.Stop("instance")
@@ -423,7 +415,7 @@ func getKeyspaceShardName(keyspace, shard string) string {
 }
 
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
-	pos, err := vitessmysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil || pos.GTIDSet == nil {
 		return BinlogCoordinates{}, err
 	}
@@ -679,6 +671,18 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 		`
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	return readInstancesByCondition(condition, args, "")
+}
+
+// ReadInstancesWithErrantGTIds reads all instances with errant GTIDs
+func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, error) {
+	condition := `
+			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and gtid_errant != ''
+		`
+
+	args := sqlutils.Args(keyspace, keyspace, shard, shard)
 	return readInstancesByCondition(condition, args, "")
 }
 
@@ -1118,7 +1122,9 @@ func ForgetLongUnseenInstances() error {
 		log.Error(err)
 		return err
 	}
-	_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+	if rows > 0 {
+		_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+	}
 	return err
 }
 

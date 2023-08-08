@@ -41,15 +41,15 @@ type (
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		// TODO: we should remove this and replace it with rewriters
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 
-		// AddColumn tells an operator to also output an additional column specified.
-		// The offset to the column is returned.
-		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (Operator, int, error)
+		AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
 
-		GetColumns() ([]*sqlparser.AliasedExpr, error)
+		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error)
 
-		GetSelectExprs() (sqlparser.SelectExprs, error)
+		GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error)
+		GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error)
 
 		ShortDescription() string
 

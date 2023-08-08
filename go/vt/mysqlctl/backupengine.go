@@ -28,6 +28,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -119,7 +121,7 @@ type RestoreParams struct {
 	StartTime time.Time
 	// RestoreToPos hints that a point in time recovery is requested, to recover up to the specific given pos.
 	// When empty, the restore is a normal from full backup
-	RestoreToPos mysql.Position
+	RestoreToPos replication.Position
 	// RestoreToTimestamp hints that a  point in time recovery is requested, to recover up to, and excluding, the
 	// given timestamp.
 	// RestoreToTimestamp and RestoreToPos are mutually exclusive.
@@ -268,14 +270,14 @@ type BackupManifest struct {
 	BackupMethod string
 
 	// Position is the replication position at which the backup was taken.
-	Position mysql.Position
+	Position replication.Position
 
 	// PurgedPosition stands for purged GTIDs, information that is necessary for PITR recovery. This is specific to MySQL56
-	PurgedPosition mysql.Position
+	PurgedPosition replication.Position
 
 	// FromPosition is only applicable to incremental backups, and stands for the position from
 	// which incremental changes are backed up.
-	FromPosition mysql.Position
+	FromPosition replication.Position
 
 	// Incremental indicates whether this is an incremental backup
 	Incremental bool

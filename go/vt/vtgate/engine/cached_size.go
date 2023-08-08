@@ -233,7 +233,7 @@ func (cached *Filter) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Predicate vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.Predicate.(cachedObject); ok {

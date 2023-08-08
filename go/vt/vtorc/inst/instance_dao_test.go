@@ -326,6 +326,90 @@ func TestReadProblemInstances(t *testing.T) {
 	}
 }
 
+// TestReadInstancesWithErrantGTIds is used to test the functionality of ReadInstancesWithErrantGTIds and verify its failure modes and successes.
+func TestReadInstancesWithErrantGTIds(t *testing.T) {
+	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
+	tests := []struct {
+		name              string
+		keyspace          string
+		shard             string
+		sql               []string
+		instancesRequired []string
+	}{
+		{
+			name:              "No instances with errant GTID",
+			sql:               nil,
+			instancesRequired: nil,
+		}, {
+			name: "errant GTID",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name:     "keyspace filtering - success",
+			keyspace: "ks",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name:     "keyspace filtering - failure",
+			keyspace: "unknown",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: nil,
+		}, {
+			name:     "shard filtering - success",
+			keyspace: "ks",
+			shard:    "0",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: []string{"zone1-0000000112"},
+		}, {
+			name:     "shard filtering - failure",
+			keyspace: "ks",
+			shard:    "unknown",
+			sql: []string{
+				"update database_instance set gtid_errant = '729a4cc4-8680-11ed-a104-47706090afbd:1' where alias = 'zone1-0000000112'",
+			},
+			instancesRequired: nil,
+		},
+	}
+
+	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
+	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
+	oldVal := config.Config.InstancePollSeconds
+	defer func() {
+		config.Config.InstancePollSeconds = oldVal
+	}()
+	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each test should clear the database. The easiest way to do that is to run all the initialization commands again
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+
+			for _, query := range append(initialSQL, tt.sql...) {
+				_, err := db.ExecVTOrc(query)
+				require.NoError(t, err)
+			}
+
+			instances, err := ReadInstancesWithErrantGTIds(tt.keyspace, tt.shard)
+			require.NoError(t, err)
+			var tabletAliases []string
+			for _, instance := range instances {
+				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+			}
+			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
+		})
+	}
+}
+
 // TestReadInstancesByCondition is used to test the functionality of readInstancesByCondition and verify its failure modes and successes.
 func TestReadInstancesByCondition(t *testing.T) {
 	tests := []struct {
