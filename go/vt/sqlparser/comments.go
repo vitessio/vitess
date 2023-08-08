@@ -224,6 +224,15 @@ type CommentDirectives struct {
 	m map[string]string
 }
 
+// ResetDirectives sets the _directives member to `nil`, which means the next call to Directives()
+// will re-evaluate it.
+func (c *ParsedComments) ResetDirectives() {
+	if c == nil {
+		return
+	}
+	c._directives = nil
+}
+
 // Directives parses the comment list for any execution directives
 // of the form:
 //

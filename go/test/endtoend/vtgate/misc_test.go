@@ -428,7 +428,7 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
 	utils.Exec(t, conn, "drop table function_default")
 
-	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
+	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT (UTC_TIMESTAMP))`)
 	utils.Exec(t, conn, "drop table function_default")
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)

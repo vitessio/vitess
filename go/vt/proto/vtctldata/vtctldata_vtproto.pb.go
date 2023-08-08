@@ -1326,6 +1326,11 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.BatchSize != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.BatchSize))
+		i--
+		dAtA[i] = 0x50
+	}
 	if m.CallerId != nil {
 		size, err := m.CallerId.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -11583,6 +11588,9 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 		l = m.CallerId.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.BatchSize != 0 {
+		n += 1 + sov(uint64(m.BatchSize))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -18764,6 +18772,25 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BatchSize", wireType)
+			}
+			m.BatchSize = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BatchSize |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
