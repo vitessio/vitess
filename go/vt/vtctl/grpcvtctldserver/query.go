@@ -80,7 +80,10 @@ func rowToSchemaMigration(row sqltypes.Row) (sm *vtctldatapb.SchemaMigration, er
 		return nil, err
 	}
 
-	// liveness_indicator row[13]
+	sm.LivenessTimestamp, err = valueToVTTime(row[13])
+	if err != nil {
+		return nil, err
+	}
 
 	sm.CompletedAt, err = valueToVTTime(row[14])
 	if err != nil {
@@ -125,7 +128,7 @@ func rowToSchemaMigration(row sqltypes.Row) (sm *vtctldatapb.SchemaMigration, er
 	}
 
 	sm.MigrationContext = row[23].ToString()
-	// ddl_action row[24]
+	sm.DdlAction = row[24].ToString()
 	sm.Message = row[25].ToString()
 
 	sm.EtaSeconds, err = row[26].ToInt64()

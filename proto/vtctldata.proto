@@ -111,6 +111,7 @@ enum QueryOrdering {
   DESCENDING = 2;
 }
 
+// SchemaMigration represents a row in the schema_migrations sidecar table.
 message SchemaMigration {
   string uuid = 1;
   string keyspace = 2;
@@ -124,7 +125,7 @@ message SchemaMigration {
   vttime.Time requested_at = 10;
   vttime.Time ready_at = 11;
   vttime.Time started_at = 12;
-  // liveness_timestamp = 13;
+  vttime.Time liveness_timestamp = 13;
   vttime.Time completed_at = 14;
   vttime.Time cleaned_up_at = 15;
   Status status = 16;
@@ -135,7 +136,7 @@ message SchemaMigration {
   bool tablet_failure = 21;
   float progress = 22;
   string migration_context = 23;
-  // action (enum - CREATE/DROP/...) = 24;
+  string ddl_action = 24;
   string message = 25;
   int64 eta_seconds = 26;
   uint64 rows_copied = 27;

@@ -42400,6 +42400,9 @@ export namespace vtctldata {
         /** SchemaMigration started_at */
         started_at?: (vttime.ITime|null);
 
+        /** SchemaMigration liveness_timestamp */
+        liveness_timestamp?: (vttime.ITime|null);
+
         /** SchemaMigration completed_at */
         completed_at?: (vttime.ITime|null);
 
@@ -42429,6 +42432,9 @@ export namespace vtctldata {
 
         /** SchemaMigration migration_context */
         migration_context?: (string|null);
+
+        /** SchemaMigration ddl_action */
+        ddl_action?: (string|null);
 
         /** SchemaMigration message */
         message?: (string|null);
@@ -42563,6 +42569,9 @@ export namespace vtctldata {
         /** SchemaMigration started_at. */
         public started_at?: (vttime.ITime|null);
 
+        /** SchemaMigration liveness_timestamp. */
+        public liveness_timestamp?: (vttime.ITime|null);
+
         /** SchemaMigration completed_at. */
         public completed_at?: (vttime.ITime|null);
 
@@ -42592,6 +42601,9 @@ export namespace vtctldata {
 
         /** SchemaMigration migration_context. */
         public migration_context: string;
+
+        /** SchemaMigration ddl_action. */
+        public ddl_action: string;
 
         /** SchemaMigration message. */
         public message: string;

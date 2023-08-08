@@ -680,6 +680,15 @@ func (m *SchemaMigration) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0xca
 	}
+	if len(m.DdlAction) > 0 {
+		i -= len(m.DdlAction)
+		copy(dAtA[i:], m.DdlAction)
+		i = encodeVarint(dAtA, i, uint64(len(m.DdlAction)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xc2
+	}
 	if len(m.MigrationContext) > 0 {
 		i -= len(m.MigrationContext)
 		copy(dAtA[i:], m.MigrationContext)
@@ -772,6 +781,16 @@ func (m *SchemaMigration) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x72
+	}
+	if m.LivenessTimestamp != nil {
+		size, err := m.LivenessTimestamp.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x6a
 	}
 	if m.StartedAt != nil {
 		size, err := m.StartedAt.MarshalToSizedBufferVT(dAtA[:i])
@@ -11849,6 +11868,10 @@ func (m *SchemaMigration) SizeVT() (n int) {
 		l = m.StartedAt.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.LivenessTimestamp != nil {
+		l = m.LivenessTimestamp.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.CompletedAt != nil {
 		l = m.CompletedAt.SizeVT()
 		n += 1 + l + sov(uint64(l))
@@ -11882,6 +11905,10 @@ func (m *SchemaMigration) SizeVT() (n int) {
 		n += 6
 	}
 	l = len(m.MigrationContext)
+	if l > 0 {
+		n += 2 + l + sov(uint64(l))
+	}
+	l = len(m.DdlAction)
 	if l > 0 {
 		n += 2 + l + sov(uint64(l))
 	}
@@ -17354,6 +17381,42 @@ func (m *SchemaMigration) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 13:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LivenessTimestamp", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.LivenessTimestamp == nil {
+				m.LivenessTimestamp = &vttime.Time{}
+			}
+			if err := m.LivenessTimestamp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		case 14:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CompletedAt", wireType)
@@ -17626,6 +17689,38 @@ func (m *SchemaMigration) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.MigrationContext = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 24:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DdlAction", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.DdlAction = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 25:
 			if wireType != 2 {
