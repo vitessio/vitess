@@ -1746,6 +1746,13 @@ func (m *BackupShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.IncrementalFromPos) > 0 {
+		i -= len(m.IncrementalFromPos)
+		copy(dAtA[i:], m.IncrementalFromPos)
+		i = encodeVarint(dAtA, i, uint64(len(m.IncrementalFromPos)))
+		i--
+		dAtA[i] = 0x32
+	}
 	if m.UpgradeSafe {
 		i--
 		if m.UpgradeSafe {
@@ -11735,6 +11742,10 @@ func (m *BackupShardRequest) SizeVT() (n int) {
 	if m.UpgradeSafe {
 		n += 2
 	}
+	l = len(m.IncrementalFromPos)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -19723,6 +19734,38 @@ func (m *BackupShardRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.UpgradeSafe = bool(v != 0)
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncrementalFromPos", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IncrementalFromPos = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

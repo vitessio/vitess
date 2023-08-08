@@ -79,10 +79,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite
 		NoDeps:     ctx.SemTable.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
 	if j.Predicate != nil {
-		err := newOp.collectPredicate(ctx, j.Predicate)
-		if err != nil {
-			return nil, rewrite.SameTree, err
-		}
+		newOp.collectPredicate(ctx, j.Predicate)
 	}
 	return newOp, rewrite.NewTree("merge querygraphs into a single one", newOp), nil
 }

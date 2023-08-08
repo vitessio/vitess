@@ -96,10 +96,7 @@ func (qg *QueryGraph) collectPredicates(ctx *plancontext.PlanningContext, sel *s
 	predicates := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 
 	for _, predicate := range predicates {
-		err := qg.collectPredicate(ctx, predicate)
-		if err != nil {
-			return err
-		}
+		qg.collectPredicate(ctx, predicate)
 	}
 	return nil
 }
@@ -130,7 +127,7 @@ func (qg *QueryGraph) addJoinPredicates(ctx *plancontext.PlanningContext, ts sem
 	})
 }
 
-func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) error {
+func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
@@ -144,7 +141,6 @@ func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predica
 	default:
 		qg.addJoinPredicates(ctx, deps, predicate)
 	}
-	return nil
 }
 
 func (qg *QueryGraph) addToSingleTable(ctx *plancontext.PlanningContext, table semantics.TableSet, predicate sqlparser.Expr) bool {
@@ -203,10 +199,7 @@ func (qg *QueryGraph) GetOrdering() ([]ops.OrderBy, error) {
 
 func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		err := qg.collectPredicate(ctx, e)
-		if err != nil {
-			return nil, err
-		}
+		qg.collectPredicate(ctx, e)
 	}
 	return qg, nil
 }
