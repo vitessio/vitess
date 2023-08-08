@@ -818,3 +818,32 @@ func BenchmarkStringTraces(b *testing.B) {
 		})
 	}
 }
+
+func TestCloneComments(t *testing.T) {
+	c := []string{"/*vt+ a=b */"}
+	parsedComments := Comments(c).Parsed()
+	directives := parsedComments.Directives()
+	{
+		assert.NotEmpty(t, directives.m)
+		val, ok := directives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+	cloned := CloneRefOfParsedComments(parsedComments)
+	cloned.ResetDirectives()
+	clonedDirectives := cloned.Directives()
+	{
+		assert.NotEmpty(t, clonedDirectives.m)
+		val, ok := clonedDirectives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+	{
+		delete(directives.m, "a")
+		assert.Empty(t, directives.m)
+
+		val, ok := clonedDirectives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+}
