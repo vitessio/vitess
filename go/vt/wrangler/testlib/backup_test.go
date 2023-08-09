@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/mysql"
@@ -145,9 +147,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -165,9 +167,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -218,9 +220,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -382,9 +384,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -401,9 +403,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -443,9 +445,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	timer := time.NewTicker(1 * time.Second)
 	<-timer.C
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -471,9 +473,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -520,9 +522,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	timer = time.NewTicker(1 * time.Second)
 	<-timer.C
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -600,9 +602,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -618,9 +620,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -660,9 +662,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -774,9 +776,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -793,9 +795,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -826,9 +828,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,

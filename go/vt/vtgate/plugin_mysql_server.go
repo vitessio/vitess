@@ -32,6 +32,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -239,14 +242,14 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
 		if err != nil {
-			return mysql.NewSQLErrorFromError(err)
+			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
 	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable))
 
-	if err := mysql.NewSQLErrorFromError(err); err != nil {
+	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
 		return err
 	}
 	fillInTxStatusFlags(c, session)
@@ -302,7 +305,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[st
 	}()
 
 	session, fld, err := vh.vtg.Prepare(ctx, session, query, bindVars)
-	err = mysql.NewSQLErrorFromError(err)
+	err = sqlerror.NewSQLErrorFromError(err)
 	if err != nil {
 		return nil, err
 	}
@@ -345,14 +348,14 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
 		if err != nil {
-			return mysql.NewSQLErrorFromError(err)
+			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
 	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars)
 	if err != nil {
-		return mysql.NewSQLErrorFromError(err)
+		return sqlerror.NewSQLErrorFromError(err)
 	}
 	fillInTxStatusFlags(c, session)
 
@@ -374,7 +377,7 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	return vterrors.VT12001("ComBinlogDumpGTID for the VTGate handler")
 }
 
@@ -385,7 +388,7 @@ func (vh *vtgateHandler) KillConnection(ctx context.Context, connectionID uint32
 
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return mysql.NewSQLError(mysql.ERNoSuchThread, mysql.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 
 	// First, we mark the connection for close, so that even when the context is cancelled, while returning the response back to client,
@@ -403,7 +406,7 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	defer vh.mu.Unlock()
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return mysql.NewSQLError(mysql.ERNoSuchThread, mysql.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 	c.CancelCtx()
 	return nil
@@ -422,6 +425,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			},
 			Autocommit:           true,
 			DDLStrategy:          defaultDDLStrategy,
+			MigrationContext:     "",
 			SessionUUID:          u.String(),
 			EnableSystemSettings: sysVarSetEnabled,
 		}

@@ -612,7 +612,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 	streamHealthResponse := shrs[0]
 
 	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
-	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
+	assert.True(t, streamHealthResponse.PrimaryTermStartTimestamp >= baseTime)
 }
 
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.

@@ -123,8 +123,12 @@ func (vw *VSchemaWrapper) ConnCollation() collations.ID {
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {
 }
 
-func (vw *VSchemaWrapper) ForeignKeyMode() string {
-	return "allow"
+func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	defaultFkMode := vschemapb.Keyspace_FK_UNMANAGED
+	if vw.V.Keyspaces[keyspace] != nil && vw.V.Keyspaces[keyspace].ForeignKeyMode != vschemapb.Keyspace_FK_DEFAULT {
+		return vw.V.Keyspaces[keyspace].ForeignKeyMode, nil
+	}
+	return defaultFkMode, nil
 }
 
 func (vw *VSchemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {

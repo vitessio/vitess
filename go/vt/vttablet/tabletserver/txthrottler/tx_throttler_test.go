@@ -22,6 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -112,7 +113,6 @@ func TestEnabledThrottler(t *testing.T) {
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
-	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
 	env := tabletenv.NewEnv(config, t.Name())
@@ -126,6 +126,8 @@ func TestEnabledThrottler(t *testing.T) {
 	})
 
 	assert.Nil(t, throttlerImpl.Open())
+	throttlerStateImpl := throttlerImpl.state.(*txThrottlerStateImpl)
+	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttlerImpl.topoWatchers.Counts())
 
@@ -161,29 +163,66 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
 }
 
-func TestNewTxThrottler(t *testing.T) {
+func TestFetchKnownCells(t *testing.T) {
+	{
+		ts := memorytopo.NewServer("cell1", "cell2")
+		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		assert.Equal(t, []string{"cell1", "cell2"}, cells)
+	}
+	{
+		ts := memorytopo.NewServer()
+		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		assert.Equal(t, []string{"cell1"}, cells)
+	}
+}
+
+func TestDryRunThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, t.Name())
 
-	{
-		// disabled
-		config.EnableTxThrottler = false
-		throttler := NewTxThrottler(env, nil)
-		throttlerImpl, _ := throttler.(*txThrottler)
-		assert.NotNil(t, throttlerImpl)
-		assert.NotNil(t, throttlerImpl.config)
-		assert.False(t, throttlerImpl.config.enabled)
+	testCases := []struct {
+		Name                           string
+		txThrottlerStateShouldThrottle bool
+		throttlerDryRun                bool
+		expectedResult                 bool
+	}{
+		{Name: "Real run throttles when txThrottlerStateImpl says it should", txThrottlerStateShouldThrottle: true, throttlerDryRun: false, expectedResult: true},
+		{Name: "Real run does not throttle when txThrottlerStateImpl says it should not", txThrottlerStateShouldThrottle: false, throttlerDryRun: false, expectedResult: false},
+		{Name: "Dry run does not throttle when txThrottlerStateImpl says it should", txThrottlerStateShouldThrottle: true, throttlerDryRun: true, expectedResult: false},
+		{Name: "Dry run does not throttle when txThrottlerStateImpl says it should not", txThrottlerStateShouldThrottle: false, throttlerDryRun: true, expectedResult: false},
 	}
-	{
-		// enabled
-		config.EnableTxThrottler = true
-		config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
-		config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
-		throttler := NewTxThrottler(env, nil)
-		throttlerImpl, _ := throttler.(*txThrottler)
-		assert.NotNil(t, throttlerImpl)
-		assert.NotNil(t, throttlerImpl.config)
-		assert.True(t, throttlerImpl.config.enabled)
-		assert.Equal(t, []string{"cell1", "cell2"}, throttlerImpl.config.healthCheckCells)
+
+	for _, aTestCase := range testCases {
+		theTestCase := aTestCase
+
+		t.Run(theTestCase.Name, func(t *testing.T) {
+			aTxThrottler := &txThrottler{
+				config: &tabletenv.TabletConfig{
+					EnableTxThrottler: true,
+					TxThrottlerDryRun: theTestCase.throttlerDryRun,
+				},
+				state:             &mockTxThrottlerState{shouldThrottle: theTestCase.txThrottlerStateShouldThrottle},
+				throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+				requestsTotal:     env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerRequests", "transaction throttler requests", "workload"),
+				requestsThrottled: env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerThrottled", "transaction throttler requests throttled", "workload"),
+			}
+
+			assert.Equal(t, theTestCase.expectedResult, aTxThrottler.Throttle(100, "some-workload"))
+		})
 	}
+}
+
+type mockTxThrottlerState struct {
+	shouldThrottle bool
+}
+
+func (t *mockTxThrottlerState) deallocateResources() {
+
+}
+func (t *mockTxThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
+
+}
+
+func (t *mockTxThrottlerState) throttle() bool {
+	return t.shouldThrottle
 }

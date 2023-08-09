@@ -26,14 +26,16 @@ type AppThrottle struct {
 	AppName  string
 	ExpireAt time.Time
 	Ratio    float64
+	Exempt   bool
 }
 
 // NewAppThrottle creates an AppThrottle struct
-func NewAppThrottle(appName string, expireAt time.Time, ratio float64) *AppThrottle {
+func NewAppThrottle(appName string, expireAt time.Time, ratio float64, exempt bool) *AppThrottle {
 	result := &AppThrottle{
 		AppName:  appName,
 		ExpireAt: expireAt,
 		Ratio:    ratio,
+		Exempt:   exempt,
 	}
 	return result
 }

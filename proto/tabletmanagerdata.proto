@@ -219,6 +219,8 @@ message ApplySchemaRequest {
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
   string sql_mode = 6;
+  // BatchSize indicates how many queries to apply together
+  int64 batch_size = 7;
 }
 
 message ApplySchemaResponse {
@@ -644,4 +646,24 @@ message ResetSequencesRequest {
 }
 
 message ResetSequencesResponse {
+}
+
+message CheckThrottlerRequest {
+  string app_name = 1;
+}
+
+message CheckThrottlerResponse {
+  // StatusCode is HTTP compliant response code (e.g. 200 for OK)
+  int32 status_code = 1;
+  // Value is the metric value collected by the tablet
+  double value = 2;
+  // Threshold is the throttling threshold the table was comparing the value with
+  double threshold = 3;
+  // Error indicates an error retrieving the value
+  string error = 4;
+  // Message 
+  string message = 5;
+  // RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
+  // that heartbeats lease should be renwed.
+  bool recently_checked = 6;
 }

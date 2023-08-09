@@ -829,10 +829,47 @@ func BitwiseOperators(yield Query) {
 func WeightString(yield Query) {
 	var inputs = []string{
 		`'foobar'`, `_latin1 'foobar'`,
-		`'foobar' as char(12)`, `'foobar' as binary(12)`,
+		`'foobar' as char(12)`, `'foobar' as char(3)`, `'foobar' as binary(12)`, `'foobar' as binary(3)`,
+		`'foobar' collate utf8mb4_bin as char(12)`, `'foobar' collate utf8mb4_bin as char(3)`,
+		`'foobar' collate binary as char(12)`, `'foobar' collate binary as char(3)`,
 		`_latin1 'foobar' as char(12)`, `_latin1 'foobar' as binary(12)`,
+		`_binary 'foobar' as char(12)`, `_binary 'foobar' as binary(12)`,
+		`1`, `-1`, `9223372036854775807`, `18446744073709551615`, `-9223372036854775808`,
+		`1 as char(1)`, `-1 as char(1)`, `9223372036854775807 as char(1)`, `18446744073709551615 as char(1)`, `-9223372036854775808 as char(1)`,
+		`1 as char(32)`, `-1 as char(32)`, `9223372036854775807 as char(32)`, `18446744073709551615 as char(32)`, `-9223372036854775808 as char(32)`,
+		`1 as binary(1)`, `-1 as binary(1)`, `9223372036854775807 as binary(1)`, `18446744073709551615 as binary(1)`, `-9223372036854775808 as binary(1)`,
+		`1 as binary(32)`, `-1 as binary(32)`, `9223372036854775807 as binary(32)`, `18446744073709551615 as binary(32)`, `-9223372036854775808 as binary(32)`,
 		`1234.0`, `12340e0`,
 		`0x1234`, `0x1234 as char(12)`, `0x1234 as char(2)`,
+		`date'2000-01-01'`, `date'2000-01-01' as char(12)`, `date'2000-01-01' as char(2)`, `date'2000-01-01' as binary(12)`, `date'2000-01-01' as binary(2)`,
+		`timestamp'2000-01-01 11:22:33'`, `timestamp'2000-01-01 11:22:33' as char(12)`, `timestamp'2000-01-01 11:22:33' as char(2)`, `timestamp'2000-01-01 11:22:33' as binary(12)`, `timestamp'2000-01-01 11:22:33' as binary(2)`,
+		`timestamp'2000-01-01 11:22:33.123456'`, `timestamp'2000-01-01 11:22:33.123456' as char(12)`, `timestamp'2000-01-01 11:22:33.123456' as char(2)`, `timestamp'2000-01-01 11:22:33.123456' as binary(12)`, `timestamp'2000-01-01 11:22:33.123456' as binary(2)`,
+		`time'-11:22:33'`, `time'-11:22:33' as char(12)`, `time'-11:22:33' as char(2)`, `time'-11:22:33' as binary(12)`, `time'-11:22:33' as binary(2)`,
+		`time'11:22:33'`, `time'11:22:33' as char(12)`, `time'11:22:33' as char(2)`, `time'11:22:33' as binary(12)`, `time'11:22:33' as binary(2)`,
+		`time'101:22:33'`, `time'101:22:33' as char(12)`, `time'101:22:33' as char(2)`, `time'101:22:33' as binary(12)`, `time'101:22:33' as binary(2)`,
+		"cast(0 as json)", "cast(1 as json)",
+		"cast(true as json)", "cast(false as json)",
+		"cast('{}' as json)", "cast('[]' as json)",
+		"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
+		"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+		"cast('9223372036854775807' as json)", "cast('18446744073709551615' as json)",
+		// JSON strings
+		"cast('\"foo\"' as json)", "cast('\"bar\"' as json)", "cast('invalid' as json)",
+		// JSON binary values
+		"cast(_binary' \"foo\"' as json)", "cast(_binary '\"bar\"' as json)",
+		"cast(0xFF666F6F626172FF as json)", "cast(0x666F6F626172FF as json)",
+		"cast(0b01 as json)", "cast(0b001 as json)",
+		// JSON arrays
+		"cast('[\"a\"]' as json)", "cast('[\"ab\"]' as json)",
+		"cast('[\"ab\", \"cd\", \"ef\"]' as json)", "cast('[\"ab\", \"ef\"]' as json)",
+		// JSON objects
+		"cast('{\"a\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"a\": 1}' as json)",
+		"cast('{\"c\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"c\": 1}' as json)",
+		"cast(' \"b\": 2}' as json)", "cast('\"a\": 1' as json)",
+		// JSON date, datetime & time
+		"cast(date '2000-01-01' as json)", "cast(date '2000-01-02' as json)",
+		"cast(timestamp '2000-01-01 12:34:58' as json)",
+		"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
 	}
 
 	for _, i := range inputs {

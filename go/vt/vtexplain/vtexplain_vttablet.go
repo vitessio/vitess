@@ -720,13 +720,13 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 		if !ok {
 			continue
 		}
-		value, err := evalengine.LiteralToValue(lit)
+		value, err := sqlparser.LiteralToValue(lit)
 		if err != nil {
 			return "", nil, 0, nil, err
 		}
 
 		// Cast the value in the tuple to the expected value of the column
-		castedValue, err := evalengine.Cast(value, colType)
+		castedValue, err := sqltypes.Cast(value, colType)
 		if err != nil {
 			return "", nil, 0, nil, err
 		}

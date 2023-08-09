@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -358,8 +357,8 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	if len(qr.Rows) != 1 {
 		return 0, 0
 	}
-	t, _ := evalengine.ToInt64(qr.Rows[0][0])
-	e, _ := evalengine.ToInt64(qr.Rows[0][1])
+	t, _ := qr.Rows[0][0].ToCastInt64()
+	e, _ := qr.Rows[0][1].ToCastInt64()
 	return t, e
 }
 

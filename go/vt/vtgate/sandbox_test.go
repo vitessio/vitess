@@ -19,6 +19,8 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"strconv"
 	"sync"
 
 	"vitess.io/vitess/go/json2"
@@ -284,6 +286,16 @@ func (sct *sandboxTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace str
 	// panic("not supported: WatchSrvKeyspace")
 }
 
+func hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+func GetSrvVSchemaHash(vs *vschemapb.SrvVSchema) string {
+	return strconv.Itoa(int(hash(vs.String())))
+}
+
 // WatchSrvVSchema is part of the srvtopo.Server interface.
 //
 // If the sandbox was created with a backing topo service, piggy back on it
@@ -302,11 +314,24 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 	if !callback(current.Value, nil) {
 		panic("sandboxTopo callback returned false")
 	}
+	currentHash := GetSrvVSchemaHash(current.Value)
 	go func() {
 		for {
-			update := <-updateChan
-			if !callback(update.Value, update.Err) {
-				panic("sandboxTopo callback returned false")
+			select {
+			case <-ctx.Done():
+				return
+			case update := <-updateChan:
+				newHash := GetSrvVSchemaHash(update.Value)
+				if newHash == currentHash {
+					// sometimes we get the same update multiple times. This results in the plan cache to be cleared
+					// causing tests to fail. So we just ignore the duplicate updates.
+					continue
+				}
+				currentHash = newHash
+				if !callback(update.Value, update.Err) {
+					panic("sandboxTopo callback returned false")
+				}
+
 			}
 		}
 	}()

@@ -399,5 +399,10 @@ func ParseTimeDecimal(d decimal.Decimal, l int32, prec int) (Time, int, bool) {
 	} else {
 		t = t.Round(prec)
 	}
+	// We only support a maximum of nanosecond precision,
+	// so if the decimal has any larger precision we truncate it.
+	if prec > 9 {
+		prec = 9
+	}
 	return t, prec, ok
 }

@@ -760,7 +760,7 @@ func TestSelectSystemVariables(t *testing.T) {
 
 	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@socket, @@query_timeout"
+		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@migration_context, @@socket, @@query_timeout"
 
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
@@ -776,6 +776,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@session_track_gtids", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "@@ddl_strategy", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "@@migration_context", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "@@socket", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
 		},
@@ -792,6 +793,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("a fine gtid"),
 			sqltypes.NewFloat64(13),
 			sqltypes.NewVarChar("own_gtid"),
+			sqltypes.NewVarChar(""),
 			sqltypes.NewVarChar(""),
 			sqltypes.NewVarChar(""),
 			sqltypes.NewInt64(0),
@@ -3011,6 +3013,8 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 
 	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4)
+	// some sleep for all goroutines to start
+	time.Sleep(100 * time.Millisecond)
 	before := runtime.NumGoroutine()
 
 	query := "select id, col from user order by id limit 2"
@@ -3640,15 +3644,15 @@ func TestSelectAggregationNoData(t *testing.T) {
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1", "int64")),
-			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64")),
+			expSandboxQ: "select col1, col2, 1 from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|1|weight_string(col2)", "int64|int64|varbinary")),
-			expSandboxQ: "select col2, 1, weight_string(col2) from (select col1, col2 from `user`) as x limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary")),
+			expSandboxQ: "select col1, col2, 1, weight_string(col2) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[]`,
 		},
@@ -3724,29 +3728,29 @@ func TestSelectAggregationData(t *testing.T) {
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1"),
-			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64"), "100|200|1", "200|300|1"),
+			expSandboxQ: "select col1, col2, 1 from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|1|weight_string(col2)", "int64|int64|varbinary"), "3|1|NULL", "2|1|NULL"),
-			expSandboxQ: "select col2, 1, weight_string(col2) from (select col1, col2 from `user`) as x limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary"), "100|3|1|NULL", "200|2|1|NULL"),
+			expSandboxQ: "select col1, col2, 1, weight_string(col2) from (select col1, col2 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(2) INT64(4)] [INT64(3) INT64(5)]]`,
 		},
 		{
 			sql:         `select count(col1) from (select id, col1 from user limit 2) x`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1", "varchar"), "a", "b"),
-			expSandboxQ: "select col1 from (select id, col1 from `user`) as x limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1", "int64|varchar"), "1|a", "2|b"),
+			expSandboxQ: "select id, col1 from (select id, col1 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(col1)" type:INT64]`,
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select count(col1), col2 from (select col2, col1 from user limit 9) x group by col2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "varchar|int64|varbinary"), "a|3|NULL", "b|2|NULL"),
-			expSandboxQ: "select col1, col2, weight_string(col2) from (select col2, col1 from `user`) as x limit :__upper_limit",
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|col1|weight_string(col2)", "int64|varchar|varbinary"), "3|a|NULL", "2|b|NULL"),
+			expSandboxQ: "select col2, col1, weight_string(col2) from (select col2, col1 from `user`) as x limit :__upper_limit",
 			expField:    `[name:"count(col1)" type:INT64 name:"col2" type:INT64]`,
 			expRow:      `[[INT64(4) INT64(2)] [INT64(5) INT64(3)]]`,
 		},
@@ -3867,7 +3871,7 @@ func TestSelectCFC(t *testing.T) {
 	_, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
 	require.NoError(t, err)
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:

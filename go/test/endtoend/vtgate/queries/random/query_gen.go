@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"math/rand"
 
-	"golang.org/x/exp/slices"
+	"vitess.io/vitess/go/slice"
 
-	"vitess.io/vitess/go/slices2"
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -298,7 +298,7 @@ func (sg *selectGenerator) randomSelect() {
 	// TODO: only_full_group_by related errors in Vitess
 	var exprGenerators []sqlparser.ExprGenerator
 	if canAggregate && testFailingQueries {
-		exprGenerators = slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
+		exprGenerators = slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 		// add scalar subqueries
 		if sg.r.Intn(10) < 1 {
 			exprGenerators = append(exprGenerators, sg)
@@ -470,7 +470,7 @@ func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
 
 // returns the aggregation columns as three types: sqlparser.SelectExprs, []column
 func (sg *selectGenerator) createAggregations(tables []tableT) (aggregates []column) {
-	exprGenerators := slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
+	exprGenerators := slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 	// add scalar subqueries
 	// TODO: subqueries fail
 	if sg.r.Intn(10) < 1 && testFailingQueries {
@@ -511,7 +511,7 @@ func (sg *selectGenerator) createOrderBy() {
 
 // returns 0-2 random expressions based on tables
 func (sg *selectGenerator) createWherePredicates(tables []tableT) {
-	exprGenerators := slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
+	exprGenerators := slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 	// add scalar subqueries
 	// TODO: subqueries fail
 	if sg.r.Intn(10) < 1 && testFailingQueries {
@@ -524,7 +524,7 @@ func (sg *selectGenerator) createWherePredicates(tables []tableT) {
 
 // creates predicates for the having clause comparing a column to a random expression
 func (sg *selectGenerator) createHavingPredicates(grouping []column) {
-	exprGenerators := slices2.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })
+	exprGenerators := slice.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })
 	// add scalar subqueries
 	// TODO: subqueries fail
 	if sg.r.Intn(10) < 1 && testFailingQueries {
@@ -613,7 +613,7 @@ func (sg *selectGenerator) matchNumCols(tables []tableT, newTable tableT, canAgg
 	if sg.genConfig.NumCols > len(sg.sel.SelectExprs) {
 		diff := sg.genConfig.NumCols - len(sg.sel.SelectExprs)
 		exprs := sg.createRandomExprs(diff, diff,
-			slices2.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+			slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 
 		for i, expr := range exprs {
 			col := sg.randomlyAlias(expr, fmt.Sprintf("crandom%d", i+1))

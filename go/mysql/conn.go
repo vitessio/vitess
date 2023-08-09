@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -598,7 +599,7 @@ func (c *Conn) readPacket() ([]byte, error) {
 func (c *Conn) ReadPacket() ([]byte, error) {
 	result, err := c.readPacket()
 	if err != nil {
-		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return result, err
 }
@@ -722,7 +723,7 @@ func (c *Conn) writeComQuit() error {
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = ComQuit
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
@@ -856,10 +857,10 @@ func getLenEncInt(i uint64) []byte {
 }
 
 func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
-	return c.writeErrorAndLog(ERUnknownComError, SSNetError, format, args...)
+	return c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, format, args...)
 }
 
-func (c *Conn) writeErrorAndLog(errorCode ErrorCode, sqlState string, format string, args ...any) bool {
+func (c *Conn) writeErrorAndLog(errorCode sqlerror.ErrorCode, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
 		return false
@@ -879,7 +880,7 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format string, args ...any) error {
+func (c *Conn) writeErrorPacket(errorCode sqlerror.ErrorCode, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)
@@ -887,7 +888,7 @@ func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format str
 	pos = writeUint16(data, pos, uint16(errorCode))
 	pos = writeByte(data, pos, '#')
 	if sqlState == "" {
-		sqlState = SSUnknownSQLState
+		sqlState = sqlerror.SSUnknownSQLState
 	}
 	if len(sqlState) != 5 {
 		panic("sqlState has to be 5 characters long")
@@ -901,11 +902,11 @@ func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format str
 // writeErrorPacketFromError writes an error packet, from a regular error.
 // See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
-	if se, ok := err.(*SQLError); ok {
+	if se, ok := err.(*sqlerror.SQLError); ok {
 		return c.writeErrorPacket(se.Num, se.State, "%v", se.Message)
 	}
 
-	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
+	return c.writeErrorPacket(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "unknown error: %v", err)
 }
 
 // writeEOFPacket writes an EOF packet, through the buffer, and
@@ -974,7 +975,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		return true
 	case ComFieldList:
 		c.recycleReadPacket()
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	case ComBinlogDump:
@@ -986,7 +987,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	}
@@ -1077,7 +1078,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	c.recycleReadPacket()
 	if !ok {
 		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -1085,7 +1086,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSNetError, "commands were executed in an improper order: %v", data) {
+		if !c.writeErrorAndLog(sqlerror.CRCommandsOutOfSync, sqlerror.SSNetError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
 	}
@@ -1195,7 +1196,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	if !fieldSent {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
@@ -1315,7 +1316,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
 			log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
-			if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
+			if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 				return false
 			}
 		}
@@ -1325,7 +1326,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		}
 	} else {
 		log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -1336,7 +1337,7 @@ func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.shutdown.Load() {
-		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
+		if !c.writeErrorAndLog(sqlerror.ERServerShutdown, sqlerror.SSNetError, "Server shutdown in progress") {
 			return false
 		}
 	} else {
@@ -1348,7 +1349,7 @@ func (c *Conn) handleComPing() bool {
 	return true
 }
 
-var errEmptyStatement = NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
+var errEmptyStatement = sqlerror.NewSQLError(sqlerror.EREmptyQuery, sqlerror.SSClientError, "Query was empty")
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
@@ -1443,7 +1444,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	if !callbackCalled {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return connErr
@@ -1634,7 +1635,7 @@ func ParseErrorPacket(data []byte) error {
 	// Error code is 2 bytes.
 	code, pos, ok := readUint16(data, pos)
 	if !ok {
-		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet code: %v", data)
+		return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet code: %v", data)
 	}
 
 	// '#' marker of the SQL state is 1 byte. Ignored.
@@ -1643,13 +1644,13 @@ func ParseErrorPacket(data []byte) error {
 	// SQL state is 5 bytes
 	sqlState, pos, ok := readBytes(data, pos, 5)
 	if !ok {
-		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
+		return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
 
 	// Human readable error message is the rest.
 	msg := string(data[pos:])
 
-	return NewSQLError(ErrorCode(code), string(sqlState), "%v", msg)
+	return sqlerror.NewSQLError(sqlerror.ErrorCode(code), string(sqlState), "%v", msg)
 }
 
 // GetTLSClientCerts gets TLS certificates.

@@ -17,6 +17,7 @@ limitations under the License.
 package datetime
 
 import (
+	"encoding/binary"
 	"time"
 
 	"vitess.io/vitess/go/mysql/decimal"
@@ -639,6 +640,20 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 	default:
 		panic("unexpected IntervalType")
 	}
+}
+
+func (dt DateTime) WeightString(dst []byte) []byte {
+	// This logic does the inverse of what we do in the binlog parser for the datetime2 type.
+	year, month, day := dt.Date.Year(), dt.Date.Month(), dt.Date.Day()
+	ymd := uint64(year*13+month)<<5 | uint64(day)
+	hms := uint64(dt.Time.Hour())<<12 | uint64(dt.Time.Minute())<<6 | uint64(dt.Time.Second())
+	raw := (ymd<<17|hms)<<24 + uint64(dt.Time.Nanosecond()/1000)
+	if dt.Time.Neg() {
+		raw = -raw
+	}
+
+	raw = raw ^ (1 << 63)
+	return binary.BigEndian.AppendUint64(dst, raw)
 }
 
 func NewDateFromStd(t time.Time) Date {

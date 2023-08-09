@@ -30,9 +30,10 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -342,7 +343,7 @@ func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) 
 }
 
 // StartReplicationUntilAfter implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
+func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
 	return nil
 }
 

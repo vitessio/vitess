@@ -65,10 +65,10 @@ import (
 
 	"github.com/pkg/errors"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/test/endtoend/encryption"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
@@ -350,7 +350,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	for _, keyspaceStr := range []string{keyspace} {
 		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
 		keyspace := *KeyspacePtr
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name, sidecardb.DefaultName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name, sidecar.DefaultName); err != nil {
 			return 1, err
 		}
 		shard := &cluster.Shard{

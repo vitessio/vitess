@@ -61,6 +61,10 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+ifdef VT_EXTRA_BUILD_LDFLAGS
+export EXTRA_BUILD_LDFLAGS := $(VT_EXTRA_BUILD_LDFLAGS)
+endif
+
 # This should be the root of the vitess Git directory.
 ifndef VTROOT
 export VTROOT=${PWD}
@@ -76,7 +80,7 @@ ifndef NOBANNER
 endif
 	bash ./build.env
 	go build -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-o ${VTROOTBIN} ./go/...
 
 # build the vitess binaries statically
@@ -89,7 +93,7 @@ endif
 	# Binaries will be placed in ${VTROOTBIN}.
 	CGO_ENABLED=0 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
@@ -111,7 +115,7 @@ endif
 	mkdir -p ${VTROOTBIN}/${GOOS}_${GOARCH}
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build         \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN}/${GOOS}_${GOARCH} ./go/...
 
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
@@ -125,7 +129,7 @@ endif
 	bash ./build.env
 	go build -trimpath \
 		$(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-gcflags -'N -l' \
 		-o ${VTROOTBIN} ./go/...
 

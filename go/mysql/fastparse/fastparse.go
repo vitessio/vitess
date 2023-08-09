@@ -65,6 +65,18 @@ next:
 			break next
 		}
 
+		var cutoff uint64
+		switch base {
+		case 10:
+			cutoff = math.MaxUint64/10 + 1
+		case 16:
+			cutoff = math.MaxUint64/16 + 1
+		default:
+			cutoff = math.MaxUint64/uint64(base) + 1
+		}
+		if d >= cutoff {
+			return math.MaxUint64, fmt.Errorf("cannot parse uint64 from %q: %w", s, ErrOverflow)
+		}
 		v := d*uint64(base) + uint64(b)
 		if v < d {
 			return math.MaxUint64, fmt.Errorf("cannot parse uint64 from %q: %w", s, ErrOverflow)
@@ -137,6 +149,22 @@ next:
 
 		if b >= byte(base) {
 			break next
+		}
+
+		var cutoff uint64
+		switch base {
+		case 10:
+			cutoff = math.MaxInt64/10 + 1
+		case 16:
+			cutoff = math.MaxInt64/16 + 1
+		default:
+			cutoff = math.MaxInt64/uint64(base) + 1
+		}
+		if d >= cutoff {
+			if minus {
+				return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
+			}
+			return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
 		}
 
 		v := d*uint64(base) + uint64(b)

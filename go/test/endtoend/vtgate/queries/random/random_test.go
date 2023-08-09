@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -317,7 +317,7 @@ func TestRandom(t *testing.T) {
 					break
 				}
 				// EOF
-				if sqlError, ok := vtErr.(*mysql.SQLError); ok && strings.Contains(sqlError.Message, "EOF") {
+				if sqlError, ok := vtErr.(*sqlerror.SQLError); ok && strings.Contains(sqlError.Message, "EOF") {
 					break
 				}
 			}
