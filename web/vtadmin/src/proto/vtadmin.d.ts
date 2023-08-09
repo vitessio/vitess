@@ -62574,6 +62574,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** WorkflowSwitchTrafficRequest initialize_target_sequences */
+        initialize_target_sequences?: (boolean|null);
     }
 
     /** Represents a WorkflowSwitchTrafficRequest. */
@@ -62611,6 +62614,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest dry_run. */
         public dry_run: boolean;
+
+        /** WorkflowSwitchTrafficRequest initialize_target_sequences. */
+        public initialize_target_sequences: boolean;
 
         /**
          * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.

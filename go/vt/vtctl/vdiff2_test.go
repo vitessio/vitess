@@ -473,7 +473,7 @@ func TestBuildProgressReport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buildProgressReport(tt.args.summary, tt.args.rowsToCompare)
 			// We always check the percentage
-			require.Equal(t, tt.want.Percentage, tt.args.summary.Progress.Percentage)
+			require.Equal(t, int(tt.want.Percentage), int(tt.args.summary.Progress.Percentage))
 
 			// We only check the ETA if there is one
 			if tt.want.ETA != "" {

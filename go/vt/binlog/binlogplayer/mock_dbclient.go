@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,9 +35,11 @@ type MockDBClient struct {
 	t             *testing.T
 	UName         string
 	expect        []*mockExpect
+	expectMu      sync.Mutex
 	currentResult int
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
+	ignored       map[string]struct{}
 }
 
 type mockExpect struct {
@@ -57,6 +60,7 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 			"select id, type, state, message from _vt.vreplication_log": {},
 			"insert into _vt.vreplication_log":                          {},
 		},
+		ignored: map[string]struct{}{},
 	}
 }
 
@@ -77,6 +81,8 @@ func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err
 		dc.done = make(chan struct{})
 	default:
 	}
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  query,
 		result: result,
@@ -93,6 +99,8 @@ func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result,
 		dc.done = make(chan struct{})
 	default:
 	}
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  queryRE,
 		re:     regexp.MustCompile(queryRE),
@@ -151,12 +159,18 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	dc.t.Helper()
 	dc.t.Logf("DBClient query: %v", query)
 
+	if _, ok := dc.ignored[query]; ok {
+		return qr, nil
+	}
+
 	for q, result := range dc.invariants {
 		if strings.Contains(query, q) {
 			return result, nil
 		}
 	}
 
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
 	}

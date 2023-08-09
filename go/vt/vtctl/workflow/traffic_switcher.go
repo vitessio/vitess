@@ -25,8 +25,12 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -68,7 +72,9 @@ const (
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
-	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
+	sqlDeleteWorkflow    = "delete from _vt.vreplication where db_name = %s and workflow = %s"
+	sqlGetMaxSequenceVal = "select max(%a) as maxval from %a.%a"
+	sqlInitSequenceTable = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -396,7 +402,6 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Errorf("DEBUG: rules: %v", rules)
 	for _, table := range ts.Tables() {
 		delete(rules, table)
 		delete(rules, table+"@replica")
@@ -408,7 +413,6 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 		delete(rules, ts.SourceKeyspaceName()+"."+table+"@replica")
 		delete(rules, ts.SourceKeyspaceName()+"."+table+"@rdonly")
 	}
-	log.Errorf("DEBUG: new rules: %v", rules)
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 		return err
 	}
@@ -837,12 +841,25 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
 					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema1", rule.Match)
+						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
 					}
-					// TODO(sougou): handle degenerate cases like sequence, etc.
-					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
-						ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+					// We currently assume the primary vindex is the best way to filter rows
+					// for the table, which may not always be true.
+					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+					switch vtable.Type {
+					case vindexes.TypeReference:
+						// For reference tables there are no vindexes and thus no filter to apply.
+					default:
+						// For non-reference tables we return an error if there's no primary
+						// vindex as it's not clear what to do.
+						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+						} else {
+							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+								vtable.Name.String(), ts.SourceKeyspaceName())
+						}
+					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}
@@ -1186,7 +1203,7 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if vschema == nil || vschema.Tables == nil {
+	if vschema == nil || len(vschema.Tables) == 0 {
 		return false, nil
 	}
 	sequenceFound := false
@@ -1201,6 +1218,287 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 		}
 	}
 	return sequenceFound, nil
+}
+
+// getTargetSequenceMetadata returns a map of sequence metadata keyed by the
+// backing sequence table name. If the target keyspace has no tables
+// defined that use sequences for auto_increment generation then a nil
+// map will be returned.
+func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[string]*sequenceMetadata, error) {
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
+			ts.targetKeyspace, err)
+	}
+	if vschema == nil || len(vschema.Tables) == 0 { // Nothing to do
+		return nil, nil
+	}
+
+	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema)
+	if err != nil {
+		return nil, err
+	}
+	// If all of the sequence tables were defined using qualified table
+	// names then we don't need to search for them in other keyspaces.
+	if len(sequencesByBackingTable) == 0 || backingTablesFound {
+		return sequencesByBackingTable, nil
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Now we need to locate the backing sequence table(s) which will
+	// be in another unsharded keyspace.
+	smMu := sync.Mutex{}
+	tableCount := len(sequencesByBackingTable)
+	tablesFound := 0                                                      // Used to short circuit the search
+	searchCompleted := make(chan struct{})                                // The search has completed
+	searchKeyspace := func(sctx context.Context, keyspace string) error { // The function used to search each keyspace
+		kvs, kerr := ts.TopoServer().GetVSchema(sctx, keyspace)
+		if kerr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
+				keyspace, kerr)
+		}
+		if kvs == nil || kvs.Sharded || len(kvs.Tables) == 0 {
+			return nil
+		}
+		for tableName, tableDef := range kvs.Tables {
+			select {
+			case <-sctx.Done():
+				return sctx.Err()
+			case <-searchCompleted:
+				return nil
+			default:
+			}
+			if complete := func() bool {
+				smMu.Lock() // Prevent concurrent access to the map
+				defer smMu.Unlock()
+				sm := sequencesByBackingTable[tableName]
+				if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
+					sm != nil && tableName == sm.backingTableName {
+					tablesFound++ // This is also protected by the mutex
+					sm.backingTableKeyspace = keyspace
+					sm.backingTableDBName = "vt_" + keyspace
+					if tablesFound == tableCount { // Short circuit the search
+						select {
+						case <-searchCompleted: // It's already been closed
+							return true
+						default:
+							close(searchCompleted) // Mark the search as completed
+							return true
+						}
+					}
+				}
+				return false
+			}(); complete {
+				return nil
+			}
+		}
+		return nil
+	}
+	keyspaces, err := ts.TopoServer().GetKeyspaces(ctx)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
+	}
+	searchGroup, gctx := errgroup.WithContext(ctx)
+	for _, keyspace := range keyspaces {
+		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
+		searchGroup.Go(func() error {
+			return searchKeyspace(gctx, keyspace)
+		})
+	}
+	if err := searchGroup.Wait(); err != nil {
+		return nil, err
+	}
+
+	if tablesFound != tableCount {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence table metadata: %+v",
+			sequencesByBackingTable)
+	}
+	return sequencesByBackingTable, nil
+}
+
+// findSequenceUsageInKeyspace searches the keyspace's vschema for usage
+// of sequences. It returns a map of sequence metadata keyed by the backing
+// sequence table name -- if any usage is found -- along with a boolean to
+// indicate if all of the backing sequence tables were defined using
+// qualified table names (so we know where they all live) along with an
+// error if any is seen.
+func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
+	allFullyQualified := true
+	targets := maps.Values(ts.Targets())
+	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target keyspace %s", ts.targetKeyspace)
+	}
+	targetDBName := targets[0].GetPrimary().DbName()
+	sequencesByBackingTable := make(map[string]*sequenceMetadata)
+
+	for _, table := range ts.Tables() {
+		vs, ok := vschema.Tables[table]
+		if !ok || vs == nil || vs.AutoIncrement == nil || vs.AutoIncrement.Sequence == "" {
+			continue
+		}
+		sm := &sequenceMetadata{
+			backingTableName:     vs.AutoIncrement.Sequence,
+			usingTableName:       table,
+			usingTableDefinition: vs,
+			usingTableDBName:     targetDBName,
+		}
+		// If the sequence table is fully qualified in the vschema then
+		// we don't need to find it later.
+		if strings.Contains(vs.AutoIncrement.Sequence, ".") {
+			keyspace, tableName, found := strings.Cut(vs.AutoIncrement.Sequence, ".")
+			if !found {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
+					vs.AutoIncrement.Sequence, ts.targetKeyspace)
+			}
+			sm.backingTableName = tableName
+			sm.backingTableKeyspace = keyspace
+			sm.backingTableDBName = "vt_" + keyspace
+		} else {
+			allFullyQualified = false
+		}
+		sequencesByBackingTable[sm.backingTableName] = sm
+	}
+
+	return sequencesByBackingTable, allFullyQualified, nil
+}
+
+// initializeTargetSequences initializes the backing sequence tables
+// using a map keyed by the backing sequence table name.
+//
+// The backing tables must have already been created. This function will
+// then ensure that the next value is set to a value greater than any
+// currently stored in the using table on the target keyspace. If the
+// backing table is updated to a new higher value then it will also tell
+// the primary tablet serving the sequence to refresh/reset its cache to
+// be sure that it does not provide a value that is less than the current max.
+func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	initSequenceTable := func(ictx context.Context, sequenceTableName string, sequenceMetadata *sequenceMetadata) error {
+		// Now we need to run this query on the target shards in order
+		// to get the max value and set the next id for the sequence to
+		// a higher value.
+		shardResults := make([]int64, 0, len(ts.TargetShards()))
+		srMu := sync.Mutex{}
+		ierr := ts.ForAllTargets(func(target *MigrationTarget) error {
+			primary := target.GetPrimary()
+			if primary == nil || primary.GetAlias() == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
+					ts.targetKeyspace, target.GetShard().ShardName())
+			}
+			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
+				sqlescape.EscapeID(sequenceMetadata.usingTableDefinition.AutoIncrement.Column),
+				sqlescape.EscapeID(sequenceMetadata.usingTableDBName),
+				sqlescape.EscapeID(sequenceMetadata.usingTableName),
+			)
+			qr, terr := ts.ws.tmc.ExecuteFetchAsApp(ictx, primary.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+				Query:   []byte(query.Query),
+				MaxRows: 1,
+			})
+			if terr != nil || len(qr.Rows) != 1 {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			}
+			maxID, terr := sqltypes.Proto3ToResult(qr).Rows[0][0].ToInt64()
+			if terr != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			}
+			srMu.Lock()
+			defer srMu.Unlock()
+			shardResults = append(shardResults, maxID)
+			return nil
+		})
+		if ierr != nil {
+			return ierr
+		}
+		select {
+		case <-ictx.Done():
+			return ictx.Err()
+		default:
+		}
+		// Sort the values to find the max value across all shards.
+		sort.Slice(shardResults, func(i, j int) bool {
+			return shardResults[i] < shardResults[j]
+		})
+		nextVal := shardResults[len(shardResults)-1] + 1
+		// Now we need to update the sequence table, if needed, in order to
+		// ensure that that the next value it provides is > the current max.
+		sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ictx, sequenceMetadata.backingTableKeyspace)
+		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, ierr)
+		}
+		sequenceTablet, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
+		if ierr != nil || sequenceTablet == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, ierr)
+		}
+		select {
+		case <-ictx.Done():
+			return ictx.Err()
+		default:
+		}
+		if sequenceTablet.DbNameOverride != "" {
+			sequenceMetadata.backingTableDBName = sequenceTablet.DbNameOverride
+		}
+		query := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
+			sqlescape.EscapeID(sequenceMetadata.backingTableDBName),
+			sqlescape.EscapeID(sequenceMetadata.backingTableName),
+			nextVal,
+			nextVal,
+			nextVal,
+		)
+		// Now execute this on the primary tablet of the unsharded keyspace
+		// housing the backing table.
+		primaryTablet, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for %s.%s using alias %s: %v",
+				sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
+		}
+		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, primaryTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+			Query:   []byte(query.Query),
+			MaxRows: 1,
+		})
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
+				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, ierr)
+		}
+		// If we actually updated the backing sequence table, then we need
+		// to tell the primary tablet managing the sequence to refresh/reset
+		// its cache for the table.
+		if qr.RowsAffected == 0 {
+			return nil
+		}
+		select {
+		case <-ictx.Done():
+			return ictx.Err()
+		default:
+		}
+		ts.Logger().Infof("Resetting sequence cache for backing table %s on shard %s/%s using tablet %s",
+			sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias)
+		ti, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, ierr)
+		}
+		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{sequenceMetadata.backingTableName})
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s/%s using tablet %s: %v",
+				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
+		}
+		return nil
+	}
+
+	initGroup, gctx := errgroup.WithContext(ctx)
+	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
+		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
+		initGroup.Go(func() error {
+			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
+		})
+	}
+	return initGroup.Wait()
 }
 
 func (ts *trafficSwitcher) mustResetSequences(ctx context.Context) (bool, error) {
