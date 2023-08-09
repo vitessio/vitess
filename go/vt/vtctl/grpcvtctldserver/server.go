@@ -1471,8 +1471,10 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 
 		condition, err = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(req.Uuid))
 	case req.MigrationContext != "":
+		span.Annotate("migration_context", req.MigrationContext)
 		condition, err = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(req.MigrationContext))
 	case req.Status != vtctldatapb.SchemaMigration_UNKNOWN:
+		span.Annotate("migration_status", schematools.SchemaMigrationStatusName(req.Status))
 		condition, err = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(schematools.SchemaMigrationStatusName(req.Status)))
 	case req.Recent != nil:
 		var d time.Duration
@@ -1481,6 +1483,7 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing duration: %s", err)
 		}
 
+		span.Annotate("recent", d.String())
 		condition = fmt.Sprintf("requested_timestamp > now() - interval %0.f second", d.Seconds())
 	default:
 		condition = "migration_uuid like '%'"
@@ -1501,6 +1504,7 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 	var skipLimit string
 	if req.Limit > 0 {
 		skipLimit = fmt.Sprintf("LIMIT %v,%v", req.Skip, req.Limit)
+		span.Annotate("skip_limit", skipLimit)
 	}
 
 	query := selectSchemaMigrationsQuery(condition, order, skipLimit)
@@ -1519,6 +1523,7 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 	for _, tablet := range tabletsResp.Tablets {
 		alias := topoproto.TabletAliasString(tablet.Alias)
 
+		// TODO: execute in parallel
 		fetchResp, err := s.ExecuteFetchAsDBA(ctx, &vtctldatapb.ExecuteFetchAsDBARequest{
 			TabletAlias: tablet.Alias,
 			Query:       query,

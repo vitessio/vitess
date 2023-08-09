@@ -73,7 +73,7 @@ func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Stra
 	if upperName != name {
 		// TODO (andrew): Remove special handling for lower/uppercase and
 		// gh-ost=>ghost/pt-osc=>ptosc support. (file issue for this).
-		log.Warningf("detected legacy strategy name syntax; parsed %q as %q. this break in the next version.", upperName, name)
+		log.Warningf("detected legacy strategy name syntax; parsed %q as %q. this will break in the next version.", upperName, name)
 	}
 
 	return vtctldatapb.SchemaMigration_Strategy(strategy), nil
