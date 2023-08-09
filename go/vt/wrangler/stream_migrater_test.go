@@ -1108,7 +1108,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	stopStreams()
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
-	want := "cannot migrate until all streams are running: 0: 10"
+	want := "failed to migrate the workflow streams: cannot migrate until all streams are running: 0: 10"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
@@ -1238,7 +1238,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	stopStreams()
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
-	want := "cannot migrate while vreplication streams in source shards are still copying: 0"
+	want := "failed to migrate the workflow streams: cannot migrate while vreplication streams in source shards are still copying: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
@@ -1300,7 +1300,7 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 	stopStreams()
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
-	want := "VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
+	want := "failed to migrate the workflow streams: VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
@@ -1362,7 +1362,7 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 	stopStreams()
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
-	want := "VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
+	want := "failed to migrate the workflow streams: VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}

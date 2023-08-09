@@ -277,7 +277,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
@@ -598,7 +598,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
@@ -1901,7 +1901,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}

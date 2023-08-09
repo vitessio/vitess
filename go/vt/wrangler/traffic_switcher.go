@@ -331,13 +331,14 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
 	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
-	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		werr := vterrors.Wrapf(err, message)
-		ts.Logger().Error(werr)
+		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		wr.Logger().Error(werr)
 		return nil, werr
 	}
+
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		return handleError("failed to get the current state of the workflow", err)
 	}
@@ -476,16 +477,15 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
 	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
-	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
-	_ = ws
-
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
-		werr := vterrors.Wrapf(err, message)
-		ts.Logger().Error(werr)
+		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		wr.Logger().Error(werr)
 		return 0, nil, werr
 	}
 
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
+	_ = ws
 	if err != nil {
 		handleError("failed to get the current workflow state", err)
 	}
