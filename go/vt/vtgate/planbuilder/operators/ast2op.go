@@ -192,6 +192,17 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		Routing: routing,
 	}
 
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		childFks := vindexTable.ChildFKsNeedsHandling()
+		if len(childFks) > 0 {
+			return nil, vterrors.VT12003()
+		}
+	}
+
 	if !vindexTable.Keyspace.Sharded {
 		return route, nil
 	}
