@@ -52,7 +52,7 @@ func TestDerivedTableWithOrderByLimit(t *testing.T) {
 	mcmp.Exec("insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
-	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ music.id from music join (select id,name from user order by id limit 2) as d on music.user_id = d.id")
+	mcmp.Exec("select music.id from music join (select id,name from user order by id limit 2) as d on music.user_id = d.id")
 }
 
 func TestDerivedAggregationOnRHS(t *testing.T) {
@@ -64,7 +64,7 @@ func TestDerivedAggregationOnRHS(t *testing.T) {
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
-	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ d.a from music join (select id, count(*) as a from user) as d on music.user_id = d.id group by 1")
+	mcmp.Exec("select d.a from music join (select id, count(*) as a from user) as d on music.user_id = d.id group by 1")
 }
 
 func TestDerivedRemoveInnerOrderBy(t *testing.T) {
@@ -74,7 +74,7 @@ func TestDerivedRemoveInnerOrderBy(t *testing.T) {
 	mcmp.Exec("insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
-	mcmp.Exec("select /*vt+ PLANNER=Gen4 */ count(*) from (select user.id as oui, music.id as non from user join music on user.id = music.user_id order by user.name) as toto")
+	mcmp.Exec("select count(*) from (select user.id as oui, music.id as non from user join music on user.id = music.user_id order by user.name) as toto")
 }
 
 func TestDerivedTableWithHaving(t *testing.T) {
@@ -85,7 +85,7 @@ func TestDerivedTableWithHaving(t *testing.T) {
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
-	mcmp.AssertMatchesAnyNoCompare("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
+	mcmp.AssertMatchesAnyNoCompare("select  * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
 }
 
 func TestDerivedTableColumns(t *testing.T) {
@@ -93,5 +93,5 @@ func TestDerivedTableColumns(t *testing.T) {
 	defer closer()
 
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
-	mcmp.AssertMatches(`SELECT /*vt+ PLANNER=gen4 */ t.id FROM (SELECT id FROM user) AS t(id) ORDER BY t.id DESC`, `[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
+	mcmp.AssertMatches(`SELECT t.id FROM (SELECT id FROM user) AS t(id) ORDER BY t.id DESC`, `[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
 }

@@ -125,7 +125,6 @@ func (c *column) getColumnName() string {
 
 func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) *sqlparser.Select {
 	sel := &sqlparser.Select{}
-	sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
 
 	// select distinct (fails with group by bigint)
 	isDistinct := rand.Intn(2) < 1

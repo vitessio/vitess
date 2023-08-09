@@ -3842,7 +3842,7 @@ func TestSelectAggregationRandom(t *testing.T) {
 	executor.pv = querypb.ExecuteOptions_Gen4
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
-	rs, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
+	rs, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
 	require.NoError(t, err)
 	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
@@ -3868,7 +3868,7 @@ func TestSelectCFC(t *testing.T) {
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
-	_, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
+	_, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select c2 from tbl_cfc where c1 like 'A%'", nil)
 	require.NoError(t, err)
 
 	timeout := time.After(30 * time.Second)

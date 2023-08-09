@@ -85,50 +85,50 @@ func TestMustFix(t *testing.T) {
 
 	// mismatched results
 	// sum values returned as int64 instead of decimal
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl1.sal) as caggr1 from emp as tbl0, emp as tbl1 group by tbl1.ename order by tbl1.ename asc")
+	helperTest(t, "select sum(tbl1.sal) as caggr1 from emp as tbl0, emp as tbl1 group by tbl1.ename order by tbl1.ename asc")
 
 	// mismatched results
 	// limit >= 9 works
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) = sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8")
+	helperTest(t, "select tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) = sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8")
 
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr1 from dept as tbl0, emp as tbl1 group by tbl1.sal having max(tbl1.comm) != true")
+	helperTest(t, "select distinct count(*) as caggr1 from dept as tbl0, emp as tbl1 group by tbl1.sal having max(tbl1.comm) != true")
 
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1")
+	helperTest(t, "select distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1")
 
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
+	helperTest(t, "select distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm")
 
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0")
+	helperTest(t, "select count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0")
 
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'")
+	helperTest(t, "select count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'")
 
 	// similar to previous two
 	// mismatched results
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)")
+	helperTest(t, "select distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)")
 
 	// mismatched results
 	// previously failing, then succeeding query, now failing again
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3")
+	helperTest(t, "select count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3")
 
 	// mismatched results (group by + right join)
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
+	helperTest(t, "select max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
 
 	// mismatched results (count + right join)
 	// left instead of right works
 	// swapping tables and predicates and changing to left fails
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
+	helperTest(t, "select count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
 
 	// EOF
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl0, (select count(*) from emp as tbl0, emp as tbl1 limit 18) as tbl1")
+	helperTest(t, "select count(*) from dept as tbl0, (select count(*) from emp as tbl0, emp as tbl1 limit 18) as tbl1")
 
 	// EOF
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
+	helperTest(t, "select count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0")
 }
 
 func TestKnownFailures(t *testing.T) {
@@ -138,63 +138,63 @@ func TestKnownFailures(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// logs more stuff
-	//clusterInstance.EnableGeneralLog()
+	// clusterInstance.EnableGeneralLog()
 
 	// cannot compare strings, collation is unknown or unsupported (collation ID: 0)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl1.dname) as caggr1 from dept as tbl0, dept as tbl1 group by tbl1.dname order by tbl1.dname asc")
+	helperTest(t, "select max(tbl1.dname) as caggr1 from dept as tbl0, dept as tbl1 group by tbl1.dname order by tbl1.dname asc")
 
 	// vitess error: <nil>
 	// mysql error: Incorrect DATE value: 'tuna'
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ min(tbl0.empno) as caggr0 from emp as tbl0 where case 'gator' when false then 314 else 'weevil' end > tbl0.job having min(tbl0.hiredate) <=> 'tuna'")
+	helperTest(t, "select min(tbl0.empno) as caggr0 from emp as tbl0 where case 'gator' when false then 314 else 'weevil' end > tbl0.job having min(tbl0.hiredate) <=> 'tuna'")
 
 	// vitess error: <nil>
 	// mysql error: Unknown column 'tbl0.deptno' in 'having clause'
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) as caggr0 from dept as tbl0 having tbl0.deptno")
+	helperTest(t, "select count(*) as caggr0 from dept as tbl0 having tbl0.deptno")
 
 	// coercion should not try to coerce this value: DATE("1980-12-17")
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename")
+	helperTest(t, "select distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename")
 
 	// only_full_group_by enabled (vitess sometimes (?) produces the correct result assuming only_full_group_by is disabled)
 	// vitess error: nil
 	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'; this is incompatible with sql_mode=only_full_group_by
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
+	helperTest(t, "select tbl0.ename, min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
 
 	// only_full_group_by enabled
 	// vitess error:  nil
 	// mysql error: Expression #1 of ORDER BY clause is not in SELECT list, references column 'ks_random.tbl2.DNAME' which is not in SELECT list; this is incompatible with DISTINCT
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) as caggr0 from dept as tbl2 group by tbl2.dname order by tbl2.dname asc")
+	helperTest(t, "select distinct count(*) as caggr0 from dept as tbl2 group by tbl2.dname order by tbl2.dname asc")
 
 	// vttablet: rpc error: code = NotFound desc = Unknown column 'cgroup0' in 'field list' (errno 1054) (sqlstate 42S22) (CallerID: userData1)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.ename as cgroup0, max(tbl0.comm) as caggr0 from emp as tbl0, emp as tbl1 group by cgroup0")
+	helperTest(t, "select tbl1.ename as cgroup0, max(tbl0.comm) as caggr0 from emp as tbl0, emp as tbl1 group by cgroup0")
 
 	// vttablet: rpc error: code = NotFound desc = Unknown column '347' in 'group statement'
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct 347 as crandom0 from emp as tbl0")
+	helperTest(t, "select distinct 347 as crandom0 from emp as tbl0")
 
 	// vttablet: rpc error: code = InvalidArgument desc = Can't group on 'count(*)' (errno 1056) (sqlstate 42000) (CallerID: userData1)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.deptno")
+	helperTest(t, "select distinct count(*) from dept as tbl0 group by tbl0.deptno")
 
 	// [BUG] push projection does not yet support: *planbuilder.memorySort (errno 1815) (sqlstate HY000)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from dept as tbl1 join (select count(*) from emp as tbl0, dept as tbl1 group by tbl1.loc) as tbl2")
+	helperTest(t, "select count(*) from dept as tbl1 join (select count(*) from emp as tbl0, dept as tbl1 group by tbl1.loc) as tbl2")
 
 	// unsupported
 	// unsupported: in scatter query: complex aggregate expression (errno 1235) (sqlstate 42000)
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (select count(*) from emp as tbl0) from emp as tbl0")
+	helperTest(t, "select (select count(*) from emp as tbl0) from emp as tbl0")
 
 	// unsupported
 	// unsupported: using aggregation on top of a *planbuilder.filter plan
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.dname) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.dname > tbl1.loc where tbl1.loc <=> tbl1.dname group by tbl1.dname order by tbl1.dname asc")
+	helperTest(t, "select count(tbl1.dname) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.dname > tbl1.loc where tbl1.loc <=> tbl1.dname group by tbl1.dname order by tbl1.dname asc")
 
 	// unsupported
 	// unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from (select count(*) from dept as tbl0) as tbl0")
+	helperTest(t, "select count(*) from (select count(*) from dept as tbl0) as tbl0")
 
 	// unsupported
 	// unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0) as tbl0, dept as tbl1")
+	helperTest(t, "select count(*), count(*) from (select count(*) from dept as tbl0) as tbl0, dept as tbl1")
 
 	// unsupported
 	// unsupported: in scatter query: aggregation function 'avg(tbl0.deptno)'
-	helperTest(t, "select /*vt+ PLANNER=Gen4 */ avg(tbl0.deptno) from dept as tbl0")
+	helperTest(t, "select avg(tbl0.deptno) from dept as tbl0")
 }
 
 func TestRandom(t *testing.T) {
@@ -264,47 +264,47 @@ func TestBuggyQueries(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*), count(*) from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.deptno group by tbl1.empno order by tbl1.empno",
+	mcmp.AssertMatches("select count(*), count(*), count(*) from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.deptno group by tbl1.empno order by tbl1.empno",
 		`[[INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)] [INT64(1) INT64(1) INT64(1)]]`)
-	//mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3",
+	// mcmp.AssertMatches("select count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3",
 	//	`[[INT64(8)] [INT64(16)] [INT64(12)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from emp as tbl0 group by tbl0.empno order by tbl0.empno",
+	mcmp.AssertMatches("select count(*), count(*) from emp as tbl0 group by tbl0.empno order by tbl0.empno",
 		`[[INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)] [INT64(1) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ distinct count(*), tbl0.loc from dept as tbl0 group by tbl0.loc",
+	mcmp.AssertMatches("select distinct count(*), tbl0.loc from dept as tbl0 group by tbl0.loc",
 		`[[INT64(1) VARCHAR("BOSTON")] [INT64(1) VARCHAR("CHICAGO")] [INT64(1) VARCHAR("DALLAS")] [INT64(1) VARCHAR("NEW YORK")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.loc",
+	mcmp.AssertMatches("select distinct count(*) from dept as tbl0 group by tbl0.loc",
 		`[[INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(tbl1.comm) from emp as tbl0, emp as tbl1",
+	mcmp.AssertMatches("select sum(tbl1.comm) from emp as tbl0, emp as tbl1",
 		`[[DECIMAL(30800)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.mgr, tbl1.mgr, count(*) from emp as tbl1 group by tbl1.mgr",
+	mcmp.AssertMatches("select tbl1.mgr, tbl1.mgr, count(*) from emp as tbl1 group by tbl1.mgr",
 		`[[NULL NULL INT64(1)] [INT64(7566) INT64(7566) INT64(2)] [INT64(7698) INT64(7698) INT64(5)] [INT64(7782) INT64(7782) INT64(1)] [INT64(7788) INT64(7788) INT64(1)] [INT64(7839) INT64(7839) INT64(3)] [INT64(7902) INT64(7902) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.mgr, tbl1.mgr, count(*) from emp as tbl0, emp as tbl1 group by tbl1.mgr",
+	mcmp.AssertMatches("select tbl1.mgr, tbl1.mgr, count(*) from emp as tbl0, emp as tbl1 group by tbl1.mgr",
 		`[[NULL NULL INT64(14)] [INT64(7566) INT64(7566) INT64(28)] [INT64(7698) INT64(7698) INT64(70)] [INT64(7782) INT64(7782) INT64(14)] [INT64(7788) INT64(7788) INT64(14)] [INT64(7839) INT64(7839) INT64(42)] [INT64(7902) INT64(7902) INT64(14)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*), count(tbl0.comm) from emp as tbl0, emp as tbl1 join dept as tbl2",
+	mcmp.AssertMatches("select count(*), count(*), count(tbl0.comm) from emp as tbl0, emp as tbl1 join dept as tbl2",
 		`[[INT64(784) INT64(784) INT64(224)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0, dept as tbl1",
+	mcmp.AssertMatches("select count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0, dept as tbl1",
 		`[[INT64(16) INT64(16)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0",
+	mcmp.AssertMatches("select count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0",
 		`[[INT64(4)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ min(tbl0.loc) from dept as tbl0",
+	mcmp.AssertMatches("select min(tbl0.loc) from dept as tbl0",
 		`[[VARCHAR("BOSTON")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.empno, max(tbl1.job) from dept as tbl0, emp as tbl1 group by tbl1.empno",
+	mcmp.AssertMatches("select tbl1.empno, max(tbl1.job) from dept as tbl0, emp as tbl1 group by tbl1.empno",
 		`[[INT64(7369) VARCHAR("CLERK")] [INT64(7499) VARCHAR("SALESMAN")] [INT64(7521) VARCHAR("SALESMAN")] [INT64(7566) VARCHAR("MANAGER")] [INT64(7654) VARCHAR("SALESMAN")] [INT64(7698) VARCHAR("MANAGER")] [INT64(7782) VARCHAR("MANAGER")] [INT64(7788) VARCHAR("ANALYST")] [INT64(7839) VARCHAR("PRESIDENT")] [INT64(7844) VARCHAR("SALESMAN")] [INT64(7876) VARCHAR("CLERK")] [INT64(7900) VARCHAR("CLERK")] [INT64(7902) VARCHAR("ANALYST")] [INT64(7934) VARCHAR("CLERK")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl1.ename, max(tbl0.comm) from emp as tbl0, emp as tbl1 group by tbl1.ename",
+	mcmp.AssertMatches("select tbl1.ename, max(tbl0.comm) from emp as tbl0, emp as tbl1 group by tbl1.ename",
 		`[[VARCHAR("ADAMS") INT64(1400)] [VARCHAR("ALLEN") INT64(1400)] [VARCHAR("BLAKE") INT64(1400)] [VARCHAR("CLARK") INT64(1400)] [VARCHAR("FORD") INT64(1400)] [VARCHAR("JAMES") INT64(1400)] [VARCHAR("JONES") INT64(1400)] [VARCHAR("KING") INT64(1400)] [VARCHAR("MARTIN") INT64(1400)] [VARCHAR("MILLER") INT64(1400)] [VARCHAR("SCOTT") INT64(1400)] [VARCHAR("SMITH") INT64(1400)] [VARCHAR("TURNER") INT64(1400)] [VARCHAR("WARD") INT64(1400)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.dname, tbl0.dname, min(tbl0.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl0.dname",
+	mcmp.AssertMatches("select tbl0.dname, tbl0.dname, min(tbl0.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl0.dname",
 		`[[VARCHAR("ACCOUNTING") VARCHAR("ACCOUNTING") INT64(10)] [VARCHAR("OPERATIONS") VARCHAR("OPERATIONS") INT64(40)] [VARCHAR("RESEARCH") VARCHAR("RESEARCH") INT64(20)] [VARCHAR("SALES") VARCHAR("SALES") INT64(30)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.dname, min(tbl1.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl1.dname",
+	mcmp.AssertMatches("select tbl0.dname, min(tbl1.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl1.dname",
 		`[[VARCHAR("ACCOUNTING") INT64(10)] [VARCHAR("ACCOUNTING") INT64(40)] [VARCHAR("ACCOUNTING") INT64(20)] [VARCHAR("ACCOUNTING") INT64(30)] [VARCHAR("OPERATIONS") INT64(10)] [VARCHAR("OPERATIONS") INT64(40)] [VARCHAR("OPERATIONS") INT64(20)] [VARCHAR("OPERATIONS") INT64(30)] [VARCHAR("RESEARCH") INT64(10)] [VARCHAR("RESEARCH") INT64(40)] [VARCHAR("RESEARCH") INT64(20)] [VARCHAR("RESEARCH") INT64(30)] [VARCHAR("SALES") INT64(10)] [VARCHAR("SALES") INT64(40)] [VARCHAR("SALES") INT64(20)] [VARCHAR("SALES") INT64(30)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ max(tbl0.hiredate) from emp as tbl0",
+	mcmp.AssertMatches("select max(tbl0.hiredate) from emp as tbl0",
 		`[[DATE("1983-01-12")]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname",
+	mcmp.AssertMatches("select min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname",
 		`[[INT64(10) INT64(4)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)",
+	mcmp.AssertMatches("select count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno)",
 		`[[INT64(4)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm",
+	mcmp.AssertMatches("select sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm",
 		`[[NULL NULL]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno",
+	mcmp.AssertMatches("select distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno",
 		`[[NULL INT64(0)]]`)
 
 }

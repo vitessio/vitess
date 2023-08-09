@@ -114,7 +114,7 @@ func TestReferenceRouting(t *testing.T) {
 	utils.AssertMatches(
 		t,
 		conn,
-		`SELECT /*vt+ PLANNER=gen4 */ COUNT(zd.id)
+		`SELECT COUNT(zd.id)
 		 FROM delivery_failure df
 		 JOIN zip_detail zd ON zd.id = df.zip_detail_id WHERE zd.id = 3`,
 		`[[INT64(0)]]`,

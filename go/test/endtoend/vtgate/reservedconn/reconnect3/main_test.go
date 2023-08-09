@@ -96,7 +96,7 @@ func TestMysqlDownServingChange(t *testing.T) {
 	defer conn.Close()
 
 	utils.Exec(t, conn, "set default_week_format = 1")
-	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+	_ = utils.Exec(t, conn, "select * from test")
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,
@@ -105,5 +105,5 @@ func TestMysqlDownServingChange(t *testing.T) {
 		clusterInstance.VtctlclientProcess.ExecuteCommand("EmergencyReparentShard", "--", "--keyspace_shard", "ks/0"))
 
 	// This should work without any error.
-	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+	_ = utils.Exec(t, conn, "select * from test")
 }
