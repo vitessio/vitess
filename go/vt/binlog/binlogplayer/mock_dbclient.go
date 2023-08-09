@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ type MockDBClient struct {
 	t             *testing.T
 	UName         string
 	expect        []*mockExpect
+	expectMu      sync.Mutex
 	currentResult int
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
@@ -79,6 +81,8 @@ func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err
 		dc.done = make(chan struct{})
 	default:
 	}
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  query,
 		result: result,
@@ -95,6 +99,8 @@ func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result,
 		dc.done = make(chan struct{})
 	default:
 	}
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  queryRE,
 		re:     regexp.MustCompile(queryRE),
@@ -163,6 +169,8 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	}
 
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
 	}
