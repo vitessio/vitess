@@ -351,6 +351,17 @@ func ParseFlags(cmd string) {
 	logutil.PurgeLogs()
 }
 
+// ParseFlagsForUnitTests initializes flags but skips the filesystem args
+// and go flag related work.
+// Note: this should NOT be used outside of unit tests.
+func ParseFlagsForUnitTests(cmd string) {
+	fs := GetFlagSetFor(cmd)
+	pflag.CommandLine = fs
+	pflag.Parse()
+	viperutil.BindFlags(fs)
+	loadViper(cmd)
+}
+
 // GetFlagSetFor returns the flag set for a given command.
 // This has to exported for the Vitess-operator to use
 func GetFlagSetFor(cmd string) *pflag.FlagSet {
