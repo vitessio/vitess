@@ -388,6 +388,7 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		// If ERS is disabled, we have no way of repairing the cluster.
 		if !config.ERSEnabled() {
+			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
 			return noRecoveryFunc
 		}
 		if isInEmergencyOperationGracefulPeriod(tabletAlias) {
@@ -397,6 +398,7 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled, we have no way of repairing the cluster.
 		if !config.ERSEnabled() {
+			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
 			return noRecoveryFunc
 		}
 		if isInEmergencyOperationGracefulPeriod(tabletAlias) {

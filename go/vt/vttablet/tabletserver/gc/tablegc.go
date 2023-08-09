@@ -28,6 +28,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -474,8 +476,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 		if err == nil {
 			return true, nil
 		}
-		if merr, ok := err.(*mysql.SQLError); ok {
-			if merr.Num == mysql.ERSpecifiedAccessDenied {
+		if merr, ok := err.(*sqlerror.SQLError); ok {
+			if merr.Num == sqlerror.ERSpecifiedAccessDenied {
 				// We do not have privileges to disable binary logging. That's fine, we're on best effort,
 				// so we're going to silently ignore this error.
 				return false, nil

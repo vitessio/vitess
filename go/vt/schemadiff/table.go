@@ -457,6 +457,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
 			if _, ok := col.Type.Options.Default.(*sqlparser.NullVal); ok {
 				col.Type.Options.Default = nil
+				col.Type.Options.DefaultLiteral = false
 			}
 		}
 
@@ -507,6 +508,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 						Type: sqlparser.StrVal,
 						Val:  defaultVal,
 					}
+					col.Type.Options.DefaultLiteral = true
 				} else {
 					col.Type.Options.Default = nil
 				}
@@ -2046,8 +2048,10 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					found = true
 					if opt.DropDefault {
 						col.Type.Options.Default = nil
+						col.Type.Options.DefaultLiteral = false
 					} else if opt.DefaultVal != nil {
 						col.Type.Options.Default = opt.DefaultVal
+						col.Type.Options.DefaultLiteral = opt.DefaultLiteral
 					}
 					col.Type.Options.Invisible = opt.Invisible
 					break

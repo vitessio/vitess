@@ -24,13 +24,15 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/constants/sidecar"
+
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -41,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 const (
@@ -339,14 +342,14 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
-		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
+		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query)
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	for _, appRule := range throttlerConfig.ThrottledApps {
-		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio)
+		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio, appRule.Exempt)
 	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
@@ -438,12 +441,12 @@ func (throttler *Throttler) Open() error {
 	// The query needs to be dynamically built because the sidecar database name
 	// is not known when the TabletServer is created, which in turn creates the
 	// Throttler.
-	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
+	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query) // default
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
-	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
+	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	log.Infof("Throttler: throttler-config-via-topo detected")
 	// We want to read throttler config from topo and apply it.
@@ -594,6 +597,9 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 	recentCheckTicker := addTicker(time.Second)
 
+	tmClient := tmclient.NewTabletManagerClient()
+	defer tmClient.Close()
+
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
 		for _, t := range tickers {
@@ -643,7 +649,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if throttler.IsOpen() {
 						// frequent
 						if !throttler.isDormant() {
-							throttler.collectMySQLMetrics(ctx)
+							throttler.collectMySQLMetrics(ctx, tmClient)
 						}
 					}
 				}
@@ -652,7 +658,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if throttler.IsOpen() {
 						// infrequent
 						if throttler.isDormant() {
-							throttler.collectMySQLMetrics(ctx)
+							throttler.collectMySQLMetrics(ctx, tmClient)
 						}
 					}
 				}
@@ -695,13 +701,37 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	}()
 }
 
-func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
+func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, tmClient tmclient.TabletManagerClient, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
 	return func() *mysql.MySQLThrottleMetric {
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
 		mySQLThrottleMetric.ClusterName = clusterName
 		mySQLThrottleMetric.Key = probe.Key
 
+		{
+			req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+			if resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req); gRPCErr == nil {
+				mySQLThrottleMetric.Value = resp.Value
+				if resp.StatusCode == http.StatusInternalServerError {
+					mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
+				}
+				if resp.RecentlyChecked {
+					// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
+					// We therefore renew the heartbeats lease.
+					go throttler.heartbeatWriter.RequestHeartbeats()
+				}
+				return mySQLThrottleMetric
+
+				// } else {
+				// In v18 we need to be backwards compatible. If we have a gRPC error it might be because the replica is v17 and
+				// does not support CheckThrottler() RPC. This is why:
+				// 1. We fall back to HTTP
+				// 2. We don't log an error (it would just spam the logs)
+				// In v19 we will remove all HTTP code, and will *potentially* log an error.
+				// log.Errorf("error in GRPC call to tablet %v: %v", probe.Tablet.GetAlias(), gRPCErr)
+			}
+		}
+		// Backwards compatibility to v17: if the underlying tablets do not support CheckThrottler gRPC, attempt a HTTP cehck:
 		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, throttlerapp.VitessName)
 		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
 		if err != nil {
@@ -733,7 +763,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 	}
 }
 
-func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
+func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		clusterName := clusterName
@@ -755,7 +785,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					if clusterName == selfStoreName {
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
-						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
+						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
@@ -772,7 +802,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Load()
-	addInstanceKey := func(tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+	addInstanceKey := func(tablet *topodatapb.Tablet, tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
 			if strings.Contains(key.StringCode(), ignore) {
 				log.Infof("Throttler: instance key ignored: %+v", key)
@@ -786,6 +816,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 		probe := &mysql.Probe{
 			Key:         *key,
+			Tablet:      tablet,
 			TabletHost:  tabletHost,
 			TabletPort:  tabletPort,
 			MetricQuery: clusterSettings.MetricQuery,
@@ -812,7 +843,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			if clusterName == selfStoreName {
 				// special case: just looking at this tablet's MySQL server
 				// We will probe this "cluster" (of one server) is a special way.
-				addInstanceKey("", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				addInstanceKey(nil, "", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return
 			}
@@ -833,7 +864,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 					}
 					if throttler.throttleTabletTypesMap[tablet.Type] {
 						key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-						addInstanceKey(tablet.Hostname, int(tablet.PortMap["vt"]), &key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+						addInstanceKey(tablet.Tablet, tablet.Hostname, int(tablet.PortMap["vt"]), &key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 					}
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
@@ -904,7 +935,7 @@ func (throttler *Throttler) expireThrottledApps() {
 }
 
 // ThrottleApp instructs the throttler to begin throttling an app, to som eperiod and with some ratio.
-func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64) (appThrottle *base.AppThrottle) {
+func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64, exempt bool) (appThrottle *base.AppThrottle) {
 	throttler.throttledAppsMutex.Lock()
 	defer throttler.throttledAppsMutex.Unlock()
 
@@ -917,6 +948,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		if ratio >= 0 {
 			appThrottle.Ratio = ratio
 		}
+		appThrottle.Exempt = exempt
 	} else {
 		if expireAt.IsZero() {
 			expireAt = now.Add(DefaultAppThrottleDuration)
@@ -924,7 +956,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio
 		}
-		appThrottle = base.NewAppThrottle(appName, expireAt, ratio)
+		appThrottle = base.NewAppThrottle(appName, expireAt, ratio, exempt)
 	}
 	if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
@@ -939,7 +971,7 @@ func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.App
 	throttler.throttledApps.Delete(appName)
 	// the app is likely to check
 	go throttler.heartbeatWriter.RequestHeartbeats()
-	return base.NewAppThrottle(appName, time.Now(), 0)
+	return base.NewAppThrottle(appName, time.Now(), 0, false)
 }
 
 // IsAppThrottled tells whether some app should be throttled.
@@ -947,16 +979,21 @@ func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.App
 // on the throttle ratio
 func (throttler *Throttler) IsAppThrottled(appName string) bool {
 	isSingleAppNameThrottled := func(singleAppName string) bool {
-		if object, found := throttler.throttledApps.Get(singleAppName); found {
-			appThrottle := object.(*base.AppThrottle)
-			if appThrottle.ExpireAt.Before(time.Now()) {
-				// throttling cleanup hasn't purged yet, but it is expired
-				return false
-			}
-			// handle ratio
-			if rand.Float64() < appThrottle.Ratio {
-				return true
-			}
+		object, found := throttler.throttledApps.Get(singleAppName)
+		if !found {
+			return false
+		}
+		appThrottle := object.(*base.AppThrottle)
+		if !appThrottle.ExpireAt.After(time.Now()) {
+			// throttling cleanup hasn't purged yet, but it is expired
+			return false
+		}
+		if appThrottle.Exempt {
+			return false
+		}
+		// handle ratio
+		if rand.Float64() < appThrottle.Ratio {
+			return true
 		}
 		return false
 	}
@@ -968,6 +1005,40 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 			continue
 		}
 		if isSingleAppNameThrottled(singleAppName) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAppExempt
+func (throttler *Throttler) IsAppExempted(appName string) bool {
+	isSingleAppNameExempted := func(singleAppName string) bool {
+		if throttlerapp.ExemptFromChecks(appName) { // well known statically exempted apps
+			return true
+		}
+		object, found := throttler.throttledApps.Get(singleAppName)
+		if !found {
+			return false
+		}
+		appThrottle := object.(*base.AppThrottle)
+		if !appThrottle.ExpireAt.After(time.Now()) {
+			// throttling cleanup hasn't purged yet, but it is expired
+			return false
+		}
+		if appThrottle.Exempt {
+			return true
+		}
+		return false
+	}
+	if isSingleAppNameExempted(appName) {
+		return true
+	}
+	for _, singleAppName := range strings.Split(appName, ":") {
+		if singleAppName == "" {
+			continue
+		}
+		if isSingleAppNameExempted(singleAppName) {
 			return true
 		}
 	}
@@ -1040,7 +1111,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
-	if throttlerapp.ExemptFromChecks(appName) {
+	if throttler.IsAppExempted(appName) {
 		// Some apps are exempt from checks. They are always responded with OK. This is because those apps are
 		// continuous and do not generate a substantial load.
 		return okMetricCheckResult

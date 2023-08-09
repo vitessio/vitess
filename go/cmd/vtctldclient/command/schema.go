@@ -103,6 +103,7 @@ var applySchemaOptions = struct {
 	WaitReplicasTimeout     time.Duration
 	SkipPreflight           bool
 	CallerID                string
+	BatchSize               int64
 }{}
 
 func commandApplySchema(cmd *cobra.Command, args []string) error {
@@ -145,6 +146,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		MigrationContext:    applySchemaOptions.MigrationContext,
 		WaitReplicasTimeout: protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
 		CallerId:            cid,
+		BatchSize:           applySchemaOptions.BatchSize,
 	})
 	if err != nil {
 		return err
@@ -285,7 +287,9 @@ func commandReloadSchemaShard(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	ApplySchema.Flags().Bool("allow-long-unavailability", false, "Deprecated and has no effect.")
 	ApplySchema.Flags().MarkDeprecated("--allow-long-unavailability", "")
+	ApplySchema.Flags().Bool("skip-preflight", false, "Deprecated and has no effect.")
 	ApplySchema.Flags().MarkDeprecated("--skip-preflight", "Deprecated. Assumed to be always 'true'")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.DDLStrategy, "ddl-strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'.")
 	ApplySchema.Flags().StringSliceVar(&applySchemaOptions.UUIDList, "uuid", nil, "Optional, comma-delimited, repeatable, explicit UUIDs for migration. If given, must match number of DDL changes.")
@@ -294,6 +298,7 @@ func init() {
 	ApplySchema.Flags().StringVar(&applySchemaOptions.CallerID, "caller-id", "", "Effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used).")
 	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
+	ApplySchema.Flags().Int64Var(&applySchemaOptions.BatchSize, "batch-size", 0, "How many queries to batch together. Only applicable when all queries are CREATE TABLE|VIEW")
 
 	Root.AddCommand(ApplySchema)
 

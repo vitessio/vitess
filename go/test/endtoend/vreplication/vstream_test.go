@@ -33,7 +33,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -171,7 +170,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	qr := execVtgateQuery(t, vtgateConn, "product", "select count(*) from customer")
 	require.NotNil(t, qr)
 	// total number of row events found by the VStream API should match the rows inserted
-	insertedRows, err := evalengine.ToInt64(qr.Rows[0][0])
+	insertedRows, err := qr.Rows[0][0].ToCastInt64()
 	require.NoError(t, err)
 	require.Equal(t, insertedRows, numRowEvents)
 }
@@ -521,7 +520,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	// We believe that checking the number of row events for the unsharded keyspace, which should always be greater than 0 before and after resharding,
 	// is sufficient to confirm that the resharding of one keyspace does not affect another keyspace, while keeping the test straightforward.
 	customerResult := execVtgateQuery(t, vtgateConn, "sharded", "select count(*) from customer")
-	insertedCustomerRows, err := evalengine.ToInt64(customerResult.Rows[0][0])
+	insertedCustomerRows, err := customerResult.Rows[0][0].ToCastInt64()
 	require.NoError(t, err)
 	require.Equal(t, insertedCustomerRows, ne.numLessThan80Events+ne.numGreaterThan80Events+ne.numLessThan40Events+ne.numGreaterThan40Events)
 	return ne

@@ -71,10 +71,10 @@ func DecodedLen(src []byte) int {
 	return (len(src) + 1) / 2
 }
 
-func DecodeBytes(dst, src []byte) bool {
+func DecodeBytes(dst, src []byte) error {
 	if len(src)&1 == 1 {
 		src = append([]byte{'0'}, src...)
 	}
 	_, err := hex.Decode(dst, src)
-	return err == nil
+	return err
 }

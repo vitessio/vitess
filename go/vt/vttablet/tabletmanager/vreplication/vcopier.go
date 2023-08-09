@@ -28,8 +28,9 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/bytes2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -344,7 +345,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Start vreplication.
 	errch := make(chan error, 1)
 	go func() {
-		errch <- newVPlayer(vc.vr, settings, copyState, mysql.Position{}, "catchup").play(ctx)
+		errch <- newVPlayer(vc.vr, settings, copyState, replication.Position{}, "catchup").play(ctx)
 	}()
 
 	// Wait for catchup.
@@ -670,7 +671,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
 	defer vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
-	pos, err := mysql.DecodePosition(gtid)
+	pos, err := replication.DecodePosition(gtid)
 	if err != nil {
 		return err
 	}

@@ -26,9 +26,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -123,9 +124,16 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Perform a graceful reparent operation.
 	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
-	assert.True(t, utils.SetReplicationSourceFailed(tablets[3], out))
 
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	// Assert that PRS failed
+	if clusterInstance.VtctlMajorVersion <= 17 {
+		assert.True(t, utils.SetReplicationSourceFailed(tablets[3], out))
+		utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
+		utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
+	}
+
 }
 
 func TestReparentAvoid(t *testing.T) {
@@ -155,7 +163,11 @@ func TestReparentAvoid(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
+	if clusterInstance.VtctlMajorVersion <= 17 {
+		assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	}
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 }
@@ -275,17 +287,24 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.True(t, utils.SetReplicationSourceFailed(tablets[2], out))
-
-	// insert data into the new primary, check the connected replica work
-	insertVal := utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
+	var insertVal int
+	// Assert that PRS failed
+	if clusterInstance.VtctlMajorVersion <= 17 {
+		assert.True(t, utils.SetReplicationSourceFailed(tablets[2], out))
+		// insert data into the new primary, check the connected replica work
+		insertVal = utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
+	} else {
+		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s error", tablets[2].Alias))
+		// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
+		insertVal = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
+	}
 
 	// restart mysql on the old replica, should still be connecting to the old primary
 	tablets[2].MysqlctlProcess.InitMysql = false
 	err = tablets[2].MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	// Use the same PlannedReparentShard command to fix up the tablet.
+	// Use the same PlannedReparentShard command to promote the new primary.
 	_, err = utils.Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
@@ -465,8 +484,8 @@ func TestFullStatus(t *testing.T) {
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)
 	assert.Contains(t, replicaStatus.ReplicationStatus.Position, "MySQL56/"+replicaStatus.ReplicationStatus.SourceUuid)
-	assert.EqualValues(t, mysql.ReplicationStateRunning, replicaStatus.ReplicationStatus.IoState)
-	assert.EqualValues(t, mysql.ReplicationStateRunning, replicaStatus.ReplicationStatus.SqlState)
+	assert.EqualValues(t, replication.ReplicationStateRunning, replicaStatus.ReplicationStatus.IoState)
+	assert.EqualValues(t, replication.ReplicationStateRunning, replicaStatus.ReplicationStatus.SqlState)
 	assert.Equal(t, fileNameFromPosition(replicaStatus.ReplicationStatus.FilePosition), fileNameFromPosition(primaryStatus.PrimaryStatus.FilePosition))
 	assert.LessOrEqual(t, rowNumberFromPosition(replicaStatus.ReplicationStatus.FilePosition), rowNumberFromPosition(primaryStatus.PrimaryStatus.FilePosition))
 	assert.Equal(t, replicaStatus.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition, primaryStatus.PrimaryStatus.FilePosition)
