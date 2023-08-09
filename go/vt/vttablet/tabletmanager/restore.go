@@ -55,12 +55,12 @@ var (
 	restoreConcurrency     = 4
 	waitForBackupInterval  time.Duration
 
-	statsRestoreBackupTime     *stats.String
+	statsRestoredBackupTime    *stats.String
 	statsRestoreBackupPosition *stats.String
 )
 
 func init() {
-	statsRestoreBackupTime = stats.NewString("RestoreBackupTime")
+	statsRestoredBackupTime = stats.NewString("RestoredBackupTime")
 	statsRestoreBackupPosition = stats.NewString("RestorePosition")
 }
 
@@ -237,7 +237,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		backupManifest, err = mysqlctl.Restore(ctx, params)
 		if backupManifest != nil {
 			statsRestoreBackupPosition.Set(mysql.EncodePosition(backupManifest.Position))
-			statsRestoreBackupTime.Set(backupManifest.BackupTime)
+			statsRestoredBackupTime.Set(backupManifest.BackupTime)
 		}
 
 		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
