@@ -83,6 +83,8 @@ var (
 	// healthCheckTimeout is the timeout on the RPC call to tablets
 	healthCheckTimeout = time.Minute
 
+	terminating bool
+
 	// System settings related flags
 	sysVarSetEnabled = true
 	setVarEnabled    = true
@@ -328,6 +330,8 @@ func Init(
 		}
 	})
 	servenv.OnTerm(func() {
+		terminating = true
+
 		if st != nil && enableSchemaChangeSignal {
 			st.Stop()
 		}
@@ -405,6 +409,10 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 // IsHealthy returns nil if server is healthy.
 // Otherwise, it returns an error indicating the reason.
 func (vtg *VTGate) IsHealthy() error {
+	if terminating {
+		return errors.New("Terminating")
+	}
+
 	return nil
 }
 
