@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
@@ -104,7 +103,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--vtgate-config-terse-errors")
 
 		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

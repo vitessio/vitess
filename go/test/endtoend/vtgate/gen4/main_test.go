@@ -27,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -84,8 +82,6 @@ func TestMain(m *testing.M) {
 			VSchema:   shardedVSchema,
 		}
 
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1
@@ -113,7 +109,6 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4 // enable Gen4 planner.
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

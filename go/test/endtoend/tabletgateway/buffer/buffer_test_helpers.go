@@ -247,7 +247,6 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
 
 	// Start vtgate
-	clusterInstance.VtGatePlannerVersion = 0
 	if err := clusterInstance.StartVtgate(); err != nil {
 		return nil, 1
 	}
@@ -347,8 +346,8 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	assert.Zero(t, readThreadInstance.errors, "found errors in read queries")
 	assert.Zero(t, updateThreadInstance.errors, "found errors in tx queries")
 
-	//At least one thread should have been buffered.
-	//This may fail if a failover is too fast. Add retries then.
+	// At least one thread should have been buffered.
+	// This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()

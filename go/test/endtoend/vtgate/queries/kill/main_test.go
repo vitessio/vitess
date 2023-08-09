@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
@@ -77,7 +76,6 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--grpc_max_message_size", strconv.FormatInt(maxGrpcSize, 10),
 			"--max_memory_rows", "999999",

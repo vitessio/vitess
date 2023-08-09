@@ -83,14 +83,13 @@ func TestMain(m *testing.M) {
 			SchemaSQL:     sqlSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%"}
+		clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users", "%"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

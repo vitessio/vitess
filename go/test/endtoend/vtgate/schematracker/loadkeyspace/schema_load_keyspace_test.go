@@ -72,7 +72,6 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 		Name:      keyspaceName,
 		SchemaSQL: sqlSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 	require.NoError(t, err)
 
@@ -86,7 +85,6 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	}
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
@@ -111,7 +109,6 @@ func TestNoInitialKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
