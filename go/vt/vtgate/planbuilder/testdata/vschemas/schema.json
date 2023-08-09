@@ -608,8 +608,7 @@
       "foreignKeyMode": "FK_MANAGED",
       "vindexes": {
         "hash_vin": {
-          "type": "hash_test",
-          "owner": "user"
+          "type": "hash_test"
         },
         "multicolIdx": {
           "type": "multiCol_test"
@@ -660,6 +659,38 @@
           "column_vindexes": [
             {
               "column": "col3",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl4": {
+          "column_vindexes": [
+            {
+              "column": "col4",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl5": {
+          "column_vindexes": [
+            {
+              "column": "col5",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl6": {
+          "column_vindexes": [
+            {
+              "column": "col6",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl7": {
+          "column_vindexes": [
+            {
+              "column": "col7",
               "name": "hash_vin"
             }
           ]

@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -62,9 +63,11 @@ func gen4DeleteStmtPlanner(
 	}
 
 	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
-		plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
-		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		if fkManagementNotRequired(vschema, tables) {
+			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
+			plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
+			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		}
 	}
 
 	if err := checkIfDeleteSupported(deleteStmt, semTable); err != nil {
@@ -96,6 +99,24 @@ func gen4DeleteStmtPlanner(
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+func fkManagementNotRequired(vschema plancontext.VSchema, vTables []*vindexes.Table) bool {
+	// Find the foreign key mode and check for any managed child foreign keys.
+	for _, vTable := range vTables {
+		ksMode, err := vschema.ForeignKeyMode(vTable.Keyspace.Name)
+		if err != nil {
+			return false
+		}
+		if ksMode != vschemapb.Keyspace_FK_MANAGED {
+			continue
+		}
+		childFks := vTable.ChildFKsNeedsHandling()
+		if len(childFks) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
