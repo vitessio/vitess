@@ -59,8 +59,10 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 			"insert into _vt.vreplication_log":                          {},
 		},
 		// For some reason the following queries are not sent in a determinstic order.
+		// In the case of foreign_key_checks, it's likely because of a potential no-op
+		// done in a defer.
 		ignored: map[string]struct{}{
-			"set foreign_key_checks=1": {},
+			//"set foreign_key_checks=1": {},
 		},
 	}
 }

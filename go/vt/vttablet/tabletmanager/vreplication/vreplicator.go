@@ -484,7 +484,7 @@ func encodeString(in string) string {
 }
 
 func (vr *vreplicator) getSettingFKCheck() error {
-	qr, err := vr.dbClient.Execute("select @@foreign_key_checks;")
+	qr, err := vr.dbClient.Execute("select @@foreign_key_checks")
 	if err != nil {
 		return err
 	}
@@ -499,7 +499,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 }
 
 func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
-	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d", vr.originalFKCheckSetting))
 	return err
 }
 
@@ -587,7 +587,7 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 }
 
 func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
-	_, err := dbClient.Execute("set foreign_key_checks=0;")
+	_, err := dbClient.Execute("set foreign_key_checks=0")
 	return err
 }
 
