@@ -304,6 +304,9 @@ message BackupShardRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
+  // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
+  // then the backup becomes incremental and applies as of given position.
+  string incremental_from_pos = 6;
 }
 
 message ChangeTabletTypeRequest {
@@ -1431,6 +1434,7 @@ message WorkflowSwitchTrafficRequest {
   int32 direction = 7;
   vttime.Duration timeout = 8;
   bool dry_run = 9;
+  bool initialize_target_sequences = 10;
 }
 
 message WorkflowSwitchTrafficResponse {

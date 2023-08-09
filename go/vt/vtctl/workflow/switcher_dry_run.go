@@ -23,6 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -363,5 +366,13 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 		return nil
 	}
 	dr.drLog.Log("The sequence caches will be reset on the source since sequence tables are being moved")
+	return nil
+}
+
+func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
+	slices.Sort(sortedBackingTableNames)
+	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
+		strings.Join(sortedBackingTableNames, ",")))
 	return nil
 }

@@ -19,7 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -131,7 +131,7 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	if slices2.All(call.Arguments[1:], func(expr Expr) bool { return expr.constant() }) {
+	if slice.All(call.Arguments[1:], func(expr Expr) bool { return expr.constant() }) {
 		paths := make([]*json.Path, 0, len(call.Arguments[1:]))
 
 		for _, arg := range call.Arguments[1:] {
@@ -406,7 +406,7 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 		return ctype{}, c.unsupported(call)
 	}
 
-	if !slices2.All(call.Arguments[2:], func(expr Expr) bool { return expr.constant() }) {
+	if !slice.All(call.Arguments[2:], func(expr Expr) bool { return expr.constant() }) {
 		return ctype{}, c.unsupported(call)
 	}
 

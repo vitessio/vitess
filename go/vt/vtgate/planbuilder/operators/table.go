@@ -19,7 +19,7 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -65,24 +65,31 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("tried to add group by to a table")
-	}
-	offset, err := addColumn(ctx, to, expr.Expr)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return to, offset, nil
+func (to *Table) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
+	return nil, vterrors.VT13001("did not expect this method to be called")
 }
 
-func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return slices2.Map(to.Columns, colNameToExpr), nil
+func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	colToFind, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return -1, nil
+	}
+
+	for idx, colName := range to.Columns {
+		if colName.Name.Equal(colToFind.Name) {
+			return idx, nil
+		}
+	}
+
+	return -1, nil
 }
 
-func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(to)
+func (to *Table) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return slice.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, to)
 }
 
 func (to *Table) GetOrdering() ([]ops.OrderBy, error) {

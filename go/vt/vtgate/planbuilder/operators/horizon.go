@@ -149,35 +149,31 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return h, nil
 }
 
-func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	col, ok := expr.Expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+func (h *Horizon) AddColumns(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	if !reuse {
+		return nil, errNoNewColumns
 	}
-
-	identity := func(c *sqlparser.ColName) sqlparser.Expr { return c }
-	if offset, found := canReuseColumn(ctx, h.Columns, col, identity); found {
-		return h, offset, nil
-	}
-
-	i, err := h.findOutputColumn(col)
-	if err != nil {
-		return nil, 0, err
-	}
-	var pos int
-	h.ColumnsOffset, pos = addToIntSlice(h.ColumnsOffset, i)
-
-	h.Columns = append(h.Columns, col)
-	// add it to the source if we were not already passing it through
-	if i <= -1 {
-		newSrc, _, err := h.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true, addToGroupBy)
-		if err != nil {
-			return nil, 0, err
+	offsets := make([]int, len(exprs))
+	for i, expr := range exprs {
+		col, ok := expr.Expr.(*sqlparser.ColName)
+		if !ok {
+			return nil, vterrors.VT13001("cannot push non-ColName expression to horizon")
 		}
-		h.Source = newSrc
+		offset, err := h.FindCol(ctx, col, false)
+		if err != nil {
+			return nil, err
+		}
+
+		if offset < 0 {
+			return nil, errNoNewColumns
+		}
+		offsets[i] = offset
 	}
-	return h, pos, nil
+
+	return offsets, nil
 }
+
+var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")
 
 // canReuseColumn is generic, so it can be used with slices of different types.
 // We don't care about the actual type, as long as we know it's a sqlparser.Expr
@@ -196,18 +192,33 @@ func canReuseColumn[T any](
 	return
 }
 
-func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
-	for _, expr := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
+		ae, ok := se.(*sqlparser.AliasedExpr)
+		if !ok {
+			return 0, vterrors.VT09015()
+		}
+		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, expr) {
+			return idx, nil
+		}
+	}
+
+	return -1, nil
+}
+
+func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
+	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.VT09015()
 		}
 		exprs = append(exprs, ae)
 	}
-	return
+
+	return exprs, nil
 }
 
-func (h *Horizon) GetSelectExprs() (sqlparser.SelectExprs, error) {
+func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return sqlparser.GetFirstSelect(h.Query).SelectExprs, nil
 }
 
@@ -216,16 +227,6 @@ func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
 		return nil, vterrors.VT13001("QP should already be here")
 	}
 	return h.QP.OrderExprs, nil
-}
-
-func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
-	for idx, val := range columnOffset {
-		if val == valToAdd {
-			return columnOffset, idx
-		}
-	}
-	columnOffset = append(columnOffset, valToAdd)
-	return columnOffset, len(columnOffset) - 1
 }
 
 // TODO: REMOVE

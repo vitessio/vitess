@@ -279,6 +279,9 @@ type BackupManifest struct {
 	// which incremental changes are backed up.
 	FromPosition replication.Position
 
+	// FromBackup indicates the backup name on which this incremental backup is based, assumign this is an incremental backup with "auto" pos``
+	FromBackup string
+
 	// Incremental indicates whether this is an incremental backup
 	Incremental bool
 
@@ -401,9 +404,16 @@ func (p *RestorePath) String() string {
 
 // FindLatestSuccessfulBackup returns the handle and manifest for the last good backup,
 // which can be either full or increment
-func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, *BackupManifest, error) {
+func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle, excludeBackupName string) (backupstorage.BackupHandle, *BackupManifest, error) {
 	for index := len(bhs) - 1; index >= 0; index-- {
 		bh := bhs[index]
+		if bh.Name() == excludeBackupName {
+			// skip this bh. Use case: in an incremental backup, as we look for previous successful backups,
+			// the new incremental backup handle is partial: the directory exists, it will show in ListBackups, but
+			// the MANIFEST file does nto exist yet. So we avoid the errors/warnings associated with reading this partial backup,
+			// and just skip it.
+			continue
+		}
 		// Check that the backup MANIFEST exists and can be successfully decoded.
 		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
@@ -413,6 +423,29 @@ func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 		return bh, bm, nil
 	}
 	return nil, nil, ErrNoCompleteBackup
+}
+
+// FindLatestSuccessfulBackupPosition returns the position of the last known successful backup
+func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams, excludeBackupName string) (backupName string, pos replication.Position, err error) {
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return "", pos, err
+	}
+	defer bs.Close()
+
+	// Backups are stored in a directory structure that starts with
+	// <keyspace>/<shard>
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	bhs, err := bs.ListBackups(ctx, backupDir)
+	if err != nil {
+		return "", pos, vterrors.Wrap(err, "ListBackups failed")
+	}
+	bh, manifest, err := FindLatestSuccessfulBackup(ctx, params.Logger, bhs, excludeBackupName)
+	if err != nil {
+		return "", pos, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
+	}
+	pos = manifest.Position
+	return bh.Name(), pos, nil
 }
 
 // FindBackupToRestore returns a path, a sequence of backup handles, to be restored.

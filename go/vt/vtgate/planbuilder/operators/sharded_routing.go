@@ -20,7 +20,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -155,7 +155,7 @@ func (tr *ShardedRouting) Clone() Routing {
 		selected = &t
 	}
 	return &ShardedRouting{
-		VindexPreds: slices2.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
+		VindexPreds: slice.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
 			// we do this to create a copy of the struct
 			p := *from
 			return &p
@@ -608,7 +608,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB)
+				return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -632,7 +632,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 		if !canMerge {
 			return nil, nil
 		}
-		return m.mergeTables(tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 	}
 	return nil, nil
 }

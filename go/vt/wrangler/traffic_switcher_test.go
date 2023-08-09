@@ -278,7 +278,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
@@ -348,7 +348,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	cancelMigration()
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -456,7 +456,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,7 +599,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
@@ -663,7 +663,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -752,7 +752,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 	freezeTargetVReplication()
 
-	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +871,7 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1001,6 +1001,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"Wait for VReplication on stopped streams to catchup for up to 1s",
 		"Create reverse replication workflow test_reverse",
 		"Create journal entries on source databases",
+		"The following sequence backing tables used by tables being moved will be initialized: t1_seq,t2_seq",
 		"Enable writes on keyspace ks2 tables [t1,t2]",
 		"Switch routing from keyspace ks1 to keyspace ks2",
 		"Routing rules for tables [t1,t2] will be updated",
@@ -1093,7 +1094,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	deleteTargetVReplication()
 
 	switchWrites(tme)
-	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, true)
+	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, true, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunWrites, *results))
 }
@@ -1181,7 +1182,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	want := "journaling intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -1243,7 +1244,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1321,7 +1322,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1386,7 +1387,7 @@ func TestTableMigrateCancel(t *testing.T) {
 	cancelMigration()
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1448,7 +1449,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	cancelMigration()
 
 	switchWrites(tme)
-	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, true)
+	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, true, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(want, *dryRunResults))
 }
@@ -1549,7 +1550,7 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	deleteTargetVReplication()
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1591,7 +1592,7 @@ func TestMigrateFrozen(t *testing.T) {
 	tme.dbTargetClients[1].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1901,7 +1902,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
@@ -1966,7 +1967,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	cancelMigration()
 
 	switchWrites(tme)
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -2061,7 +2062,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 		invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)] = tme.dbTargetClients[i].getInvariant(streamInfoKs)
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, tme.dbTargetClients[i].getInvariant(streamInfoKs+"-rdonly"))
 	}
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "no tablet found"))
 	require.True(t, strings.Contains(err.Error(), "-80"))
@@ -2071,7 +2072,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)])
 	}
 
-	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}

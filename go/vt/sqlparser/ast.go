@@ -70,6 +70,7 @@ type (
 		GetColumnCount() int
 		GetColumns() SelectExprs
 		Commented
+		IsDistinct() bool
 	}
 
 	// DDLStatement represents any DDL Statement

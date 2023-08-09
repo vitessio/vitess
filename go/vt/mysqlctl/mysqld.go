@@ -1362,6 +1362,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		}
 		scanner := bufio.NewScanner(pipe)
 		scanComplete := make(chan error)
+		intentionalKill := false
 		scan := func() {
 			defer close(scanComplete)
 			// Read line by line and process it
@@ -1378,6 +1379,10 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 					matchFound = true
 				}
 				if found && stopAtFirst {
+					// Found the first timestamp and it's all we need. We won't scan any further and so we should also
+					// kill mysqlbinlog (otherwise it keeps waiting until we've read the entire pipe).
+					intentionalKill = true
+					mysqlbinlogCmd.Process.Kill()
 					return
 				}
 			}
@@ -1386,7 +1391,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			return matchedTime, false, err
 		}
 		go scan()
-		if err := mysqlbinlogCmd.Wait(); err != nil {
+		if err := mysqlbinlogCmd.Wait(); err != nil && !intentionalKill {
 			return matchedTime, false, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
 		}
 		if err := <-scanComplete; err != nil {
@@ -1430,7 +1435,7 @@ func noSocketFile() {
 	if socketFile != "" {
 		// We log an error for now until we fix the issue with ApplySchema surfacing in MoveTables.
 		// See https://github.com/vitessio/vitess/issues/13203 and https://github.com/vitessio/vitess/pull/13178
-		//panic("Running remotely through mysqlctl, socketFile must not be set")
+		// panic("Running remotely through mysqlctl, socketFile must not be set")
 		log.Warning("Running remotely through mysqlctl and thus socketFile should not be set")
 	}
 }
