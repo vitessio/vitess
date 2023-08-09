@@ -182,7 +182,7 @@ message SchemaMigration {
     DIRECT = 3;
     // SchemaMigration_MYSQL is a managed migration (queued and executed by the
     // scheduler) but runs through a MySQL `ALTER TABLE`.
-	  MYSQL = 4;
+    MYSQL = 4;
   }
 
   enum Status {
