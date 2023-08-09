@@ -272,6 +272,9 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		Workflow:                  moveTablesOptions.Workflow,
 		TargetKeyspace:            moveTablesOptions.TargetKeyspace,
 		SourceKeyspace:            moveTablesCreateOptions.SourceKeyspace,
+		SourceShards:              moveTablesCreateOptions.SourceShards,
+		SourceTimeZone:            moveTablesCreateOptions.SourceTimeZone,
+		ExternalClusterName:       moveTablesCreateOptions.ExternalClusterName,
 		Cells:                     moveTablesCreateOptions.Cells,
 		TabletTypes:               moveTablesCreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
@@ -279,6 +282,7 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		IncludeTables:             moveTablesCreateOptions.IncludeTables,
 		ExcludeTables:             moveTablesCreateOptions.ExcludeTables,
 		OnDdl:                     moveTablesCreateOptions.OnDDL,
+		DeferSecondaryKeys:        moveTablesCreateOptions.DeferSecondaryKeys,
 		AutoStart:                 moveTablesCreateOptions.AutoStart,
 		StopAfterCopy:             moveTablesCreateOptions.StopAfterCopy,
 	}
