@@ -718,6 +718,15 @@ func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr
 	}
 }
 
+// NewCaseExpr makes a new CaseExpr
+func NewCaseExpr(expr Expr, whens []*When, elseExpr Expr) *CaseExpr {
+	return &CaseExpr{
+		Expr:  expr,
+		Whens: whens,
+		Else:  elseExpr,
+	}
+}
+
 // NewLimit makes a new Limit
 func NewLimit(offset, rowCount int) *Limit {
 	return &Limit{
