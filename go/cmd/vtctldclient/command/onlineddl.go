@@ -33,11 +33,21 @@ import (
 var (
 	OnlineDDL = &cobra.Command{
 		Use:                   "OnlineDDL <cmd> <keyspace> [args]",
+		Short:                 "Operates on online DDL (schema migrations).",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(2),
 	}
 	OnlineDDLShow = &cobra.Command{
-		Use:                   "show",
+		Use:   "show",
+		Short: "Display information about online DDL operations.",
+		Example: `OnlineDDL show test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90
+OnlineDDL show test_keyspace all
+OnlineDDL show --order descending test_keyspace all
+OnlineDDL show --limit 10 test_keyspace all
+OnlineDDL show --skip 5 --limit 10 test_keyspace all
+OnlineDDL show test_keyspace running
+OnlineDDL show test_keyspace complete
+OnlineDDL show test_keyspace failed`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.RangeArgs(0, 1),
 		RunE:                  commandOnlineDDLShow,
@@ -109,10 +119,10 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "TODO")
-	OnlineDDLShow.Flags().StringVar(&onlineDDLShowArgs.OrderStr, "order", "asc", "TODO")
-	OnlineDDLShow.Flags().Uint64Var(&onlineDDLShowArgs.Limit, "limit", 0, "TODO")
-	OnlineDDLShow.Flags().Uint64Var(&onlineDDLShowArgs.Skip, "skip", 0, "TODO")
+	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "Output JSON instead of human-readable table.")
+	OnlineDDLShow.Flags().StringVar(&onlineDDLShowArgs.OrderStr, "order", "asc", "Sort the results by `id` property of the Schema migration.")
+	OnlineDDLShow.Flags().Uint64Var(&onlineDDLShowArgs.Limit, "limit", 0, "Limit number of rows returned in output.")
+	OnlineDDLShow.Flags().Uint64Var(&onlineDDLShowArgs.Skip, "skip", 0, "Skip specified number of rows returned in output.")
 
 	OnlineDDL.AddCommand(OnlineDDLShow)
 	Root.AddCommand(OnlineDDL)
