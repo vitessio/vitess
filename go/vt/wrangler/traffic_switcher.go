@@ -1956,7 +1956,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		return nil, nil
 	}
 
-	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(ctx, vschema)
+	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -1964,6 +1964,10 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	// names then we don't need to search for them in other keyspaces.
 	if len(sequencesByBackingTable) == 0 || backingTablesFound {
 		return sequencesByBackingTable, nil
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	// Now we need to locate the backing sequence table(s) which will
@@ -2039,7 +2043,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // indicate if all of the backing sequence tables were defined using
 // qualified table names (so we know where they all live) along with an
 // error if any is seen.
-func (ts *trafficSwitcher) findSequenceUsageInKeyspace(ctx context.Context, vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
+func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
 	allFullyQualified := true
 	targets := maps.Values(ts.Targets())
 	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
@@ -2050,36 +2054,30 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(ctx context.Context, vsch
 
 	for _, table := range ts.Tables() {
 		vs, ok := vschema.Tables[table]
-		if !ok || vs == nil {
+		if !ok || vs == nil || vs.AutoIncrement == nil || vs.AutoIncrement.Sequence == "" {
 			continue
 		}
-		if vs.AutoIncrement != nil && vs.AutoIncrement.Sequence != "" {
-			sm := &sequenceMetadata{
-				backingTableName:     vs.AutoIncrement.Sequence,
-				usingTableName:       table,
-				usingTableDefinition: vs,
-				usingTableDBName:     targetDBName,
-			}
-			// If the sequence table is fully qualified in the vschema then
-			// we don't need to find it later.
-			if strings.Contains(vs.AutoIncrement.Sequence, ".") {
-				keyspace, tableName, found := strings.Cut(vs.AutoIncrement.Sequence, ".")
-				if !found {
-					return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
-						vs.AutoIncrement.Sequence, ts.targetKeyspace)
-				}
-				sm.backingTableName = tableName
-				sm.backingTableKeyspace = keyspace
-				sm.backingTableDBName = "vt_" + keyspace
-			} else {
-				allFullyQualified = false
-			}
-			sequencesByBackingTable[sm.backingTableName] = sm
+		sm := &sequenceMetadata{
+			backingTableName:     vs.AutoIncrement.Sequence,
+			usingTableName:       table,
+			usingTableDefinition: vs,
+			usingTableDBName:     targetDBName,
 		}
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, false, err
+		// If the sequence table is fully qualified in the vschema then
+		// we don't need to find it later.
+		if strings.Contains(vs.AutoIncrement.Sequence, ".") {
+			keyspace, tableName, found := strings.Cut(vs.AutoIncrement.Sequence, ".")
+			if !found {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
+					vs.AutoIncrement.Sequence, ts.targetKeyspace)
+			}
+			sm.backingTableName = tableName
+			sm.backingTableKeyspace = keyspace
+			sm.backingTableDBName = "vt_" + keyspace
+		} else {
+			allFullyQualified = false
+		}
+		sequencesByBackingTable[sm.backingTableName] = sm
 	}
 
 	return sequencesByBackingTable, allFullyQualified, nil
