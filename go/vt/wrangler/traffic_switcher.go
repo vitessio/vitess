@@ -1993,25 +1993,30 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 				return nil
 			default:
 			}
-			smMu.Lock() // Prevent concurrent access to the map
-			sm := sequencesByBackingTable[tableName]
-			if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
-				sm != nil && tableName == sm.backingTableName {
-				tablesFound++ // This is also protected by the mutex
-				sm.backingTableKeyspace = keyspace
-				sm.backingTableDBName = "vt_" + keyspace
-				if tablesFound == tableCount { // Short circuit the search
-					smMu.Unlock()
-					select {
-					case <-searchCompleted: // It's already been closed
-						return nil
-					default:
-						close(searchCompleted) // Mark the search as completed
-						return nil
+			if complete := func() bool {
+				smMu.Lock() // Prevent concurrent access to the map
+				defer smMu.Unlock()
+				sm := sequencesByBackingTable[tableName]
+				if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
+					sm != nil && tableName == sm.backingTableName {
+					tablesFound++ // This is also protected by the mutex
+					sm.backingTableKeyspace = keyspace
+					sm.backingTableDBName = "vt_" + keyspace
+					if tablesFound == tableCount { // Short circuit the search
+						smMu.Unlock()
+						select {
+						case <-searchCompleted: // It's already been closed
+							return true
+						default:
+							close(searchCompleted) // Mark the search as completed
+							return true
+						}
 					}
 				}
+				return false
+			}(); complete {
+				return nil
 			}
-			smMu.Unlock()
 		}
 		return nil
 	}
