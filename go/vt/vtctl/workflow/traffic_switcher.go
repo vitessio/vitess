@@ -1281,7 +1281,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 					sm.backingTableKeyspace = keyspace
 					sm.backingTableDBName = "vt_" + keyspace
 					if tablesFound == tableCount { // Short circuit the search
-						smMu.Unlock()
 						select {
 						case <-searchCompleted: // It's already been closed
 							return true
