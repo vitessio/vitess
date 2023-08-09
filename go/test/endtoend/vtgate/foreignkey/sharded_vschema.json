@@ -39,6 +39,14 @@
         }
       ]
     },
+    "t4": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
     "multicol_tbl1": {
       "column_vindexes": [
         {

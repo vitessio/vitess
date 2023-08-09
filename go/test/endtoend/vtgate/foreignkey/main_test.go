@@ -91,7 +91,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 
 	deleteAll := func() {
 		_ = utils.Exec(t, conn, "use `ks/-80`")
-		tables := []string{"t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
+		tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
 		for _, table := range tables {
 			_ = utils.Exec(t, conn, "delete from "+table)
 		}
