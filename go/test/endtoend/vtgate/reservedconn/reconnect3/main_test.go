@@ -73,6 +73,8 @@ func runAllTests(m *testing.M) int {
 	}
 	if enableSettingsPool {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
+	} else {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool=false")
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
 		return 1

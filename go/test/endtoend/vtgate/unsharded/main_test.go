@@ -183,6 +183,8 @@ func runAllTests(m *testing.M) int {
 	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
 	if enableSettingsPool {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
+	} else {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool=false")
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
 		log.Fatal(err.Error())
