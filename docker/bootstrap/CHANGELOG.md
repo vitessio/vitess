@@ -76,4 +76,4 @@ List of changes between bootstrap image versions.
 
 ## [20] - 2023-08-03
 ### Changes
-- Bump all images (besides mysql57) to bullseye base image
+- Bump all images to bullseye base image
