@@ -23,17 +23,18 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	_flag "vitess.io/vitess/go/internal/flag"
-	"vitess.io/vitess/go/mysql/replication"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -45,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
@@ -4803,6 +4805,206 @@ func TestGetSchema(t *testing.T) {
 
 			assert.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetSchemaMigrations(t *testing.T) {
+	t.Parallel()
+
+	convertNamedRowsToProto3Result := func(rows []sqltypes.RowNamedValues) *querypb.QueryResult {
+		var (
+			result                 sqltypes.Result
+			fieldNames, fieldTypes []string
+		)
+		for i, row := range rows {
+			var unnamedRow sqltypes.Row
+			if i == 0 {
+				// Add to fields if this is the first row
+				for name, value := range row {
+					fieldNames = append(fieldNames, name)
+					fieldTypes = append(fieldTypes, strings.ToLower(querypb.Type_name[int32(value.Type())]))
+				}
+			}
+
+			for _, name := range fieldNames {
+				value, ok := row[name]
+				if !ok {
+					value = sqltypes.NULL
+				}
+
+				unnamedRow = append(unnamedRow, value)
+			}
+
+			result.Rows = append(result.Rows, unnamedRow)
+		}
+
+		result.Fields = sqltypes.MakeTestFields(strings.Join(fieldNames, "|"), strings.Join(fieldTypes, "|"))
+		return sqltypes.ResultToProto3(&result)
+	}
+
+	tests := []struct {
+		name         string
+		tablets      []*topodatapb.Tablet
+		rowsByTablet map[string][]sqltypes.RowNamedValues
+		failTopo     bool
+		req          *vtctldatapb.GetSchemaMigrationsRequest
+		expected     *vtctldatapb.GetSchemaMigrationsResponse
+		shouldErr    bool
+	}{
+		{
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			rowsByTablet: map[string][]sqltypes.RowNamedValues{
+				"zone1-0000000100": {
+					map[string]sqltypes.Value{
+						"migration_uuid": sqltypes.NewVarChar("uuid1"),
+						"keyspace":       sqltypes.NewVarChar("ks"),
+						"shard":          sqltypes.NewVarChar("-"),
+						"strategy":       sqltypes.NewVarChar(schematools.SchemaMigrationStrategyName(vtctldatapb.SchemaMigration_ONLINE)),
+					},
+				},
+			},
+			req: &vtctldatapb.GetSchemaMigrationsRequest{
+				Keyspace: "ks",
+			},
+			expected: &vtctldatapb.GetSchemaMigrationsResponse{
+				Migrations: []*vtctldatapb.SchemaMigration{
+					{
+						Uuid:       "uuid1",
+						Keyspace:   "ks",
+						Shard:      "-",
+						Strategy:   vtctldatapb.SchemaMigration_ONLINE,
+						EtaSeconds: -1,
+					},
+				},
+			},
+		},
+		{
+			name: "bad uuid input",
+			req: &vtctldatapb.GetSchemaMigrationsRequest{
+				Uuid: "not-a-uuid",
+			},
+			shouldErr: true,
+		},
+		{
+			name:     "gettablets failure",
+			failTopo: true,
+			req: &vtctldatapb.GetSchemaMigrationsRequest{
+				Keyspace: "notfound",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "execute fetch failure",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			rowsByTablet: map[string][]sqltypes.RowNamedValues{
+				"zone1-0000000100": nil,
+			},
+			req: &vtctldatapb.GetSchemaMigrationsRequest{
+				Keyspace: "ks",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "bad row data",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			rowsByTablet: map[string][]sqltypes.RowNamedValues{
+				"zone1-0000000100": {
+					{"requested_timestamp": sqltypes.NewVarChar("invalid timestamp")},
+				},
+			},
+			req: &vtctldatapb.GetSchemaMigrationsRequest{
+				Keyspace: "ks",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmc := &testutil.TabletManagerClient{
+				ExecuteFetchAsDbaResults: make(map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}, len(test.rowsByTablet)),
+			}
+
+			if test.rowsByTablet == nil {
+				test.rowsByTablet = map[string][]sqltypes.RowNamedValues{}
+			}
+			for alias, rows := range test.rowsByTablet {
+				switch rows {
+				case nil:
+					tmc.ExecuteFetchAsDbaResults[alias] = struct {
+						Response *querypb.QueryResult
+						Error    error
+					}{
+						Error: assert.AnError,
+					}
+				default:
+					tmc.ExecuteFetchAsDbaResults[alias] = struct {
+						Response *querypb.QueryResult
+						Error    error
+					}{
+						Response: convertNamedRowsToProto3Result(rows),
+					}
+				}
+			}
+
+			cells := []string{"zone1", "zone2", "zone3"}
+
+			ctx := context.Background()
+			ts, factory := memorytopo.NewServerAndFactory(cells...)
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, test.tablets...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			if test.failTopo {
+				factory.SetError(assert.AnError)
+			}
+
+			resp, err := vtctld.GetSchemaMigrations(ctx, test.req)
+			if test.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, test.expected, resp)
 		})
 	}
 }
