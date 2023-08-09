@@ -119,6 +119,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		switch currentWorkflowType {
 		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
 			args = append(args, "--defer-secondary-keys")
+			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
 		}
 	}
 	if cells != "" {

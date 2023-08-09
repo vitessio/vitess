@@ -65,9 +65,9 @@ var testCases = []*testCase{
 		tabletBaseID:      200,
 		tables:            "customer,Lead,Lead-1",
 		autoRetryError:    true,
-		retryInsert:       `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
+		retryInsert:       `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
 		resume:            true,
-		resumeInsert:      `insert into customer(cid, name, typ) values(92234, 'Testy McTester (redux)', 'enterprise')`,
+		resumeInsert:      `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
 		testCLIErrors:     true, // test for errors in the simplest workflow
 		testCLICreateWait: true, // test wait on create feature against simplest workflow
 	},
@@ -81,9 +81,9 @@ var testCases = []*testCase{
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(93234, 'Testy McTester Jr', 'enterprise'), (94234, 'Testy McTester II', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(1993234, 'Testy McTester Jr', 'enterprise'), (1993235, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(95234, 'Testy McTester III', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(1994234, 'Testy McTester III', 'enterprise')`,
 		stop:           true,
 	},
 	{
@@ -96,9 +96,9 @@ var testCases = []*testCase{
 		targetShards:   "0",
 		tabletBaseID:   700,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(96234, 'Testy McTester IV', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(1995234, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(97234, 'Testy McTester V', 'enterprise'), (98234, 'Testy McTester VI', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(1996234, 'Testy McTester V', 'enterprise'), (1996235, 'Testy McTester VI', 'enterprise')`,
 		stop:           true,
 	},
 }

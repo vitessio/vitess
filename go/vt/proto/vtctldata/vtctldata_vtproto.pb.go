@@ -10711,6 +10711,16 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.InitializeTargetSequences {
+		i--
+		if m.InitializeTargetSequences {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
+	}
 	if m.DryRun {
 		i--
 		if m.DryRun {
@@ -15039,6 +15049,9 @@ func (m *WorkflowSwitchTrafficRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.DryRun {
+		n += 2
+	}
+	if m.InitializeTargetSequences {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -40732,6 +40745,26 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.DryRun = bool(v != 0)
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InitializeTargetSequences", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InitializeTargetSequences = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

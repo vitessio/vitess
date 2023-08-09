@@ -26,8 +26,12 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
@@ -56,10 +60,30 @@ const (
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
 	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
+
+	sqlGetMaxSequenceVal = "select max(%a) as maxval from %a.%a"
+	sqlInitSequenceTable = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
+
+// sequenceMetadata contains all of the relevant metadata for a sequence that
+// is being used by a table involved in a vreplication workflow.
+type sequenceMetadata struct {
+	// The name of the sequence table.
+	backingTableName string
+	// The keyspace where the backing table lives.
+	backingTableKeyspace string
+	// The dbName in use by the keyspace where the backing table lives.
+	backingTableDBName string
+	// The name of the table using the sequence.
+	usingTableName string
+	// The dbName in use by the keyspace where the using table lives.
+	usingTableDBName string
+	// The using table definition.
+	usingTableDefinition *vschemapb.Table
+}
 
 const (
 	allowWrites = accessType(iota)
@@ -307,29 +331,33 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
 	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+	// Consistently handle errors by logging and returning them.
+	handleError := func(message string, err error) (*[]string, error) {
+		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		wr.Logger().Error(werr)
+		return nil, werr
+	}
 
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	if err != nil {
-		wr.Logger().Errorf("getWorkflowState failed: %v", err)
-		return nil, err
+		return handleError("failed to get the current state of the workflow", err)
 	}
 	if ts == nil {
 		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		wr.Logger().Errorf(errorMsg)
-		return nil, fmt.Errorf(errorMsg)
+		return handleError("failed to get the current state of the workflow", fmt.Errorf(errorMsg))
 	}
 	log.Infof("Switching reads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
 	var switchReplicas, switchRdonly bool
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
-			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
+			return handleError("invalid tablet type", fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType))
 		}
 		if !ts.isPartialMigration { // shard level traffic switching is all or nothing
 			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
-				return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
+				return handleError("invalid request", fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 			}
 			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
-				return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
+				return handleError("invalid request", fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 			}
 		}
 		switch servedType {
@@ -358,8 +386,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	// If journals exist notify user and fail.
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil {
-		wr.Logger().Errorf("checkJournals failed: %v", err)
-		return nil, err
+		return handleError(fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
 	}
 	if journalsExist {
 		log.Infof("Found a previous journal entry for %d", ts.id)
@@ -372,15 +399,13 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	}
 
 	if err := ts.validate(ctx); err != nil {
-		ts.Logger().Errorf("validate failed: %v", err)
-		return nil, err
+		return handleError("workflow validation failed", err)
 	}
 
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
 	if lockErr != nil {
-		ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
-		return nil, lockErr
+		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer unlock(&err)
 
@@ -388,23 +413,20 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
 		} else if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {
-			ts.Logger().Errorf("switchTableReads failed: %v", err)
-			return nil, err
+			return handleError("failed to switch read traffic for the tables", err)
 		}
 		return sw.logs(), nil
 	}
 	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
 	if err := sw.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
-		ts.Logger().Errorf("switchShardReads failed: %v", err)
-		return nil, err
+		return handleError("failed to switch read traffic for the shards", err)
 	}
 
 	wr.Logger().Infof("switchShardReads Completed: %+v, %+v, %+v", cells, servedTypes, direction)
 	if err := wr.ts.ValidateSrvKeyspace(ctx, targetKeyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			targetKeyspace, strings.Join(cells, ","))
-		log.Errorf("%w", err2)
-		return nil, err2
+		return handleError("failed to validate SrvKeyspace record", err2)
 	}
 	return sw.logs(), nil
 }
@@ -454,17 +476,22 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
-	cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
+	// Consistently handle errors by logging and returning them.
+	handleError := func(message string, err error) (int64, *[]string, error) {
+		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		wr.Logger().Error(werr)
+		return 0, nil, werr
+	}
+
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
-		wr.Logger().Errorf("getWorkflowState failed: %v", err)
-		return 0, nil, err
+		handleError("failed to get the current workflow state", err)
 	}
 	if ts == nil {
 		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		wr.Logger().Errorf(errorMsg)
-		return 0, nil, fmt.Errorf(errorMsg)
+		handleError("failed to get the current workflow state", fmt.Errorf(errorMsg))
 	}
 
 	var sw iswitcher
@@ -481,47 +508,57 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 
 	ts.Logger().Infof("Built switching metadata: %+v", ts)
 	if err := ts.validate(ctx); err != nil {
-		ts.Logger().Errorf("validate failed: %v", err)
-		return 0, nil, err
+		handleError("workflow validation failed", err)
 	}
 
 	if reverseReplication {
 		err := wr.areTabletsAvailableToStreamFrom(ctx, ts, ts.TargetKeyspaceName(), ts.TargetShards())
 		if err != nil {
-			return 0, nil, err
+			return handleError(fmt.Sprintf("no tablets were available to stream from in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 	}
 
 	// Need to lock both source and target keyspaces.
 	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
 	if lockErr != nil {
-		ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
-		return 0, nil, lockErr
+		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	ctx = tctx
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
 		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
 		if lockErr != nil {
-			ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
-			return 0, nil, lockErr
+			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
 		ctx = tctx
 		defer targetUnlock(&err)
 	}
 
+	// Find out if the target is using any sequence tables for auto_increment
+	// value generation. If so, then we'll need to ensure that they are
+	// initialized properly before allowing new writes on the target.
+	sequenceMetadata := make(map[string]*sequenceMetadata)
+	// For sharded to sharded migrations the sequence must already be setup.
+	// For reshards the sequence usage is not changed.
+	if initializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
+		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
+		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
+		if err != nil {
+			return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
+		}
+	}
+
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
-		ts.Logger().Errorf("checkJournals failed: %v", err)
-		return 0, nil, err
+		return handleError(fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
 		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel)
 		if err != nil {
-			ts.Logger().Errorf("buildStreamMigrater failed: %v", err)
-			return 0, nil, err
+			return handleError("failed to migrate the workflow streams", err)
 		}
 		if cancel {
 			sw.cancelMigration(ctx, sm)
@@ -531,21 +568,19 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		ts.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
-			ts.Logger().Errorf("stopStreams failed: %v", err)
 			for key, streams := range sm.Streams() {
 				for _, stream := range streams {
 					ts.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
 			}
 			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
+			return handleError("failed to stop the workflow streams", err)
 		}
 
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
-			ts.Logger().Errorf("stopSourceWrites failed: %v", err)
 			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
+			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -554,9 +589,8 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			// the tablet's deny list check and the first mysqld side table lock.
 			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
 				if err := ts.executeLockTablesOnSource(ctx); err != nil {
-					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCycles, err)
 					sw.cancelMigration(ctx, sm)
-					return 0, nil, err
+					return handleError(fmt.Sprintf("failed to execute LOCK TABLES (attempt %d of %d) on sources", cnt, lockTablesCycles), err)
 				}
 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
 				// and thus the locks released.
@@ -566,73 +600,71 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
-			ts.Logger().Errorf("waitForCatchup failed: %v", err)
 			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
+			return handleError("failed to sync up replication between the source and target", err)
 		}
 
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
-			ts.Logger().Errorf("migrateStreams failed: %v", err)
 			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
+			return handleError("failed to migrate the workflow streams", err)
 		}
 
 		ts.Logger().Infof("Resetting sequences")
 		if err := sw.resetSequences(ctx); err != nil {
-			ts.Logger().Errorf("resetSequences failed: %v", err)
 			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
+			return handleError("failed to reset the sequences", err)
 		}
 
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
-			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
 			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
+			return handleError("failed to create the reverse vreplication streams", err)
 		}
 	} else {
 		if cancel {
-			err := fmt.Errorf("traffic switching has reached the point of no return, cannot cancel")
-			ts.Logger().Errorf("%v", err)
-			return 0, nil, err
+			return handleError("invalid cancel", fmt.Errorf("traffic switching has reached the point of no return, cannot cancel"))
 		}
 		ts.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := ts.gatherPositions(ctx); err != nil {
-			ts.Logger().Errorf("gatherPositions failed: %v", err)
-			return 0, nil, err
+			return handleError("failed to gather replication positions", err)
 		}
 	}
 
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
-		ts.Logger().Errorf("createJournals failed: %v", err)
-		return 0, nil, err
+		return handleError("failed to create the journal", err)
+	}
+	// Initialize any target sequences, if there are any, before allowing new writes.
+	if initializeTargetSequences && len(sequenceMetadata) > 0 {
+		// Writes are blocked so we can safely initialize the sequence tables but
+		// we also want to use a shorter timeout than the parent context.
+		// We use up at most half of the overall timeout.
+		initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
+		defer cancel()
+		if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
+			return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+		}
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
-		ts.Logger().Errorf("allowTargetWrites failed: %v", err)
-		return 0, nil, err
+		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
 	if err := sw.changeRouting(ctx); err != nil {
-		ts.Logger().Errorf("changeRouting failed: %v", err)
-		return 0, nil, err
+		return handleError("failed to update the routing rules", err)
 	}
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
-		ts.Logger().Errorf("finalize failed: %v", err)
-		return 0, nil, err
+		handleError("failed to finalize the traffic switch", err)
 	}
 	if reverseReplication {
 		if err := sw.startReverseVReplication(ctx); err != nil {
-			ts.Logger().Errorf("startReverseVReplication failed: %v", err)
-			return 0, nil, err
+			return handleError("failed to start the reverse workflow", err)
 		}
 	}
 
 	if err := sw.freezeTargetVReplication(ctx); err != nil {
-		ts.Logger().Errorf("deleteTargetVReplication failed: %v", err)
-		return 0, nil, err
+		return handleError(fmt.Sprintf("failed to freeze the workflow in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
 
 	return ts.id, sw.logs(), nil
@@ -1893,7 +1925,7 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if vschema == nil || vschema.Tables == nil {
+	if vschema == nil || len(vschema.Tables) == 0 {
 		return false, nil
 	}
 	sequenceFound := false
@@ -1908,6 +1940,280 @@ func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, e
 		}
 	}
 	return sequenceFound, nil
+}
+
+// getTargetSequenceMetadata returns a map of sequence metadata keyed by the
+// backing sequence table name. If the target keyspace has no tables
+// defined that use sequences for auto_increment generation then a nil
+// map will be returned.
+func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[string]*sequenceMetadata, error) {
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for target keyspace %s: %v",
+			ts.targetKeyspace, err)
+	}
+	if vschema == nil || len(vschema.Tables) == 0 { // Nothing to do
+		return nil, nil
+	}
+
+	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema)
+	if err != nil {
+		return nil, err
+	}
+	// If all of the sequence tables were defined using qualified table
+	// names then we don't need to search for them in other keyspaces.
+	if len(sequencesByBackingTable) == 0 || backingTablesFound {
+		return sequencesByBackingTable, nil
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Now we need to locate the backing sequence table(s) which will
+	// be in another unsharded keyspace.
+	smMu := sync.Mutex{}
+	tableCount := len(sequencesByBackingTable)
+	tablesFound := 0                                                      // Used to short circuit the search
+	searchCompleted := make(chan struct{})                                // The search has completed
+	searchKeyspace := func(sctx context.Context, keyspace string) error { // The function used to search each keyspace
+		kvs, kerr := ts.TopoServer().GetVSchema(sctx, keyspace)
+		if kerr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for keyspace %s: %v",
+				keyspace, kerr)
+		}
+		if kvs == nil || kvs.Sharded || len(kvs.Tables) == 0 {
+			return nil
+		}
+		for tableName, tableDef := range kvs.Tables {
+			select {
+			case <-sctx.Done():
+				return sctx.Err()
+			case <-searchCompleted:
+				return nil
+			default:
+			}
+			if complete := func() bool {
+				smMu.Lock() // Prevent concurrent access to the map
+				defer smMu.Unlock()
+				sm := sequencesByBackingTable[tableName]
+				if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
+					sm != nil && tableName == sm.backingTableName {
+					tablesFound++ // This is also protected by the mutex
+					sm.backingTableKeyspace = keyspace
+					sm.backingTableDBName = "vt_" + keyspace
+					if tablesFound == tableCount { // Short circuit the search
+						select {
+						case <-searchCompleted: // It's already been closed
+							return true
+						default:
+							close(searchCompleted) // Mark the search as completed
+							return true
+						}
+					}
+				}
+				return false
+			}(); complete {
+				return nil
+			}
+		}
+		return nil
+	}
+	keyspaces, err := ts.TopoServer().GetKeyspaces(ctx)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get keyspaces: %v", err)
+	}
+	searchGroup, gctx := errgroup.WithContext(ctx)
+	for _, keyspace := range keyspaces {
+		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
+		searchGroup.Go(func() error {
+			return searchKeyspace(gctx, keyspace)
+		})
+	}
+	if err := searchGroup.Wait(); err != nil {
+		return nil, err
+	}
+
+	if tablesFound != tableCount {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence table metadata: %+v",
+			sequencesByBackingTable)
+	}
+	return sequencesByBackingTable, nil
+}
+
+// findSequenceUsageInKeyspace searches the keyspace's vschema for usage
+// of sequences. It returns a map of sequence metadata keyed by the backing
+// sequence table name -- if any usage is found -- along with a boolean to
+// indicate if all of the backing sequence tables were defined using
+// qualified table names (so we know where they all live) along with an
+// error if any is seen.
+func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
+	allFullyQualified := true
+	targets := maps.Values(ts.Targets())
+	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target keyspace %s", ts.targetKeyspace)
+	}
+	targetDBName := targets[0].GetPrimary().DbName()
+	sequencesByBackingTable := make(map[string]*sequenceMetadata)
+
+	for _, table := range ts.Tables() {
+		vs, ok := vschema.Tables[table]
+		if !ok || vs == nil || vs.AutoIncrement == nil || vs.AutoIncrement.Sequence == "" {
+			continue
+		}
+		sm := &sequenceMetadata{
+			backingTableName:     vs.AutoIncrement.Sequence,
+			usingTableName:       table,
+			usingTableDefinition: vs,
+			usingTableDBName:     targetDBName,
+		}
+		// If the sequence table is fully qualified in the vschema then
+		// we don't need to find it later.
+		if strings.Contains(vs.AutoIncrement.Sequence, ".") {
+			keyspace, tableName, found := strings.Cut(vs.AutoIncrement.Sequence, ".")
+			if !found {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
+					vs.AutoIncrement.Sequence, ts.targetKeyspace)
+			}
+			sm.backingTableName = tableName
+			sm.backingTableKeyspace = keyspace
+			sm.backingTableDBName = "vt_" + keyspace
+		} else {
+			allFullyQualified = false
+		}
+		sequencesByBackingTable[sm.backingTableName] = sm
+	}
+
+	return sequencesByBackingTable, allFullyQualified, nil
+}
+
+// initializeTargetSequences initializes the backing sequence tables
+// using a map keyed by the backing sequence table name.
+//
+// The backing tables must have already been created. This function will
+// then ensure that the next value is set to a value greater than any
+// currently stored in the using table on the target keyspace. If the
+// backing table is updated to a new higher value then it will also tell
+// the primary tablet serving the sequence to refresh/reset its cache to
+// be sure that it does not provide a value that is less than the current max.
+func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	initSequenceTable := func(ictx context.Context, sequenceTableName string, sequenceMetadata *sequenceMetadata) error {
+		// Now we need to run this query on the target shards in order
+		// to get the max value and set the next id for the sequence to
+		// a higher value.
+		shardResults := make([]int64, 0, len(ts.TargetShards()))
+		srMu := sync.Mutex{}
+		ierr := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+			primary := target.GetPrimary()
+			if primary == nil || primary.GetAlias() == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
+					ts.targetKeyspace, target.GetShard().ShardName())
+			}
+			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
+				sqlescape.EscapeID(sequenceMetadata.usingTableDefinition.AutoIncrement.Column),
+				sqlescape.EscapeID(sequenceMetadata.usingTableDBName),
+				sqlescape.EscapeID(sequenceMetadata.usingTableName),
+			)
+			qr, terr := ts.wr.ExecuteFetchAsApp(ictx, primary.GetAlias(), true, query.Query, 1)
+			if terr != nil || len(qr.Rows) != 1 {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			}
+			maxID, terr := sqltypes.Proto3ToResult(qr).Rows[0][0].ToInt64()
+			if terr != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			}
+			srMu.Lock()
+			defer srMu.Unlock()
+			shardResults = append(shardResults, maxID)
+			return nil
+		})
+		if ierr != nil {
+			return ierr
+		}
+		select {
+		case <-ictx.Done():
+			return ictx.Err()
+		default:
+		}
+		if len(shardResults) == 0 { // This should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get any results for the max used sequence value for target table %s.%s in order to initialize the backing sequence table",
+				ts.targetKeyspace, sequenceMetadata.usingTableName)
+		}
+		// Sort the values to find the max value across all shards.
+		sort.Slice(shardResults, func(i, j int) bool {
+			return shardResults[i] < shardResults[j]
+		})
+		nextVal := shardResults[len(shardResults)-1] + 1
+		// Now we need to update the sequence table, if needed, in order to
+		// ensure that that the next value it provides is > the current max.
+		sequenceShard, ierr := ts.wr.TopoServer().GetOnlyShard(ictx, sequenceMetadata.backingTableKeyspace)
+		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, ierr)
+		}
+		sequenceTablet, ierr := ts.wr.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
+		if ierr != nil || sequenceTablet == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, ierr)
+		}
+		select {
+		case <-ictx.Done():
+			return ictx.Err()
+		default:
+		}
+		if sequenceTablet.DbNameOverride != "" {
+			sequenceMetadata.backingTableDBName = sequenceTablet.DbNameOverride
+		}
+		query := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
+			sqlescape.EscapeID(sequenceMetadata.backingTableDBName),
+			sqlescape.EscapeID(sequenceMetadata.backingTableName),
+			nextVal,
+			nextVal,
+			nextVal,
+		)
+		// Now execute this on the primary tablet of the unsharded keyspace
+		// housing the backing table.
+		qr, ierr := ts.wr.ExecuteFetchAsApp(ictx, sequenceShard.PrimaryAlias, true, query.Query, 1)
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
+				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, ierr)
+		}
+		// If we actually updated the backing sequence table, then we need
+		// to tell the primary tablet managing the sequence to refresh/reset
+		// its cache for the table.
+		if qr.RowsAffected == 0 {
+			return nil
+		}
+		select {
+		case <-ictx.Done():
+			return ictx.Err()
+		default:
+		}
+		ts.Logger().Infof("Resetting sequence cache for backing table %s on shard %s/%s using tablet %s",
+			sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias)
+		ti, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
+				sequenceMetadata.backingTableKeyspace, ierr)
+		}
+		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{sequenceMetadata.backingTableName})
+		if ierr != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s/%s using tablet %s: %v",
+				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
+		}
+		return nil
+	}
+
+	initGroup, gctx := errgroup.WithContext(ctx)
+	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
+		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
+		initGroup.Go(func() error {
+			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
+		})
+	}
+	return initGroup.Wait()
 }
 
 func (ts *trafficSwitcher) mustResetSequences(ctx context.Context) (bool, error) {
