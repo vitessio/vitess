@@ -1005,7 +1005,7 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 }
 
 func terminateBackup(t *testing.T, alias string) {
-	stopBackupMsg := "Done taking Backup"
+	stopBackupMsg := "finished backup"
 	if useXtrabackup {
 		stopBackupMsg = "Starting backup with"
 		useXtrabackup = false
@@ -1023,19 +1023,26 @@ func terminateBackup(t *testing.T, alias string) {
 	reader, _ := tmpProcess.StderrPipe()
 	err := tmpProcess.Start()
 	require.Nil(t, err)
-	found := false
 
 	scanner := bufio.NewScanner(reader)
 
+	var latestLogs []string
+	cap := 20
+
 	for scanner.Scan() {
 		text := scanner.Text()
+		if len(latestLogs) == cap {
+			latestLogs = latestLogs[1:]
+		}
+		latestLogs = append(latestLogs, text)
 		if strings.Contains(text, stopBackupMsg) {
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true //nolint
 			return
 		}
 	}
-	assert.True(t, found, "backup message not found")
+
+	t.Logf("logs: \n%s", strings.Join(latestLogs, "\n"))
+	assert.Fail(t, "backup message not found")
 }
 
 func terminateRestore(t *testing.T) {

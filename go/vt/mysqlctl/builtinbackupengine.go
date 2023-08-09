@@ -690,6 +690,7 @@ type backupPipe struct {
 	nn     int64
 	done   chan struct{}
 	closed int32
+	action string
 }
 
 func newBackupWriter(filename string, writerBufferSize int, maxSize int64, w io.Writer) *backupPipe {
@@ -699,6 +700,7 @@ func newBackupWriter(filename string, writerBufferSize int, maxSize int64, w io.
 		filename: filename,
 		maxSize:  maxSize,
 		done:     make(chan struct{}),
+		action:   "writing",
 	}
 }
 
@@ -709,6 +711,7 @@ func newBackupReader(filename string, maxSize int64, r io.Reader) *backupPipe {
 		filename: filename,
 		done:     make(chan struct{}),
 		maxSize:  maxSize,
+		action:   "reading",
 	}
 }
 
@@ -748,15 +751,22 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 	for {
 		select {
 		case <-bp.done:
-			logger.Infof("Done taking Backup %q", bp.filename)
+			n := float64(atomic.LoadInt64(&bp.nn))
+			logger.Infof("finished %s: %q (%.02fkb)", bp.action, bp.filename, n/1024.0)
 			return
 		case <-tick.C:
-			written := float64(atomic.LoadInt64(&bp.nn))
+			n := float64(atomic.LoadInt64(&bp.nn))
 			if bp.maxSize == 0 {
-				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+				logger.Infof("%s %q: %.02fkb", bp.action, bp.filename, n/1024.0)
 			} else {
 				maxSize := float64(bp.maxSize)
-				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+				logger.Infof("%s %q: %.02f%% (%.02f/%.02fkb)",
+					bp.action,
+					bp.filename,
+					100.0*n/maxSize,
+					n/1024.0,
+					maxSize/1024.0,
+				)
 			}
 		}
 	}
@@ -792,7 +802,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	go br.ReportProgress(builtinBackupProgress, params.Logger)
 
 	// Open the destination file for writing, and a buffer.
-	params.Logger.Infof("Backing up file: %v", fe.Name)
+	params.Logger.Infof("backup: %q", fe.Name)
 	openDestAt := time.Now()
 	dest, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
@@ -806,6 +816,8 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			rerr = vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name)
 			params.Logger.Error(rerr)
 			finalErr = errors.Join(finalErr, rerr)
+		} else if finalErr == nil {
+			params.Logger.Infof("finished backup: %q", fe.Name)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
@@ -1053,7 +1065,8 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
-	br := newBackupReader(name, 0, timedSource)
+	params.Logger.Infof("restore: %q", fe.Name)
+	br := newBackupReader(fe.Name, 0, timedSource)
 	go br.ReportProgress(builtinBackupProgress, params.Logger)
 	var reader io.Reader = br
 
@@ -1069,6 +1082,8 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		closeDestAt := time.Now()
 		if cerr := dest.Close(); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
+		} else if finalErr == nil {
+			params.Logger.Infof("finished restore: %q", fe.Name)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
