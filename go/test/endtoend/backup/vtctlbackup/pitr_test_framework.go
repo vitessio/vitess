@@ -61,8 +61,8 @@ type testedBackupTimestampInfo struct {
 func waitForReplica(t *testing.T, replicaIndex int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	primaryPos := GetPrimaryPosition(t)
 	for {
+		primaryPos := GetPrimaryPosition(t)
 		replicaPos := GetReplicaPosition(t, replicaIndex)
 		if replicaPos == primaryPos {
 			// success
