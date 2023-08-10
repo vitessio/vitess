@@ -34,10 +34,10 @@ import (
 func waitForReplica(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	pMsgs := backup.ReadRowsFromPrimary(t)
 	for {
-		rMsgs := backup.ReadRowsFromReplica(t)
-		if len(pMsgs) == len(rMsgs) {
+		primaryPos := backup.GetPrimaryPosition(t)
+		replicaPos := backup.GetReplicaPosition(t)
+		if replicaPos == primaryPos {
 			// success
 			return
 		}

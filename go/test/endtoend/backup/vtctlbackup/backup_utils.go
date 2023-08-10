@@ -1093,9 +1093,17 @@ func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, tabletType string) (backu
 	return backups, destroy
 }
 
-func GetReplicaPosition(t *testing.T) string {
-	pos, _ := cluster.GetPrimaryPosition(t, *replica1, hostname)
+func GetTabletPosition(t *testing.T, tablet *cluster.Vttablet) string {
+	pos, _ := cluster.GetPrimaryPosition(t, *tablet, hostname)
 	return pos
+}
+
+func GetReplicaPosition(t *testing.T) string {
+	return GetTabletPosition(t, replica1)
+}
+
+func GetPrimaryPosition(t *testing.T) string {
+	return GetTabletPosition(t, primary)
 }
 
 func GetReplicaGtidPurged(t *testing.T) string {
