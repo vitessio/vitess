@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package colldata
 
 import (
 	"bytes"
 	"math/bits"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/vt/vthash"
@@ -27,7 +28,7 @@ import (
 
 type Collation_utf8mb4_uca_0900 struct {
 	name string
-	id   ID
+	id   collations.ID
 	uca  *uca.Collation900
 }
 
@@ -35,7 +36,7 @@ func (c *Collation_utf8mb4_uca_0900) Name() string {
 	return c.name
 }
 
-func (c *Collation_utf8mb4_uca_0900) ID() ID {
+func (c *Collation_utf8mb4_uca_0900) ID() collations.ID {
 	return c.id
 }
 
@@ -213,7 +214,7 @@ func (c *Collation_utf8mb4_uca_0900) ToUpper(dst, src []byte) []byte {
 
 type Collation_utf8mb4_0900_bin struct{}
 
-func (c *Collation_utf8mb4_0900_bin) ID() ID {
+func (c *Collation_utf8mb4_0900_bin) ID() collations.ID {
 	return 309
 }
 
@@ -271,11 +272,11 @@ func (c *Collation_utf8mb4_0900_bin) ToUpper(dst, src []byte) []byte {
 
 type Collation_uca_legacy struct {
 	name string
-	id   ID
+	id   collations.ID
 	uca  *uca.CollationLegacy
 }
 
-func (c *Collation_uca_legacy) ID() ID {
+func (c *Collation_uca_legacy) ID() collations.ID {
 	return c.id
 }
 

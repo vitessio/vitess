@@ -14,25 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package colldata
 
 import (
 	"bytes"
 	"math"
 	"math/bits"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Collation_unicode_general_ci struct {
-	id      ID
+	id      collations.ID
 	name    string
 	unicase *UnicaseInfo
 	charset charset.Charset
 }
 
-func (c *Collation_unicode_general_ci) ID() ID {
+func (c *Collation_unicode_general_ci) ID() collations.ID {
 	return c.id
 }
 
@@ -164,12 +165,12 @@ func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, match
 }
 
 type Collation_unicode_bin struct {
-	id      ID
+	id      collations.ID
 	name    string
 	charset charset.Charset
 }
 
-func (c *Collation_unicode_bin) ID() ID {
+func (c *Collation_unicode_bin) ID() collations.ID {
 	return c.id
 }
 

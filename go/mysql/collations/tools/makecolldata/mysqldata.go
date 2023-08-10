@@ -353,12 +353,12 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 	g.P("},")
 }
 
-func makemysqldata(output string, metadata AllMetadata) {
+func makemysqldata(output string, supportedOutput string, metadata AllMetadata) {
 	var unsupportedByCharset = make(map[string][]string)
 	var g = Generator{
-		Generator: codegen.NewGenerator(PkgCollations),
+		Generator: codegen.NewGenerator(PkgCollationsData),
 		Tables: TableGenerator{
-			Generator:         codegen.NewGenerator(PkgCollations),
+			Generator:         codegen.NewGenerator(PkgCollationsData),
 			dedup:             make(map[string]string),
 			baseWeightsUca400: metadata.get("utf8mb4_unicode_ci").Weights,
 			baseWeightsUca520: metadata.get("utf8mb4_unicode_520_ci").Weights,
@@ -366,15 +366,22 @@ func makemysqldata(output string, metadata AllMetadata) {
 		},
 	}
 
+	var h = Generator{
+		Generator: codegen.NewGenerator("vitess.io/vitess/go/mysql/collations"),
+	}
+
 	g.P("var collationsById = [...]Collation{")
+	h.P("var supported = [...]string{")
 
 	for _, meta := range metadata {
 		switch {
 		case meta.Name == "utf8mb4_0900_bin":
 			g.P(uint(309), ": &Collation_utf8mb4_0900_bin{},")
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case meta.Name == "binary":
 			g.P(uint(63), ": &Collation_binary{},")
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case meta.Name == "tis620_bin":
 			// explicitly unsupported for now because of not accurate results
@@ -384,24 +391,31 @@ func makemysqldata(output string, metadata AllMetadata) {
 			meta.CollationImpl == "utf32_uca" ||
 			meta.CollationImpl == "ucs2_uca":
 			g.printCollationUcaLegacy(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case meta.CollationImpl == "uca_900":
 			g.printCollationUca900(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci":
 			g.printCollation8bit(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case meta.Name == "gb18030_unicode_520_ci":
 			g.printCollationUcaLegacy(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case charset.IsMultibyteByName(meta.Charset):
 			g.printCollationMultibyte(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case strings.HasSuffix(meta.Name, "_bin") && charset.IsUnicodeByName(meta.Charset):
 			g.printCollationUnicode(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case strings.HasSuffix(meta.Name, "_general_ci"):
 			g.printCollationUnicode(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		default:
 			unsupportedByCharset[meta.Charset] = append(unsupportedByCharset[meta.Charset], meta.Name)
@@ -409,7 +423,9 @@ func makemysqldata(output string, metadata AllMetadata) {
 	}
 
 	g.P("}")
+	h.P("}")
 	codegen.Merge(g.Tables.Generator, g.Generator).WriteToFile(path.Join(output, "mysqldata.go"))
+	h.WriteToFile(path.Join(supportedOutput, "supported.go"))
 
 	var unhandledCount int
 	for impl, collations := range unsupportedByCharset {

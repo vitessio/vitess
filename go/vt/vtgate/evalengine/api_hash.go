@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,7 +46,7 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	h := vthash.New()
 	switch e := e.(type) {
 	case *evalBytes:
-		if !collation.Valid() {
+		if collation == collations.Unknown {
 			return 0, UnsupportedCollationHashError
 		}
 		e.col.Collation = collation
@@ -193,10 +194,10 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 
 	case sqltypes.IsBinary(coerceTo):
 		hash.Write16(hashPrefixBytes)
-		collations.Binary.Hash(hash, v.Raw(), 0)
+		colldata.Lookup(collations.CollationBinaryID).Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsText(coerceTo):
-		coll := collation.Get()
+		coll := colldata.Lookup(collation)
 		if coll == nil {
 			panic("cannot hash unsupported collation")
 		}

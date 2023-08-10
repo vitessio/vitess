@@ -18,9 +18,11 @@ limitations under the License.
 
 // The fuzzing tests for collations use the new Fuzz implementation in Go 1.18+
 
-package collations
+package colldata
 
-import "testing"
+import (
+	"testing"
+)
 
 func FuzzUCACollate(f *testing.F) {
 	for _, left := range AllTestStrings {
