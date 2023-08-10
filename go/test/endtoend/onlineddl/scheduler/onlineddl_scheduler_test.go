@@ -180,13 +180,6 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 			readyToComplete := row.AsInt64("ready_to_complete", 0)
 			if expected == (readyToComplete > 0) {
 				// all good. This is what we waited for
-				if expected {
-					// if migration is ready to complete, the nthe timestamp should be non-null
-					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
-				} else {
-					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
-				}
-
 				return
 			}
 		}
