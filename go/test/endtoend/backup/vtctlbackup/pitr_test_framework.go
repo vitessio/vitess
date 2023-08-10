@@ -198,7 +198,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// Also, we give the replica a chance to catch up.
 				time.Sleep(postWriteSleepDuration)
 				// randomly flush binary logs 0, 1 or 2 times
-				FlushBinaryLogsOnReplica(t, 0, rand.Intn(3))
+				FlushBinaryLogsOnPrimary(t, 3)
+				FlushBinaryLogsOnReplica(t, 0, 4)
 				waitForReplica(t, 0)
 				t.Logf("========= primary <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
 				t.Logf("========= replica <<<< %d >>>> rows", len(ReadRowsFromReplica(t, 0)))

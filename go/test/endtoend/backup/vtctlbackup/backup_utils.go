@@ -1155,14 +1155,24 @@ func ReadRowsFromReplica(t *testing.T, replicaIndex int) (msgs []string) {
 	return ReadRowsFromTablet(t, getReplica(t, replicaIndex))
 }
 
+// FlushBinaryLogsOnTablet issues `FLUSH BINARY LOGS` <count> times
+func FlushBinaryLogsOnTablet(t *testing.T, tablet *cluster.Vttablet, count int) {
+	query := "flush binary logs"
+	for i := 0; i < count; i++ {
+		_, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.NoError(t, err)
+	}
+}
+
 // FlushBinaryLogsOnReplica issues `FLUSH BINARY LOGS` <count> times
 func FlushBinaryLogsOnReplica(t *testing.T, replicaIndex int, count int) {
 	replica := getReplica(t, replicaIndex)
-	query := "flush binary logs"
-	for i := 0; i < count; i++ {
-		_, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.NoError(t, err)
-	}
+	FlushBinaryLogsOnTablet(t, replica, count)
+}
+
+// FlushBinaryLogsOnPrimary issues `FLUSH BINARY LOGS` <count> times
+func FlushBinaryLogsOnPrimary(t *testing.T, count int) {
+	FlushBinaryLogsOnTablet(t, primary, count)
 }
 
 // FlushAndPurgeBinaryLogsOnReplica intentionally loses all existing binary logs. It flushes into a new binary log
