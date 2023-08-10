@@ -139,5 +139,84 @@
         "unsharded_fk_allow.u_tbl2"
       ]
     }
+  },
+  {
+    "comment": "Update in a table with cross-shard foreign keys disallowed",
+    "query": "update tbl1 set t1col1 = 'foo' where col1 = 1",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "Update in a table with cross-shard foreign keys, column not in update expression - allowed",
+    "query": "update tbl1 set not_ref_col = 'foo' where id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl1 set not_ref_col = 'foo' where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update tbl1 set not_ref_col = 'foo' where id = 1",
+        "Table": "tbl1"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl1"
+      ]
+    }
+  },
+  {
+    "comment": "Update in a table with shard-scoped foreign keys is allowed",
+    "query": "update tbl7 set t7col7 = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl7 set t7col7 = 'foo'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update tbl7 set t7col7 = 'foo'",
+        "Table": "tbl7"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl7"
+      ]
+    }
+  },
+  {
+    "comment": "Update in a table with shard-scoped foreign keys with cascade disallowed",
+    "query": "update tbl5 set t5col5 = 'foo'",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns",
+    "query": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into tbl6(col6, t6col6) values (:_col6_0, 'foo')",
+        "TableName": "tbl6",
+        "VindexValues": {
+          "hash_vin": "INT64(100)"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl6"
+      ]
+    }
   }
 ]
