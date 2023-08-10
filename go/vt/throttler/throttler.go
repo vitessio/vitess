@@ -329,6 +329,8 @@ func (t *Throttler) ResetConfiguration() {
 }
 
 // Log returns the most recent changes of the MaxReplicationLag module.
+//
+//revive:disable-next-line:unexported-return for testing
 func (t *Throttler) Log() []result {
 	return t.maxReplicationLagModule.log()
 }

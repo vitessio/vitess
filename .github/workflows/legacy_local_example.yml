@@ -4,7 +4,8 @@ jobs:
 
   build:
     name: Legacy local example using ${{ matrix.topo }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: vitess-ubuntu20
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -48,7 +49,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.7
+        go-version: 1.19.10
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'

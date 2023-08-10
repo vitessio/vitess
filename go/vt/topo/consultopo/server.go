@@ -30,19 +30,25 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
+	consulConfig               = api.DefaultConfig()
 	consulAuthClientStaticFile = flag.String("consul_auth_static_file", "", "JSON File to read the topos/tokens from.")
 	// serfHealth is the default check from consul
 	consulLockSessionChecks = flag.String("topo_consul_lock_session_checks", "serfHealth", "List of checks for consul session.")
 	consulLockSessionTTL    = flag.String("topo_consul_lock_session_ttl", "", "TTL for consul session.")
 	consulLockDelay         = flag.Duration("topo_consul_lock_delay", 15*time.Second, "LockDelay for consul session.")
 )
+
+func init() {
+	flag.IntVar(&consulConfig.Transport.MaxConnsPerHost, "topo_consul_max_conns_per_host", consulConfig.Transport.MaxConnsPerHost, "Maximum number of consul connections per host.")
+	flag.IntVar(&consulConfig.Transport.MaxIdleConns, "topo_consul_max_idle_conns", consulConfig.Transport.MaxIdleConns, "Maximum number of idle consul connections.")
+	flag.DurationVar(&consulConfig.Transport.IdleConnTimeout, "topo_consul_idle_conn_timeout", consulConfig.Transport.IdleConnTimeout, "Maximum amount of time to pool idle connections.")
+}
 
 // ClientAuthCred credential to use for consul clusters
 type ClientAuthCred struct {
@@ -120,7 +126,7 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := api.DefaultConfig()
+	cfg := consulConfig
 	cfg.Address = serverAddr
 	if creds != nil {
 		if creds[cell] != nil {

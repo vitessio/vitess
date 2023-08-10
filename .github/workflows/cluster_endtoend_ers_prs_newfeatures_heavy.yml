@@ -9,7 +9,8 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on Cluster (ers_prs_newfeatures_heavy)
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -50,7 +51,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.7
+        go-version: 1.19.10
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

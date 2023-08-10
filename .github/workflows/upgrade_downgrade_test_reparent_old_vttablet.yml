@@ -76,7 +76,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_reparent_old_vttablet.yml'
 
-    - name: Set up Go
+    - name: Set up older Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
@@ -148,6 +148,12 @@ jobs:
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
+
+    - name: Set up new Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19.10
 
     # Checkout to this build's commit
     - name: Check out commit's code

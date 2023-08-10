@@ -4,4 +4,3 @@ web/vtadmin/src/proto/*.ts -diff
 go/vt/proto/** linguist-generated=true
 go/vt/proto/*/*.pb.go -diff
 go/vt/sqlparser/sql.go linguist-generated=true -diff
-go/vt/mysqlctl/rice-box.go linguist-generated=true -diff
