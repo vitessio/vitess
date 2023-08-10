@@ -22,6 +22,8 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/stats"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
@@ -52,7 +54,15 @@ var (
 	restoreFromBackupTsStr string
 	restoreConcurrency     = 4
 	waitForBackupInterval  time.Duration
+
+	statsRestoredBackupTime    *stats.String
+	statsRestoreBackupPosition *stats.String
 )
+
+func init() {
+	statsRestoredBackupTime = stats.NewString("RestoredBackupTime")
+	statsRestoreBackupPosition = stats.NewString("RestorePosition")
+}
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&restoreFromBackup, "restore_from_backup", restoreFromBackup, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
@@ -225,6 +235,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
+		if backupManifest != nil {
+			statsRestoreBackupPosition.Set(mysql.EncodePosition(backupManifest.Position))
+			statsRestoredBackupTime.Set(backupManifest.BackupTime)
+		}
+
 		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
 		if waitForBackupInterval == 0 {
 			break

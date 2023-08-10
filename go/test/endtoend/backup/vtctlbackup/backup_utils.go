@@ -446,7 +446,7 @@ func primaryBackup(t *testing.T) {
 	// Restore the older/first backup -- using the timestamp we saved -- on the original primary tablet (primary)
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "--", "--backup_timestamp", firstBackupTimestamp, primary.Alias)
 	require.Nil(t, err)
-
+	verifyRestorePositionAndTimeStats(t, primary.VttabletProcess.GetVars())
 	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
 	err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 	require.Nil(t, err)
@@ -1047,4 +1047,17 @@ func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectEr
 		return
 	}
 	require.NoErrorf(t, err, "output: %v", output)
+}
+
+func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
+	require.Contains(t, vars, "RestoredBackupTime")
+	backupTime := vars["RestoredBackupTime"].(string)
+	require.NotEqual(t, "", backupTime)
+
+	require.Contains(t, vars, "RestorePosition")
+	backupPosition := vars["RestorePosition"].(string)
+	require.NotEqual(t, "", backupPosition)
+	rp, err := mysql.DecodePosition(backupPosition)
+	require.NoError(t, err)
+	require.False(t, rp.IsZero())
 }
