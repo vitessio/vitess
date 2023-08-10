@@ -40,29 +40,29 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
-			input: "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + VALUES(count)",
+			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + VALUES(count)",
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
 		},
 		{
-			input: "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE account = account + VALUES(account)",
+			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE account = account + VALUES(account)",
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update account = `account` + values(`account`)",
 		},
 		{
 			// INVISIBLE should parse, but be a no-op (for now)
-			input: "create table t (pk int primary key, c1 int INVISIBLE)",
+			input:  "create table t (pk int primary key, c1 int INVISIBLE)",
 			output: "create table t (\n\tpk int primary key,\n\tc1 int\n)",
 		},
 		{
 			// INVISIBLE should parse, but be a no-op (for now)
-			input: "alter table t add column c1 int INVISIBLE",
+			input:  "alter table t add column c1 int INVISIBLE",
 			output: "alter table t add column (\n\tc1 int\n)",
 		},
 		{
-			input: "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
+			input:  "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
 			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
 		},
 		{
-			input: "CREATE TABLE webhook_events (pk int primary key, event varchar(255) DEFAULT NULL)",
+			input:  "CREATE TABLE webhook_events (pk int primary key, event varchar(255) DEFAULT NULL)",
 			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
 		},
 		{
@@ -74,11 +74,11 @@ var (
 			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
 		},
 		{
-			input: `Select 'a' "b" 'c'`,
+			input:  `Select 'a' "b" 'c'`,
 			output: "select 'abc'",
 		},
 		{
-			input: `Select concat('a' "b" 'c', "de" 'f')`,
+			input:  `Select concat('a' "b" 'c', "de" 'f')`,
 			output: "select concat('abc', 'def')",
 		},
 		{
@@ -334,7 +334,7 @@ var (
 			input: "select a from t1 natural join lateral (select b from t2) as sq",
 		},
 		{
-			input: "select a from t1 join lateral (select b from t2) sq",
+			input:  "select a from t1 join lateral (select b from t2) sq",
 			output: "select a from t1 join lateral (select b from t2) as sq",
 		},
 		{
@@ -453,49 +453,49 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time as of '2019-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version as of '2019-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version as of '2019-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version all use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions all use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01'",
+			input:  "select /* use */ 1 from t1 for system_time as of '2019-01-01'",
 			output: "select /* use */ 1 from t1 as of '2019-01-01'",
 		}, {
 			input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
@@ -504,7 +504,7 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 			output: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 		}, {
 			input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
@@ -1146,10 +1146,10 @@ var (
 		}, {
 			input: "delete /* limit */ from a limit 100",
 		}, {
-			input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+			input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
 			output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 		}, {
-			input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+			input:  "delete a, b from a, b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from a, b where a.id = b.id and b.`name` = 'test'",
 		},
 		{
@@ -1820,14 +1820,14 @@ var (
 		}, {
 			input: "show tables as of 123",
 		}, {
-			input: "show tables for system_time as of 123",
+			input:  "show tables for system_time as of 123",
 			output: "show tables as of 123",
 		}, {
 			input: "show tables like '%keyspace%'",
 		}, {
 			input: "show tables as of 123 like '%keyspace%'",
 		}, {
-			input: "show tables for system_time as of 123 like '%keyspace%'",
+			input:  "show tables for system_time as of 123 like '%keyspace%'",
 			output: "show tables as of 123 like '%keyspace%'",
 		}, {
 			input: "show tables where 1 = 0",
@@ -2308,13 +2308,13 @@ var (
 			output: "begin",
 		}, {
 			input:  "start transaction",
-			output: "begin",
+			output: "start transaction",
 		}, {
 			input:  "start transaction read only",
-			output: "begin read only",
+			output: "start transaction read only",
 		}, {
 			input:  "start transaction read write",
-			output: "begin read write",
+			output: "start transaction read write",
 		}, {
 			input: "commit",
 		}, {
@@ -2490,7 +2490,7 @@ var (
 		}, {
 			input: "call f1(a) as of '2023-10-10'",
 		}, {
-			input: "call f1(a) for system_time as of '2023-10-10'",
+			input:  "call f1(a) for system_time as of '2023-10-10'",
 			output: "call f1(a) as of '2023-10-10'",
 		}, {
 			input: "call f1(now(), rand()) as of 'uo5qcl722f891g6aisqp3ma7r41s4ha4'",
@@ -2873,7 +2873,7 @@ var (
 		}, {
 			input:  "create table test (pk varchar(255)) collate utf8_unicode_ci",
 			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
-		},{
+		}, {
 			input:  "select * from current",
 			output: "select * from `current`",
 		}, {
@@ -3453,15 +3453,15 @@ end`,
 	// mode treats double quotes (and backticks) as identifier quotes, and single quotes as string quotes.
 	validAnsiQuotesSQL = []parseTest{
 		{
-			input: `select "count", "foo", "bar" from t order by "COUNT"`,
+			input:  `select "count", "foo", "bar" from t order by "COUNT"`,
 			output: "select `count`, foo, bar from t order by `COUNT` asc",
 		},
 		{
-			input: `INSERT INTO hourly_logins ("applications_id", "count", "hour") VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE "count" = "count" + VALUES(count)`,
+			input:  `INSERT INTO hourly_logins ("applications_id", "count", "hour") VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE "count" = "count" + VALUES(count)`,
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
 		},
 		{
-			input: `CREATE TABLE "webhook_events" ("pk" int primary key, "event" varchar(255) DEFAULT NULL)`,
+			input:  `CREATE TABLE "webhook_events" ("pk" int primary key, "event" varchar(255) DEFAULT NULL)`,
 			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
 		},
 		{
@@ -3469,17 +3469,17 @@ end`,
 			output: "with test as (select 1 from `dual`), test_two as (select 2 from `dual`) select * from test, test_two union all (with b as (with c as (select 1, 2 from `dual`) select * from c) select * from b)",
 		},
 		{
-			input: `select '"' from t order by "foo"`,
+			input:  `select '"' from t order by "foo"`,
 			output: `select '\"' from t order by foo asc`,
 		},
 		{
 			// Assert that quote escaping is the same as when ANSI_QUOTES is off
-			input: `select '''foo'''`,
+			input:  `select '''foo'''`,
 			output: `select '\'foo\''`,
 		},
 		{
 			// Assert that quote escaping is the same as when ANSI_QUOTES is off
-			input: `select """""""foo"""""""`,
+			input:  `select """""""foo"""""""`,
 			output: "select `\"\"\"foo\"\"\"`",
 		},
 	}
@@ -4176,50 +4176,50 @@ func TestInvalid(t *testing.T) {
 		input: "select * from test order by a union select * from test",
 		err:   "syntax error",
 	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"name 'name'\n" +
-			"name 'name'",
-		err: "multiple definitions of attribute name",
-	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"definition 'definition'\n" +
-			"definition 'definition'\n",
-		err: "multiple definitions of attribute definition",
-	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"organization 'organization' identified by 4321\n" +
-			"organization 'organization' identified by 4321",
-		err: "multiple definitions of attribute organization",
-	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"description 'description'\n" +
-			"description 'description'",
-		err: "multiple definitions of attribute description",
-	},
-	{
-		input: "create or replace spatial reference system 1234\n" +
-			"name 'name'\n" +
-			"name 'name'",
-		err: "multiple definitions of attribute name",
-	},
-	{
-		input: "create spatial reference system if not exists 1234\n" +
-			"name 'name'\n" +
-			"name 'name'",
-		err: "multiple definitions of attribute name",
-	},
-	{
-		input: "select * from t join lateral t2",
-		err:   "syntax error",
-	},
-	{
-		input: "select * from t join lateral (select * from t2)",
-		err:   "Every derived table must have its own alias",
-	},
+		{
+			input: "create spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"name 'name'",
+			err: "multiple definitions of attribute name",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"definition 'definition'\n" +
+				"definition 'definition'\n",
+			err: "multiple definitions of attribute definition",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"organization 'organization' identified by 4321\n" +
+				"organization 'organization' identified by 4321",
+			err: "multiple definitions of attribute organization",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"description 'description'\n" +
+				"description 'description'",
+			err: "multiple definitions of attribute description",
+		},
+		{
+			input: "create or replace spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"name 'name'",
+			err: "multiple definitions of attribute name",
+		},
+		{
+			input: "create spatial reference system if not exists 1234\n" +
+				"name 'name'\n" +
+				"name 'name'",
+			err: "multiple definitions of attribute name",
+		},
+		{
+			input: "select * from t join lateral t2",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from t join lateral (select * from t2)",
+			err:   "Every derived table must have its own alias",
+		},
 	}
 
 	for _, tcase := range invalidSQL {
@@ -4997,11 +4997,11 @@ func TestFunctionCalls(t *testing.T) {
 			output: "select LOCALTIMESTAMP()",
 		},
 		{
-			input: "SELECT CAST(foo AS DOUBLE)",
+			input:  "SELECT CAST(foo AS DOUBLE)",
 			output: "select CAST(foo as DOUBLE)",
 		},
 		{
-			input: "SELECT CAST(foo AS FLOAT)",
+			input:  "SELECT CAST(foo AS FLOAT)",
 			output: "select CAST(foo as FLOAT)",
 		},
 	}
@@ -5048,7 +5048,7 @@ func TestFunctionCalls(t *testing.T) {
 func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
-			input:  "select cast('abc' as date) from t",
+			input: "select cast('abc' as date) from t",
 		}, {
 			input:                      "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
@@ -6459,17 +6459,17 @@ var (
 	invalidAnsiQuotesSQL = []parseTest{
 		{
 			// Assert that the two identifier quotes do not match each other
-			input: "select \"foo`",
+			input:  "select \"foo`",
 			output: "syntax error at position 13 near 'foo`'",
 		},
 		{
 			// Assert that the two identifier quotes do not match each other
-			input: "select `bar\"",
+			input:  "select `bar\"",
 			output: "syntax error at position 13 near 'bar\"'",
 		},
 		{
 			// Assert that single and double quotes do not auto concatenate in ANSI_QUOTES mode
-			input: "select 'a' \"b\" 'c'",
+			input:  "select 'a' \"b\" 'c'",
 			output: "syntax error at position 19 near 'c'",
 		},
 	}
@@ -7680,7 +7680,6 @@ FROM
 			output: "select * from json_table('{}', \"$\" columns(\n" +
 				"\tc1 INT path \"$.c1\" error on empty\n" +
 				")) as jt",
-
 		},
 
 		// ON ERROR TESTS

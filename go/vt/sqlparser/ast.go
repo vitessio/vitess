@@ -2933,15 +2933,15 @@ func (ts *JSONTableSpec) AddColumn(cd *JSONTableColDef) {
 
 // Format formats the node.
 func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("\"%s\" %s(", ts.Path, keywordStrings[COLUMNS])
+	buf.Myprintf("'%s' %s(", ts.Path, keywordStrings[COLUMNS])
 	for i, col := range ts.Columns {
 		if i == 0 {
-			buf.Myprintf("\n\t%v", col)
+			buf.Myprintf(" %v", col)
 		} else {
-			buf.Myprintf(",\n\t%v", col)
+			buf.Myprintf(",%v", col)
 		}
 	}
-	buf.Myprintf("\n)")
+	buf.Myprintf(")")
 }
 
 func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
@@ -2972,7 +2972,16 @@ func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s %s %v", keywordStrings[NESTED], keywordStrings[PATH], col.Spec)
 		return
 	} else {
-		buf.Myprintf("%v %v %s %v", col.Name, &col.Type, keywordStrings[PATH], col.Opts)
+		exists := " "
+		if col.Opts.Exists {
+			exists = exists + keywordStrings[EXISTS]
+		}
+		if col.Type.Autoincrement {
+			buf.Myprintf("%v %s%s %s %v", col.Name, "FOR ORDINALITY", exists, keywordStrings[PATH], col.Opts)
+
+		} else {
+			buf.Myprintf("%v %v%s %s %v", col.Name, &col.Type, exists, keywordStrings[PATH], col.Opts)
+		}
 	}
 }
 
@@ -2999,21 +3008,18 @@ type JSONTableColOpts struct {
 
 // Format formats the node.
 func (opt JSONTableColOpts) Format(buf *TrackedBuffer) {
-	buf.Myprintf("\"%s\"", opt.Path)
+	buf.Myprintf("'%s'", opt.Path)
 	if opt.ValOnEmpty != nil {
-		buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
+		buf.Myprintf(" DEFAULT %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
 	}
 	if opt.ValOnError != nil {
-		buf.Myprintf(" %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
+		buf.Myprintf(" DEFAULT %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
 	}
 	if opt.ErrorOnEmpty {
 		buf.Myprintf(" %s %s %s", keywordStrings[ERROR], keywordStrings[ON], keywordStrings[EMPTY])
 	}
 	if opt.ErrorOnError {
 		buf.Myprintf(" %s %s %s", keywordStrings[ERROR], keywordStrings[ON], keywordStrings[ERROR])
-	}
-	if opt.Exists {
-		buf.Myprintf(" %s", keywordStrings[EXISTS])
 	}
 }
 
