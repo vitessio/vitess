@@ -187,6 +187,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		var fromFullPositionBackups []string
 		for _, tc := range tt {
 			t.Run(tc.name, func(t *testing.T) {
+				t.Logf("========== primary position at start of test: %v", GetPrimaryPosition(t))
 				if tc.writeBeforeBackup {
 					InsertRowOnPrimary(t, "")
 					t.Logf("========= wrote on primary. Now <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
@@ -201,6 +202,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				waitForReplica(t, 0)
 				t.Logf("========= primary <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
 				t.Logf("========= replica <<<< %d >>>> rows", len(ReadRowsFromReplica(t, 0)))
+				t.Logf("========== primary position at recording: %v", GetPrimaryPosition(t))
+				t.Logf("========== replica position at recording: %v", GetReplicaPosition(t, 0))
 				recordRowsPerPosition(t)
 				// configure --incremental-from-pos to either:
 				// - auto
