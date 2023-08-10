@@ -2977,8 +2977,7 @@ func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 			exists = exists + keywordStrings[EXISTS]
 		}
 		if col.Type.Autoincrement {
-			buf.Myprintf("%v %s%s %s %v", col.Name, "FOR ORDINALITY", exists, keywordStrings[PATH], col.Opts)
-
+			buf.Myprintf("%v %s", col.Name, "FOR ORDINALITY")
 		} else {
 			buf.Myprintf("%v %v%s %s %v", col.Name, &col.Type, exists, keywordStrings[PATH], col.Opts)
 		}
