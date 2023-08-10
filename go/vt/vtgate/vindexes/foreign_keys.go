@@ -134,7 +134,7 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 
 // ChildFKsNeedsHandling retuns the child foreign keys that needs to be handled by the vtgate.
 // This can be either the foreign key is not shard scoped or the child tables needs cascading.
-func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
+func (t *Table) ChildFKsNeedsHandling(getAction func(fk ChildFKInfo) sqlparser.ReferenceAction) (fks []ChildFKInfo) {
 	for _, fk := range t.ChildForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
@@ -143,7 +143,7 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 			continue
 		}
 		// If the action is not Restrict, then it needs a cascade.
-		switch fk.OnDelete {
+		switch getAction(fk) {
 		case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
 			fks = append(fks, fk)
 			continue
@@ -158,6 +158,9 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 	}
 	return
 }
+
+func UpdateAction(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnUpdate }
+func DeleteAction(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnDelete }
 
 func isShardScoped(pTable *Table, cTable *Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
 	if !pTable.Keyspace.Sharded {

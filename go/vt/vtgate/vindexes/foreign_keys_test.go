@@ -243,9 +243,10 @@ func TestChildFKs(t *testing.T) {
 		},
 		expChildTbls: []string{"t1"},
 	}}
+	deleteAction := func(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnDelete }
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			childFks := tt.table.ChildFKsNeedsHandling()
+			childFks := tt.table.ChildFKsNeedsHandling(deleteAction)
 			var actualChildTbls []string
 			for _, fk := range childFks {
 				actualChildTbls = append(actualChildTbls, fk.Table.Name.String())

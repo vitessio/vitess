@@ -603,7 +603,7 @@
         }
       }
     },
-    "user_fk_allow": {
+    "sharded_fk_allow": {
       "sharded": true,
       "foreignKeyMode": "FK_MANAGED",
       "vindexes": {
@@ -695,6 +695,17 @@
             }
           ]
         }
+      }
+    },
+    "unsharded_fk_allow": {
+      "foreignKeyMode": "FK_MANAGED",
+      "tables": {
+        "u_tbl1": {},
+        "u_tbl2": {},
+        "u_tbl3": {},
+        "u_tbl4": {},
+        "u_tbl5": {},
+        "u_tbl6": {}
       }
     }
   }

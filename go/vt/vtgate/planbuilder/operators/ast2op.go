@@ -160,6 +160,24 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		Routing: routing,
 	}
 
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
+		if len(childFks) > 0 {
+			// Check if any column in the parent table is being updated which has a child foreign key.
+			for _, updateExpr := range updStmt.Exprs {
+				for _, childFk := range childFks {
+					if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+						return nil, vterrors.VT12003()
+					}
+				}
+			}
+		}
+	}
+
 	subq, err := createSubqueryFromStatement(ctx, updStmt)
 	if err != nil {
 		return nil, err
@@ -197,7 +215,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		childFks := vindexTable.ChildFKsNeedsHandling()
+		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
 		if len(childFks) > 0 {
 			return nil, vterrors.VT12003()
 		}

@@ -102,17 +102,41 @@ func TestPlan(t *testing.T) {
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
 func TestForeignKeyPlanning(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		// Set the keyspace with foreign keys enabled as the default.
-		keyspace: &vindexes.Keyspace{
-			Name:    "user_fk_allow",
-			Sharded: true,
-		},
-	}
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+
+	vschemaWrapper := &vschemaWrapper{v: vschema}
 	testOutputTempDir := makeTestOutput(t)
 
 	testFile(t, "foreignkey_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+func setFks(t *testing.T, vschema *vindexes.VSchema) {
+	if vschema.Keyspaces["sharded_fk_allow"] != nil {
+		// FK from multicol_tbl2 referencing multicol_tbl1 that is shard scoped.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "multicol_tbl2", createFkDefinition([]string{"colb", "cola", "x", "colc", "y"}, "multicol_tbl1", []string{"colb", "cola", "y", "colc", "x"}, sqlparser.Cascade, sqlparser.Cascade))
+		// FK from tbl2 referencing tbl1 that is shard scoped.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl2", createFkDefinition([]string{"col2"}, "tbl1", []string{"col1"}, sqlparser.Restrict, sqlparser.Restrict))
+		// FK from tbl3 referencing tbl1 that is not shard scoped.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl3", createFkDefinition([]string{"coly"}, "tbl1", []string{"col1"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
+		// FK from tbl4 referencing tbl5 that is shard scoped.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.SetNull))
+		// FK from tbl6 referencing tbl7 that is shard scoped.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
+	}
+	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
+		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
+		// u_tbl3(col2)  -> u_tbl2(col2)  Cascade Null.
+		// u_tbl4(col41) -> u_tbl1(col14) Restrict.
+		// u_tbl4(col4)  -> u_tbl3(col3)  Restrict.
+		// u_tbl6(col6)  -> u_tbl5(col5)  Restrict.
+
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl2", createFkDefinition([]string{"col2"}, "u_tbl1", []string{"col1"}, sqlparser.Cascade, sqlparser.Cascade))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl3", createFkDefinition([]string{"col3"}, "u_tbl2", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col41"}, "u_tbl1", []string{"col14"}, sqlparser.NoAction, sqlparser.NoAction))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl3", []string{"col3"}, sqlparser.Restrict, sqlparser.Restrict))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl6", createFkDefinition([]string{"col6"}, "u_tbl5", []string{"col5"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
+	}
 }
 
 func TestSystemTables57(t *testing.T) {
@@ -438,23 +462,6 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 				}
 			}
 		}
-	}
-	if vschema.Keyspaces["user_fk_allow"] != nil {
-		// FK from multicol_tbl2 referencing multicol_tbl1 that is shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "multicol_tbl2", createFkDefinition([]string{"colb", "cola", "x", "colc", "y"}, "multicol_tbl1", []string{"colb", "cola", "y", "colc", "x"}, sqlparser.Cascade, sqlparser.Cascade))
-		require.NoError(t, err)
-		// FK from tbl2 referencing tbl1 that is shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "tbl2", createFkDefinition([]string{"col2"}, "tbl1", []string{"col1"}, sqlparser.Restrict, sqlparser.Restrict))
-		require.NoError(t, err)
-		// FK from tbl3 referencing tbl1 that is not shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "tbl3", createFkDefinition([]string{"coly"}, "tbl1", []string{"col1"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
-		require.NoError(t, err)
-		// FK from tbl4 referencing tbl5 that is shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.SetNull))
-		require.NoError(t, err)
-		// FK from tbl6 referencing tbl7 that is shard scoped.
-		err = vschema.AddForeignKey("user_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
-		require.NoError(t, err)
 	}
 	return vschema
 }

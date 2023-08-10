@@ -14,7 +14,7 @@
         "OperatorType": "Insert",
         "Variant": "Sharded",
         "Keyspace": {
-          "Name": "user_fk_allow",
+          "Name": "sharded_fk_allow",
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
@@ -25,7 +25,7 @@
         }
       },
       "TablesUsed": [
-        "user_fk_allow.tbl2"
+        "sharded_fk_allow.tbl2"
       ]
     }
   },
@@ -39,7 +39,7 @@
         "OperatorType": "Insert",
         "Variant": "Sharded",
         "Keyspace": {
-          "Name": "user_fk_allow",
+          "Name": "sharded_fk_allow",
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
@@ -50,7 +50,7 @@
         }
       },
       "TablesUsed": [
-        "user_fk_allow.multicol_tbl2"
+        "sharded_fk_allow.multicol_tbl2"
       ]
     }
   },
@@ -69,7 +69,7 @@
         "OperatorType": "Delete",
         "Variant": "Scatter",
         "Keyspace": {
-          "Name": "user_fk_allow",
+          "Name": "sharded_fk_allow",
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
@@ -77,7 +77,7 @@
         "Table": "tbl7"
       },
       "TablesUsed": [
-        "user_fk_allow.tbl7"
+        "sharded_fk_allow.tbl7"
       ]
     }
   },
@@ -90,5 +90,54 @@
     "comment": "Delete in a table with shard-scoped foreign keys with cascade disallowed",
     "query": "delete from tbl5",
     "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "update in unsharded table with restrict",
+    "query": "update u_tbl5 set col5 = 'foo' where id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl5 set col5 = 'foo' where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_fk_allow",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update u_tbl5 set col5 = 'foo' where id = 1",
+        "Table": "u_tbl5"
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl5"
+      ]
+    }
+  },
+  {
+    "comment": "update in unsharded table with cascade",
+    "query": "update u_tbl2 set col2 = 'bar' where id = 1",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "update in unsharded table with cascade - on non-referenced column",
+    "query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_fk_allow",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
+        "Table": "u_tbl2"
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl2"
+      ]
+    }
   }
 ]
