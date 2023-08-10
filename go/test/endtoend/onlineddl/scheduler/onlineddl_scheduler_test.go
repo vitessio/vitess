@@ -585,15 +585,12 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 		})
-<<<<<<< HEAD
-=======
 
 		t.Run("check ready to complete (before)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
 				waitForReadyToComplete(t, uuid, false)
 			}
 		})
->>>>>>> 9e5fa55c7d (CI: fix onlineddl_scheduler flakiness (#13754))
 		t.Run("unthrottle, expect t2 running", func(t *testing.T) {
 			onlineddl.UnthrottleAllMigrations(t, &vtParams)
 			// t1 should now be ready_to_complete, hence t2 should start running
@@ -621,15 +618,12 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
-<<<<<<< HEAD
-=======
 		t.Run("check ready to complete (after)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
 				waitForReadyToComplete(t, uuid, true)
 			}
 		})
 
->>>>>>> 9e5fa55c7d (CI: fix onlineddl_scheduler flakiness (#13754))
 		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
