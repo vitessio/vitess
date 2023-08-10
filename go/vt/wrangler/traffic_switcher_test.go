@@ -36,6 +36,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -2153,12 +2154,14 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.close(t)
 
-	// The target keyspace is sharded. Let's remove the vschema definitions so
-	// that we know the workflow creation will fail.
+	// The target keyspace is sharded. Let's remove any vschema table
+	// definitions so that we know the workflow creation will fail.
 	// Let's also be sure that the routing rules are empty.
 	err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil)
 	require.NoError(t, err, "failed to save routing rules")
-	err = tme.ts.SaveVSchema(ctx, "ks2", nil)
+	err = tme.ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{
+		Sharded: true,
+	})
 	require.NoError(t, err, "failed to save vschema")
 	err = tme.ts.RebuildSrvVSchema(ctx, nil)
 	require.NoError(t, err, "failed to rebuild serving vschema")

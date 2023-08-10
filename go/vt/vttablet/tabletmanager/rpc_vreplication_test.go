@@ -29,7 +29,9 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -589,4 +591,75 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			require.ErrorIs(t, err, errShortCircuit)
 		})
 	}
+}
+
+// TestNoOrphanedRoutingRulesOnFailedCreate tests that no orphaned routing rules
+// are left in place when the workflow creation fails -- specifically at the point
+// where we try and create the workflow streams.
+func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
+	ctx := context.Background()
+	sourceKs := "sourceks"
+	sourceTabletUID := 200
+	sourceShard := "0"
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	wf := "testwf"
+	table := defaultSchema.TableDefinitions[0].Name
+	tenv := newTestEnv(t, sourceKs, []string{sourceShard})
+	defer tenv.close()
+	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetShards["-80"] = tenv.addTablet(t, 300, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, 310, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	tenv.mysqld.Schema = defaultSchema
+	tenv.mysqld.Schema.DatabaseSchema = tenv.dbName
+
+	// The target keyspace is sharded. Let's remove any vschema table
+	// definitions so that we know the workflow creation will fail.
+	// Let's also be sure that the routing rules are empty.
+	err := topotools.SaveRoutingRules(ctx, tenv.ts, nil)
+	require.NoError(t, err, "failed to save routing rules")
+	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+	})
+	require.NoError(t, err, "failed to save vschema")
+	err = tenv.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err, "failed to rebuild serving vschema")
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tenv.ts, sourceKs, tenv.cells, false)
+	require.NoError(t, err, "failed to rebuild keyspace")
+
+	for _, tablet := range targetShards {
+		tenv.tmc.setVReplicationExecResults(tablet.tablet, fmt.Sprintf(checkForWorkflow, targetKs, wf), &sqltypes.Result{})
+		tenv.tmc.setVReplicationExecResults(tablet.tablet, fmt.Sprintf(checkForFrozenWorkflow, targetKs), &sqltypes.Result{})
+		tenv.tmc.setVReplicationExecResults(tablet.tablet, fmt.Sprintf(getWorkflow, targetKs, wf),
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id",
+					"int64",
+				),
+				"1",
+			),
+		)
+		tablet.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	}
+
+	_, err = ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		Cells:          tenv.cells,
+		TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		IncludeTables:  []string{table},
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("table %s not found in vschema for keyspace %s", table, targetKs))
+
+	// Check that there are no orphaned routing rules.
+	rules, err := topotools.GetRoutingRules(ctx, tenv.ts)
+	require.NoError(t, err, "failed to get routing rules")
+	require.Equal(t, 0, len(rules), "expected no routing rules to be present")
 }
