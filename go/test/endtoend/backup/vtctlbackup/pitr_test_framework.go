@@ -189,6 +189,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			t.Run(tc.name, func(t *testing.T) {
 				if tc.writeBeforeBackup {
 					InsertRowOnPrimary(t, "")
+					t.Logf("========= wrote on primary. Now <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
 				}
 				// we wait for >1 second because backups are written to a directory named after the current timestamp,
 				// in 1 second resolution. We want to avoid two backups that have the same pathname. Realistically this
@@ -198,6 +199,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// randomly flush binary logs 0, 1 or 2 times
 				FlushBinaryLogsOnReplica(t, 0, rand.Intn(3))
 				waitForReplica(t, 0)
+				t.Logf("========= primary <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
+				t.Logf("========= replica <<<< %d >>>> rows", len(ReadRowsFromReplica(t, 0)))
 				recordRowsPerPosition(t)
 				// configure --incremental-from-pos to either:
 				// - auto
