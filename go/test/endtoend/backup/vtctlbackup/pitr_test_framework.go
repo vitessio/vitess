@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -77,26 +76,6 @@ func waitForReplica(t *testing.T, replicaIndex int) {
 		}
 	}
 }
-
-// func waitForReplica(t *testing.T, replicaIndex int) {
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
-// 	pMsgs := ReadRowsFromPrimary(t)
-// 	for {
-// 		rMsgs := ReadRowsFromReplica(t, replicaIndex)
-// 		if len(pMsgs) == len(rMsgs) {
-// 			// success
-// 			return
-// 		}
-// 		select {
-// 		case <-ctx.Done():
-// 			assert.FailNow(t, "timeout waiting for replica to catch up")
-// 			return
-// 		case <-time.After(time.Second):
-// 			//
-// 		}
-// 	}
-// }
 
 // ExecTestIncrementalBackupAndRestoreToPos runs a series of backups: a full backup and multiple incremental backups.
 // in between, it makes writes to the database, and takes notes: what data was available in what backup.
@@ -187,10 +166,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		var fromFullPositionBackups []string
 		for _, tc := range tt {
 			t.Run(tc.name, func(t *testing.T) {
-				t.Logf("========== primary position at start of test: %v", GetPrimaryPosition(t))
 				if tc.writeBeforeBackup {
 					InsertRowOnPrimary(t, "")
-					t.Logf("========= wrote on primary. Now <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
 				}
 				// we wait for >1 second because backups are written to a directory named after the current timestamp,
 				// in 1 second resolution. We want to avoid two backups that have the same pathname. Realistically this
@@ -200,10 +177,6 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// randomly flush binary logs 0, 1 or 2 times
 				FlushBinaryLogsOnReplica(t, 0, rand.Intn(3))
 				waitForReplica(t, 0)
-				t.Logf("========= primary <<<< %d >>>> rows", len(ReadRowsFromPrimary(t)))
-				t.Logf("========= replica <<<< %d >>>> rows", len(ReadRowsFromReplica(t, 0)))
-				t.Logf("========== primary position at recording: %v", GetPrimaryPosition(t))
-				t.Logf("========== replica position at recording: %v", GetReplicaPosition(t, 0))
 				recordRowsPerPosition(t)
 				// configure --incremental-from-pos to either:
 				// - auto
@@ -239,39 +212,37 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				if !incrementalFromPos.IsZero() {
 					expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
-				t.Logf("======== manifest.Position: %v", manifest.Position.GTIDSet)
-				t.Logf("======== lastBackupPos.GTIDSet: %v", lastBackupPos.GTIDSet)
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
 			})
 		}
 
-		// testRestores := func(t *testing.T) {
-		// 	for _, r := range rand.Perm(len(backupPositions)) {
-		// 		pos := backupPositions[r]
-		// 		testName := fmt.Sprintf("%s, %d records", pos, rowsPerPosition[pos])
-		// 		t.Run(testName, func(t *testing.T) {
-		// 			restoreToPos, err := replication.DecodePosition(pos)
-		// 			require.NoError(t, err)
-		// 			TestReplicaRestoreToPos(t, 0, restoreToPos, "")
-		// 			msgs := ReadRowsFromReplica(t, 0)
-		// 			count, ok := rowsPerPosition[pos]
-		// 			require.True(t, ok)
-		// 			assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
-		// 		})
-		// 	}
-		// }
-		// t.Run("PITR", func(t *testing.T) {
-		// 	testRestores(t)
-		// })
-		// t.Run("remove full position backups", func(t *testing.T) {
-		// 	// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
-		// 	for _, backupName := range fromFullPositionBackups {
-		// 		RemoveBackup(t, backupName)
-		// 	}
-		// })
-		// t.Run("PITR-2", func(t *testing.T) {
-		// 	testRestores(t)
-		// })
+		testRestores := func(t *testing.T) {
+			for _, r := range rand.Perm(len(backupPositions)) {
+				pos := backupPositions[r]
+				testName := fmt.Sprintf("%s, %d records", pos, rowsPerPosition[pos])
+				t.Run(testName, func(t *testing.T) {
+					restoreToPos, err := replication.DecodePosition(pos)
+					require.NoError(t, err)
+					TestReplicaRestoreToPos(t, 0, restoreToPos, "")
+					msgs := ReadRowsFromReplica(t, 0)
+					count, ok := rowsPerPosition[pos]
+					require.True(t, ok)
+					assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
+				})
+			}
+		}
+		t.Run("PITR", func(t *testing.T) {
+			testRestores(t)
+		})
+		t.Run("remove full position backups", func(t *testing.T) {
+			// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
+			for _, backupName := range fromFullPositionBackups {
+				RemoveBackup(t, backupName)
+			}
+		})
+		t.Run("PITR-2", func(t *testing.T) {
+			testRestores(t)
+		})
 	})
 }
 

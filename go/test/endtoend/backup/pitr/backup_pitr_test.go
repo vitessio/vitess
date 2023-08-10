@@ -47,7 +47,7 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 //     (of course we only delete backups that still leave us with valid restore paths).
 //
 // All of the above is done for BuiltinBackup, XtraBackup, Mysqlctld (which is technically builtin)
-func _TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
+func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
 	tcase := &backup.PITRTestCase{
 		Name:           "BuiltinBackup",
 		SetupType:      backup.BuiltinBackup,
@@ -59,7 +59,7 @@ func _TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
 // TestIncrementalBackupOnTwoTablets runs a series of interleaved backups on two different replicas: full and incremental.
 // Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
 // one another.
-func _TestIncrementalBackupOnTwoTablets(t *testing.T) {
+func TestIncrementalBackupOnTwoTablets(t *testing.T) {
 	tcase := &backup.PITRTestCase{
 		Name:           "BuiltinBackup",
 		SetupType:      backup.BuiltinBackup,
