@@ -28,7 +28,7 @@ import (
 )
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
-	var unmerged []*SubQueryOp
+	var unmerged []*UncorrelatedSubQuery
 
 	// first loop over the subqueries and try to merge them into the outer plan
 	outer := op.Outer
@@ -54,7 +54,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 
 		if len(preds) == 0 {
 			// uncorrelated queries
-			sq := &SubQueryOp{
+			sq := &UncorrelatedSubQuery{
 				Extracted: inner.ExtractedSubquery,
 				Inner:     innerOp,
 			}
@@ -386,8 +386,8 @@ func createCorrelatedSubqueryOp(
 		}
 	}
 	return &CorrelatedSubQueryOp{
-		Outer:      newOuter,
-		Inner:      innerOp,
+		LHS:        newOuter,
+		RHS:        innerOp,
 		Extracted:  extractedSubquery,
 		Vars:       vars,
 		LHSColumns: lhsCols,

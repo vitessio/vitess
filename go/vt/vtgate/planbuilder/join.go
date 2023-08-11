@@ -50,7 +50,7 @@ type join struct {
 	LHSColumns []*sqlparser.ColName
 }
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (j *join) Wireup(ctx *plancontext.PlanningContext) error {
 	err := j.Left.Wireup(ctx)
 	if err != nil {

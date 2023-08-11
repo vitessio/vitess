@@ -3252,7 +3252,7 @@
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"

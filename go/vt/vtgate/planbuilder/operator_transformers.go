@@ -47,7 +47,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformUnionPlan(ctx, op)
 	case *operators.Vindex:
 		return transformVindexPlan(ctx, op)
-	case *operators.SubQueryOp:
+	case *operators.UncorrelatedSubQuery:
 		return transformSubQueryPlan(ctx, op)
 	case *operators.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryPlan(ctx, op)

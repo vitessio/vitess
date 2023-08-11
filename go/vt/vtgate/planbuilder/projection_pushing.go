@@ -36,7 +36,7 @@ func pushProjection(
 	inner, reuseCol, hasAggregation bool,
 ) (offset int, added bool, err error) {
 	switch node := plan.(type) {
-	case *limit, *projection, *pulloutSubquery, *distinct, *filter:
+	case *limit, *projection, *uncorrelatedSubquery, *distinct, *filter:
 		// All of these either push to the single source, or push to the LHS
 		src := node.Inputs()[0]
 		return pushProjection(ctx, expr, src, inner, reuseCol, hasAggregation)

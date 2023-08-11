@@ -23,8 +23,8 @@ import (
 
 type (
 	CorrelatedSubQueryOp struct {
-		Outer, Inner ops.Operator
-		Extracted    *sqlparser.ExtractedSubquery
+		LHS, RHS  ops.Operator
+		Extracted *sqlparser.ExtractedSubquery
 
 		// JoinCols are the columns from the LHS used for the join.
 		// These are the same columns pushed on the LHS that are now used in the Vars field
@@ -37,7 +37,7 @@ type (
 		noPredicates
 	}
 
-	SubQueryOp struct {
+	UncorrelatedSubQuery struct {
 		Outer, Inner ops.Operator
 		Extracted    *sqlparser.ExtractedSubquery
 
@@ -47,8 +47,8 @@ type (
 )
 
 // Clone implements the Operator interface
-func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
-	result := &SubQueryOp{
+func (s *UncorrelatedSubQuery) Clone(inputs []ops.Operator) ops.Operator {
+	result := &UncorrelatedSubQuery{
 		Outer:     inputs[0],
 		Inner:     inputs[1],
 		Extracted: s.Extracted,
@@ -56,21 +56,21 @@ func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (s *SubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+func (s *UncorrelatedSubQuery) GetOrdering() ([]ops.OrderBy, error) {
 	return s.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (s *SubQueryOp) Inputs() []ops.Operator {
+func (s *UncorrelatedSubQuery) Inputs() []ops.Operator {
 	return []ops.Operator{s.Outer, s.Inner}
 }
 
 // SetInputs implements the Operator interface
-func (s *SubQueryOp) SetInputs(ops []ops.Operator) {
+func (s *UncorrelatedSubQuery) SetInputs(ops []ops.Operator) {
 	s.Outer, s.Inner = ops[0], ops[1]
 }
 
-func (s *SubQueryOp) ShortDescription() string {
+func (s *UncorrelatedSubQuery) ShortDescription() string {
 	return ""
 }
 
@@ -84,8 +84,8 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	}
 
 	result := &CorrelatedSubQueryOp{
-		Outer:      inputs[0],
-		Inner:      inputs[1],
+		LHS:        inputs[0],
+		RHS:        inputs[1],
 		Extracted:  c.Extracted,
 		LHSColumns: columns,
 		Vars:       vars,
@@ -94,17 +94,17 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 func (c *CorrelatedSubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
-	return c.Outer.GetOrdering()
+	return c.LHS.GetOrdering()
 }
 
 // Inputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
-	return []ops.Operator{c.Outer, c.Inner}
+	return []ops.Operator{c.LHS, c.RHS}
 }
 
 // SetInputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) SetInputs(ops []ops.Operator) {
-	c.Outer, c.Inner = ops[0], ops[1]
+	c.LHS, c.RHS = ops[0], ops[1]
 }
 
 func (c *CorrelatedSubQueryOp) ShortDescription() string {

@@ -1136,7 +1136,7 @@
       "QueryType": "SELECT",
       "Original": "select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue0 ) order by s_suppkey",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq_has_values1",
@@ -1185,7 +1185,7 @@
   {
     "comment": "TPC-H query 16",
     "query": "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
-    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.pulloutSubquery plan"
+    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.uncorrelatedSubquery plan"
   },
   {
     "comment": "TPC-H query 17",

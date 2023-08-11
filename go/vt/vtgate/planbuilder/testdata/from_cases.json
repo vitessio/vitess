@@ -2051,7 +2051,7 @@
       "QueryType": "SELECT",
       "Original": "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -2095,7 +2095,7 @@
       "QueryType": "SELECT",
       "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -2139,7 +2139,7 @@
       "QueryType": "SELECT",
       "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2184,7 +2184,7 @@
       "QueryType": "SELECT",
       "Original": "select unsharded.col from unsharded join user on user.col in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2247,7 +2247,7 @@
       "QueryType": "SELECT",
       "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2310,7 +2310,7 @@
       "QueryType": "SELECT",
       "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -3147,7 +3147,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq_has_values2",
@@ -3172,7 +3172,7 @@
             ]
           },
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
               "__sq_has_values1",

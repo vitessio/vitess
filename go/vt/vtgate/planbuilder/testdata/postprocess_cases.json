@@ -117,7 +117,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user having id in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -409,7 +409,7 @@
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by col",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -612,7 +612,7 @@
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by null",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -730,7 +730,7 @@
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by rand()",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -1252,7 +1252,7 @@
         "Count": "INT64(1)",
         "Inputs": [
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
               "__sq_has_values1",

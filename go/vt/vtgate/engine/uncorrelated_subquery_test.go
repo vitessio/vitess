@@ -54,7 +54,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 	ufp := &fakePrimitive{
 		results: []*sqltypes.Result{underlyingResult},
 	}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -79,7 +79,7 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 		results: []*sqltypes.Result{sqResult},
 	}
 	ufp := &fakePrimitive{}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -104,7 +104,7 @@ func TestPulloutSubqueryValueBadColumns(t *testing.T) {
 	sfp := &fakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -126,7 +126,7 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 	sfp := &fakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -149,7 +149,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		results: []*sqltypes.Result{sqResult},
 	}
 	ufp := &fakePrimitive{}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutIn,
 		SubqueryResult: "sq",
 		HasValues:      "has_values",
@@ -185,7 +185,7 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 		results: []*sqltypes.Result{sqResult},
 	}
 	ufp := &fakePrimitive{}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutIn,
 		SubqueryResult: "sq",
 		HasValues:      "has_values",
@@ -211,7 +211,7 @@ func TestPulloutSubqueryInBadColumns(t *testing.T) {
 	sfp := &fakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutIn,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -233,7 +233,7 @@ func TestPulloutSubqueryExists(t *testing.T) {
 		results: []*sqltypes.Result{sqResult},
 	}
 	ufp := &fakePrimitive{}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:     PulloutExists,
 		HasValues:  "has_values",
 		Subquery:   sfp,
@@ -258,7 +258,7 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 		results: []*sqltypes.Result{sqResult},
 	}
 	ufp := &fakePrimitive{}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:     PulloutExists,
 		HasValues:  "has_values",
 		Subquery:   sfp,
@@ -276,7 +276,7 @@ func TestPulloutSubqueryError(t *testing.T) {
 	sfp := &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutExists,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -310,7 +310,7 @@ func TestPulloutSubqueryStream(t *testing.T) {
 	ufp := &fakePrimitive{
 		results: []*sqltypes.Result{underlyingResult},
 	}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
@@ -329,7 +329,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		"aa": sqltypes.Int64BindVariable(1),
 	}
 	ufp := &fakePrimitive{}
-	ps := &PulloutSubquery{
+	ps := &UncorrelatedSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		HasValues:      "has_values",

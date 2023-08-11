@@ -63,7 +63,7 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
 

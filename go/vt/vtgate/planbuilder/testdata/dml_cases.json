@@ -4153,7 +4153,7 @@
       "QueryType": "UPDATE",
       "Original": "update user set col = (select id from unsharded)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -4196,7 +4196,7 @@
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -4239,7 +4239,7 @@
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"

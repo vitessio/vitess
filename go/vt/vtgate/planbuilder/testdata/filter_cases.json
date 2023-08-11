@@ -1889,7 +1889,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -1936,7 +1936,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id not in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutNotIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -1979,7 +1979,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where exists (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
           "__sq_has_values1"
@@ -2027,7 +2027,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2074,7 +2074,7 @@
       "QueryType": "SELECT",
       "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2082,7 +2082,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
               "__sq_has_values2",
@@ -2164,7 +2164,7 @@
       "QueryType": "SELECT",
       "Original": "select col from user where id = (select id from route2)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2441,7 +2441,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values2",
@@ -2464,7 +2464,7 @@
             "Vindex": "user_index"
           },
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutNotIn",
             "PulloutVars": [
               "__sq_has_values1",
@@ -2615,7 +2615,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id in (select col from unsharded where col = id)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -2805,7 +2805,7 @@
       "QueryType": "SELECT",
       "Original": "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
           "__sq_has_values1"
@@ -2851,7 +2851,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values2",
@@ -2903,7 +2903,7 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutNotIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -3206,7 +3206,7 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
               "__sq_has_values1",

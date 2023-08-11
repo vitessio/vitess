@@ -602,9 +602,9 @@ type selectExpressions interface {
 func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
+		src, added, offset := addMultipleColumnsToInput(ctx, op.LHS, reuse, addToGroupBy, exprs)
 		if added {
-			op.Outer = src
+			op.LHS = src
 		}
 		return op, added, offset
 

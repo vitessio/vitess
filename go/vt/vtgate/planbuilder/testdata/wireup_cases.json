@@ -607,7 +607,7 @@
       "QueryType": "SELECT",
       "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
           "__sq_has_values1",
@@ -687,7 +687,7 @@
         "Count": "INT64(10)",
         "Inputs": [
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutValue",
             "PulloutVars": [
               "__sq1"
