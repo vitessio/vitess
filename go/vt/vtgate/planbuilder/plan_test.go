@@ -125,6 +125,7 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tbl6 referencing tbl7 that is shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col6"}, "tbl7", []string{"t7col7"}, sqlparser.NoAction, sqlparser.NoAction))
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col62"}, "tbl7", []string{"t7col72"}, sqlparser.NoAction, sqlparser.NoAction))
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.

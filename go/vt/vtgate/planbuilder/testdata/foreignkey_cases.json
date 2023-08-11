@@ -60,26 +60,9 @@
     "plan": "VT12002: unsupported: foreign keys management at vitess"
   },
   {
-    "comment": "Delete in a table with shard-scoped foreign keys is allowed",
+    "comment": "Delete in a table with not all column shard-scoped foreign keys - disallowed",
     "query": "delete from tbl7",
-    "plan": {
-      "QueryType": "DELETE",
-      "Original": "delete from tbl7",
-      "Instructions": {
-        "OperatorType": "Delete",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "sharded_fk_allow",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "delete from tbl7",
-        "Table": "tbl7"
-      },
-      "TablesUsed": [
-        "sharded_fk_allow.tbl7"
-      ]
-    }
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
   },
   {
     "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade not allowed",
@@ -168,26 +151,9 @@
     }
   },
   {
-    "comment": "Update in a table with shard-scoped foreign keys is allowed",
-    "query": "update tbl7 set t7col7 = 'foo'",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update tbl7 set t7col7 = 'foo'",
-      "Instructions": {
-        "OperatorType": "Update",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "sharded_fk_allow",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "update tbl7 set t7col7 = 'foo'",
-        "Table": "tbl7"
-      },
-      "TablesUsed": [
-        "sharded_fk_allow.tbl7"
-      ]
-    }
+    "comment": "Update in a table with column modified not shard-scoped foreign key whereas other column referencing same table is - disallowed",
+    "query": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
   },
   {
     "comment": "Update in a table with shard-scoped foreign keys with cascade disallowed",
@@ -195,28 +161,8 @@
     "plan": "VT12002: unsupported: foreign keys management at vitess"
   },
   {
-    "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns",
+    "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns - both are not shard scoped - disallowed",
     "query": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
-    "plan": {
-      "QueryType": "INSERT",
-      "Original": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
-      "Instructions": {
-        "OperatorType": "Insert",
-        "Variant": "Sharded",
-        "Keyspace": {
-          "Name": "sharded_fk_allow",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "insert into tbl6(col6, t6col6) values (:_col6_0, 'foo')",
-        "TableName": "tbl6",
-        "VindexValues": {
-          "hash_vin": "INT64(100)"
-        }
-      },
-      "TablesUsed": [
-        "sharded_fk_allow.tbl6"
-      ]
-    }
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
   }
 ]

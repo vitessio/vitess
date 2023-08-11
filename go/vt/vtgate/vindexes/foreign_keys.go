@@ -109,8 +109,6 @@ func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstrain
 
 // CrossShardParentFKs returns all the parent fk constraints on this table that are not shard scoped.
 func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
-	pTblShardScoped := make(map[string]bool)
-	var maybeShardScopedFks []ParentFKInfo
 	for _, fk := range t.ParentForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
@@ -125,25 +123,15 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 		}
 
 		if !isShardScoped(fk.Table, t, fk.ParentColumns, fk.ChildColumns) {
-			maybeShardScopedFks = append(maybeShardScopedFks, fk)
-			continue
-		}
-		pTblShardScoped[fk.Table.Name.String()] = true
-	}
-	for _, fk := range maybeShardScopedFks {
-		if _, shardScoped := pTblShardScoped[fk.Table.Name.String()]; !shardScoped {
 			crossShardFKs = append(crossShardFKs, fk)
 		}
 	}
-
 	return
 }
 
 // ChildFKsNeedsHandling retuns the child foreign keys that needs to be handled by the vtgate.
 // This can be either the foreign key is not shard scoped or the child tables needs cascading.
 func (t *Table) ChildFKsNeedsHandling(getAction func(fk ChildFKInfo) sqlparser.ReferenceAction) (fks []ChildFKInfo) {
-	cTblShardScoped := make(map[string]bool)
-	var restrictFks []ChildFKInfo
 	for _, fk := range t.ChildForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
@@ -162,13 +150,6 @@ func (t *Table) ChildFKsNeedsHandling(getAction func(fk ChildFKInfo) sqlparser.R
 		// do not allow modification if there is a child row.
 		// Check if the restrict is shard scoped.
 		if !isShardScoped(t, fk.Table, fk.ParentColumns, fk.ChildColumns) {
-			restrictFks = append(restrictFks, fk)
-			continue
-		}
-		cTblShardScoped[fk.Table.Name.String()] = true
-	}
-	for _, fk := range restrictFks {
-		if _, shardScoped := cTblShardScoped[fk.Table.Name.String()]; !shardScoped {
 			fks = append(fks, fk)
 		}
 	}
