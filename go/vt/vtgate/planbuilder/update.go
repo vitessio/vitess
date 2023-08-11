@@ -94,6 +94,7 @@ func gen4UpdateStmtPlanner(
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
+// TODO: Handle all this in semantic analysis.
 func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plancontext.VSchema, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
 	childFkMap := make(map[string][]vindexes.ChildFKInfo)
 
@@ -112,24 +113,17 @@ func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plan
 		}
 	}
 
-	// Check if any column in the parent table is being updated which has a child foreign key.
-	for _, updateExpr := range updateExprs {
-		tblInfo, err := semTable.TableInfoForExpr(updateExpr.Name)
+	getChildFKInfo := func(expr *sqlparser.UpdateExpr) []vindexes.ChildFKInfo {
+		tblInfo, err := semTable.TableInfoForExpr(expr.Name)
 		if err != nil {
-			continue
+			return nil
 		}
 		vTable := tblInfo.GetVindexTable()
-		childFks, exists := childFkMap[vTable.String()]
-		if !exists {
-			continue
-		}
-		for _, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return false
-			}
-		}
+		return childFkMap[vTable.String()]
 	}
-	return true
+
+	// Check if any column in the parent table is being updated which has a child foreign key.
+	return !operators.ColumnModified(updateExprs, getChildFKInfo)
 }
 
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
