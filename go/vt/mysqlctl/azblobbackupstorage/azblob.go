@@ -51,15 +51,44 @@ var (
 	// This is an optional prefix to prepend to all files
 	storageRoot string
 
+<<<<<<< HEAD
 	azBlobParallelism int
+=======
+	azBlobBufferSize = viperutil.Configure(
+		configKey("buffer_size"),
+		viperutil.Options[int]{
+			Default:  100 << (10 * 2), // 100 MiB
+			FlagName: "azblob_buffer_size",
+		},
+	)
+
+	azBlobParallelism = viperutil.Configure(
+		configKey("parallelism"),
+		viperutil.Options[int]{
+			Default:  1,
+			FlagName: "azblob_backup_parallelism",
+		},
+	)
+>>>>>>> 1659386f43 (Address vttablet memory usage with backups to Azure Blob Service (#13770))
 )
 
 func registerFlags(fs *pflag.FlagSet) {
+<<<<<<< HEAD
 	fs.StringVar(&accountName, "azblob_backup_account_name", "", "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
 	fs.StringVar(&accountKeyFile, "azblob_backup_account_key_file", "", "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
 	fs.StringVar(&containerName, "azblob_backup_container_name", "", "Azure Blob Container Name.")
 	fs.StringVar(&storageRoot, "azblob_backup_storage_root", "", "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
 	fs.IntVar(&azBlobParallelism, "azblob_backup_parallelism", 1, "Azure Blob operation parallelism (requires extra memory when increased).")
+=======
+	fs.String("azblob_backup_account_name", accountName.Default(), "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
+	fs.String("azblob_backup_account_key_file", accountKeyFile.Default(), "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
+	fs.String("azblob_backup_container_name", containerName.Default(), "Azure Blob Container Name.")
+	fs.String("azblob_backup_storage_root", storageRoot.Default(), "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
+	fs.Int("azblob_backup_buffer_size", azBlobBufferSize.Default(), "The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service.")
+	fs.Int("azblob_backup_parallelism", azBlobParallelism.Default(), "Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size).")
+
+	viperutil.BindFlags(fs, accountName, accountKeyFile, containerName, storageRoot, azBlobParallelism)
+>>>>>>> 1659386f43 (Address vttablet memory usage with backups to Azure Blob Service (#13770))
 }
 
 func init() {
@@ -218,8 +247,13 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	go func() {
 		defer bh.waitGroup.Done()
 		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
+<<<<<<< HEAD
 			BufferSize: azblob.BlockBlobMaxStageBlockBytes,
 			MaxBuffers: azBlobParallelism,
+=======
+			BufferSize: azBlobBufferSize.Get(),
+			MaxBuffers: azBlobParallelism.Get(),
+>>>>>>> 1659386f43 (Address vttablet memory usage with backups to Azure Blob Service (#13770))
 		})
 		if err != nil {
 			reader.CloseWithError(err)
