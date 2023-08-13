@@ -567,7 +567,7 @@ func fileNameFromPosition(pos string) string {
 
 func TestFileNameFromPosition(t *testing.T) {
 	assert.Equal(t, "", fileNameFromPosition("shouldfail"))
-	assert.Equal(t, "filename", fileNameFromPosition("filename:123456789"))
+	assert.Equal(t, "FilePos/vt-0000000101-bin.000001", fileNameFromPosition("FilePos/vt-0000000101-bin.000001:123456789"))
 }
 
 // rowNumberFromPosition gets the row number from the position
