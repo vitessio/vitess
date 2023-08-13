@@ -70,7 +70,7 @@ func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
 	}
 }
 
-func TestShouldDrainForBackup(t *testing.T) {
+func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
 	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
