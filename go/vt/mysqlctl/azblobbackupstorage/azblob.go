@@ -52,6 +52,7 @@ var (
 	storageRoot string
 
 	azBlobParallelism int
+	azBlobBufferSize  = 100 << (10 * 2) // 100 MiB
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -59,6 +60,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&accountKeyFile, "azblob_backup_account_key_file", "", "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
 	fs.StringVar(&containerName, "azblob_backup_container_name", "", "Azure Blob Container Name.")
 	fs.StringVar(&storageRoot, "azblob_backup_storage_root", "", "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
+	fs.IntVar(&azBlobBufferSize, "azblob_backup_buffer_size", azBlobBufferSize, "The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service.")
 	fs.IntVar(&azBlobParallelism, "azblob_backup_parallelism", 1, "Azure Blob operation parallelism (requires extra memory when increased).")
 }
 
@@ -218,7 +220,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	go func() {
 		defer bh.waitGroup.Done()
 		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
-			BufferSize: azblob.BlockBlobMaxStageBlockBytes,
+			BufferSize: azBlobBufferSize,
 			MaxBuffers: azBlobParallelism,
 		})
 		if err != nil {
