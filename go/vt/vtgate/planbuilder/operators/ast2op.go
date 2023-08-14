@@ -165,10 +165,11 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		parentFKs := vindexTable.ParentFKsNeedsHandling()
 		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
-		if len(childFks) > 0 &&
-			ColumnModified(updStmt.Exprs, func(expr *sqlparser.UpdateExpr) []vindexes.ChildFKInfo {
-				return childFks
+		if (len(childFks) > 0 || len(parentFKs) > 0) &&
+			ColumnModified(updStmt.Exprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+				return parentFKs, childFks
 			}) {
 			return nil, vterrors.VT12003()
 		}
@@ -186,11 +187,16 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 }
 
 // ColumnModified checks if any column in the parent table is being updated which has a child foreign key.
-func ColumnModified(exprs sqlparser.UpdateExprs, getChildFks func(expr *sqlparser.UpdateExpr) []vindexes.ChildFKInfo) bool {
+func ColumnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo)) bool {
 	for _, updateExpr := range exprs {
-		childFks := getChildFks(updateExpr)
+		parentFKs, childFks := getFks(updateExpr)
 		for _, childFk := range childFks {
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		for _, parentFk := range parentFKs {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				return true
 			}
 		}
@@ -306,7 +312,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.CrossShardParentFKs()
+		parentFKs := vindexTable.ParentFKsNeedsHandling()
 		if len(parentFKs) > 0 {
 			return nil, vterrors.VT12002()
 		}

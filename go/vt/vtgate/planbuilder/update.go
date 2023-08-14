@@ -113,17 +113,17 @@ func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plan
 		}
 	}
 
-	getChildFKInfo := func(expr *sqlparser.UpdateExpr) []vindexes.ChildFKInfo {
+	getFKInfo := func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
 		tblInfo, err := semTable.TableInfoForExpr(expr.Name)
 		if err != nil {
-			return nil
+			return nil, nil
 		}
 		vTable := tblInfo.GetVindexTable()
-		return childFkMap[vTable.String()]
+		return vTable.ParentForeignKeys, childFkMap[vTable.String()]
 	}
 
 	// Check if any column in the parent table is being updated which has a child foreign key.
-	return !operators.ColumnModified(updateExprs, getChildFKInfo)
+	return !operators.ColumnModified(updateExprs, getFKInfo)
 }
 
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {

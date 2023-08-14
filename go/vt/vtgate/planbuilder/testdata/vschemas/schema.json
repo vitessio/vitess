@@ -694,6 +694,14 @@
               "name": "hash_vin"
             }
           ]
+        },
+        "tbl10": {
+          "column_vindexes": [
+            {
+              "column": "sk",
+              "name": "hash_vin"
+            }
+          ]
         }
       }
     },

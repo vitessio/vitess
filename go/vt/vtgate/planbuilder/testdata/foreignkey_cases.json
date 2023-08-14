@@ -164,5 +164,32 @@
     "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns - both are not shard scoped - disallowed",
     "query": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
     "plan": "VT12002: unsupported: cross-shard foreign keys"
+  },
+  {
+    "comment": "Update a table with parent and child foreign keys - shard scoped",
+    "query": "update tbl2 set col = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl2 set col = 'foo'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update tbl2 set col = 'foo'",
+        "Table": "tbl2"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl2"
+      ]
+    }
+  },
+  {
+    "comment": "update table with column's parent foreign key cross shard - disallowed",
+    "query": "update tbl10 set col = 'foo'",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
   }
 ]
