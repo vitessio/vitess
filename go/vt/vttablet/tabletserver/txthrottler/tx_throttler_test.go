@@ -121,8 +121,8 @@ func TestEnabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
-	config.TxThrottlerQueryPoolThresholds = &flagutil.LowHighIntValues{Low: 66, High: 80}
-	config.TxThrottlerTxPoolThresholds = &flagutil.LowHighIntValues{Low: 66, High: 80}
+	config.TxThrottlerQueryPoolThresholds = &flagutil.LowHighPercentIntValues{Low: 66, High: 80}
+	config.TxThrottlerTxPoolThresholds = &flagutil.LowHighPercentIntValues{Low: 66, High: 80}
 
 	env := tabletenv.NewEnv(config, t.Name())
 	mockQueryEngine := NewMockTabletserverEngine()
@@ -356,6 +356,36 @@ func TestDryRunThrottler(t *testing.T) {
 				&querypb.ExecuteOptions{Priority: "100", WorkloadName: "some_workload"},
 			))
 		})
+	}
+}
+
+func TestCheckEnginePoolUsage(t *testing.T) {
+	mockEngine := NewMockTabletserverEngine()
+	highErr := errors.New("mock error")
+	lowErr := errors.New("mock low error")
+	{
+		// default thresholds (disabled)
+		thresholds := &flagutil.LowHighPercentIntValues{Low: 0, High: 100}
+		mockEngine.setPoolUsagePercent(100)
+		assert.Nil(t, checkEnginePoolUsage(mockEngine, thresholds, highErr, lowErr))
+	}
+	{
+		// below low+high threshold
+		thresholds := &flagutil.LowHighPercentIntValues{Low: 50, High: 75}
+		mockEngine.setPoolUsagePercent(1)
+		assert.Nil(t, checkEnginePoolUsage(mockEngine, thresholds, highErr, lowErr))
+	}
+	{
+		// above low, below high threshold
+		thresholds := &flagutil.LowHighPercentIntValues{Low: 50, High: 75}
+		mockEngine.setPoolUsagePercent(60)
+		assert.ErrorIs(t, checkEnginePoolUsage(mockEngine, thresholds, highErr, lowErr), lowErr)
+	}
+	{
+		// above low+high threshold
+		thresholds := &flagutil.LowHighPercentIntValues{Low: 50, High: 75}
+		mockEngine.setPoolUsagePercent(90)
+		assert.ErrorIs(t, checkEnginePoolUsage(mockEngine, thresholds, highErr, lowErr), highErr)
 	}
 }
 

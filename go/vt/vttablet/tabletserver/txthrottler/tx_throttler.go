@@ -472,7 +472,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoS
 	}
 }
 
-func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighIntValues, highErr, lowErr error) error {
+func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighPercentIntValues, highErr, lowErr error) error {
 	if thresholds.Low <= 0 && thresholds.High >= 100 {
 		return nil
 	}

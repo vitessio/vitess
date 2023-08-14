@@ -95,45 +95,45 @@ func TestStringMap(t *testing.T) {
 
 type lowHighFloat64Values struct {
 	in  string
-	out *LowHighIntValues
+	out *LowHighPercentIntValues
 	err error
 }
 
-func TestLowHighIntValues(t *testing.T) {
-	v := LowHighIntValues{}
+func TestLowHighPercentIntValues(t *testing.T) {
+	v := LowHighPercentIntValues{}
 	var _ pflag.Value = &v
 	wanted := []lowHighFloat64Values{
 		{
 			in:  "",
-			err: errInvalidLowHighIntValuesPair,
+			err: errInvalidLowHighPercentIntValuesPair,
 		},
 		{
 			in:  "should:fail",
-			err: errInvalidLowHighIntValuesPair,
+			err: errInvalidLowHighPercentIntValuesPair,
 		},
 		{
 			in:  "2:1",
-			err: errInvalidLowHighIntValuesPair,
+			err: errInvalidLowHighPercentIntValuesPair,
 		},
 		{
 			in:  "-1:10",
-			err: errInvalidLowHighIntValuesPair,
+			err: errInvalidLowHighPercentIntValuesPair,
 		},
 		{
 			in:  "1:101",
-			err: errInvalidLowHighIntValuesPair,
+			err: errInvalidLowHighPercentIntValuesPair,
 		},
 		{
 			in:  "1:2:3",
-			err: errInvalidLowHighIntValuesPair,
+			err: errInvalidLowHighPercentIntValuesPair,
 		},
 		{
 			in:  "75:90",
-			out: &LowHighIntValues{Low: 75, High: 90},
+			out: &LowHighPercentIntValues{Low: 75, High: 90},
 		},
 		{
 			in:  "2",
-			out: &LowHighIntValues{Low: 2, High: 100},
+			out: &LowHighPercentIntValues{Low: 2, High: 100},
 		},
 	}
 	for _, want := range wanted {
