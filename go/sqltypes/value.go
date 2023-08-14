@@ -147,6 +147,11 @@ func NewInt32(v int32) Value {
 	return MakeTrusted(Int32, strconv.AppendInt(nil, int64(v), 10))
 }
 
+// NewInt16 builds a Int16 Value.
+func NewInt16(v int16) Value {
+	return MakeTrusted(Int16, strconv.AppendInt(nil, int64(v), 10))
+}
+
 // NewUint64 builds an Uint64 Value.
 func NewUint64(v uint64) Value {
 	return MakeTrusted(Uint64, strconv.AppendUint(nil, v, 10))
@@ -157,9 +162,29 @@ func NewUint32(v uint32) Value {
 	return MakeTrusted(Uint32, strconv.AppendUint(nil, uint64(v), 10))
 }
 
+// NewUint16 builds a Uint16 Value.
+func NewUint16(v uint16) Value {
+	return MakeTrusted(Uint16, strconv.AppendUint(nil, uint64(v), 10))
+}
+
+// NewUint8 builds a Uint8 Value.
+func NewUint8(v uint8) Value {
+	return MakeTrusted(Uint8, strconv.AppendUint(nil, uint64(v), 10))
+}
+
+// NewBoolean builds a Uint8 Value from a boolean.
+func NewBoolean(v bool) Value {
+	return MakeTrusted(Uint8, strconv.AppendBool(nil, v))
+}
+
 // NewFloat64 builds an Float64 Value.
 func NewFloat64(v float64) Value {
 	return MakeTrusted(Float64, strconv.AppendFloat(nil, v, 'g', -1, 64))
+}
+
+// NewFloat32 builds a Float32 Value.
+func NewFloat32(v float32) Value {
+	return MakeTrusted(Float32, strconv.AppendFloat(nil, float64(v), 'g', -1, 64))
 }
 
 // NewVarChar builds a VarChar Value.
