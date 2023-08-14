@@ -1084,7 +1084,7 @@ func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backup
 	require.Nil(t, err)
 
 	backups = waitForNumBackups(t, numBackups+1)
-	require.Nil(t, err)
+	require.NotEmpty(t, backups)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 
@@ -1250,7 +1250,7 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	require.NoErrorf(t, err, "output: %v", output)
 
 	backups := waitForNumBackups(t, numBackups+1)
-	require.NotNil(t, backups)
+	require.NotEmpty(t, backups)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
