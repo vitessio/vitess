@@ -279,27 +279,28 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
 				return err
 			}
-		} else {
-			rules, err := topotools.GetRoutingRules(ctx, wr.ts)
-			if err != nil {
-				return err
-			}
-			for _, table := range tables {
-				toSource := []string{sourceKeyspace + "." + table}
-				rules[table] = toSource
-				rules[table+"@replica"] = toSource
-				rules[table+"@rdonly"] = toSource
-				rules[targetKeyspace+"."+table] = toSource
-				rules[targetKeyspace+"."+table+"@replica"] = toSource
-				rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-				rules[targetKeyspace+"."+table] = toSource
-				rules[sourceKeyspace+"."+table+"@replica"] = toSource
-				rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-			}
-			if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
-				return err
-			}
 		}
+
+		rules, err := topotools.GetRoutingRules(ctx, wr.ts)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			toSource := []string{sourceKeyspace + "." + table}
+			rules[table] = toSource
+			rules[table+"@replica"] = toSource
+			rules[table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[targetKeyspace+"."+table+"@replica"] = toSource
+			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[sourceKeyspace+"."+table+"@replica"] = toSource
+			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+		}
+		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
+			return err
+		}
+
 		if vschema != nil {
 			// We added to the vschema.
 			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
