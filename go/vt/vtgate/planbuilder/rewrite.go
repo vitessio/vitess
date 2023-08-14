@@ -88,6 +88,8 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
+	case *sqlparser.ExtractedSubquery:
+		return false
 	case *sqlparser.Subquery:
 		err := rewriteSubquery(cursor, r, node)
 		if err != nil {
