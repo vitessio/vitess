@@ -187,8 +187,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Var(currentConfig.TxThrottlerTabletTypes, "tx-throttler-tablet-types", "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
 	fs.BoolVar(&currentConfig.TxThrottlerDryRun, "tx-throttler-dry-run", defaultConfig.TxThrottlerDryRun, "If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.")
 	fs.DurationVar(&currentConfig.TxThrottlerTopoRefreshInterval, "tx-throttler-topo-refresh-interval", time.Minute*5, "The rate that the transaction throttler will refresh the topology to find cells.")
-	fs.Var(currentConfig.TxThrottlerQueryPoolThresholds, "tx-throttler-query-pool-thresholds", "The low:high query pool usage percentages for the transaction throttler to begin throttling low-priority select queries, defined as two colon-separated floats.")
-	fs.Var(currentConfig.TxThrottlerTxPoolThresholds, "tx-throttler-tx-pool-thresholds", "The low:high tx pool usage percentages for the transaction throttler to begin throttling low-priority transactions, defined as two colon-separated floats.")
+	fs.Var(currentConfig.TxThrottlerQueryPoolThresholds, "tx-throttler-query-pool-thresholds", "The low:high query pool usage percentages for the transaction throttler to begin throttling low-priority select queries, defined as two colon-separated integers between 0 and 100.")
+	fs.Var(currentConfig.TxThrottlerTxPoolThresholds, "tx-throttler-tx-pool-thresholds", "The low:high tx pool usage percentages for the transaction throttler to begin throttling low-priority transactions, defined as two colon-separated integers between 0 and 100.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -363,15 +363,15 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler              bool                           `json:"-"`
-	TxThrottlerDryRun              bool                           `json:"-"`
-	TxThrottlerConfig              *TxThrottlerConfigFlag         `json:"-"`
-	TxThrottlerHealthCheckCells    []string                       `json:"-"`
-	TxThrottlerDefaultPriority     int                            `json:"-"`
-	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag  `json:"-"`
-	TxThrottlerTopoRefreshInterval time.Duration                  `json:"-"`
-	TxThrottlerQueryPoolThresholds *flagutil.LowHighFloat64Values `json:"-"`
-	TxThrottlerTxPoolThresholds    *flagutil.LowHighFloat64Values `json:"-"`
+	EnableTxThrottler              bool                          `json:"-"`
+	TxThrottlerDryRun              bool                          `json:"-"`
+	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
+	TxThrottlerHealthCheckCells    []string                      `json:"-"`
+	TxThrottlerDefaultPriority     int                           `json:"-"`
+	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag `json:"-"`
+	TxThrottlerTopoRefreshInterval time.Duration                 `json:"-"`
+	TxThrottlerQueryPoolThresholds *flagutil.LowHighIntValues    `json:"-"`
+	TxThrottlerTxPoolThresholds    *flagutil.LowHighIntValues    `json:"-"`
 
 	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
@@ -839,8 +839,8 @@ var defaultConfig = TabletConfig{
 	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
 	TxThrottlerDryRun:              false,
 	TxThrottlerTopoRefreshInterval: time.Minute * 5,
-	TxThrottlerQueryPoolThresholds: &flagutil.LowHighFloat64Values{},
-	TxThrottlerTxPoolThresholds:    &flagutil.LowHighFloat64Values{},
+	TxThrottlerQueryPoolThresholds: &flagutil.LowHighIntValues{},
+	TxThrottlerTxPoolThresholds:    &flagutil.LowHighIntValues{},
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 

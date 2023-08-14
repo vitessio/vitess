@@ -66,11 +66,11 @@ func TestStringMap(t *testing.T) {
 	wanted := []pair{
 		{
 			in:  "tag1:value1,tag2:value2",
-			out: map[string]string{"tag1": "value1", "tag2": "value2"},
+			out: StringMapValue{"tag1": "value1", "tag2": "value2"},
 		},
 		{
 			in:  `tag1:1:value1\,,tag2:value2`,
-			out: map[string]string{"tag1": "1:value1,", "tag2": "value2"},
+			out: StringMapValue{"tag1": "1:value1,", "tag2": "value2"},
 		},
 		{
 			in:  `tag1:1:value1\,,tag2`,
@@ -82,7 +82,6 @@ func TestStringMap(t *testing.T) {
 		if want.err != nil {
 			continue
 		}
-
 		if len(want.out) != len(v) {
 			assert.Equal(t, want.out, v)
 			continue
@@ -96,45 +95,45 @@ func TestStringMap(t *testing.T) {
 
 type lowHighFloat64Values struct {
 	in  string
-	out *LowHighFloat64Values
+	out *LowHighIntValues
 	err error
 }
 
-func TestLowHighFloat64Values(t *testing.T) {
-	v := LowHighFloat64Values{}
+func TestLowHighIntValues(t *testing.T) {
+	v := LowHighIntValues{}
 	var _ pflag.Value = &v
 	wanted := []lowHighFloat64Values{
 		{
 			in:  "",
-			err: errInvalidLowHighFloat64ValuesPair,
+			err: errInvalidLowHighIntValuesPair,
 		},
 		{
 			in:  "should:fail",
-			err: errInvalidLowHighFloat64ValuesPair,
+			err: errInvalidLowHighIntValuesPair,
 		},
 		{
 			in:  "2:1",
-			err: errInvalidLowHighFloat64ValuesPair,
+			err: errInvalidLowHighIntValuesPair,
 		},
 		{
 			in:  "-1:10",
-			err: errInvalidLowHighFloat64ValuesPair,
+			err: errInvalidLowHighIntValuesPair,
 		},
 		{
 			in:  "1:101",
-			err: errInvalidLowHighFloat64ValuesPair,
+			err: errInvalidLowHighIntValuesPair,
 		},
 		{
 			in:  "1:2:3",
-			err: errInvalidLowHighFloat64ValuesPair,
+			err: errInvalidLowHighIntValuesPair,
 		},
 		{
-			in:  "75.123:90.456",
-			out: &LowHighFloat64Values{Low: 75.123, High: 90.456},
+			in:  "75:90",
+			out: &LowHighIntValues{Low: 75, High: 90},
 		},
 		{
 			in:  "2",
-			out: &LowHighFloat64Values{Low: 2, High: 0},
+			out: &LowHighIntValues{Low: 2, High: 0},
 		},
 	}
 	for _, want := range wanted {

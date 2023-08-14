@@ -137,23 +137,23 @@ func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *query
 //
 // Intended Usage:
 //
-//	// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
-//	t := NewTxThrottler(config, topoServer)
+//		// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
+//		t := NewTxThrottler(config, topoServer)
 //
-//	// A transaction throttler must be opened before its first use:
-//	if err := t.Open(keyspace, shard); err != nil {
-//	  return err
-//	}
+//		// A transaction throttler must be opened before its first use:
+//		if err := t.Open(keyspace, shard); err != nil {
+//		  return err
+//		}
 //
-//	// Checking whether to throttle can be done as follows before starting a transaction.
-//	if err := t.Throttle(); err != nil {
-//	  return fmt.Errorf("Transaction throttled: %w", err)
-//	} else {
-//	  // execute transaction.
-//	}
+//		// Checking whether to throttle can be done as follows before starting a transaction.
+//		if err := t.Throttle(); err != nil {
+//		  return fmt.Errorf("Transaction throttled: %w", err)
+//		} else {
+//	  		// execute transaction.
+//		}
 //
-//	// To release the resources used by the throttler the caller should call Close().
-//	t.Close()
+//		// To release the resources used by the throttler the caller should call Close().
+//		t.Close()
 //
 // A txThrottler object is generally not thread-safe: at any given time at most one goroutine should
 // be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
@@ -471,12 +471,12 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoS
 	}
 }
 
-func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighFloat64Values, highErr, lowErr error) error {
+func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighIntValues, highErr, lowErr error) error {
 	// Calls to .GetPoolUsagePercent() are serialized by the underlying engine.
 	switch usagePercent := engine.GetPoolUsagePercent(); {
-	case thresholds.High != 0 && usagePercent >= thresholds.High:
+	case thresholds.High != 0 && int(usagePercent) >= thresholds.High:
 		return highErr
-	case thresholds.Low != 0 && usagePercent >= thresholds.Low:
+	case thresholds.Low != 0 && int(usagePercent) >= thresholds.Low:
 		return lowErr
 	default:
 		return nil
