@@ -472,11 +472,14 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoS
 }
 
 func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighIntValues, highErr, lowErr error) error {
+	if thresholds.Low == 0 || thresholds.High == 0 {
+		return nil
+	}
 	// Calls to .GetPoolUsagePercent() are serialized by the underlying engine.
 	switch usagePercent := engine.GetPoolUsagePercent(); {
-	case thresholds.High != 0 && int(usagePercent) >= thresholds.High:
+	case int(usagePercent) >= thresholds.High:
 		return highErr
-	case thresholds.Low != 0 && int(usagePercent) >= thresholds.Low:
+	case int(usagePercent) >= thresholds.Low:
 		return lowErr
 	default:
 		return nil
