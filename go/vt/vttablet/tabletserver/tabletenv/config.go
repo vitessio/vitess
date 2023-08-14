@@ -363,15 +363,15 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler              bool                          `json:"-"`
-	TxThrottlerDryRun              bool                          `json:"-"`
-	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
-	TxThrottlerHealthCheckCells    []string                      `json:"-"`
-	TxThrottlerDefaultPriority     int                           `json:"-"`
-	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag `json:"-"`
-	TxThrottlerTopoRefreshInterval time.Duration                 `json:"-"`
-	TxThrottlerQueryPoolThresholds *flagutil.LowHighPercentIntValues    `json:"-"`
-	TxThrottlerTxPoolThresholds    *flagutil.LowHighPercentIntValues    `json:"-"`
+	EnableTxThrottler              bool                              `json:"-"`
+	TxThrottlerDryRun              bool                              `json:"-"`
+	TxThrottlerConfig              *TxThrottlerConfigFlag            `json:"-"`
+	TxThrottlerHealthCheckCells    []string                          `json:"-"`
+	TxThrottlerDefaultPriority     int                               `json:"-"`
+	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag     `json:"-"`
+	TxThrottlerTopoRefreshInterval time.Duration                     `json:"-"`
+	TxThrottlerQueryPoolThresholds *flagutil.LowHighPercentIntValues `json:"-"`
+	TxThrottlerTxPoolThresholds    *flagutil.LowHighPercentIntValues `json:"-"`
 
 	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
