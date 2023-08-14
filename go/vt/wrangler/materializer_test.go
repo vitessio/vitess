@@ -2707,7 +2707,7 @@ func TestStripConstraints(t *testing.T) {
 	}
 }
 
-func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
+func TestMaterializerSourceShardSelection(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -2719,7 +2719,11 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 		}},
 	}
 
-	vs := &vschemapb.Keyspace{
+	getStreamInsert := func(sourceShard, targetShard string) string {
+		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
+	}
+
+	targetVSchema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"hash": {
@@ -2735,52 +2739,122 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 			},
 		},
 	}
+
 	type testcase struct {
-		targetShards, sourceShards []string
-		insertMap                  map[string][]string
+		targetShards, sourceShards   []string
+		insertMap                    map[string][]string
+		targetVSchema, sourceVSchema *vschemapb.Keyspace
+		getStreamInsert              func(sourceShard, targetShard string) string
 	}
 	testcases := []testcase{
 		{
-			targetShards: []string{"-40", "40-80", "80-c0", "c0-"},
-			sourceShards: []string{"-80", "80-"},
-			insertMap:    map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-c0": {"80-"}, "c0-": {"80-"}},
+			targetShards:    []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceShards:    []string{"-80", "80-"},
+			insertMap:       map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-c0": {"80-"}, "c0-": {"80-"}},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
 		},
 		{
-			targetShards: []string{"-20", "20-40", "40-a0", "a0-f0", "f0-"},
-			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
-			insertMap:    map[string][]string{"-20": {"-40"}, "20-40": {"-40"}, "40-a0": {"40-80", "80-c0"}, "a0-f0": {"80-c0", "c0-"}, "f0-": {"c0-"}},
+			targetShards:    []string{"-20", "20-40", "40-a0", "a0-f0", "f0-"},
+			sourceShards:    []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap:       map[string][]string{"-20": {"-40"}, "20-40": {"-40"}, "40-a0": {"40-80", "80-c0"}, "a0-f0": {"80-c0", "c0-"}, "f0-": {"c0-"}},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
 		},
 		{
-			targetShards: []string{"-40", "40-80", "80-"},
-			sourceShards: []string{"-80", "80-"},
-			insertMap:    map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-": {"80-"}},
+			targetShards:    []string{"-40", "40-80", "80-"},
+			sourceShards:    []string{"-80", "80-"},
+			insertMap:       map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-": {"80-"}},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
+		},
+		{
+			targetShards:    []string{"-80", "80-"},
+			sourceShards:    []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap:       map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
+		},
+		{
+			targetShards:    []string{"0"},
+			sourceShards:    []string{"-80", "80-"},
+			insertMap:       map[string][]string{"0": {"-80", "80-"}},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
+		},
+		{
+			targetShards:    []string{"-80", "80-"},
+			sourceShards:    []string{"0"},
+			insertMap:       map[string][]string{"-80": {"0"}, "80-": {"0"}},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
 		},
 		{
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
-			insertMap:    map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
-		},
-		{
-			targetShards: []string{"0"},
-			sourceShards: []string{"-80", "80-"},
-			insertMap:    map[string][]string{"0": {"-80", "80-"}},
+			insertMap: map[string][]string{
+				"-80": {"-40", "40-80", "80-c0", "c0-"},
+				"80-": {"-40", "40-80", "80-c0", "c0-"},
+			},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "xxhash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "c1",
+							Name:   "hash",
+						}},
+					},
+				},
+			},
+			getStreamInsert: func(sourceShard, targetShard string) string {
+				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
+			},
 		},
 		{
 			targetShards: []string{"-80", "80-"},
-			sourceShards: []string{"0"},
-			insertMap:    map[string][]string{"-80": {"0"}, "80-": {"0"}},
+			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap: map[string][]string{
+				"-80": {"-40", "40-80", "80-c0", "c0-"},
+				"80-": {"-40", "40-80", "80-c0", "c0-"},
+			},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "c1",
+							Name:   "xxhash",
+						}},
+					},
+				},
+			},
+			getStreamInsert: func(sourceShard, targetShard string) string {
+				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*%s.*`, sourceShard, targetShard)
+			},
 		},
-	}
-
-	getStreamInsert := func(sourceShard, targetShard string) string {
-		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
 	}
 
 	for _, tcase := range testcases {
 		t.Run("", func(t *testing.T) {
 			env := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
-			if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+			if err := env.topoServ.SaveVSchema(context.Background(), "targetks", tcase.targetVSchema); err != nil {
 				t.Fatal(err)
+			}
+			if tcase.sourceVSchema != nil {
+				if err := env.topoServ.SaveVSchema(context.Background(), "sourceks", tcase.sourceVSchema); err != nil {
+					t.Fatal(err)
+				}
 			}
 			defer env.close()
 			for i, targetShard := range tcase.targetShards {
@@ -2790,7 +2864,7 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 				streamsInsert := ""
 				sourceShards := tcase.insertMap[targetShard]
 				for _, sourceShard := range sourceShards {
-					streamsInsert += getStreamInsert(sourceShard, targetShard)
+					streamsInsert += tcase.getStreamInsert(sourceShard, targetShard)
 				}
 				env.tmc.expectVRQuery(
 					tabletID,

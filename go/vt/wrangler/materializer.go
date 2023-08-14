@@ -57,12 +57,13 @@ import (
 )
 
 type materializer struct {
-	wr            *Wrangler
-	ms            *vtctldatapb.MaterializeSettings
-	targetVSchema *vindexes.KeyspaceSchema
-	sourceShards  []*topo.ShardInfo
-	targetShards  []*topo.ShardInfo
-	isPartial     bool
+	wr                  *Wrangler
+	ms                  *vtctldatapb.MaterializeSettings
+	targetVSchema       *vindexes.KeyspaceSchema
+	sourceShards        []*topo.ShardInfo
+	targetShards        []*topo.ShardInfo
+	isPartial           bool
+	samePrimaryVindexes bool
 }
 
 const (
@@ -971,7 +972,8 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	}
 	insertMap := make(map[string]string, len(mz.targetShards))
 	for _, targetShard := range mz.targetShards {
-		inserts, err := mz.generateInserts(ctx, targetShard)
+		sourceShards := mz.filterSourceShards(targetShard)
+		inserts, err := mz.generateInserts(ctx, sourceShards)
 		if err != nil {
 			return nil, err
 		}
@@ -993,11 +995,19 @@ func (wr *Wrangler) Materialize(ctx context.Context, ms *vtctldatapb.Materialize
 }
 
 func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.MaterializeSettings) (*materializer, error) {
-	vschema, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	sourceVSchemaPB, err := wr.ts.GetVSchema(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace)
+	sourceVSchema, err := vindexes.BuildKeyspaceSchema(sourceVSchemaPB, ms.SourceKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	targetVSchemaPB, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(targetVSchemaPB, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1049,14 +1059,15 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if len(targetShards) == 0 {
 		return nil, fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
-
+	samePrimaryVindexes := samePrimaryVindexes(ms, sourceVSchema, targetVSchema)
 	return &materializer{
-		wr:            wr,
-		ms:            ms,
-		targetVSchema: targetVSchema,
-		sourceShards:  sourceShards,
-		targetShards:  targetShards,
-		isPartial:     isPartial,
+		wr:                  wr,
+		ms:                  ms,
+		targetVSchema:       targetVSchema,
+		sourceShards:        sourceShards,
+		targetShards:        targetShards,
+		isPartial:           isPartial,
+		samePrimaryVindexes: samePrimaryVindexes,
 	}, nil
 }
 
@@ -1244,17 +1255,10 @@ func stripTableConstraints(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
+func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*topo.ShardInfo) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "{{.dbname}}")
 
-	for _, sourceShard := range mz.sourceShards {
-		// Don't create streams from sources which won't contain data for the target shard.
-		// We only do it for MoveTables for now since this doesn't hold for materialize flows
-		// where the target's sharding key might differ from that of the source
-		if mz.ms.MaterializationIntent == vtctldatapb.MaterializationIntent_MOVETABLES &&
-			!key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
-			continue
-		}
+	for _, sourceShard := range sourceShards {
 		bls := &binlogdatapb.BinlogSource{
 			Keyspace:        mz.ms.SourceKeyspace,
 			Shard:           sourceShard.ShardName(),
@@ -1469,4 +1473,81 @@ func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error 
 		return nil
 	})
 	return err
+}
+
+func (mz *materializer) filterSourceShards(targetShard *topo.ShardInfo) []*topo.ShardInfo {
+	// Don't create streams from sources which won't contain data for the
+	// target shard. Only do it for MoveTables where the source and target
+	// keyspaces are both sharded and have the same primary vindexes.
+	if mz.samePrimaryVindexes && mz.ms.MaterializationIntent == vtctldatapb.MaterializationIntent_MOVETABLES {
+		return useIntersectingSourceShards(targetShard, mz.sourceShards)
+	}
+	return useAllSourceShards(targetShard, mz.sourceShards)
+}
+
+// samePrimaryVindexes returns true if, for all tables defined in the provided
+// materialize settings, the provided source and target vschemas have the same
+// primary vindexes.
+func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vindexes.KeyspaceSchema) bool {
+	// For keyspaces that are not unsharded, there are no primary vindexes to
+	// compare.
+	if !source.Keyspace.Sharded || !target.Keyspace.Sharded {
+		return false
+	}
+
+	// For source and target keyspaces that are sharded, we can optimize source
+	// shard selection if source and target tables' primary vindexes are equal.
+	//
+	// To determine this, iterate over all target tables, looking for primary
+	// vindexes that differ from the corresponding source table.
+	for _, ts := range ms.TableSettings {
+		st, sok := source.Tables[ts.TargetTable]
+		tt, tok := target.Tables[ts.TargetTable]
+		if !sok || !tok {
+			// Expected vschema to have a table definition, but did not.
+			return false
+		}
+		if st.Type != "" || tt.Type != "" {
+			// Expected tables to be type "" (regular, sharded), but were not.
+			return false
+		}
+		if len(st.ColumnVindexes) == 0 || len(tt.ColumnVindexes) == 0 {
+			// Expected column to have a primary column vindex, but none
+			// was found.
+			return false
+		}
+		spv, sok := source.Vindexes[st.ColumnVindexes[0].Name]
+		tpv, tok := target.Vindexes[st.ColumnVindexes[0].Name]
+		if !sok || !tok {
+			// Could not find keyspace vindex defined in column primary
+			// vindex.
+			return false
+		}
+		// Compare source and primary vindex. For explanation of pointer
+		// comparison, see note on vindexes.Vindex.String.
+		//
+		// > String returns the name of the Vindex instance.
+		// > It's used for testing and diagnostics. Use pointer
+		// > comparison to see if two objects refer to the same
+		// > Vindex.
+		if spv != tpv {
+			return false
+		}
+	}
+	return true
+}
+
+func useAllSourceShards(_ *topo.ShardInfo, sourceShards []*topo.ShardInfo) []*topo.ShardInfo {
+	return sourceShards
+}
+
+func useIntersectingSourceShards(targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo) []*topo.ShardInfo {
+	var filteredSourceShards []*topo.ShardInfo
+	for _, sourceShard := range sourceShards {
+		if !key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
+			continue
+		}
+		filteredSourceShards = append(filteredSourceShards, sourceShard)
+	}
+	return filteredSourceShards
 }
