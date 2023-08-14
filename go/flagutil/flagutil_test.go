@@ -133,7 +133,7 @@ func TestLowHighIntValues(t *testing.T) {
 		},
 		{
 			in:  "2",
-			out: &LowHighIntValues{Low: 2, High: 0},
+			out: &LowHighIntValues{Low: 2, High: 100},
 		},
 	}
 	for _, want := range wanted {

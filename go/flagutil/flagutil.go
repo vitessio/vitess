@@ -149,7 +149,7 @@ func (value LowHighIntValues) Get() any {
 // Set sets the value of this flag from parsing the given string.
 func (value *LowHighIntValues) Set(v string) (err error) {
 	minMax := strings.SplitN(v, ":", 2)
-	value.High = 0
+	value.High = 100
 	if value.Low, err = strconv.Atoi(minMax[0]); err != nil {
 		return errInvalidLowHighIntValuesPair
 	}
@@ -158,7 +158,7 @@ func (value *LowHighIntValues) Set(v string) (err error) {
 			return errInvalidLowHighIntValuesPair
 		}
 	}
-	if value.Low < 1 || value.High > 100 || (value.High > 0 && value.Low > value.High) {
+	if value.Low < 1 || value.High > 100 || value.Low >= value.High {
 		return errInvalidLowHighIntValuesPair
 	}
 	return nil
