@@ -53,7 +53,8 @@ const (
 	XtraBackup = iota
 	BuiltinBackup
 	Mysqlctld
-	timeout = time.Duration(60 * time.Second)
+	timeout                = time.Duration(60 * time.Second)
+	topoConsistencyTimeout = 20 * time.Second
 )
 
 var (
@@ -1208,7 +1209,7 @@ func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.B
 // waitForNumBackups waits for GetBackups to list exactly the given expected number.
 // If expectNumBackups < 0 then any response is considered valid
 func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), topoConsistencyTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
