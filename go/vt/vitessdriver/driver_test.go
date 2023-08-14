@@ -38,9 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 )
 
-var (
-	testAddress string
-)
+var testAddress string
 
 // TestMain tests the Vitess Go SQL driver.
 //
@@ -71,7 +69,7 @@ func TestOpen(t *testing.T) {
 		panic(err)
 	}
 
-	var testcases = []struct {
+	testcases := []struct {
 		desc    string
 		connStr string
 		conn    *conn
@@ -80,7 +78,7 @@ func TestOpen(t *testing.T) {
 			desc:    "Open()",
 			connStr: fmt.Sprintf(`{"address": "%s", "target": "@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
-				Configuration: Configuration{
+				cfg: Configuration{
 					Protocol:   "grpc",
 					DriverName: "vitess",
 					Target:     "@replica",
@@ -94,7 +92,7 @@ func TestOpen(t *testing.T) {
 			desc:    "Open() (defaults omitted)",
 			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
-				Configuration: Configuration{
+				cfg: Configuration{
 					Protocol:   "grpc",
 					DriverName: "vitess",
 				},
@@ -107,7 +105,7 @@ func TestOpen(t *testing.T) {
 			desc:    "Open() with keyspace",
 			connStr: fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "target": "ks:0@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
-				Configuration: Configuration{
+				cfg: Configuration{
 					Protocol:   "grpc",
 					DriverName: "vitess",
 					Target:     "ks:0@replica",
@@ -123,7 +121,7 @@ func TestOpen(t *testing.T) {
 				`{"address": "%s", "timeout": %d, "defaultlocation": "America/Los_Angeles"}`,
 				testAddress, int64(30*time.Second)),
 			conn: &conn{
-				Configuration: Configuration{
+				cfg: Configuration{
 					Protocol:        "grpc",
 					DriverName:      "vitess",
 					DefaultLocation: "America/Los_Angeles",
@@ -144,7 +142,7 @@ func TestOpen(t *testing.T) {
 
 		wantc := tc.conn
 		newc := *(c.(*conn))
-		newc.Address = ""
+		newc.cfg.Address = ""
 		newc.conn = nil
 		newc.session = nil
 		if !reflect.DeepEqual(&newc, wantc) {
@@ -255,7 +253,7 @@ func TestExecStreamingNotAllowed(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		desc        string
 		config      Configuration
 		requestName string
@@ -357,7 +355,7 @@ func TestQuery(t *testing.T) {
 }
 
 func TestBindVars(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		desc   string
 		in     []driver.NamedValue
 		out    map[string]*querypb.BindVariable
@@ -440,7 +438,7 @@ func TestBindVars(t *testing.T) {
 }
 
 func TestDatetimeQuery(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		desc        string
 		config      Configuration
 		requestName string
@@ -762,4 +760,104 @@ func colList(fields []*querypb.Field) []string {
 		cols = append(cols, field.Name)
 	}
 	return cols
+}
+
+func TestConnSeparateSessions(t *testing.T) {
+	c := Configuration{
+		Protocol: "grpc",
+		Address:  testAddress,
+		Target:   "@primary",
+	}
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Each new connection starts a fresh session pointed at @primary. When the
+	// USE statement is executed, we simulate a change to that individual
+	// connection's target string.
+	//
+	// No connections are returned to the pool during this test and therefore
+	// the connection state should not be shared.
+	var conns []*sql.Conn
+	for i := 0; i < 3; i++ {
+		sconn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conns = append(conns, sconn)
+
+		targets := []string{targetString(t, sconn)}
+
+		_, err = sconn.ExecContext(ctx, "use @rdonly")
+		require.NoError(t, err)
+
+		targets = append(targets, targetString(t, sconn))
+
+		require.Equal(t, []string{"@primary", "@rdonly"}, targets)
+	}
+
+	for _, c := range conns {
+		require.NoError(t, c.Close())
+	}
+}
+
+func TestConnReuseSessions(t *testing.T) {
+	c := Configuration{
+		Protocol: "grpc",
+		Address:  testAddress,
+		Target:   "@primary",
+	}
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Pull an individual connection from the pool and execute a USE, resulting
+	// in changing the target string. We return the connection to the pool
+	// continuously in this test and verify that we keep pulling the same
+	// connection with its target string altered.
+	sconn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = sconn.ExecContext(ctx, "use @rdonly")
+	require.NoError(t, err)
+	require.NoError(t, sconn.Close())
+
+	var targets []string
+	for i := 0; i < 3; i++ {
+		sconn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		targets = append(targets, targetString(t, sconn))
+		require.NoError(t, sconn.Close())
+	}
+
+	require.Equal(t, []string{"@rdonly", "@rdonly", "@rdonly"}, targets)
+}
+
+func targetString(t *testing.T, c *sql.Conn) string {
+	t.Helper()
+
+	var target string
+	require.NoError(t, c.Raw(func(driverConn any) error {
+		target = driverConn.(*conn).session.SessionPb().TargetString
+		return nil
+	}))
+
+	return target
 }

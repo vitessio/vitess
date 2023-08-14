@@ -24,8 +24,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -150,7 +151,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
-		validCandidates            map[string]mysql.Position
+		validCandidates            map[string]replication.Position
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
@@ -308,7 +309,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
-	validCandidates map[string]mysql.Position,
+	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
@@ -374,7 +375,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
 func (erp *EmergencyReparenter) findMostAdvanced(
-	validCandidates map[string]mysql.Position,
+	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {

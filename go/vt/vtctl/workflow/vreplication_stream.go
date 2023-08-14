@@ -23,7 +23,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -33,7 +33,7 @@ type VReplicationStream struct {
 	ID                 int32
 	Workflow           string
 	BinlogSource       *binlogdatapb.BinlogSource
-	Position           mysql.Position
+	Position           replication.Position
 	WorkflowType       binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	DeferSecondaryKeys bool

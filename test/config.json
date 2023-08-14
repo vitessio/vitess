@@ -842,6 +842,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_foreignkey": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_gen4",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vtgate_gen4": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/gen4"],

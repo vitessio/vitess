@@ -81,9 +81,9 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			collations: []collationInTable{{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol1"}},
 			query:      "select distinct textcol1 from user",
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
-				oa, isOA := primitive.(*engine.OrderedAggregate)
-				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
+				distinct, isDistinct := primitive.(*engine.Distinct)
+				require.True(t, isDistinct, "should be a distinct")
+				require.Equal(t, collid(colls[0].collationName), distinct.CheckCols[0].Collation)
 			},
 		},
 		{

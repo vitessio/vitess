@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -100,10 +101,11 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		return nil, err
 	}
 
-	union := &Union{
-		Distinct: node.Distinct,
-		Sources:  []ops.Operator{opLHS, opRHS},
-	}
+	lexprs := ctx.SemTable.SelectExprs(node.Left)
+	rexprs := ctx.SemTable.SelectExprs(node.Right)
+
+	unionCols := ctx.SemTable.SelectExprs(node)
+	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
 	return &Horizon{Source: union, Query: node}, nil
 }
 
@@ -190,6 +192,17 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		Routing: routing,
 	}
 
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		childFks := vindexTable.ChildFKsNeedsHandling()
+		if len(childFks) > 0 {
+			return nil, vterrors.VT12003()
+		}
+	}
+
 	if !vindexTable.Keyspace.Sharded {
 		return route, nil
 	}
@@ -258,6 +271,18 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	route := &Route{
 		Source:  insOp,
 		Routing: routing,
+	}
+
+	// Find the foreign key mode and store the ParentFKs that we need to verify.
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		parentFKs := vindexTable.CrossShardParentFKs()
+		if len(parentFKs) > 0 {
+			return nil, vterrors.VT12002()
+		}
 	}
 
 	// Table column list is nil then add all the columns
@@ -597,11 +622,10 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			inner = horizon.Source
 		}
 
-		stmt := sqlparser.CloneSelectStatement(tbl.Select)
-		if onlyTable && stmt.GetLimit() == nil {
-			stmt.SetOrderBy(nil)
+		if onlyTable && tbl.Select.GetLimit() == nil {
+			tbl.Select.SetOrderBy(nil)
 		}
-		qp, err := CreateQPFromSelectStatement(ctx, stmt)
+		qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
@@ -610,7 +634,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			TableId:       &tableID,
 			Alias:         tableExpr.As.String(),
 			Source:        inner,
-			Query:         stmt,
+			Query:         tbl.Select,
 			ColumnAliases: tableExpr.Columns,
 			QP:            qp,
 		}, nil

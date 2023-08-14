@@ -24,6 +24,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -57,7 +60,7 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	if err != nil {
 		return nil, err
 	}
-	return mysql.ReplicationStatusToProto(status), nil
+	return replication.ReplicationStatusToProto(status), nil
 }
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
@@ -81,7 +84,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 	if err == nil {
-		replicationStatusProto = mysql.ReplicationStatusToProto(replicationStatus)
+		replicationStatusProto = replication.ReplicationStatusToProto(replicationStatus)
 	}
 
 	// Primary status - "SHOW MASTER STATUS"
@@ -91,7 +94,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 	if err == nil {
-		primaryStatusProto = mysql.PrimaryStatusToProto(primaryStatus)
+		primaryStatusProto = replication.PrimaryStatusToProto(primaryStatus)
 	}
 
 	// Purged GTID set
@@ -158,7 +161,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		ServerUuid:                  serverUUID,
 		ReplicationStatus:           replicationStatusProto,
 		PrimaryStatus:               primaryStatusProto,
-		GtidPurged:                  mysql.EncodePosition(purgedGTIDs),
+		GtidPurged:                  replication.EncodePosition(purgedGTIDs),
 		Version:                     version,
 		VersionComment:              versionComment,
 		ReadOnly:                    readOnly,
@@ -184,7 +187,7 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 	if err != nil {
 		return nil, err
 	}
-	return mysql.PrimaryStatusToProto(status), nil
+	return replication.PrimaryStatusToProto(status), nil
 }
 
 // PrimaryPosition returns the position of a primary database
@@ -193,13 +196,13 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 // WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	log.Infof("WaitForPosition: %v", pos)
-	mpos, err := mysql.DecodePosition(pos)
+	mpos, err := replication.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
@@ -236,7 +239,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	}
 	defer tm.unlock()
 
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return "", err
 	}
@@ -252,7 +255,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	if err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 // StartReplication will start the mysql. Works both when Vitess manages
@@ -287,7 +290,7 @@ func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, positio
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -322,7 +325,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return "", err
@@ -359,14 +362,14 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
 	log.Infof("PopulateReparentJournal: action: %v parent: %v  position: %v timeCreatedNS: %d actionName: %s primaryAlias: %s",
 		actionName, primaryAlias, position, timeCreatedNS, actionName, primaryAlias)
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -399,7 +402,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		}
 	}
 
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -498,7 +501,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return nil, err
@@ -536,7 +539,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if err != nil {
 		return nil, err
 	}
-	return mysql.PrimaryStatusToProto(status), nil
+	return replication.PrimaryStatusToProto(status), nil
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
@@ -674,7 +677,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		shouldbeReplicating = true
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
-		status = mysql.ReplicationStatus{}
+		status = replication.ReplicationStatus{}
 	} else if err != nil {
 		// Abort on any other non-nil error.
 		return err
@@ -741,7 +744,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if shouldbeReplicating {
 		log.Infof("Set up MySQL replication; should now be replicating from %s at %s", parentAlias, waitPosition)
 		if waitPosition != "" {
-			pos, err := mysql.DecodePosition(waitPosition)
+			pos, err := replication.DecodePosition(waitPosition)
 			if err != nil {
 				return err
 			}
@@ -792,7 +795,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	if err != nil {
 		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
-	before := mysql.ReplicationStatusToProto(rs)
+	before := replication.ReplicationStatusToProto(rs)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
@@ -838,7 +841,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			},
 		}, vterrors.Wrap(err, "acquiring replication status failed")
 	}
-	after := mysql.ReplicationStatusToProto(rsAfter)
+	after := replication.ReplicationStatusToProto(rsAfter)
 
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
@@ -886,7 +889,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 func isPrimaryEligible(tabletType topodatapb.TabletType) bool {

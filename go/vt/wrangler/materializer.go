@@ -46,7 +46,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -816,7 +815,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for _, row := range qr.Rows {
-			id, err := evalengine.ToInt64(row[0])
+			id, err := row[0].ToCastInt64()
 			if err != nil {
 				return err
 			}
@@ -893,7 +892,7 @@ func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) 
 		}
 		qr := sqltypes.Proto3ToResult(qrproto)
 		for i := 0; i < len(qr.Rows); i++ {
-			id, err = evalengine.ToInt64(qr.Rows[i][0])
+			id, err = qr.Rows[i][0].ToCastInt64()
 			if err != nil {
 				return err
 			}

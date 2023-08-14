@@ -1372,7 +1372,7 @@
         },
         "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
         "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
-        "Table": "music",
+        "Table": "`user`, music",
         "Values": [
           "INT64(1)"
         ],
@@ -1399,7 +1399,7 @@
         },
         "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
         "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
-        "Table": "music",
+        "Table": "`user`, music",
         "Values": [
           "INT64(1)"
         ],
@@ -2162,11 +2162,6 @@
     }
   },
   {
-    "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
-  },
-  {
     "comment": "plan test for a natural character set string",
     "query": "select N'string' from dual",
     "plan": {
@@ -2439,11 +2434,6 @@
     }
   },
   {
-    "comment": "correlated subquery part of an OR clause",
-    "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
-  },
-  {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
     "query": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
     "plan": {
@@ -2477,37 +2467,29 @@
       "QueryType": "SELECT",
       "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Concatenate",
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id as found from `user` where 1 != 1",
-                "Query": "select id as found from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select id from unsharded where 1 != 1",
-                "Query": "select id from unsharded",
-                "Table": "unsharded"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id as found from `user` where 1 != 1",
+            "Query": "select id as found from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from unsharded where 1 != 1",
+            "Query": "select id from unsharded",
+            "Table": "unsharded"
           }
         ]
       },
@@ -4189,8 +4171,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit :__upper_limit",
+                "FieldQuery": "select user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select user_id from (select user_id from user_extra) as ue limit :__upper_limit",
                 "Table": "user_extra"
               }
             ]
@@ -4284,16 +4266,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "cant switch sides for outer joins",
-    "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": "VT12001: unsupported: LEFT JOIN with derived tables"
-  },
-  {
-    "comment": "limit on both sides means that we can't evaluate this at all",
-    "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "plan": "VT12001: unsupported: JOIN between derived tables"
   },
   {
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",

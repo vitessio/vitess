@@ -26,12 +26,10 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -98,7 +96,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.VitessMigrations:
-		return buildShowVMigrationsPlan(show, vschema)
+		return buildShowVitessMigrationsPlan(show, vschema)
 	case sqlparser.VGtidExecGlobal:
 		return buildShowVGtidPlan(show, vschema)
 	case sqlparser.GtidExecGlobal:
@@ -243,10 +241,9 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
 }
 
-// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
-// It invokes queries on the sidecar database's schema_migrations table
-// on all PRIMARY tablets in the keyspace's shards.
-func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+// buildShowVitessMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
+// It sends down the SHOW command to the PRIMARY shard tablets (on all shards)
+func buildShowVitessMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
 		return nil, err
@@ -263,26 +260,11 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(ks.Name)
-	if err != nil {
-		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v", ks.Name, err)
-		return nil, vterrors.VT14005(ks.Name)
-	}
-
-	sql := sqlparser.BuildParsedQuery("SELECT * FROM %s.schema_migrations", sidecarDBID).Query
-
-	if show.Filter != nil {
-		if show.Filter.Filter != nil {
-			sql += fmt.Sprintf(" where %s", sqlparser.String(show.Filter.Filter))
-		} else if show.Filter.Like != "" {
-			lit := sqlparser.String(sqlparser.NewStrLiteral(show.Filter.Like))
-			sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
-		}
-	}
 	return &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
-		Query:             sql,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
 	}, nil
 }
 

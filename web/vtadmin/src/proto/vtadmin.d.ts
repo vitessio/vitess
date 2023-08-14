@@ -19930,6 +19930,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest sql_mode */
         sql_mode?: (string|null);
+
+        /** ApplySchemaRequest batch_size */
+        batch_size?: (number|Long|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -19958,6 +19961,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest sql_mode. */
         public sql_mode: string;
+
+        /** ApplySchemaRequest batch_size. */
+        public batch_size: (number|Long);
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.
@@ -44045,6 +44051,9 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest caller_id */
         caller_id?: (vtrpc.ICallerID|null);
+
+        /** ApplySchemaRequest batch_size */
+        batch_size?: (number|Long|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -44079,6 +44088,9 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest caller_id. */
         public caller_id?: (vtrpc.ICallerID|null);
+
+        /** ApplySchemaRequest batch_size. */
+        public batch_size: (number|Long);
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.
@@ -44732,6 +44744,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
+
+        /** BackupShardRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -44757,6 +44772,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest upgrade_safe. */
         public upgrade_safe: boolean;
+
+        /** BackupShardRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
@@ -62556,6 +62574,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** WorkflowSwitchTrafficRequest initialize_target_sequences */
+        initialize_target_sequences?: (boolean|null);
     }
 
     /** Represents a WorkflowSwitchTrafficRequest. */
@@ -62593,6 +62614,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest dry_run. */
         public dry_run: boolean;
+
+        /** WorkflowSwitchTrafficRequest initialize_target_sequences. */
+        public initialize_target_sequences: boolean;
 
         /**
          * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.

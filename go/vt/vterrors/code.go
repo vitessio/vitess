@@ -80,6 +80,8 @@ var (
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
 	VT12001 = errorWithoutState("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", "This statement is unsupported by Vitess. Please rewrite your query to use supported syntax.")
+	VT12002 = errorWithoutState("VT12002", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard foreign keys", "Vitess does not support cross shard foreign keys.")
+	VT12003 = errorWithoutState("VT12002", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: foreign keys management at vitess", "Vitess does not support managing foreign keys tables.")
 
 	// VT13001 General Error
 	VT13001 = errorWithoutState("VT13001", vtrpcpb.Code_INTERNAL, "[BUG] %s", "This error should not happen and is a bug. Please file an issue on GitHub: https://github.com/vitessio/vitess/issues/new/choose.")
@@ -143,6 +145,8 @@ var (
 		VT09015,
 		VT10001,
 		VT12001,
+		VT12002,
+		VT12003,
 		VT13001,
 		VT13002,
 		VT14001,

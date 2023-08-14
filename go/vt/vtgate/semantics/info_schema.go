@@ -1671,16 +1671,22 @@ type infoSchemaWithColumns struct {
 	infoSchemaData map[string][]vindexes.Column
 }
 
+// We cache this information, since these are maps that are not changed
+var infoSchema57 = getInfoSchema57()
+var infoSchema80 = getInfoSchema80()
+
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {
+	return &infoSchemaWithColumns{inner: inner, infoSchemaData: loadSchemaInfo()}
+}
+
+func loadSchemaInfo() map[string][]vindexes.Column {
 	version := servenv.MySQLServerVersion()
-	var infoSchema map[string][]vindexes.Column
 	if strings.HasPrefix(version, "5.7") {
-		infoSchema = getInfoSchema57()
-	} else {
-		infoSchema = getInfoSchema80()
+		return infoSchema57
 	}
-	return &infoSchemaWithColumns{inner: inner, infoSchemaData: infoSchema}
+
+	return infoSchema80
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
