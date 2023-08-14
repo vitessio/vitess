@@ -2936,9 +2936,9 @@ func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("'%s' %s(", ts.Path, keywordStrings[COLUMNS])
 	for i, col := range ts.Columns {
 		if i == 0 {
-			buf.Myprintf(" %v", col)
+			buf.Myprintf("%v", col)
 		} else {
-			buf.Myprintf(",%v", col)
+			buf.Myprintf(", %v", col)
 		}
 	}
 	buf.Myprintf(")")
@@ -2972,9 +2972,9 @@ func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s %s %v", keywordStrings[NESTED], keywordStrings[PATH], col.Spec)
 		return
 	} else {
-		exists := " "
+		exists := ""
 		if col.Opts.Exists {
-			exists = exists + keywordStrings[EXISTS]
+			exists = " " + keywordStrings[EXISTS]
 		}
 		if col.Type.Autoincrement {
 			buf.Myprintf("%v %s", col.Name, "FOR ORDINALITY")
