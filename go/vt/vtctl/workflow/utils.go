@@ -610,6 +610,7 @@ func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonl
 
 func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
 	// We use the value from the workflow for the TabletPicker.
+	log.Infof("areTabletsAvailableToStreamFrom: %v", req)
 	tabletTypesStr := ts.optTabletTypes
 	cells := req.Cells
 	// If no cells were provided in the command then use the value from the workflow.
@@ -626,6 +627,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
+			log.Infof("Calling NewTabletPicker with cells: %v, keyspace: %s, shard: %s, tabletTypes: %s", cells, keyspace, shard.ShardName(), tabletTypesStr)
 			tp, err := discovery.NewTabletPicker(ctx, ts.ws.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypesStr, discovery.TabletPickerOptions{})
 			if err != nil {
 				allErrors.RecordError(err)

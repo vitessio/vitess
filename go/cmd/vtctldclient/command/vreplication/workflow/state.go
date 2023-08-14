@@ -1,0 +1,139 @@
+package workflow
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"github.com/spf13/cobra"
+
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/textutil"
+
+	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+)
+
+var (
+	// WorkflowStart makes a WorfklowUpdate gRPC call to a vtctld.
+	workflowStart = &cobra.Command{
+		Use:                   "start",
+		Short:                 "Start a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer start --workflow commerce2customer`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Start"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowUpdateState,
+	}
+
+	// WorkflowStop makes a WorfklowUpdate gRPC call to a vtctld.
+	workflowStop = &cobra.Command{
+		Use:                   "stop",
+		Short:                 "Stop a VReplication workflow.",
+		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer stop --workflow commerce2customer`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Stop"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowUpdateState,
+	}
+)
+
+func getWorkflow(keyspace, workflow string) (*vtctldatapb.GetWorkflowsResponse, error) {
+	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: keyspace,
+		Workflow: workflow,
+	})
+	if err != nil {
+		return &vtctldatapb.GetWorkflowsResponse{}, err
+	}
+	return resp, nil
+}
+
+// canRestartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
+// Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
+func canRestartWorkflow(keyspace, workflow string) error {
+	resp, err := getWorkflow(keyspace, workflow)
+	if err != nil {
+		return err
+	}
+	if len(resp.Workflows) == 0 {
+		return fmt.Errorf("workflow %s not found", workflow)
+	}
+	if len(resp.Workflows) > 1 {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "multiple results found for workflow %s", workflow)
+	}
+	wf := resp.Workflows[0]
+	if wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_AtomicCopy.String() {
+		return nil
+	}
+	// If we're here, we have an atomic copy workflow.
+	for _, shardStream := range wf.ShardStreams {
+		for _, stream := range shardStream.Streams {
+			if len(stream.CopyStates) > 0 {
+				return fmt.Errorf("stream %d is still in the copy phase: can only start workflow %s if all streams have completed the copy phase.", stream.Id, workflow)
+			}
+		}
+	}
+	return nil
+}
+
+func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	var state binlogdatapb.VReplicationWorkflowState
+	switch strings.ToLower(cmd.Name()) {
+	case "start":
+		if err := canRestartWorkflow(workflowUpdateOptions.Workflow, workflowOptions.Keyspace); err != nil {
+			return err
+		}
+		state = binlogdatapb.VReplicationWorkflowState_Running
+	case "stop":
+		state = binlogdatapb.VReplicationWorkflowState_Stopped
+	default:
+		return fmt.Errorf("invalid workstate: %s", args[0])
+	}
+
+	// The only thing we're updating is the state.
+	req := &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: workflowOptions.Keyspace,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow:    workflowUpdateOptions.Workflow,
+			Cells:       textutil.SimulatedNullStringSlice,
+			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			State:       state,
+		},
+	}
+
+	resp, err := common.GetClient().WorkflowUpdate(common.GetCommandCtx(), req)
+	if err != nil {
+		return err
+	}
+
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
+	})
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func addWorkflowUpdateStateFlags(cmd *cobra.Command) {
+	workflowStart.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to start (required)")
+	workflowStart.MarkFlagRequired("workflow")
+	workflowStop.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to stop (required)")
+	workflowStop.MarkFlagRequired("workflow")
+
+}

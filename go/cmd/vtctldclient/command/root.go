@@ -24,6 +24,13 @@ import (
 	"strconv"
 	"time"
 
+	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+
+	// import all commands, so that the init()s within them get called and they register their commands/subcommands.
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/reshard"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
@@ -36,8 +43,9 @@ var (
 	// VtctldClientProtocol is the protocol to use when creating the vtctldclient.VtctldClient.
 	VtctldClientProtocol = "grpc"
 
-	client        vtctldclient.VtctldClient
-	traceCloser   io.Closer
+	client      vtctldclient.VtctldClient
+	traceCloser io.Closer
+
 	commandCtx    context.Context
 	commandCancel func()
 
@@ -59,6 +67,8 @@ var (
 				ctx = context.Background()
 			}
 			commandCtx, commandCancel = context.WithTimeout(ctx, actionTimeout)
+			common.SetClient(client)
+			common.SetCommandCtx(commandCtx)
 			return err
 		},
 		// Similarly, PersistentPostRun cleans up the resources spawned by
@@ -132,4 +142,5 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 func init() {
 	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection (required)")
 	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout for the total command")
+	common.RegisterCommands(Root)
 }
