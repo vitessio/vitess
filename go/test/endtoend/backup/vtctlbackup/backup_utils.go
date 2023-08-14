@@ -1229,7 +1229,7 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 		assert.Less(t, len(backups), expectNumBackups)
 		select {
 		case <-ctx.Done():
-			assert.FailNow(t, ctx.Err().Error(), "expected %d backups, got %d", expectNumBackups, len(backups))
+			assert.Failf(t, ctx.Err().Error(), "expected %d backups, got %d", expectNumBackups, len(backups))
 			return nil
 		case <-ticker.C:
 		}
@@ -1251,7 +1251,7 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	require.NoErrorf(t, err, "output: %v", output)
 
 	backups := waitForNumBackups(t, numBackups+1)
-	require.NotEmpty(t, backups)
+	require.NotEmptyf(t, backups, "output: %v", output)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
