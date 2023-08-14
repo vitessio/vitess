@@ -947,7 +947,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that will be executing the workflow.
-func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (res *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -964,7 +964,6 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tables       = req.IncludeTables
 		externalTopo *topo.Server
 		sourceTopo   *topo.Server = s.ts
-		err          error
 	)
 
 	// When the source is an external cluster mounted using the Mount command.
