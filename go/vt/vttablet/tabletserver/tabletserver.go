@@ -497,7 +497,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			startTime := time.Now()
 			plan := &planbuilder.Plan{PlanID: planbuilder.PlanBegin}
 			if err := tsv.txThrottler.Throttle(plan, options); err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled, cause: %v", err)
+				return err
 			}
 			var connSetting *pools.Setting
 			if len(settings) > 0 {

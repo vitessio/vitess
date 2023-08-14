@@ -18,7 +18,6 @@ package txthrottler
 
 import (
 	"context"
-	"errors"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -35,20 +34,22 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	ErrThrottledConnPoolUsageHard = errors.New("ConnPoolUsageHard")
-	ErrThrottledConnPoolUsageSoft = errors.New("ConnPoolUsageSoft")
-	ErrThrottledReplicationLag    = errors.New("ReplicationLag")
-	ErrThrottledTxPoolUsageHard   = errors.New("TxPoolUsageHard")
-	ErrThrottledTxPoolUsageSoft   = errors.New("TxPoolUsageSoft")
+	ErrThrottledConnPoolUsageHard = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Query throttled: ConnPoolUsageHard")
+	ErrThrottledConnPoolUsageSoft = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Query throttled: ConnPoolUsageSoft")
+	ErrThrottledReplicationLag    = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled: ReplicationLag")
+	ErrThrottledTxPoolUsageHard   = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled: TxPoolUsageHard")
+	ErrThrottledTxPoolUsageSoft   = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled: TxPoolUsageSoft")
 )
 
 // These vars store the functions used to create the topo server, healthcheck,
