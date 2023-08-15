@@ -202,18 +202,19 @@ func MarshalResult(v any) (*Result, error) {
 func marshalRow(val reflect.Value, sqlFields []*querypb.Field, structFields []reflect.StructField) (Row, error) {
 	var row Row
 	for i, structField := range structFields {
-		sqlField := sqlFields[i]
-		var fieldVal any
-		if f := val.FieldByName(structField.Name); f.IsValid() {
-			fieldVal = f.Interface()
-		} else {
-			// TODO: not sure if we still need this
-			fieldVal = reflect.Zero(structField.Type).Interface()
-		}
+		var (
+			sqlField = sqlFields[i]
 
-		sqlVal, err := structToQueryValue(fieldVal, structField, sqlField.Type)
-		if err != nil {
-			return nil, err
+			sqlVal Value
+			err    error
+		)
+		if f := val.FieldByName(structField.Name); f.IsValid() {
+			sqlVal, err = structToQueryValue(f.Interface(), structField, sqlField.Type)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			sqlVal = NULL
 		}
 
 		row = append(row, sqlVal)
@@ -420,10 +421,22 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 	case querypb.Type_TIMESTAMP:
 		var s string
 		switch v := value.(type) { // TODO: support overrides for other timestamp formats
+		case *time.Time:
+			if v == nil {
+				return NULL, nil
+			}
+
+			s = v.Format(TimestampFormat)
 		case time.Time:
 			s = v.Format(TimestampFormat)
 		case *vttime.Time:
+			if v == nil {
+				return NULL, nil
+			}
+
 			s = protoutil.TimeFromProto(v).Format(TimestampFormat)
+		case vttime.Time:
+			s = protoutil.TimeFromProto(&v).Format(TimestampFormat)
 		case string:
 			s = v
 		default:
