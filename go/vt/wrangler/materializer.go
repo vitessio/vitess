@@ -256,8 +256,8 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return err
 	}
 
-	// If we get an error after this point, where the vreplication streams/records have been
-	// created, then we clean up the workflow's artifacts.
+	// If we get an error after this point, where the vreplication streams/records
+	// have been created, then we clean up the workflow's artifacts.
 	defer func() {
 		if err != nil {
 			ts, cerr := wr.buildTrafficSwitcher(ctx, ms.TargetKeyspace, ms.Workflow)
@@ -273,8 +273,8 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules in place.
 	if externalTopo == nil {
-		// Save routing rules before vschema. If we save vschema first, and routing rules
-		// fails to save, we may generate duplicate table errors.
+		// Save routing rules before vschema. If we save vschema first, and routing
+		// rules fails to save, we may generate duplicate table errors.
 		if mz.isPartial {
 			if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
 				return err

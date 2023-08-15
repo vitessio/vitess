@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -716,7 +715,6 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		IncludeTables:  []string{table},
 		SourceTimeZone: invalidTimeZone,
 	})
-	log.Errorf("Error: %v", err)
 	require.ErrorContains(t, err, fmt.Sprintf("unable to perform time_zone conversions from %s to UTC", invalidTimeZone))
 
 	// Check that there are no orphaned routing rules.
