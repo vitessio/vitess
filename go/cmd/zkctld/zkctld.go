@@ -57,6 +57,7 @@ func main() {
 	defer logutil.Flush()
 
 	servenv.ParseFlags("zkctld")
+	servenv.Init()
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 

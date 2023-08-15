@@ -495,3 +495,84 @@ func TestCompilerSingle(t *testing.T) {
 		})
 	}
 }
+
+func TestBindVarLiteral(t *testing.T) {
+	var testCases = []struct {
+		expression string
+		bindType   func(expr sqlparser.Expr)
+		bindVar    *querypb.BindVariable
+		result     string
+	}{
+		{
+			expression: `_latin1 :vtg1 /* HEXNUM */`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexNum
+			},
+			bindVar: sqltypes.HexNumBindVariable([]byte("0xFF")),
+			result:  `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `cast(:vtg1 /* HEXVAL */ as char character set latin1)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.CastExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexVal
+			},
+			bindVar: sqltypes.HexValBindVariable([]byte("0'FF'")),
+			result:  `VARCHAR("ÿ")`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := sqlparser.ParseExpr(tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc.bindType(expr)
+
+			fields := evalengine.FieldResolver(makeFields(nil))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Optimization:  evalengine.OptimizationLevelCompilerDebug,
+			}
+
+			converted, err := evalengine.Translate(expr, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result := `VARCHAR("ÿ")`
+
+			env := evalengine.EmptyExpressionEnv()
+			env.BindVars = map[string]*querypb.BindVariable{
+				"vtg1": tc.bindVar,
+			}
+
+			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if expected.String() != result {
+				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), result)
+			}
+
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
+			}
+
+			// re-run the same evaluation multiple times to ensure results are always consistent
+			for i := 0; i < 8; i++ {
+				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if res.String() != result {
+					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
+				}
+			}
+		})
+	}
+}

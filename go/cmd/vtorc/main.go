@@ -104,6 +104,7 @@ func main() {
 		fs.StringVar(&configFile, "config", "", "config file name")
 	})
 	servenv.ParseFlags("vtorc")
+	servenv.Init()
 	config.UpdateConfigValuesFromFlags()
 
 	log.Info("starting vtorc")

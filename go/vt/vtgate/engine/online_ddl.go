@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -76,8 +77,9 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Name: "uuid",
-				Type: sqltypes.VarChar,
+				Name:    "uuid",
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.Default()),
 			},
 		},
 		Rows: [][]sqltypes.Value{},

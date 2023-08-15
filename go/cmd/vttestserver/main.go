@@ -268,6 +268,7 @@ func parseFlags() (env vttest.Environment, err error) {
 
 func main() {
 	cluster, err := runCluster()
+	servenv.Init()
 	if err != nil {
 		log.Fatal(err)
 	}

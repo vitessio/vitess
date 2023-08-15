@@ -541,7 +541,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved.Value(),
+				Value:  resolved.Value(collations.Default()),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
@@ -629,8 +629,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		}
 		return ColExpr{
 			Field: &querypb.Field{
-				Name: "keyspace_id",
-				Type: sqltypes.VarBinary,
+				Name:    "keyspace_id",
+				Type:    sqltypes.VarBinary,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 			},
 			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
@@ -653,8 +655,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			}
 			return ColExpr{
 				Field: &querypb.Field{
-					Name: "keyspace_id",
-					Type: sqltypes.VarBinary,
+					Name:    "keyspace_id",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 				Vindex:        cv.Vindex,
 				VindexColumns: vindexColumns,
@@ -689,8 +693,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		}
 		return ColExpr{
 			Field: &querypb.Field{
-				Name: "1",
-				Type: querypb.Type_INT64,
+				Name:    "1",
+				Type:    querypb.Type_INT64,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
 			},
 			ColNum:     -1,
 			FixedValue: sqltypes.NewInt64(num),

@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -963,13 +964,12 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		tabletMap      map[string]*topo.TabletInfo
 		opts           PlannedReparentOptions
 
-		expectedPos   string
 		expectedEvent *events.Reparent
 		shouldErr     bool
 		// Optional function to run some additional post-test assertions. Will
 		// be run in the main test body before the common assertions are run,
 		// regardless of the value of tt.shouldErr for that test case.
-		extraAssertions func(t *testing.T, pos string, err error)
+		extraAssertions func(t *testing.T, err error)
 	}{
 		{
 			name: "successful promotion",
@@ -998,15 +998,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000200": {
-						Result: "successful reparent journal position",
-						Error:  nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
@@ -1033,10 +1024,9 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap:   map[string]*topo.TabletInfo{},
-			opts:        PlannedReparentOptions{},
-			expectedPos: "successful reparent journal position",
-			shouldErr:   false,
+			tabletMap: map[string]*topo.TabletInfo{},
+			opts:      PlannedReparentOptions{},
+			shouldErr: false,
 		},
 		{
 			name: "cannot get snapshot of current primary",
@@ -1376,20 +1366,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					// This being present means that if we don't encounter a
-					// a case where either WaitForPosition errors, or the parent
-					// context times out, then we will fail the test, since it
-					// will cause the overall function under test to return no
-					// error.
-					"zone1-0000000200": {
-						Result: "success!",
-						Error:  nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
@@ -1483,7 +1459,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
-			extraAssertions: func(t *testing.T, pos string, err error) {
+			extraAssertions: func(t *testing.T, err error) {
 				assert.Contains(t, err.Error(), "UndoDemotePrimary", "expected error to include information about failed demotion rollback")
 			},
 		},
@@ -1546,143 +1522,9 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
-			extraAssertions: func(t *testing.T, pos string, err error) {
+			extraAssertions: func(t *testing.T, err error) {
 				assert.NotContains(t, err.Error(), "UndoDemotePrimary", "expected error to not include information about failed demotion rollback")
 			},
-		},
-		{
-			name: "primary-elect fails to promote",
-			ts:   memorytopo.NewServer("zone1"),
-			tmc: &testutil.TabletManagerClient{
-				DemotePrimaryResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{
-							// value of Position doesn't strictly matter for
-							// this test case, as long as it matches the inner
-							// key of the WaitForPositionResults map for the
-							// primary-elect.
-							Position: "position1",
-						},
-						Error: nil,
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
-					},
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000200": {
-						Error: assert.AnError,
-					},
-				},
-				SetReplicationSourceResults: map[string]error{
-					"zone1-0000000200": nil,
-				},
-				WaitForPositionResults: map[string]map[string]error{
-					"zone1-0000000200": {
-						"position1": nil,
-					},
-				},
-			},
-			ev:       &events.Reparent{},
-			keyspace: "testkeyspace",
-			shard:    "-",
-			currentPrimary: &topo.TabletInfo{
-				Tablet: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
-					},
-				},
-			},
-			primaryElect: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  200,
-				},
-			},
-			tabletMap: map[string]*topo.TabletInfo{},
-			opts:      PlannedReparentOptions{},
-			shouldErr: true,
-		},
-		{
-			name: "promotion succeeds but parent context times out",
-			ts:   memorytopo.NewServer("zone1"),
-			tmc: &testutil.TabletManagerClient{
-				DemotePrimaryResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{
-							// value of Position doesn't strictly matter for
-							// this test case, as long as it matches the inner
-							// key of the WaitForPositionResults map for the
-							// primary-elect.
-							Position: "position1",
-						},
-						Error: nil,
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
-					},
-				},
-				PromoteReplicaPostDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000200": {
-						Error: nil,
-					},
-				},
-				SetReplicationSourceResults: map[string]error{
-					"zone1-0000000200": nil,
-				},
-				WaitForPositionResults: map[string]map[string]error{
-					"zone1-0000000200": {
-						"position1": nil,
-					},
-				},
-			},
-			ctxTimeout: time.Millisecond * 10,
-			ev:         &events.Reparent{},
-			keyspace:   "testkeyspace",
-			shard:      "-",
-			currentPrimary: &topo.TabletInfo{
-				Tablet: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
-					},
-				},
-			},
-			primaryElect: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  200,
-				},
-			},
-			tabletMap: map[string]*topo.TabletInfo{},
-			opts:      PlannedReparentOptions{},
-			shouldErr: true,
 		},
 	}
 
@@ -1727,7 +1569,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			require.NoError(t, err)
 			tt.opts.durability = durability
 
-			pos, err := pr.performGracefulPromotion(
+			err = pr.performGracefulPromotion(
 				ctx,
 				tt.ev,
 				tt.keyspace,
@@ -1739,7 +1581,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			)
 
 			if tt.extraAssertions != nil {
-				tt.extraAssertions(t, pos, err)
+				tt.extraAssertions(t, err)
 			}
 
 			if tt.shouldErr {
@@ -1749,7 +1591,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedPos, pos)
 		})
 	}
 }
@@ -2066,8 +1907,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		primaryElect *topodatapb.Tablet
 		tabletMap    map[string]*topo.TabletInfo
 
-		expectedPos string
-		shouldErr   bool
+		shouldErr bool
 	}{
 		{
 			name: "success",
@@ -2094,15 +1934,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 						Error: nil,
-					},
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Result: "reparent journal position",
-						Error:  nil,
 					},
 				},
 			},
@@ -2141,8 +1972,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 					},
 				},
 			},
-			expectedPos: "reparent journal position",
-			shouldErr:   false,
+			shouldErr: false,
 		},
 		{
 			name: "failed to DemotePrimary on a tablet",
@@ -2403,158 +2233,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			},
 			shouldErr: true,
 		},
-		{
-			name: "failed to promote primary-elect",
-			ts:   memorytopo.NewServer("zone1"),
-			tmc: &testutil.TabletManagerClient{
-				DemotePrimaryResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
-						},
-						Error: nil,
-					},
-					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
-						},
-						Error: nil,
-					},
-					"zone1-0000000102": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-						},
-						Error: nil,
-					},
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Result: "",
-						Error:  assert.AnError,
-					},
-				},
-			},
-			unlockTopo: false,
-			keyspace:   "testkeyspace",
-			shard:      "-",
-			primaryElect: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
-				},
-			},
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-					},
-				},
-				"zone1-0000000101": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  101,
-						},
-					},
-				},
-				"zone1-0000000102": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  102,
-						},
-					},
-				},
-			},
-			shouldErr: true,
-		},
-		{
-			name: "timed out while promoting primary-elect",
-			ts:   memorytopo.NewServer("zone1"),
-			tmc: &testutil.TabletManagerClient{
-				DemotePrimaryResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
-						},
-						Error: nil,
-					},
-					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
-						},
-						Error: nil,
-					},
-					"zone1-0000000102": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-						},
-						Error: nil,
-					},
-				},
-				PromoteReplicaDelays: map[string]time.Duration{
-					"zone1-0000000100": time.Millisecond * 100,
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Result: "reparent journal position",
-						Error:  nil,
-					},
-				},
-			},
-			timeout:    time.Millisecond * 50,
-			unlockTopo: false,
-			keyspace:   "testkeyspace",
-			shard:      "-",
-			primaryElect: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
-				},
-			},
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-					},
-				},
-				"zone1-0000000101": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  101,
-						},
-					},
-				},
-				"zone1-0000000102": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  102,
-						},
-					},
-				},
-			},
-			shouldErr: true,
-		},
 	}
 
 	ctx := context.Background()
@@ -2595,7 +2273,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 
 			durability, err := GetDurabilityPolicy("none")
 			require.NoError(t, err)
-			rp, err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, PlannedReparentOptions{durability: durability})
+			err = pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, PlannedReparentOptions{durability: durability})
 			if tt.shouldErr {
 				assert.Error(t, err)
 
@@ -2603,7 +2281,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedPos, rp)
 		})
 	}
 }
@@ -3335,10 +3012,12 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		durability              string
 		ev                      *events.Reparent
 		reparentJournalPosition string
+		promoteReplicaRequired  bool
 		tabletMap               map[string]*topo.TabletInfo
 		opts                    PlannedReparentOptions
 
 		shouldErr bool
+		wantErr   string
 	}{
 		{
 			name:       "success - durability = none",
@@ -3473,6 +3152,158 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: false,
+		}, {
+			name:                   "success - promote replica required",
+			durability:             "semi_sync",
+			promoteReplicaRequired: true,
+			tmc: &testutil.TabletManagerClient{
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Result: "successful reparent journal position",
+						Error:  nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": true,
+					"zone1-0000000201": true,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			shouldErr: false,
+		}, {
+			name:                   "Promote replica failed",
+			durability:             "semi_sync",
+			promoteReplicaRequired: true,
+			tmc: &testutil.TabletManagerClient{
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Error: errors.New("failed promote replica"),
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": true,
+					"zone1-0000000201": true,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			shouldErr: true,
+			wantErr:   "failed PromoteReplica(primary=zone1-0000000100,",
 		},
 		{
 			name: "SetReplicationSource failed on replica",
@@ -3534,6 +3365,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: true,
+			wantErr:   "retry failed replicas: tablet zone1-0000000201 failed to SetReplicationSource(zone1-0000000100): assert.AnError general error for testing",
 		},
 		{
 			name: "SetReplicationSource timed out on replica",
@@ -3601,6 +3433,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				WaitReplicasTimeout: time.Millisecond * 10,
 			},
 			shouldErr: true,
+			wantErr:   "retry failed replicas: tablet zone1-0000000201 failed to SetReplicationSource(zone1-0000000100): context deadline exceeded",
 		},
 		{
 			name: "PopulateReparentJournal failed out on new primary",
@@ -3662,6 +3495,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: true,
+			wantErr:   "failed PopulateReparentJournal(primary=zone1-0000000100",
 		},
 		{
 			name: "PopulateReparentJournal timed out on new primary",
@@ -3729,6 +3563,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				WaitReplicasTimeout: time.Millisecond * 10,
 			},
 			shouldErr: true,
+			wantErr:   "failed PopulateReparentJournal(primary=zone1-0000000100",
 		},
 	}
 
@@ -3749,10 +3584,12 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			durability, err := GetDurabilityPolicy(durabilityPolicy)
 			require.NoError(t, err)
 			tt.opts.durability = durability
-			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.tabletMap, tt.opts)
+			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.promoteReplicaRequired, tt.tabletMap, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
-
+				if tt.wantErr != "" {
+					require.ErrorContains(t, err, tt.wantErr)
+				}
 				return
 			}
 

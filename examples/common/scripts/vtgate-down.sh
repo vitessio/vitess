@@ -18,6 +18,5 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-# Stop vtgate.
-echo "Stopping vtgate..."
-kill `cat $VTDATAROOT/tmp/vtgate.pid`
+stop_process "vtgate" "$VTDATAROOT/tmp/vtgate.pid"
+

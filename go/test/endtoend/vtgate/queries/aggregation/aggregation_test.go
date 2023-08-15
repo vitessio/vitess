@@ -371,6 +371,9 @@ func TestAggregateRandom(t *testing.T) {
 	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
 
 	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
+
+	mcmp.Exec("set sql_mode=''")
+	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno", `[[NULL INT64(0)]]`)
 }
 
 // TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
@@ -383,8 +386,10 @@ func TestAggregateLeftJoin(t *testing.T) {
 
 	mcmp.AssertMatchesNoOrder("SELECT t1.shardkey FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(1)] [INT64(0)]]`)
 	mcmp.AssertMatches("SELECT count(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
+	mcmp.AssertMatches("SELECT count(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(1)]]`)
 	mcmp.AssertMatches("SELECT count(*) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
 	mcmp.AssertMatches("SELECT sum(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
+	mcmp.AssertMatches("SELECT sum(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
 	mcmp.AssertMatches("SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r'", `[[INT64(1)]]`)
 }
 
@@ -440,6 +445,9 @@ func TestBuggyQueries(t *testing.T) {
 		"[[NULL NULL INT64(3) NULL NULL INT64(3)] "+
 			"[INT32(100) DECIMAL(300) INT64(3) INT32(100) DECIMAL(300) INT64(3)] "+
 			"[INT32(200) DECIMAL(600) INT64(3) INT32(200) DECIMAL(600) INT64(3)]]")
+
+	mcmp.Exec("select /*vt+ PLANNER=gen4 */sum(tbl1.a), min(tbl0.b) from t10 as tbl0, t10 as tbl1 left join t10 as tbl2 on tbl1.a = tbl2.a and tbl1.b = tbl2.k")
+	mcmp.Exec("select /*vt+ PLANNER=gen4 */count(*) from t10 left join t10 as t11 on t10.a = t11.b where t11.a")
 }
 
 func TestMinMaxAcrossJoins(t *testing.T) {

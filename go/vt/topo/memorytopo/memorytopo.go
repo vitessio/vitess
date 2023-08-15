@@ -49,10 +49,6 @@ const (
 	UnreachableServerAddr = "unreachable"
 )
 
-var (
-	nextWatchIndex = 0
-)
-
 // Factory is a memory-based implementation of topo.Factory.  It
 // takes a file-system like approach, with directories at each level
 // being an actual directory node. This is meant to be closer to
@@ -204,6 +200,20 @@ func (n *node) propagateRecursiveWatch(ev *topo.WatchDataRecursive) {
 			}
 		}
 	}
+}
+
+var (
+	nextWatchIndex   = 0
+	nextWatchIndexMu sync.Mutex
+)
+
+func (n *node) addWatch(w watch) int {
+	nextWatchIndexMu.Lock()
+	defer nextWatchIndexMu.Unlock()
+	watchIndex := nextWatchIndex
+	nextWatchIndex++
+	n.watches[watchIndex] = w
+	return watchIndex
 }
 
 // PropagateWatchError propagates the given error to all watches on this node

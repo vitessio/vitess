@@ -17,10 +17,11 @@ limitations under the License.
 package json
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/hex"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -106,7 +107,7 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 			dst = append(dst, "CAST("...)
 		}
 		dst = append(dst, "x'"...)
-		dst = append(dst, hex.EncodeToString([]byte(v.s))...)
+		dst = append(dst, hex.EncodeBytes(hack.StringBytes(v.s))...)
 		dst = append(dst, "'"...)
 		if top {
 			dst = append(dst, " as JSON)"...)

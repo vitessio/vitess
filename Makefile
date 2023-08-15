@@ -460,8 +460,5 @@ generate_ci_workflows:
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh
 
-release-notes:
-	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
-
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh

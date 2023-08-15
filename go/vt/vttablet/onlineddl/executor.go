@@ -860,7 +860,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
-	defer close(renameCompleteChan)
 	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
@@ -969,6 +968,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
 		go func() {
+			defer close(renameCompleteChan)
 			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
 		}()
@@ -2850,7 +2850,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 			Select:      viewStmt.Select,
 			CheckOption: viewStmt.CheckOption,
 			IsReplace:   true,
-			Comments:    viewStmt.Comments,
+			Comments:    sqlparser.CloneRefOfParsedComments(viewStmt.Comments),
 		}
 		stmt.SetTable("", artifactViewName)
 	default:

@@ -167,6 +167,38 @@ func TestParseTableName(t *testing.T) {
 	}
 }
 
+func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			readyToComplete := row.AsInt64("ready_to_complete", 0)
+			if expected == (readyToComplete > 0) {
+				// all good. This is what we waited for
+				if expected {
+					// if migration is ready to complete, the nthe timestamp should be non-null
+					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
+				} else {
+					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
+				}
+
+				return
+			}
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
+		require.NoError(t, ctx.Err())
+	}
+}
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -557,13 +589,7 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("check ready to complete (before)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					readyToComplete := row.AsInt64("ready_to_complete", 0)
-					assert.Equal(t, int64(0), readyToComplete)
-					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
-				}
+				waitForReadyToComplete(t, uuid, false)
 			}
 		})
 		t.Run("unthrottle, expect t2 running", func(t *testing.T) {
@@ -595,21 +621,15 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("check ready to complete (after)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					readyToComplete := row.AsInt64("ready_to_complete", 0)
-					assert.Equal(t, int64(1), readyToComplete)
-					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
-				}
+				waitForReadyToComplete(t, uuid, true)
 			}
 		})
 
 		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
-		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
-		t2uuid = testRevertMigration(t, createRevertParams(t2uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
+		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", true))
+		t2uuid = testRevertMigration(t, createRevertParams(t2uuid, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", true))
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		t.Run("expect both migrations to run", func(t *testing.T) {
@@ -617,12 +637,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 		})
 		t.Run("test ready-to-complete", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				readyToComplete := row.AsInt64("ready_to_complete", 0)
-				assert.Equal(t, int64(1), readyToComplete)
-			}
+			waitForReadyToComplete(t, t1uuid, true)
 		})
 		t.Run("complete t2", func(t *testing.T) {
 			// now that both are running, let's unblock t2. We expect it to complete.
@@ -760,12 +775,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 		})
 		t.Run("t3 ready to complete", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, drop1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				readyToComplete := row.AsInt64("ready_to_complete", 0)
-				assert.Equal(t, int64(1), readyToComplete)
-			}
+			waitForReadyToComplete(t, drop1uuid, true)
 		})
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
