@@ -67,6 +67,7 @@ const (
 	getMaxValForSequence     = "select max(`id`) as maxval from `vt_%s`.`%s`"
 	initSequenceTable        = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 	deleteWorkflow           = "delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
+	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=1`
 )
 
 var (
@@ -316,7 +317,7 @@ func TestMoveTables(t *testing.T) {
 				),
 				fmt.Sprintf("1|%s", bls),
 			), nil)
-		ftc.vrdbClient.ExpectRequest(`update _vt.vreplication set message='Picked source tablet: cell:\"zone1\" uid:200' where id=1`, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
@@ -647,8 +648,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		),
 		nil,
 	)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(`update _vt.vreplication set message='Picked source tablet: cell:\"zone1\" uid:%d' where id=1`,
-		sourceTabletUID),
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID),
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
@@ -715,8 +715,8 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		),
 	)
 
-	// We expect the workflow creation to fail due to the invalid time zone
-	// and thus the workflow iteslf to be cleaned up.
+	// We expect the workflow creation to fail due to the invalid time
+	// zone and thus the workflow iteslf to be cleaned up.
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet,
 		fmt.Sprintf(deleteWorkflow, sourceKs, workflow.ReverseWorkflowName(wf)),
 		&sqltypes.Result{RowsAffected: 1},

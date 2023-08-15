@@ -2146,17 +2146,18 @@ func TestIsPartialMoveTables(t *testing.T) {
 	}
 }
 
-// TestNoOrphanedRoutingRulesOnFailedCreate tests that no orphaned routing rules
-// are left in place when the workflow creation fails -- specifically at the point
-// where we try and create the workflow streams.
+// TestNoOrphanedRoutingRulesOnFailedCreate tests that no orphaned
+// routing rules are left in place when the workflow creation
+// fails -- specifically at the point where we try and create the
+// workflow streams.
 func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.close(t)
 
-	// The target keyspace is sharded. Let's remove any vschema table
-	// definitions so that we know the workflow creation will fail.
-	// Let's also be sure that the routing rules are empty.
+	// The target keyspace is sharded. Let's remove any vschema
+	// table definitions so that we know the workflow creation will
+	// fail. Let's also be sure that the routing rules are empty.
 	err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil)
 	require.NoError(t, err, "failed to save routing rules")
 	err = tme.ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{
