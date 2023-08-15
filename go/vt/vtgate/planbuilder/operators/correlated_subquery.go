@@ -22,6 +22,9 @@ import (
 )
 
 type (
+	// CorrelatedSubQueryOp is a correlated subquery that is used for filtering rows from the outer query.
+	// It is a join between the outer query and the subquery, where the subquery is the RHS.
+	// We are only interested in the existence of rows in the RHS, so we only need to know if
 	CorrelatedSubQueryOp struct {
 		LHS, RHS  ops.Operator
 		Extracted *sqlparser.ExtractedSubquery
@@ -37,6 +40,9 @@ type (
 		noPredicates
 	}
 
+	// UncorrelatedSubQuery is a subquery that can be executed indendently of the outer query,
+	// so we pull it out and execute before the outer query, and feed the result into a bindvar
+	// that is fed to the outer query
 	UncorrelatedSubQuery struct {
 		Outer, Inner ops.Operator
 		Extracted    *sqlparser.ExtractedSubquery

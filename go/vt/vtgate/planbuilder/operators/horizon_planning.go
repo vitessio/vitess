@@ -145,63 +145,61 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 }
 
 func pushOrExpandSubQueryLogical(ctx *plancontext.PlanningContext, in *SubQueryLogical) (ops.Operator, *rewrite.ApplyResult, error) {
-	switch outer := in.Outer.(type) {
-	case *ApplyJoin:
-		return tryPushDownSubQueryInJoin(ctx, in, outer)
+	var remaining []SubQuery
+	var result *rewrite.ApplyResult
+
+	for _, inner := range in.Inner {
+		switch outer := in.Outer.(type) {
+		case *ApplyJoin:
+			pushed, _result, err := tryPushDownSubQueryInJoin(ctx, inner, outer)
+			if err != nil {
+				return nil, nil, err
+			}
+			result = result.Merge(_result)
+			if !pushed {
+				remaining = append(remaining, inner)
+			}
+		}
 	}
 
 	return in, rewrite.SameTree, nil
 }
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQueryLogical into an ApplyJoin
-func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, in *SubQueryLogical, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	var remaining []*SubQueryInner
-	var result *rewrite.ApplyResult
+func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery, join *ApplyJoin) (bool, *rewrite.ApplyResult, error) {
 
 	lhs := TableID(join.LHS)
 	rhs := TableID(join.RHS)
-	for _, inner := range in.Inner {
-		if inner.outside == nil {
-			remaining = append(remaining, inner)
-			continue
-		}
-
-		deps := ctx.SemTable.RecursiveDeps(inner.outside)
-
-		if deps.IsSolvedBy(lhs) {
-			// we can safely push down the subquery on the LHS
-			join.LHS = addSubQueryInner(join.LHS, inner)
-			result = result.Merge(rewrite.NewTree("push subquery into LHS of join", inner))
-			continue
-		}
-
-		if deps.IsSolvedBy(rhs) && !join.LeftJoin {
-			// we can't push down filter on outer joins
-			join.RHS = addSubQueryInner(join.RHS, inner)
-			result = result.Merge(rewrite.NewTree("push subquery into RHS of join", inner))
-			continue
-		}
-
-		remaining = append(remaining, inner)
+	if inner.outside() == nil {
+		return false, rewrite.SameTree, nil
 	}
 
-	if len(remaining) == 0 {
-		return join, result, nil
+	deps := ctx.SemTable.RecursiveDeps(inner.outside())
+
+	if deps.IsSolvedBy(lhs) {
+		// we can safely push down the subquery on the LHS
+		join.LHS = addSubQueryInner(join.LHS, inner)
+		return true, rewrite.NewTree("push subquery into LHS of join", inner), nil
 	}
 
-	in.Inner = remaining
-	return in, result, nil
+	if deps.IsSolvedBy(rhs) && !join.LeftJoin {
+		// we can't push down filter on outer joins
+		join.RHS = addSubQueryInner(join.RHS, inner)
+		return true, rewrite.NewTree("push subquery into RHS of join", inner), nil
+	}
+
+	return false, rewrite.SameTree, nil
 }
 
 // addSubQueryInner adds a SubQueryInner to the given operator. If the operator is a SubQueryLogical,
 // it will add the SubQueryInner to the SubQueryLogical. If the operator is something else,	it will
 // create a new SubQueryLogical with the given operator as the outer and the SubQueryInner as the inner.
-func addSubQueryInner(in ops.Operator, inner *SubQueryInner) ops.Operator {
+func addSubQueryInner(in ops.Operator, inner SubQuery) ops.Operator {
 	sql, ok := in.(*SubQueryLogical)
 	if !ok {
 		return &SubQueryLogical{
 			Outer: in,
-			Inner: []*SubQueryInner{inner},
+			Inner: []SubQuery{inner},
 		}
 	}
 

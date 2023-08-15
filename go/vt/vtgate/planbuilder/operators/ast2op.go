@@ -143,7 +143,7 @@ func createExtractedSubquery(
 	expr sqlparser.Expr,
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
-) (*SubQueryInner, error) {
+) (SubQuery, error) {
 	opInner, err := translateQueryToOp(ctx, subq.Select)
 	if err != nil {
 		return nil, err

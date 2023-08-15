@@ -24,10 +24,12 @@ import (
 )
 
 type (
-	// SubQueryLogical stores the information about subquery
+	// SubQueryLogical stores the information about a query and it's subqueries.
+	// The inner subqueries can be executed in any order, so we store them like this so we can see more opportunities
+	// for merging
 	SubQueryLogical struct {
 		Outer ops.Operator
-		Inner []*SubQueryInner
+		Inner []SubQuery
 	}
 
 	// SubQueryInner stores the subquery information for a select statement
@@ -50,6 +52,22 @@ type (
 
 		noColumns
 		noPredicates
+	}
+
+	SubQuery interface {
+		ops.Operator
+
+		Inner() ops.Operator
+		Outer() ops.Operator
+		OpCode() opcode.PulloutOpcode
+
+		// The comments below are for the following query:
+		// WHERE tbl.id = (SELECT foo from user LIMIT 1)
+		OriginalExpression() sqlparser.Expr // tbl.id = (SELECT foo from user LIMIT 1)
+		outside() sqlparser.Expr            // tbl.id
+		inside() sqlparser.Expr             // user.foo
+		alternative() sqlparser.Expr        // tbl.id = :arg
+		sq() *sqlparser.Subquery            // (SELECT foo from user LIMIT 1)
 	}
 )
 
@@ -88,7 +106,7 @@ func (s *SubQueryLogical) Clone(inputs []ops.Operator) ops.Operator {
 		Outer: inputs[0],
 	}
 	for idx := range s.Inner {
-		inner, ok := inputs[idx+1].(*SubQueryInner)
+		inner, ok := inputs[idx+1].(SubQuery)
 		if !ok {
 			panic("got bad input")
 		}
