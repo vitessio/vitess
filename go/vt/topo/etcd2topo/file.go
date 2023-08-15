@@ -77,7 +77,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
 	nodePath := path.Join(s.root, filePath)
 
-	resp, err := s.cli.Get(ctx, nodePath)
+	resp, err := s.cli.Get(ctx, nodePath, clientv3.WithSerializable())
 	if err != nil {
 		return nil, nil, convertError(err, nodePath)
 	}

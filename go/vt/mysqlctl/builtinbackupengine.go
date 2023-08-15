@@ -328,7 +328,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// everything that's ever been applied, and a subset of that is gtid_purged, which are the event no longer available in binary logs.
 	// When we consider Vitess incremental backups, what's important for us is "what's the GTIDSet that's true when this backup was taken,
 	// and which will be true when we restore this backup". The answer to this is the GTIDSet that includes the purged GTIDs.
-	// It's also nice for icnremental backups that are taken on _other_ tablets, so that they don't need to understand what exactly was purged
+	// It's also nice for incremental backups that are taken on _other_ tablets, so that they don't need to understand what exactly was purged
 	// on _this_ tablet. They don't care, all they want to know is "what GTIDSet can we get from this".
 	incrementalBackupToPosition.GTIDSet = incrementalBackupToPosition.GTIDSet.Union(gtidPurged.GTIDSet)
 	req := &mysqlctl.ReadBinlogFilesTimestampsRequest{}
@@ -345,7 +345,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
 	}
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
-		return false, vterrors.Wrapf(err, "empty binlog name in response. Request=%v, Response=%v", req, resp)
+		return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	incrDetails := &IncrementalBackupDetails{
 		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
