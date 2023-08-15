@@ -17,6 +17,7 @@ package command
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 
@@ -49,7 +51,7 @@ OnlineDDL show test_keyspace running
 OnlineDDL show test_keyspace complete
 OnlineDDL show test_keyspace failed`,
 		DisableFlagsInUseLine: true,
-		Args:                  cobra.RangeArgs(0, 1),
+		Args:                  cobra.RangeArgs(0, 2),
 		RunE:                  commandOnlineDDLShow,
 	}
 )
@@ -113,7 +115,12 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("%s\n", data)
 	default:
-		// TODO: support tabular/textual format
+		res, err := sqltypes.MarshalResult(schematools.MarshallableSchemaMigrations(resp.Migrations))
+		if err != nil {
+			return err
+		}
+
+		cli.WriteQueryResultTable(os.Stdout, res)
 	}
 	return nil
 }
