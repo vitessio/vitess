@@ -55,4 +55,14 @@ func TestMarshalResult(t *testing.T) {
 	assert.Equal(t, "zone1-0000000101", row.AsString("tablet", ""))
 	assert.Equal(t, "running", row.AsString("status", ""))
 	assert.Equal(t, "t1", row.AsString("mysql_table", ""))
+
+	r, err = sqltypes.MarshalResult(MarshallableSchemaMigrations([]*vtctldatapb.SchemaMigration{sm}))
+	require.NoError(t, err)
+	row = r.Named().Rows[0]
+
+	assert.Equal(t, "abc", row.AsString("migration_uuid", ""))
+	assert.Equal(t, now.Format(sqltypes.TimestampFormat), row.AsString("requested_timestamp", ""))
+	assert.Equal(t, "zone1-0000000101", row.AsString("tablet", ""))
+	assert.Equal(t, "running", row.AsString("status", ""))
+	assert.Equal(t, "t1", row.AsString("mysql_table", ""))
 }
