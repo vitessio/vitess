@@ -1389,7 +1389,6 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		defer client.Close()
 		return client.ReadBinlogFilesTimestamps(ctx, req)
 	}
-
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return nil, err
