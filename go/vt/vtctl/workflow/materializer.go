@@ -39,6 +39,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -437,19 +438,11 @@ func (mz *materializer) deploySchema() error {
 func (mz *materializer) buildMaterializer() error {
 	ctx := mz.ctx
 	ms := mz.ms
-	sourceVSchemaPB, err := mz.ts.GetVSchema(ctx, ms.SourceKeyspace)
+	vschema, err := mz.ts.GetVSchema(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return err
 	}
-	sourceVSchema, err := vindexes.BuildKeyspaceSchema(sourceVSchemaPB, ms.SourceKeyspace)
-	if err != nil {
-		return err
-	}
-	targetVSchemaPB, err := mz.ts.GetVSchema(ctx, ms.TargetKeyspace)
-	if err != nil {
-		return err
-	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(targetVSchemaPB, ms.TargetKeyspace)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace)
 	if err != nil {
 		return err
 	}
@@ -501,11 +494,15 @@ func (mz *materializer) buildMaterializer() error {
 	if len(targetShards) == 0 {
 		return fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
+	samePVs := false
+	if sourceVSchema, err := mz.ts.GetVSchema(ctx, ms.SourceKeyspace); err == nil {
+		samePVs = samePrimaryVindexes(ms, sourceVSchema, vschema)
+	}
 	mz.targetVSchema = targetVSchema
 	mz.sourceShards = sourceShards
 	mz.targetShards = targetShards
 	mz.isPartial = isPartial
-	mz.samePrimaryVindexes = samePrimaryVindexes(ms, sourceVSchema, targetVSchema)
+	mz.samePrimaryVindexes = samePVs
 	return nil
 }
 
@@ -622,10 +619,10 @@ func (mz *materializer) filterSourceShards(targetShard *topo.ShardInfo) []*topo.
 // samePrimaryVindexes returns true if, for all tables defined in the provided
 // materialize settings, the provided source and target vschemas have the same
 // primary vindexes.
-func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vindexes.KeyspaceSchema) bool {
+func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vschema.Keyspace) bool {
 	// For keyspaces that are not unsharded, there are no primary vindexes to
 	// compare.
-	if !source.Keyspace.Sharded || !target.Keyspace.Sharded {
+	if !source.Sharded || !target.Sharded {
 		return false
 	}
 
@@ -657,14 +654,8 @@ func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vi
 			// vindex.
 			return false
 		}
-		// Compare source and primary vindex. For explanation of pointer
-		// comparison, see note on vindexes.Vindex.String.
-		//
-		// > String returns the name of the Vindex instance.
-		// > It's used for testing and diagnostics. Use pointer
-		// > comparison to see if two objects refer to the same
-		// > Vindex.
-		if spv != tpv {
+		// Compare source and primary vindex types.
+		if !strings.EqualFold(spv.Type, tpv.Type) {
 			return false
 		}
 	}

@@ -52,6 +52,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -995,22 +996,15 @@ func (wr *Wrangler) Materialize(ctx context.Context, ms *vtctldatapb.Materialize
 }
 
 func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.MaterializeSettings) (*materializer, error) {
-	sourceVSchemaPB, err := wr.ts.GetVSchema(ctx, ms.SourceKeyspace)
+	vschema, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
 	}
-	sourceVSchema, err := vindexes.BuildKeyspaceSchema(sourceVSchemaPB, ms.SourceKeyspace)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
 	}
-	targetVSchemaPB, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
-	if err != nil {
-		return nil, err
-	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(targetVSchemaPB, ms.TargetKeyspace)
-	if err != nil {
-		return nil, err
-	}
+
 	if targetVSchema.Keyspace.Sharded {
 		for _, ts := range ms.TableSettings {
 			if targetVSchema.Tables[ts.TargetTable] == nil {
@@ -1059,7 +1053,11 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if len(targetShards) == 0 {
 		return nil, fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
-	samePrimaryVindexes := samePrimaryVindexes(ms, sourceVSchema, targetVSchema)
+	samePVs := false
+	if sourceVSchema, err := wr.ts.GetVSchema(ctx, ms.SourceKeyspace); err == nil {
+		samePVs = samePrimaryVindexes(ms, sourceVSchema, vschema)
+	}
+
 	return &materializer{
 		wr:                  wr,
 		ms:                  ms,
@@ -1067,7 +1065,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		sourceShards:        sourceShards,
 		targetShards:        targetShards,
 		isPartial:           isPartial,
-		samePrimaryVindexes: samePrimaryVindexes,
+		samePrimaryVindexes: samePVs,
 	}, nil
 }
 
@@ -1488,10 +1486,10 @@ func (mz *materializer) filterSourceShards(targetShard *topo.ShardInfo) []*topo.
 // samePrimaryVindexes returns true if, for all tables defined in the provided
 // materialize settings, the provided source and target vschemas have the same
 // primary vindexes.
-func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vindexes.KeyspaceSchema) bool {
+func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vschema.Keyspace) bool {
 	// For keyspaces that are not unsharded, there are no primary vindexes to
 	// compare.
-	if !source.Keyspace.Sharded || !target.Keyspace.Sharded {
+	if !source.Sharded || !target.Sharded {
 		return false
 	}
 
@@ -1523,14 +1521,8 @@ func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vi
 			// vindex.
 			return false
 		}
-		// Compare source and primary vindex. For explanation of pointer
-		// comparison, see note on vindexes.Vindex.String.
-		//
-		// > String returns the name of the Vindex instance.
-		// > It's used for testing and diagnostics. Use pointer
-		// > comparison to see if two objects refer to the same
-		// > Vindex.
-		if spv != tpv {
+		// Compare source and primary vindex types.
+		if !strings.EqualFold(spv.Type, tpv.Type) {
 			return false
 		}
 	}
