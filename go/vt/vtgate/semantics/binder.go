@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // binder is responsible for finding all the column references in
@@ -61,18 +60,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
-		// do not extract subquery in insert statement.
-		if _, isInsert := currScope.stmt.(*sqlparser.Insert); isInsert {
-			return nil
-		}
-		sq, err := b.createExtractedSubquery(cursor, currScope, node)
-		if err != nil {
-			return err
-		}
-
-		b.subqueryMap[currScope.stmt] = append(b.subqueryMap[currScope.stmt], sq)
-		b.subqueryRef[node] = sq
-
 		b.setSubQueryDependencies(node, currScope)
 	case *sqlparser.JoinCondition:
 		currScope := b.scoper.currentScope()
@@ -220,39 +207,6 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
 }
 
-func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
-	if currScope.stmt == nil {
-		return nil, &BuggyError{Msg: "unable to bind subquery to select statement"}
-	}
-
-	sq := &sqlparser.ExtractedSubquery{
-		Subquery: subq,
-		Original: subq,
-		OpCode:   int(opcode.PulloutValue),
-	}
-
-	switch par := cursor.Parent().(type) {
-	case *sqlparser.ComparisonExpr:
-		switch par.Operator {
-		case sqlparser.InOp:
-			sq.OpCode = int(opcode.PulloutIn)
-		case sqlparser.NotInOp:
-			sq.OpCode = int(opcode.PulloutNotIn)
-		}
-		subq, exp := GetSubqueryAndOtherSide(par)
-		sq.Original = &sqlparser.ComparisonExpr{
-			Left:     exp,
-			Operator: par.Operator,
-			Right:    subq,
-		}
-		sq.OtherSide = exp
-	case *sqlparser.ExistsExpr:
-		sq.OpCode = int(opcode.PulloutExists)
-		sq.Original = par
-	}
-	return sq, nil
-}
-
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
 	first := true
@@ -317,18 +271,4 @@ func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
 		err = &AmbiguousColumnError{Column: sqlparser.String(colName)}
 	}
 	return err
-}
-
-// GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
-func GetSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
-	var subq *sqlparser.Subquery
-	var exp sqlparser.Expr
-	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
-		subq = lSubq
-		exp = node.Right
-	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
-		subq = rSubq
-		exp = node.Left
-	}
-	return subq, exp
 }

@@ -56,8 +56,8 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			if op.TableId != nil {
 				return pushDownDerived(ctx, op)
 			}
-		case *SubQuery:
-			return optimizeSubQuery(ctx, op, ts)
+		// case *SubQueryLogical:
+		// 	return pushDownSubQueryLogical(ctx, op)
 		case *Filter:
 			return pushDownFilter(op)
 		}
@@ -70,6 +70,10 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 
 	return compact(ctx, op)
 }
+
+// func pushDownSubQueryLogical(ctx *plancontext.PlanningContext, op *SubQueryLogical) (ops.Operator, *rewrite.ApplyResult, error) {
+//
+// }
 
 func pushDownFilter(op *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
 	// TODO: once all horizon planning has been moved to the operators, we can remove this method

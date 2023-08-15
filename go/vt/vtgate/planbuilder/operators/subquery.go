@@ -18,18 +18,16 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
-	// SubQuery stores the information about subquery
-	SubQuery struct {
+	// SubQueryLogical stores the information about subquery
+	SubQueryLogical struct {
 		Outer ops.Operator
 		Inner []*SubQueryInner
-
-		noColumns
-		noPredicates
 	}
 
 	// SubQueryInner stores the subquery information for a select statement
@@ -39,23 +37,30 @@ type (
 		// of type Concatenate since we have a Union.
 		Inner ops.Operator
 
-		// ExtractedSubquery contains all information we need about this subquery
-		ExtractedSubquery *sqlparser.ExtractedSubquery
+		OpCode         opcode.PulloutOpcode
+		comparisonType sqlparser.ComparisonExprOperator
+
+		// The comments below are for the following query:
+		// WHERE tbl.id = (SELECT foo from user LIMIT 1)
+		Original    sqlparser.Expr      // tbl.id = (SELECT foo from user LIMIT 1)
+		outside     sqlparser.Expr      // tbl.id
+		inside      sqlparser.Expr      // user.foo
+		alternative sqlparser.Expr      // tbl.id = :arg
+		sq          *sqlparser.Subquery // (SELECT foo from user LIMIT 1)
 
 		noColumns
 		noPredicates
 	}
 )
 
-var _ ops.Operator = (*SubQuery)(nil)
+var _ ops.Operator = (*SubQueryLogical)(nil)
 var _ ops.Operator = (*SubQueryInner)(nil)
 
 // Clone implements the Operator interface
 func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
-	return &SubQueryInner{
-		Inner:             inputs[0],
-		ExtractedSubquery: s.ExtractedSubquery,
-	}
+	klone := *s
+	klone.Inner = inputs[0]
+	return &klone
 }
 
 func (s *SubQueryInner) GetOrdering() ([]ops.OrderBy, error) {
@@ -72,9 +77,14 @@ func (s *SubQueryInner) SetInputs(ops []ops.Operator) {
 	s.Inner = ops[0]
 }
 
+// ShortDescription implements the Operator interface
+func (s *SubQueryInner) ShortDescription() string {
+	return ""
+}
+
 // Clone implements the Operator interface
-func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
-	result := &SubQuery{
+func (s *SubQueryLogical) Clone(inputs []ops.Operator) ops.Operator {
+	result := &SubQueryLogical{
 		Outer: inputs[0],
 	}
 	for idx := range s.Inner {
@@ -87,12 +97,12 @@ func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (s *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+func (s *SubQueryLogical) GetOrdering() ([]ops.OrderBy, error) {
 	return s.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (s *SubQuery) Inputs() []ops.Operator {
+func (s *SubQueryLogical) Inputs() []ops.Operator {
 	operators := []ops.Operator{s.Outer}
 	for _, inner := range s.Inner {
 		operators = append(operators, inner)
@@ -101,36 +111,32 @@ func (s *SubQuery) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (s *SubQuery) SetInputs(ops []ops.Operator) {
+func (s *SubQueryLogical) SetInputs(ops []ops.Operator) {
 	s.Outer = ops[0]
 }
 
-func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
-	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
-		return nil, nil
-	}
-	subq := &SubQuery{}
-	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := translateQueryToOp(ctx, sq.Subquery.Select)
-		if err != nil {
-			return nil, err
-		}
-		if horizon, ok := opInner.(*Horizon); ok {
-			opInner = horizon.Source
-		}
-
-		subq.Inner = append(subq.Inner, &SubQueryInner{
-			ExtractedSubquery: sq,
-			Inner:             opInner,
-		})
-	}
-	return subq, nil
-}
-
-func (s *SubQuery) ShortDescription() string {
+func (s *SubQueryLogical) ShortDescription() string {
 	return ""
 }
 
-func (s *SubQueryInner) ShortDescription() string {
-	return ""
+func (sq *SubQueryLogical) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	newSrc, err := sq.Outer.AddPredicate(ctx, expr)
+	sq.Outer = newSrc
+	return sq, err
+}
+
+func (sq *SubQueryLogical) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return sq.Outer.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
+}
+
+func (sq *SubQueryLogical) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return sq.Outer.FindCol(ctx, expr, underRoute)
+}
+
+func (sq *SubQueryLogical) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return sq.Outer.GetColumns(ctx)
+}
+
+func (sq *SubQueryLogical) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return sq.Outer.GetSelectExprs(ctx)
 }

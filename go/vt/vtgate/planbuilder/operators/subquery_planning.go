@@ -27,7 +27,84 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
+/*
+-- correlated projection subquery. connecting predicate: u.id:s.id
+SELECT id, (select max(sale) from sales where u.id = s.id) from user
+
+-- uncorrelated projection subquery: no connecting predicate
+SELECT id, (select max(sale) from sales) from user
+
+-- correlated predicate subquery. connecting predicate: user.foo = sales.foo AND user_extra.bar = sales.bar
+correlated with two tables
+SELECT id
+FROM user
+	JOIN user_extra on user.id = user_extra.user_id
+WHERE user.foo = (
+	SELECT foo
+	FROM sales
+	WHERE user_extra.bar = sales.bar
+)
+
+-- correlated predicate subquery. connecting predicate: user.foo = sales.foo AND user_extra.bar = sales.bar
+correlated with two tables
+SELECT id
+FROM user
+	JOIN user_extra on user.id = user_extra.user_id
+WHERE EXISTS(
+	SELECT 1
+	FROM sales
+	WHERE user_extra.bar = sales.bar AND user.foo = sales.foo
+)
+
+-- correlated predicate subquery. connecting predicate: user.foo = sales.foo AND user_extra.bar = sales.bar
+correlated with two tables
+SELECT id
+FROM user
+	JOIN user_extra on user.id = user_extra.user_id
+WHERE EXISTS(
+	SELECT 1
+	FROM sales
+	WHERE user_extra.bar = sales.bar
+	UNION
+	SELECT 1
+	FROM sales
+	WHERE user.foo = sales.foo
+)
+
+-- correlated predicate subquery: connecting predicate: user_extra.bar = sales.bar
+correlated only with user_extra
+SELECT id
+FROM user
+	JOIN user_extra on user.id = user_extra.user_id
+WHERE user.foo = (
+	SELECT MAX(foo)
+	FROM sales
+	WHERE user_extra.bar = sales.bar
+)
+
+-- correlated predicate subquery: connecting predicate: user_extra.bar = sales.bar
+correlated only with user_extra
+SELECT id
+FROM user
+	JOIN user_extra on user.id = user_extra.user_id
+WHERE EXISTS(SELECT 1
+	FROM sales
+	WHERE user_extra.bar = sales.bar
+	HAVING MAX(user.foo) = sales.foo
+)
+
+-- uncorrelated predicate subquery: no connecting predicate
+SELECT id
+FROM user
+WHERE user.foo = (
+	SELECT MAX(foo)
+	FROM sales
+)
+
+
+*/
+
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQueryLogical, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
 	var unmerged []*UncorrelatedSubQuery
 
 	// first loop over the subqueries and try to merge them into the outer plan
@@ -38,32 +115,32 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		var preds []sqlparser.Expr
 		preds, innerOp = unresolvedAndSource(ctx, innerOp)
 
-		newInner := &SubQueryInner{
-			Inner:             inner.Inner,
-			ExtractedSubquery: inner.ExtractedSubquery,
-		}
-		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if merged != nil {
-			outer = merged
-			continue
-		}
+		//newInner := &SubQueryInner{
+		//	Inner:             inner.Inner,
+		//	ExtractedSubquery: inner.ExtractedSubquery,
+		//}
+		//merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
+		//if err != nil {
+		//	return nil, nil, err
+		//}
+		//
+		//if merged != nil {
+		//	outer = merged
+		//	continue
+		//}
 
 		if len(preds) == 0 {
 			// uncorrelated queries
 			sq := &UncorrelatedSubQuery{
-				Extracted: inner.ExtractedSubquery,
-				Inner:     innerOp,
+
+				Inner: innerOp,
 			}
 			unmerged = append(unmerged, sq)
 			continue
 		}
 
-		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
-			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
+		if inner.OpCode == popcode.PulloutExists {
+			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -176,8 +253,8 @@ func tryMergeSubqueryWithRoute(
 	if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
 		return nil, nil
 	}
-
-	deps := ctx.SemTable.DirectDeps(subQueryInner.ExtractedSubquery.Subquery)
+	x := &sqlparser.ExtractedSubquery{}
+	deps := ctx.SemTable.DirectDeps(x.Subquery)
 	outer := lhs.Merge(TableID(outerOp))
 	if !deps.IsSolvedBy(outer) {
 		return nil, nil
@@ -193,14 +270,14 @@ func tryMergeSubqueryWithRoute(
 		return merged, err
 	}
 
-	if !isMergeable(ctx, subQueryInner.ExtractedSubquery.Subquery.Select, subq) {
+	if !isMergeable(ctx, subQueryInner.sq.Select, subq) {
 		return nil, nil
 	}
 
 	// Inner subqueries can be merged with the outer subquery as long as
 	// the inner query is a single column selection, and that single column has a matching
 	// vindex on the outer query's operand.
-	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
+	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner) {
 		// TODO: clean up. All this casting is not pretty
 		outerRouting, ok := outerOp.Routing.(*ShardedRouting)
 		if !ok {
@@ -280,7 +357,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 ) (ops.Operator, error) {
 	var rewriteError error
 	// go over the entire expression in the subquery
-	sqlparser.SafeRewrite(subQueryInner.ExtractedSubquery.Original, nil, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.SafeRewrite(subQueryInner.Original, nil, func(cursor *sqlparser.Cursor) bool {
 		node, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
 			return true
@@ -313,10 +390,10 @@ func rewriteColumnsInSubqueryOpForJoin(
 	})
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
-	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(innerOp))
-	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(innerOp))
+	tableSet := ctx.SemTable.DirectDeps(subQueryInner.sq)
+	ctx.SemTable.Direct[subQueryInner.sq] = tableSet.Remove(TableID(innerOp))
+	tableSet = ctx.SemTable.RecursiveDeps(subQueryInner.sq)
+	ctx.SemTable.Recursive[subQueryInner.sq] = tableSet.Remove(TableID(innerOp))
 
 	// return any error while rewriting
 	return innerOp, rewriteError
@@ -397,10 +474,10 @@ func createCorrelatedSubqueryOp(
 // canMergeSubqueryOnColumnSelection will return true if the predicate used allows us to merge the two subqueries
 // into a single Route. This can be done if we are comparing two columns that contain data that is guaranteed
 // to exist on the same shard.
-func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
-	left := predicate.OtherSide
-	opCode := predicate.OpCode
-	if opCode != int(popcode.PulloutValue) && opCode != int(popcode.PulloutIn) {
+func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, inner *SubQueryInner) bool {
+	left := inner.outside
+	opCode := inner.OpCode
+	if opCode != popcode.PulloutValue && opCode != popcode.PulloutIn {
 		return false
 	}
 
@@ -409,7 +486,7 @@ func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *R
 		return false
 	}
 
-	rightSelection := extractSingleColumnSubquerySelection(predicate.Subquery)
+	rightSelection := extractSingleColumnSubquerySelection(inner.sq)
 	if rightSelection == nil {
 		return false
 	}

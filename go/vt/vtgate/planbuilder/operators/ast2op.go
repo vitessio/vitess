@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -55,35 +56,171 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
-	subq, err := createSubqueryFromStatement(ctx, sel)
-	if err != nil {
-		return nil, err
-	}
 	op, err := crossJoin(ctx, sel.From)
 	if err != nil {
 		return nil, err
 	}
-	if sel.Where != nil {
-		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-		for _, expr := range exprs {
-			sqlparser.RemoveKeyspaceFromColName(expr)
-			op, err = op.AddPredicate(ctx, expr)
-			if err != nil {
-				return nil, err
-			}
-			addColumnEquality(ctx, expr)
-		}
+
+	if sel.Where == nil {
+		return &Horizon{Source: op, Query: sel}, nil
 	}
 
-	if subq != nil {
-		subq.Outer = op
-		op = subq
+	src, err := addWherePredicates(ctx, sel.Where.Expr, op)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Horizon{
-		Source: op,
+		Source: src,
 		Query:  sel,
 	}, nil
+}
+
+func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
+	sqL := &SubQueryLogical{}
+	outerID := TableID(op)
+	exprs := sqlparser.SplitAndExpression(nil, expr)
+	for _, expr := range exprs {
+		sqlparser.RemoveKeyspaceFromColName(expr)
+		isSubq, err := sqL.handleSubquery(ctx, expr, outerID)
+		if err != nil {
+			return nil, err
+		}
+		if isSubq {
+			continue
+		}
+		op, err = op.AddPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		addColumnEquality(ctx, expr)
+	}
+	return sqL.getRootOperator(op), nil
+}
+
+func (sq *SubQueryLogical) handleSubquery(
+	ctx *plancontext.PlanningContext,
+	expr sqlparser.Expr,
+	outerID semantics.TableSet,
+) (bool, error) {
+	subq := getSubQuery(expr)
+	if subq == nil {
+		return false, nil
+	}
+
+	sqInner, err := createExtractedSubquery(ctx, expr, subq, outerID)
+	if err != nil {
+		return false, err
+	}
+	sq.Inner = append(sq.Inner, sqInner)
+
+	return true, nil
+}
+
+func (sq *SubQueryLogical) getRootOperator(op ops.Operator) ops.Operator {
+	if len(sq.Inner) == 0 {
+		return op
+	}
+
+	sq.Outer = op
+	return sq
+}
+
+func getSubQuery(expr sqlparser.Expr) *sqlparser.Subquery {
+	var subqueryExprExists *sqlparser.Subquery
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if subq, ok := node.(*sqlparser.Subquery); ok {
+			subqueryExprExists = subq
+			return false, nil
+		}
+		return true, nil
+	}, expr)
+	return subqueryExprExists
+}
+
+func createExtractedSubquery(
+	ctx *plancontext.PlanningContext,
+	expr sqlparser.Expr,
+	subq *sqlparser.Subquery,
+	outerID semantics.TableSet,
+) (*SubQueryInner, error) {
+	opInner, err := translateQueryToOp(ctx, subq.Select)
+	if err != nil {
+		return nil, err
+	}
+	subqID := TableID(opInner)
+	totalID := subqID.Merge(outerID)
+	sq := &SubQueryInner{
+		Inner:    opInner,
+		Original: expr,
+		sq:       subq,
+		OpCode:   opcode.PulloutValue,
+	}
+
+	switch par := expr.(type) {
+	case *sqlparser.ExistsExpr:
+		return funcName(ctx, sq, par, subqID, outerID, totalID)
+	}
+	return sq, nil
+}
+
+func funcName(
+	ctx *plancontext.PlanningContext,
+	sq *SubQueryInner,
+	par sqlparser.Expr,
+	subqID,
+	outerID,
+	totalID semantics.TableSet,
+) (*SubQueryInner, error) {
+	sq.OpCode = opcode.PulloutExists
+	innerSel, ok := sq.sq.Select.(*sqlparser.Select)
+	if !ok || innerSel.Where == nil {
+		return sq, nil
+	}
+	predicates := sqlparser.SplitAndExpression(nil, innerSel.Where.Expr)
+	for _, predicate := range predicates {
+		deps := ctx.SemTable.RecursiveDeps(predicate)
+		if !(!deps.IsSolvedBy(subqID) && !deps.IsSolvedBy(outerID)) || !deps.IsSolvedBy(totalID) {
+			continue
+		}
+		// if neither of the two sides of the predicate is enough, but together we have all we need,
+		// then we can use this predicate to connect the subquery to the outer query
+		cmp, ok := predicate.(*sqlparser.ComparisonExpr)
+		if !ok {
+			continue
+		}
+
+		subE, outerE := cmp.Left, cmp.Right
+		subDeps := ctx.SemTable.RecursiveDeps(subE)
+		outerDeps := ctx.SemTable.RecursiveDeps(outerE)
+		if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
+			subDeps, outerDeps = outerDeps, subDeps
+			subE, outerE = outerE, subE
+		}
+
+		// we check again, if we still haven't figured it out, we can't use this predicate
+		if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
+			continue
+		}
+
+		sq.outside = outerE
+		sq.inside = subE
+	}
+	return sq, nil
+}
+
+// GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
+func getSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
+	var subq *sqlparser.Subquery
+	var exp sqlparser.Expr
+	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
+		subq = lSubq
+		exp = node.Right
+	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
+		subq = rSubq
+		exp = node.Left
+	}
+	return subq, exp
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
@@ -135,19 +272,6 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		tr.VindexPreds = vp
 	}
 
-	for _, predicate := range qt.Predicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if routing.OpCode() == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
-	}
-
 	r := &Route{
 		Source: &Update{
 			QTable:              qt,
@@ -175,15 +299,27 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		}
 	}
 
-	subq, err := createSubqueryFromStatement(ctx, updStmt)
-	if err != nil {
-		return nil, err
+	outerID := TableID(r)
+
+	sqL := &SubQueryLogical{}
+	for _, predicate := range qt.Predicates {
+		if isSubq, err := sqL.handleSubquery(ctx, predicate, outerID); err != nil {
+			return nil, err
+		} else if isSubq {
+			continue
+		}
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if subq == nil {
-		return r, nil
+
+	if routing.OpCode() == engine.Scatter && updStmt.Limit != nil {
+		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
-	subq.Outer = r
-	return subq, nil
+
+	return sqL.getRootOperator(r), nil
 }
 
 // ColumnModified checks if any column in the parent table is being updated which has a child foreign key.
@@ -258,8 +394,13 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	del.OwnedVindexQuery = ovq
 
+	sqL := &SubQueryLogical{}
 	for _, predicate := range qt.Predicates {
-		var err error
+		if isSubQ, err := sqL.handleSubquery(ctx, predicate, TableID(route)); err != nil {
+			return nil, err
+		} else if isSubQ {
+			continue
+		}
 		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
 		if err != nil {
 			return nil, err
@@ -271,15 +412,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return route, nil
-	}
-	subq.Outer = route
-	return subq, nil
+	return sqL.getRootOperator(route), nil
 }
 
 func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (ops.Operator, error) {
