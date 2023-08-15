@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
