@@ -319,6 +319,39 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
+<<<<<<< HEAD
+=======
+	// The backup position is the GTISset of the last binary log (taken from Previous-GTIDs of the one-next binary log), and we
+	// also include gtid_purged ; this complies with the "standard" way MySQL "thinks" about GTIDs: there's gtid_executed, which includes
+	// everything that's ever been applied, and a subset of that is gtid_purged, which are the event no longer available in binary logs.
+	// When we consider Vitess incremental backups, what's important for us is "what's the GTIDSet that's true when this backup was taken,
+	// and which will be true when we restore this backup". The answer to this is the GTIDSet that includes the purged GTIDs.
+	// It's also nice for incremental backups that are taken on _other_ tablets, so that they don't need to understand what exactly was purged
+	// on _this_ tablet. They don't care, all they want to know is "what GTIDSet can we get from this".
+	incrementalBackupToPosition.GTIDSet = incrementalBackupToPosition.GTIDSet.Union(gtidPurged.GTIDSet)
+	req := &mysqlctl.ReadBinlogFilesTimestampsRequest{}
+	for _, binlogFile := range binaryLogsToBackup {
+		fe := FileEntry{Base: backupBinlogDir, Name: binlogFile}
+		fullPath, err := fe.fullPath(params.Cnf)
+		if err != nil {
+			return false, err
+		}
+		req.BinlogFileNames = append(req.BinlogFileNames, fullPath)
+	}
+	resp, err := params.Mysqld.ReadBinlogFilesTimestamps(ctx, req)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
+	}
+	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
+		return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
+	}
+	incrDetails := &IncrementalBackupDetails{
+		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
+		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
+		LastTimestamp:        FormatRFC3339(logutil.ProtoToTime(resp.LastTimestamp)),
+		LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
+	}
+>>>>>>> d48782eecd (Fixing `backup_pitr` flaky tests via wait-for loop on topo reads (#13781))
 	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
 	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
 	// However, we implement incremental backups by copying complete binlog files. That position could potentially
