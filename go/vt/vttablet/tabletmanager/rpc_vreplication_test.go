@@ -644,46 +644,64 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 				"int64|varchar",
 			),
 			fmt.Sprintf("1|%s", bls),
-		), nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(`update _vt.vreplication set message='Picked source tablet: cell:\"zone1\" uid:%d' where id=1`, sourceTabletUID),
+		),
+		nil,
+	)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(`update _vt.vreplication set message='Picked source tablet: cell:\"zone1\" uid:%d' where id=1`,
+		sourceTabletUID),
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
-			"varchar|varchar|int64|int64|varchar|int64|varchar|int64|int64",
+	targetTablet.vrdbClient.ExpectRequest(getWorkflowState,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
+				"varchar|varchar|int64|int64|varchar|int64|varchar|int64|int64",
+			),
+			fmt.Sprintf("||0|0|Stopped|1|%s|0|0", wf),
 		),
-		fmt.Sprintf("||0|0|Stopped|1|%s|0|0", wf),
-	), nil)
-	targetTablet.vrdbClient.ExpectRequest(getNumCopyStateTable, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"count(distinct table_name)",
-			"int64",
+		nil,
+	)
+	targetTablet.vrdbClient.ExpectRequest(getNumCopyStateTable,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"count(distinct table_name)",
+				"int64",
+			),
+			"1",
 		),
-		"1",
-	), nil)
-	targetTablet.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
-			"varchar|varchar|int64|int64|varchar|int64|varchar|int64|int64",
+		nil,
+	)
+	targetTablet.vrdbClient.ExpectRequest(getWorkflowState,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
+				"varchar|varchar|int64|int64|varchar|int64|varchar|int64|int64",
+			),
+			fmt.Sprintf("||0|0|Stopped|1|%s|0|0", wf),
 		),
-		fmt.Sprintf("||0|0|Stopped|1|%s|0|0", wf),
-	), nil)
-	targetTablet.vrdbClient.ExpectRequest(getNumCopyStateTable, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"count(distinct table_name)",
-			"int64",
+		nil,
+	)
+	targetTablet.vrdbClient.ExpectRequest(getNumCopyStateTable,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"count(distinct table_name)",
+				"int64",
+			),
+			"1",
 		),
-		"1",
-	), nil)
-	targetTablet.vrdbClient.ExpectRequest(getBinlogRowImage, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"@@binlog_row_image",
-			"varchar",
+		nil,
+	)
+	targetTablet.vrdbClient.ExpectRequest(getBinlogRowImage,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"@@binlog_row_image",
+				"varchar",
+			),
+			"FULL",
 		),
-		"FULL",
-	), nil)
+		nil,
+	)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(insertStreamsCreatedLog, bls), &sqltypes.Result{}, nil)
 
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet,
@@ -701,10 +719,12 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	// and thus the workflow iteslf to be cleaned up.
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet,
 		fmt.Sprintf(deleteWorkflow, sourceKs, workflow.ReverseWorkflowName(wf)),
-		&sqltypes.Result{RowsAffected: 1})
+		&sqltypes.Result{RowsAffected: 1},
+	)
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet,
 		fmt.Sprintf(deleteWorkflow, targetKs, wf),
-		&sqltypes.Result{RowsAffected: 1})
+		&sqltypes.Result{RowsAffected: 1},
+	)
 
 	_, err = ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       wf,
