@@ -1069,30 +1069,21 @@ func terminateRestore(t *testing.T) {
 	assert.True(t, found, "Restore message not found")
 }
 
-<<<<<<< HEAD
 func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, tabletType string) (backups []string, destroy func(t *testing.T)) {
+	numBackups := len(waitForNumBackups(t, -1))
 	restoreWaitForBackup(t, tabletType, nil, true)
 	verifyInitialReplication(t)
-=======
-func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
-	replica := getReplica(t, replicaIndex)
-	numBackups := len(waitForNumBackups(t, -1))
->>>>>>> d48782eecd (Fixing `backup_pitr` flaky tests via wait-for loop on topo reads (#13781))
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
-<<<<<<< HEAD
-	backups = localCluster.VerifyBackupCount(t, shardKsName, 1)
+	backups = waitForNumBackups(t, numBackups+1)
+	require.NotEmpty(t, backups)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
-=======
-	backups = waitForNumBackups(t, numBackups+1)
-	require.NotEmpty(t, backups)
->>>>>>> d48782eecd (Fixing `backup_pitr` flaky tests via wait-for loop on topo reads (#13781))
 
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
@@ -1169,9 +1160,6 @@ func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest, des
 	return readManifestFile(t, backupLocation), destroy
 }
 
-<<<<<<< HEAD
-func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
-=======
 // waitForNumBackups waits for GetBackups to list exactly the given expected number.
 // If expectNumBackups < 0 then any response is considered valid
 func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
@@ -1202,9 +1190,8 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
-func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
->>>>>>> d48782eecd (Fixing `backup_pitr` flaky tests via wait-for loop on topo reads (#13781))
 	incrementalFromPosArg := "auto"
 	if !incrementalFromPos.IsZero() {
 		incrementalFromPosArg = mysql.EncodePosition(incrementalFromPos)
@@ -1217,16 +1204,9 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
-<<<<<<< HEAD
-	backups, err := localCluster.ListBackups(shardKsName)
-	require.NoError(t, err)
-	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
-=======
 	backups := waitForNumBackups(t, numBackups+1)
 	require.NotEmptyf(t, backups, "output: %v", output)
-
-	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
->>>>>>> d48782eecd (Fixing `backup_pitr` flaky tests via wait-for loop on topo reads (#13781))
+	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
 	return readManifestFile(t, backupLocation), backupName
