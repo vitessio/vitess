@@ -59,13 +59,6 @@ const (
 	getAutoIncrementStep     = "select @@session.auto_increment_increment"
 	setSessionTZ             = "set @@session.time_zone = '+00:00'"
 	setNames                 = "set names 'binary'"
-	setSQLMode               = "set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')"
-	setPermissiveSQLMode     = "SET @@session.sql_mode='NO_AUTO_VALUE_ON_ZERO'"
-	setStrictSQLMode         = "SET @@session.sql_mode='ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
-	getSQLMode               = "SELECT @@session.sql_mode AS sql_mode"
-	getFKChecks              = "select @@foreign_key_checks"
-	enableFKChecks           = "set foreign_key_checks=1"
-	sqlMode                  = "ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 	getBinlogRowImage        = "select @@binlog_row_image"
 	insertStreamsCreatedLog  = "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Stream Created', '', '%s'"
 	getVReplicationRecord    = "select * from _vt.vreplication where id = 1"
@@ -325,11 +318,6 @@ func TestMoveTables(t *testing.T) {
 		ftc.vrdbClient.ExpectRequest(`update _vt.vreplication set message='Picked source tablet: cell:\"zone1\" uid:200' where id=1`, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
-		ftc.vrdbClient.ExpectRequest(setSQLMode, &sqltypes.Result{}, nil)
-		ftc.vrdbClient.ExpectRequest(getSQLMode, sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("sql_mode", "varchar"),
-			sqlMode,
-		), nil)
 		ftc.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
@@ -340,14 +328,6 @@ func TestMoveTables(t *testing.T) {
 		ftc.vrdbClient.ExpectRequest(getNumCopyStateTable, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"count(distinct table_name)",
-				"int64",
-			),
-			"1",
-		), nil)
-		ftc.vrdbClient.ExpectRequest(setPermissiveSQLMode, &sqltypes.Result{}, nil)
-		ftc.vrdbClient.ExpectRequest(getFKChecks, sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"@@foreign_key_checks",
 				"int64",
 			),
 			"1",
@@ -373,8 +353,6 @@ func TestMoveTables(t *testing.T) {
 			),
 			"FULL",
 		), nil)
-		ftc.vrdbClient.ExpectRequest(enableFKChecks, &sqltypes.Result{}, nil)
-		ftc.vrdbClient.ExpectRequest(setStrictSQLMode, &sqltypes.Result{}, nil)
 
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(insertStreamsCreatedLog, bls), &sqltypes.Result{}, nil)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(getWorkflow, targetKs, wf),

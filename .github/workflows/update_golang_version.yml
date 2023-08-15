@@ -9,6 +9,7 @@ permissions: read-all
 
 jobs:
   update_golang_version:
+    if: github.repository == 'vitessio/vitess'
     permissions:
       contents: write
       pull-requests: write
