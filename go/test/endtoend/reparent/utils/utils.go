@@ -77,7 +77,11 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalPro
 
 // TeardownCluster is used to teardown the reparent cluster
 func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
+	usedRoot := clusterInstance.CurrentVTDATAROOT
 	clusterInstance.Teardown()
+	if err := os.RemoveAll(usedRoot); err != nil {
+		log.Errorf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err)
+	}
 }
 
 func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, durability string) *cluster.LocalProcessCluster {
