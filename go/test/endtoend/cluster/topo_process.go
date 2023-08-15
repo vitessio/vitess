@@ -57,10 +57,6 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 	case "consul":
 		return topo.SetupConsul(cluster)
 	default:
-		// We still rely on the etcd v2 API for things like mkdir.
-		// If this ENV var is not set then some tests may fail with etcd 3.4+
-		// where the v2 API is disabled by default in both the client and server.
-		os.Setenv("ETCDCTL_API", "2")
 		return topo.SetupEtcd()
 	}
 }
@@ -77,7 +73,6 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-advertise-peer-urls", topo.PeerURL,
 		"--listen-peer-urls", topo.PeerURL,
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
-		"--enable-v2=true",
 	)
 
 	err = createDirectory(topo.DataDirectory, 0700)
