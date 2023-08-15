@@ -319,6 +319,9 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 	url := topo.VerifyURL + directory
 	payload := strings.NewReader(`{"dir":"true"}`)
 	if command == "mkdir" {
+		if *topoFlavor == "etcd2" { // No need to create the empty prefix key in v3
+			return nil
+		}
 		req, _ := http.NewRequest("PUT", url, payload)
 		req.Header.Add("content-type", "application/json")
 		resp, err := http.DefaultClient.Do(req)
@@ -327,6 +330,10 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 		}
 		return err
 	} else if command == "rmdir" {
+		if *topoFlavor == "etcd2" { // Use etcdctl as the gRPC gateway
+			cmd := exec.Command("etcdctl", "del", "--prefix", directory)
+			return cmd.Run()
+		}
 		req, _ := http.NewRequest("DELETE", url+"?dir=true", payload)
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
@@ -361,7 +368,7 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	topo.ListenClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
 	topo.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port))
 	topo.LogDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port), "logs")
-	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v2/keys", topo.Host, topo.Port)
+	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v3/kv", topo.Host, topo.Port)
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo
 }
