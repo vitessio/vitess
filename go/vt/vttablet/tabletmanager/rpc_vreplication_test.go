@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"runtime/debug"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -66,6 +67,7 @@ const (
 	stopForCutover           = "update _vt.vreplication set state='Stopped', message='stopped for cutover' where id=1"
 	getMaxValForSequence     = "select max(`id`) as maxval from `vt_%s`.`%s`"
 	initSequenceTable        = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
+	deleteWorkflow           = "delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 )
 
 var (
@@ -571,60 +573,139 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	}
 }
 
-// TestNoOrphanedRoutingRulesOnFailedCreate tests that no orphaned routing rules
-// are left in place when the workflow creation fails -- specifically at the point
-// where we try and create the workflow streams.
-func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
+// TestFailedMoveTablesCreateCleanup tests that the workflow
+// and its artifacts are cleaned up when the workflow creation
+// fails -- specifically after the point where we have created
+// the workflow streams.
+func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	ctx := context.Background()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
-	sourceShard := "0"
+	shard := "0"
+	targetTabletUID := 300
 	targetKs := "targetks"
-	targetShards := make(map[string]*fakeTabletConn)
 	wf := "testwf"
 	table := defaultSchema.TableDefinitions[0].Name
-	tenv := newTestEnv(t, sourceKs, []string{sourceShard})
+	invalidTimeZone := "NOPE"
+	bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"%s\" filter:\"select * from %s\"}}",
+		sourceKs, shard, table, table)
+	tenv := newTestEnv(t, sourceKs, []string{shard})
 	defer tenv.close()
 	ws := workflow.NewServer(tenv.ts, tenv.tmc)
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
 	defer tenv.deleteTablet(sourceTablet.tablet)
-	targetShards["-80"] = tenv.addTablet(t, 300, targetKs, "-80")
-	defer tenv.deleteTablet(targetShards["-80"].tablet)
-	targetShards["80-"] = tenv.addTablet(t, 310, targetKs, "80-")
-	defer tenv.deleteTablet(targetShards["80-"].tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
 
 	tenv.mysqld.Schema = defaultSchema
 	tenv.mysqld.Schema.DatabaseSchema = tenv.dbName
+	tenv.mysqld.FetchSuperQueryMap = make(map[string]*sqltypes.Result)
+	tenv.mysqld.FetchSuperQueryMap[`select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where .*`] = sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"character_set_name|collation_name|column_name|data_type|column_type|extra",
+			"varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"NULL|NULL|id|bigint|bigint|",
+		"NULL|NULL|c2|bigint|bigint|",
+	)
 
-	// The target keyspace is sharded. Let's remove any vschema table
-	// definitions so that we know the workflow creation will fail.
-	// Let's also be sure that the routing rules are empty.
+	// Let's be sure that the routing rules are empty to start.
 	err := topotools.SaveRoutingRules(ctx, tenv.ts, nil)
 	require.NoError(t, err, "failed to save routing rules")
-	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-	})
-	require.NoError(t, err, "failed to save vschema")
-	err = tenv.ts.RebuildSrvVSchema(ctx, nil)
-	require.NoError(t, err, "failed to rebuild serving vschema")
-	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tenv.ts, sourceKs, tenv.cells, false)
-	require.NoError(t, err, "failed to rebuild keyspace")
 
-	for _, tablet := range targetShards {
-		tenv.tmc.setVReplicationExecResults(tablet.tablet, fmt.Sprintf(checkForWorkflow, targetKs, wf), &sqltypes.Result{})
-		tenv.tmc.setVReplicationExecResults(tablet.tablet, fmt.Sprintf(checkForFrozenWorkflow, targetKs), &sqltypes.Result{})
-		tenv.tmc.setVReplicationExecResults(tablet.tablet, fmt.Sprintf(getWorkflow, targetKs, wf),
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"id",
-					"int64",
-				),
-				"1",
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf(checkForWorkflow, targetKs, wf), &sqltypes.Result{})
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf(checkForFrozenWorkflow, targetKs), &sqltypes.Result{})
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf(getWorkflow, targetKs, wf),
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id",
+				"int64",
 			),
-		)
-		tablet.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	}
+			"1",
+		),
+	)
+	targetTablet.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(
+		fmt.Sprintf("%s %s",
+			insertVReplicationPrefix,
+			fmt.Sprintf(`values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"%s\" filter:\"select * from %s\"}} source_time_zone:\"%s\" target_time_zone:\"UTC\"', '', 0, 0, '%s', 'primary', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+				wf, sourceKs, shard, table, table, invalidTimeZone, strings.Join(tenv.cells, ","), tenv.dbName),
+		),
+		&sqltypes.Result{
+			RowsAffected: 1,
+			InsertID:     1,
+		},
+		nil,
+	)
+	targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(getVReplicationRecord,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id|source",
+				"int64|varchar",
+			),
+			fmt.Sprintf("1|%s", bls),
+		), nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(`update _vt.vreplication set message='Picked source tablet: cell:\"zone1\" uid:%d' where id=1`, sourceTabletUID),
+		&sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
+			"varchar|varchar|int64|int64|varchar|int64|varchar|int64|int64",
+		),
+		fmt.Sprintf("||0|0|Stopped|1|%s|0|0", wf),
+	), nil)
+	targetTablet.vrdbClient.ExpectRequest(getNumCopyStateTable, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"count(distinct table_name)",
+			"int64",
+		),
+		"1",
+	), nil)
+	targetTablet.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
+			"varchar|varchar|int64|int64|varchar|int64|varchar|int64|int64",
+		),
+		fmt.Sprintf("||0|0|Stopped|1|%s|0|0", wf),
+	), nil)
+	targetTablet.vrdbClient.ExpectRequest(getNumCopyStateTable, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"count(distinct table_name)",
+			"int64",
+		),
+		"1",
+	), nil)
+	targetTablet.vrdbClient.ExpectRequest(getBinlogRowImage, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@binlog_row_image",
+			"varchar",
+		),
+		"FULL",
+	), nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(insertStreamsCreatedLog, bls), &sqltypes.Result{}, nil)
+
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet,
+		fmt.Sprintf("select convert_tz('2006-01-02 15:04:05', '%s', 'UTC')", invalidTimeZone),
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				fmt.Sprintf("convert_tz('2006-01-02 15:04:05', '%s', 'UTC')", invalidTimeZone),
+				"datetime",
+			),
+			"NULL",
+		),
+	)
+
+	// We expect the workflow creation to fail due to the invalid time zone
+	// and thus the workflow iteslf to be cleaned up.
+	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet,
+		fmt.Sprintf(deleteWorkflow, sourceKs, workflow.ReverseWorkflowName(wf)),
+		&sqltypes.Result{RowsAffected: 1})
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet,
+		fmt.Sprintf(deleteWorkflow, targetKs, wf),
+		&sqltypes.Result{RowsAffected: 1})
 
 	_, err = ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       wf,
@@ -633,8 +714,10 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 		Cells:          tenv.cells,
 		TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 		IncludeTables:  []string{table},
+		SourceTimeZone: invalidTimeZone,
 	})
-	require.ErrorContains(t, err, fmt.Sprintf("table %s not found in vschema for keyspace %s", table, targetKs))
+	log.Errorf("Error: %v", err)
+	require.ErrorContains(t, err, fmt.Sprintf("unable to perform time_zone conversions from %s to UTC", invalidTimeZone))
 
 	// Check that there are no orphaned routing rules.
 	rules, err := topotools.GetRoutingRules(ctx, tenv.ts)
