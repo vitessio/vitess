@@ -901,13 +901,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		default:
 			return sqltypes.NULL, 0, false
 		}
-	case sqltypes.Char:
-		// NOTE: vitessio/vitess drops the sqltypes.Char information and returns the type as VarBinary, but
-		//       that prevents us from knowing what type information the client really sent. It seems like
-		//       preserving that type information is more correct and we may want to preserve other types, too.
-		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
-		return sqltypes.MakeTrusted(sqltypes.Char, val), pos, ok
-	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary,
+	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.Char, sqltypes.VarBinary,
 		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
 		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
 		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok

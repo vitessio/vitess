@@ -43,9 +43,13 @@ for low-frequency updates like new features and releases.
 
 ## Security
 
+### Security Policy
+
+The [security policy](https://github.com/dolthub/vitess/blob/main/SECURITY.md) is maintained in this repository. Please follow the disclosure instructions there. Please do not initially report security issues in this repository's public GitHub issues.
+
 ### Security Audit
 
-A third party security audit was performed by Cure53. You can see the full report [here](doc/VIT-01-report.pdf).
+A third party security audit was performed of the upstream project by Cure53. You can see the full report [here](https://github.com/vitessio/vitess/blob/main/doc/VIT-01-report.pdf).
 
 ## License
 
