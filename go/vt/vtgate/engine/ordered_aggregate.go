@@ -76,6 +76,7 @@ type GroupByParams struct {
 	WeightStringCol int
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
+	Type            sqltypes.Type
 	CollationID     collations.ID
 }
 
@@ -88,7 +89,7 @@ func (gbp GroupByParams) String() string {
 		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
 
-	if gbp.CollationID != collations.Unknown {
+	if sqltypes.IsText(gbp.Type) && gbp.CollationID != collations.Unknown {
 		collation := gbp.CollationID.Get()
 		out += " COLLATE " + collation.Name()
 	}
@@ -106,6 +107,7 @@ type AggregateParams struct {
 	KeyCol      int
 	WCol        int
 	WAssigned   bool
+	Type        sqltypes.Type
 	CollationID collations.ID
 
 	Alias    string `json:",omitempty"`
@@ -130,7 +132,7 @@ func (ap *AggregateParams) String() string {
 	if ap.WAssigned {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-	if ap.CollationID != collations.Unknown {
+	if sqltypes.IsText(ap.Type) && ap.CollationID != collations.Unknown {
 		keyCol += " COLLATE " + ap.CollationID.Get().Name()
 	}
 	dispOrigOp := ""
