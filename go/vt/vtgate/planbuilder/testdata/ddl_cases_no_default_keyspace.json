@@ -638,11 +638,6 @@
     }
   },
   {
-    "comment": "drop table with incompatible tables",
-    "query": "drop table user, unsharded_a",
-    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
-  },
-  {
     "comment": "drop table with unknown table",
     "query": "drop table unknown",
     "plan": "VT03007: keyspace not specified"
@@ -666,11 +661,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "drop view with incompatible views",
-    "query": "drop view user, unsharded_a",
-    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "drop view with unknown view",
@@ -715,11 +705,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "Rename table with different keyspace tables",
-    "query": "rename table user_extra to b, main.a to b",
-    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "Rename table with change in keyspace name",

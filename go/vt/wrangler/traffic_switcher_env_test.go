@@ -26,34 +26,39 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 const (
 	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
 	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type, defer_secondary_keys, rows_copied from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)"
+	maxValForSequence  = "select max(`id`) as maxval from `vt_%s`.`%s`"
 )
 
 var (
@@ -68,20 +73,22 @@ var (
 )
 
 type testMigraterEnv struct {
-	ts              *topo.Server
-	wr              *Wrangler
-	sourcePrimaries []*fakeTablet
-	targetPrimaries []*fakeTablet
-	dbSourceClients []*fakeDBClient
-	dbTargetClients []*fakeDBClient
-	allDBClients    []*fakeDBClient
-	targetKeyspace  string
-	sourceShards    []string
-	targetShards    []string
-	sourceKeyRanges []*topodatapb.KeyRange
-	targetKeyRanges []*topodatapb.KeyRange
-	tmeDB           *fakesqldb.DB
-	mu              sync.Mutex
+	ts                  *topo.Server
+	wr                  *Wrangler
+	sourcePrimaries     []*fakeTablet
+	targetPrimaries     []*fakeTablet
+	additionalPrimaries []*fakeTablet
+	dbSourceClients     []*fakeDBClient
+	dbTargetClients     []*fakeDBClient
+	dbAdditionalClients []*fakeDBClient
+	allDBClients        []*fakeDBClient
+	targetKeyspace      string
+	sourceShards        []string
+	targetShards        []string
+	sourceKeyRanges     []*topodatapb.KeyRange
+	targetKeyRanges     []*topodatapb.KeyRange
+	tmeDB               *fakesqldb.DB
+	mu                  sync.Mutex
 }
 
 // testShardMigraterEnv has some convenience functions for adding expected queries.
@@ -117,6 +124,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
+	useSequences := false
+	if len(sourceShards) == 1 && len(targetShards) > 1 {
+		useSequences = true
+	}
 	expectVDiffQueries(tme.tmeDB)
 	tabletID := 10
 	for _, shard := range sourceShards {
@@ -149,7 +160,8 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
-		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+		allPrimaries := append(tme.sourcePrimaries, tme.targetPrimaries...)
+		for _, ft := range append(allPrimaries, tme.additionalPrimaries...) {
 			if ft.Tablet.Alias.Uid == tablet.Alias.Uid {
 				return ft, nil
 			}
@@ -190,6 +202,73 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			t.Fatal(err)
 		}
 	}
+	if useSequences {
+		// Add another unsharded keyspace with sequence tables in
+		// order to test sequence handling.
+		uvs := &vschemapb.Keyspace{
+			Sharded: false,
+			Tables: map[string]*vschemapb.Table{
+				"t1_seq": {
+					Type: vindexes.TypeSequence,
+				},
+				"t2_seq": {
+					Type: vindexes.TypeSequence,
+				},
+			},
+		}
+		tabletID += 10
+		gfdb := fakesqldb.New(t)
+		tme.additionalPrimaries = append(tme.additionalPrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, gfdb, TabletKeyspaceShard(t, "global", "0")))
+		if err := tme.ts.SaveVSchema(ctx, "global", uvs); err != nil {
+			t.Fatal(err)
+		}
+
+		// Now use these sequence tables in the target sharded keyspace.
+		tks := proto.Clone(vs).(*vschemapb.Keyspace)
+		tks.Tables["t1"].AutoIncrement = &vschemapb.AutoIncrement{
+			Column:   "id",
+			Sequence: "t1_seq",
+		}
+		tks.Tables["t2"].AutoIncrement = &vschemapb.AutoIncrement{
+			Column:   "id",
+			Sequence: "t2_seq",
+		}
+		if err := tme.ts.SaveVSchema(ctx, "ks2", tks); err != nil {
+			t.Fatal(err)
+		}
+
+		// Now tell the fakesqldb used by the target keyspace tablets to expect
+		// the sequence management related queries against the target keyspace.
+		tme.tmeDB.AddQuery(fmt.Sprintf(maxValForSequence, "ks2", "t1"),
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"maxval",
+					"int64",
+				),
+				"5",
+			),
+		)
+		tme.tmeDB.AddQuery(fmt.Sprintf(maxValForSequence, "ks2", "t2"),
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"maxval",
+					"int64",
+				),
+				"7",
+			),
+		)
+
+		// Now tell the fakesqldb used by the global keyspace tablets to expect
+		// the sequence management related queries against the target keyspace.
+		gfdb.AddQuery(
+			sqlparser.BuildParsedQuery(sqlInitSequenceTable, sqlescape.EscapeID("vt_global"), sqlescape.EscapeID("t1_seq"), 6, 6, 6).Query,
+			&sqltypes.Result{RowsAffected: 0},
+		)
+		gfdb.AddQuery(
+			sqlparser.BuildParsedQuery(sqlInitSequenceTable, sqlescape.EscapeID("vt_global"), sqlescape.EscapeID("t2_seq"), 8, 8, 8).Query,
+			&sqltypes.Result{RowsAffected: 0},
+		)
+	}
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -223,13 +302,13 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 					}},
 				},
 			}
-			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
-			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||||0", j+1, now, now))
+			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
+			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||1||0", j+1, now, now))
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types",
-			"int64|varchar|varchar|varchar|varchar"),
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 			streamInfoRows...))
 		tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -257,12 +336,12 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 					}},
 				},
 			}
-			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types",
-			"int64|varchar|varchar|varchar|varchar"),
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 			streamInfoRows...),
 		)
 	}
@@ -395,13 +474,13 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 						}},
 					},
 				}
-				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", i+1, bls))
-				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||||0", i+1, now, now))
+				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", i+1, bls))
+				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||1||0", i+1, now, now))
 			}
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
 			tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types",
-				"int64|varchar|varchar|varchar|varchar"),
+				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 				streamInfoRows...))
 			tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -431,12 +510,12 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 						}},
 					},
 				}
-				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", i+1, bls))
+				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", i+1, bls))
 				tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
 			}
 			tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types",
-				"int64|varchar|varchar|varchar|varchar"),
+				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 				streamInfoRows...),
 			)
 		}
@@ -499,26 +578,26 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
-		Vindexes: map[string]*vschema.Vindex{
+		Vindexes: map[string]*vschemapb.Vindex{
 			"thash": {
 				Type: "hash",
 			},
 		},
-		Tables: map[string]*vschema.Table{
+		Tables: map[string]*vschemapb.Table{
 			"t1": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
 			},
 			"t2": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
 			},
 			"t3": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
@@ -557,8 +636,8 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v||||0|0|0", j+1, bls))
-			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY|0|0|0", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
+			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY|1|0|0", j+1, bls))
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
@@ -598,6 +677,7 @@ func (tme *testMigraterEnv) startTablets(t *testing.T) {
 	tme.mu.Lock()
 	defer tme.mu.Unlock()
 	allPrimarys := append(tme.sourcePrimaries, tme.targetPrimaries...)
+	allPrimarys = append(allPrimarys, tme.additionalPrimaries...)
 	for _, primary := range allPrimarys {
 		primary.StartActionLoop(t, tme.wr)
 	}
@@ -628,6 +708,9 @@ func (tme *testMigraterEnv) stopTablets(t *testing.T) {
 	for _, primary := range tme.targetPrimaries {
 		primary.StopActionLoop(t)
 	}
+	for _, primary := range tme.additionalPrimaries {
+		primary.StopActionLoop(t)
+	}
 }
 
 func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
@@ -650,7 +733,13 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
 		primary.TM.VREngine.Open(ctx)
 	}
+	for _, primary := range tme.additionalPrimaries {
+		log.Infof("Adding as additionalPrimary %s", primary.Tablet.Alias)
+		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
+		tme.dbAdditionalClients = append(tme.dbTargetClients, dbclient)
+	}
 	tme.allDBClients = append(tme.dbSourceClients, tme.dbTargetClients...)
+	tme.allDBClients = append(tme.allDBClients, tme.dbAdditionalClients...)
 }
 
 func (tme *testMigraterEnv) setPrimaryPositions() {
@@ -808,6 +897,9 @@ func (tme *testMigraterEnv) close(t *testing.T) {
 		dbclient.Close()
 	}
 	for _, dbclient := range tme.dbTargetClients {
+		dbclient.Close()
+	}
+	for _, dbclient := range tme.dbAdditionalClients {
 		dbclient.Close()
 	}
 	tme.tmeDB.CloseAllConnections()

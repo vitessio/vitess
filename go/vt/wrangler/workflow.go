@@ -55,10 +55,11 @@ type VReplicationWorkflowParams struct {
 	OnDDL                             string
 
 	// MoveTables/Migrate specific
-	SourceKeyspace, Tables  string
-	AllTables, RenameTables bool
-	SourceTimeZone          string
-	DropForeignKeys         bool
+	SourceKeyspace, Tables    string
+	AllTables, RenameTables   bool
+	SourceTimeZone            string
+	DropForeignKeys           bool
+	InitializeTargetSequences bool
 
 	// Reshard specific
 	SourceShards, TargetShards []string
@@ -476,7 +477,8 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
-		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
+		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun,
+		vrw.params.InitializeTargetSequences)
 	if err != nil {
 		return nil, err
 	}

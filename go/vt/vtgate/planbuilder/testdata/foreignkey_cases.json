@@ -1,0 +1,94 @@
+[
+  {
+    "comment": "Insertion in a table with cross-shard foreign keys disallowed",
+    "query": "insert into tbl3 (col3, coly) values (1, 3)",
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
+  },
+  {
+    "comment": "Insertion in a table with shard-scoped foreign keys is allowed",
+    "query": "insert into tbl2 (col2, coly) values (1, 3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into tbl2 (col2, coly) values (1, 3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into tbl2(col2, coly) values (:_col2_0, 3)",
+        "TableName": "tbl2",
+        "VindexValues": {
+          "hash_vin": "INT64(1)"
+        }
+      },
+      "TablesUsed": [
+        "user_fk_allow.tbl2"
+      ]
+    }
+  },
+  {
+    "comment": "Insertion in a table with shard-scoped multiple column foreign key is allowed",
+    "query": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
+        "TableName": "multicol_tbl2",
+        "VindexValues": {
+          "multicolIdx": "INT64(1), INT64(2), INT64(3)"
+        }
+      },
+      "TablesUsed": [
+        "user_fk_allow.multicol_tbl2"
+      ]
+    }
+  },
+  {
+    "comment": "Delete in a table with cross-shard foreign keys disallowed",
+    "query": "delete from tbl1",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "Delete in a table with shard-scoped foreign keys is allowed",
+    "query": "delete from tbl7",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl7",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from tbl7",
+        "Table": "tbl7"
+      },
+      "TablesUsed": [
+        "user_fk_allow.tbl7"
+      ]
+    }
+  },
+  {
+    "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade not allowed",
+    "query": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "Delete in a table with shard-scoped foreign keys with cascade disallowed",
+    "query": "delete from tbl5",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  }
+]

@@ -352,7 +352,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	}
 
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
-	join.ColumnsAST = joinColumns
+	join.JoinColumns = joinColumns
 
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created

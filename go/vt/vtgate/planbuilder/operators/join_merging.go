@@ -25,23 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// Merge checks whether two operators can be merged into a single one.
+// mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
-	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
-	if lhsRoute == nil || rhsRoute == nil {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
+	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
+	if lhsRoute == nil {
 		return nil, nil
-	}
-
-	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
-
-	a, b := getRoutingType(routingA), getRoutingType(routingB)
-	if getTypeName(routingA) < getTypeName(routingB) {
-		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
-		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
-		a, b = b, a
-		routingA, routingB = routingB, routingA
 	}
 
 	switch {
@@ -76,9 +66,28 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	}
 }
 
+func prepareInputRoutes(lhs ops.Operator, rhs ops.Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
+	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+	if lhsRoute == nil || rhsRoute == nil {
+		return nil, nil, nil, nil, 0, 0, false
+	}
+
+	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
+
+	a, b := getRoutingType(routingA), getRoutingType(routingB)
+	if getTypeName(routingA) < getTypeName(routingB) {
+		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
+		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
+		a, b = b, a
+		routingA, routingB = routingB, routingA
+	}
+
+	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
+}
+
 type (
 	merger interface {
-		mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
+		mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
 		merge(op1, op2 *Route, r Routing) (*Route, error)
 	}
 
@@ -188,7 +197,7 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 	}
 }
 
-func (jm *joinMerger) mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	tr := &ShardedRouting{
 		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:       r1.keyspace,
@@ -272,7 +281,7 @@ func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inne
 	}
 }
 
-func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
+func (s *subQueryMerger) mergeShardedRouting(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	s.subq.ExtractedSubquery.Merged = true
 
 	routing, err := s.markPredicateInOuterRouting(outer, inner)
@@ -300,8 +309,8 @@ func (s *subQueryMerger) merge(outer, inner *Route, routing Routing) (*Route, er
 	return outer, nil
 }
 
-func (d *mergeDecorator) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	merged, err := d.inner.mergeTables(outer, inner, op1, op2)
+func (d *mergeDecorator) mergeShardedRouting(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
+	merged, err := d.inner.mergeShardedRouting(outer, inner, op1, op2)
 	if err != nil {
 		return nil, err
 	}
