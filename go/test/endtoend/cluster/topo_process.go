@@ -57,6 +57,9 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 	case "consul":
 		return topo.SetupConsul(cluster)
 	default:
+		// Override any inherited ETCDCTL_API value to
+		// ensure that we use the v3 API and storage.
+		os.Setenv("ETCDCTL_API", "3")
 		return topo.SetupEtcd()
 	}
 }
@@ -331,7 +334,7 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 		return err
 	} else if command == "rmdir" {
 		if *topoFlavor == "etcd2" { // Use etcdctl as the gRPC gateway
-			cmd := exec.Command("etcdctl", "del", "--prefix", directory)
+			cmd := exec.Command("etcdctl", "--endpoints", fmt.Sprintf("http://%s:%d", topo.Host, topo.Port), "del", "--prefix", directory)
 			return cmd.Run()
 		}
 		req, _ := http.NewRequest("DELETE", url+"?dir=true", payload)
