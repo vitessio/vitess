@@ -18,10 +18,12 @@ package clustertest
 
 import (
 	"fmt"
-	"os/exec"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -31,18 +33,26 @@ func TestEtcdServer(t *testing.T) {
 
 	// Confirm basic cluster health.
 	etcdHealthURL := fmt.Sprintf("http://%s:%d/health", clusterInstance.Hostname, clusterInstance.TopoPort)
-	testURL(t, etcdHealthURL, "generic etcd url")
+	testURL(t, etcdHealthURL, "generic etcd health url")
 
 	// Confirm that we have the expected global keys for the
 	// cluster's cell.
+	etcdClientOptions := []clientv3.OpOption{
+		clientv3.WithPrefix(),
+		clientv3.WithKeysOnly(),
+		clientv3.WithLimit(1),
+	}
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{net.JoinHostPort(clusterInstance.TopoProcess.Host, fmt.Sprintf("%d", clusterInstance.TopoProcess.Port))},
+		DialTimeout: 5 * time.Second,
+	})
+	require.NoError(t, err)
+	defer cli.Close()
 	keyPrefixes := []string{fmt.Sprintf("/vitess/global/cells/%s", cell)}
-	baseEtcdctlCmdArgs := []string{"--endpoints", fmt.Sprintf("http://%s:%d", clusterInstance.TopoProcess.Host, clusterInstance.TopoProcess.Port),
-		"get", "--keys-only", "-w", "simple", "--limit", "1", "--prefix"}
 	for _, keyPrefix := range keyPrefixes {
-		etcdctlCmd := exec.Command("etcdctl", append(baseEtcdctlCmdArgs, keyPrefix)...)
-		out, err := etcdctlCmd.CombinedOutput()
-		sout := string(out)
-		require.NoError(t, err, sout)
-		require.Contains(t, sout, keyPrefix) // Confirm that at least one key was returned
+		res, err := cli.Get(cli.Ctx(), keyPrefix, etcdClientOptions...)
+		require.NoError(t, err)
+		// Confirm that we have at least one key matching the prefix.
+		require.Greaterf(t, len(res.Kvs), 0, "no keys found matching prefix: %s", keyPrefix)
 	}
 }

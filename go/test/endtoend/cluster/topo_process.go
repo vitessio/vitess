@@ -17,8 +17,10 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,7 +29,10 @@ import (
 	"syscall"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
+
 	"vitess.io/vitess/go/vt/log"
+	vtopo "vitess.io/vitess/go/vt/topo"
 )
 
 // TopoProcess is a generic handle for a running Topo service .
@@ -57,7 +62,7 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 	case "consul":
 		return topo.SetupConsul(cluster)
 	default:
-		// Override any inherited ETCDCTL_API value to
+		// Override any inherited ETCDCTL_API env value to
 		// ensure that we use the v3 API and storage.
 		os.Setenv("ETCDCTL_API", "3")
 		return topo.SetupEtcd()
@@ -247,7 +252,6 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 // TearDown shutdowns the running topo service
 func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool, topoFlavor string) error {
-
 	if topoFlavor == "zk2" {
 		cmd := "shutdown"
 		if keepdata {
@@ -322,7 +326,7 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 	url := topo.VerifyURL + directory
 	payload := strings.NewReader(`{"dir":"true"}`)
 	if command == "mkdir" {
-		if *topoFlavor == "etcd2" { // No need to create the empty prefix key in v3
+		if *topoFlavor == "etcd2" { // No need to create the empty prefix keys in v3
 			return nil
 		}
 		req, _ := http.NewRequest("PUT", url, payload)
@@ -333,9 +337,21 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 		}
 		return err
 	} else if command == "rmdir" {
-		if *topoFlavor == "etcd2" { // Use etcdctl as the gRPC gateway
-			cmd := exec.Command("etcdctl", "--endpoints", fmt.Sprintf("http://%s:%d", topo.Host, topo.Port), "del", "--prefix", directory)
-			return cmd.Run()
+		if *topoFlavor == "etcd2" {
+			cli, err := clientv3.New(clientv3.Config{
+				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
+				DialTimeout: 5 * time.Second,
+			})
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), vtopo.RemoteOperationTimeout)
+			defer cancel()
+			_, err = cli.Delete(ctx, directory, clientv3.WithPrefix())
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 		req, _ := http.NewRequest("DELETE", url+"?dir=true", payload)
 		resp, err := http.DefaultClient.Do(req)
