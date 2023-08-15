@@ -49,6 +49,7 @@ type TopoProcess struct {
 	VerifyURL          string
 	PeerURL            string
 	ZKPorts            string
+	Client             interface{}
 
 	proc *exec.Cmd
 	exit chan error
@@ -128,7 +129,6 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 // SetupZookeeper spawns a new zookeeper topo service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
 func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error) {
-
 	host, err := os.Hostname()
 	if err != nil {
 		return
@@ -174,7 +174,6 @@ type PortsInfo struct {
 // SetupConsul spawns a new consul service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
 func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
-
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v1/kv/?keys", topo.Host, topo.Port)
 
 	_ = os.MkdirAll(topo.LogDirectory, os.ModePerm)
@@ -237,6 +236,14 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if topo.IsHealthy() {
+			cli, cerr := clientv3.New(clientv3.Config{
+				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
+				DialTimeout: 5 * time.Second,
+			})
+			if cerr != nil {
+				return err
+			}
+			topo.Client = cli
 			return
 		}
 		select {
@@ -275,6 +282,15 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 
 		if !(*keepData || keepdata) {
 			topo.removeTopoDirectories(Cell)
+		}
+
+		if topo.Client != nil {
+			switch cli := topo.Client.(type) {
+			case *clientv3.Client:
+				_ = cli.Close()
+			default:
+				log.Errorf("Unknown topo client type %T", cli)
+			}
 		}
 
 		// Attempt graceful shutdown with SIGTERM first
@@ -338,12 +354,12 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 		return err
 	} else if command == "rmdir" {
 		if *topoFlavor == "etcd2" {
-			cli, err := clientv3.New(clientv3.Config{
-				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
-				DialTimeout: 5 * time.Second,
-			})
-			if err != nil {
-				return err
+			if topo.Client == nil {
+				return fmt.Errorf("etcd client is not initialized")
+			}
+			cli, ok := topo.Client.(*clientv3.Client)
+			if !ok {
+				return fmt.Errorf("etcd client is invalid")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), vtopo.RemoteOperationTimeout)
 			defer cancel()
