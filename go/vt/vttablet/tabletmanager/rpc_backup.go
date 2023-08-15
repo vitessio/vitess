@@ -68,7 +68,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 
 	// Prevent concurrent backups, and record stats
 	backupMode := backupModeOnline
-	if engine.ShouldDrainForBackup() {
+	if engine.ShouldDrainForBackup(req) {
 		backupMode = backupModeOffline
 	}
 	if err := tm.beginBackup(backupMode); err != nil {
@@ -80,7 +80,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	var originalType topodatapb.TabletType
-	if engine.ShouldDrainForBackup() {
+	if engine.ShouldDrainForBackup(req) {
 		if err := tm.lock(ctx); err != nil {
 			return err
 		}

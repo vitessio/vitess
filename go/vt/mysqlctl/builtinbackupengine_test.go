@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+<<<<<<< HEAD
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -39,6 +40,10 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+=======
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+>>>>>>> 16024c2b7c (Do not drain tablet in incremental backup (#13773))
 )
 
 func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
@@ -466,6 +471,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 // needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
 // Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
@@ -486,4 +492,13 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
 	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+=======
+func TestShouldDrainForBackupBuiltIn(t *testing.T) {
+	be := &BuiltinBackupEngine{}
+
+	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
+	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "auto"}))
+	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
+	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "MySQL56/99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
+>>>>>>> 16024c2b7c (Do not drain tablet in incremental backup (#13773))
 }
