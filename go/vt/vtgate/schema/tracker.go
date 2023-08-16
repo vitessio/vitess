@@ -21,22 +21,21 @@ import (
 	"sync"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/callerid"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -236,7 +235,7 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 		return map[string][]vindexes.Column{} // we know nothing about this KS, so that is the info we can give out
 	}
 
-	return m
+	return maps.Clone(m)
 }
 
 // Views returns all known views in the keyspace with their definition.
@@ -247,7 +246,9 @@ func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
 	if t.views == nil {
 		return nil
 	}
-	return t.views.m[ks]
+
+	m := t.views.m[ks]
+	return maps.Clone(m)
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
