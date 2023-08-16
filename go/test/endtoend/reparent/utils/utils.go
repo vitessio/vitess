@@ -75,10 +75,22 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalPro
 	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
 }
 
-// TeardownCluster is used to teardown the reparent cluster
+// TeardownCluster is used to teardown the reparent cluster. When
+// run in a CI environment -- which is considered true when the
+// "CI" env variable is set to "true" -- the teardown also removes
+// the VTDATAROOT directory that was used for the test/cluster.
 func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	usedRoot := clusterInstance.CurrentVTDATAROOT
 	clusterInstance.Teardown()
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if !ok || strings.ToLower(ci) != "true" {
+		// Leave the directory in place to support local debugging.
+		return
+	}
+	// We're running in the CI, so free up disk space for any
+	// subsequent tests.
 	if err := os.RemoveAll(usedRoot); err != nil {
 		log.Errorf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err)
 	}
