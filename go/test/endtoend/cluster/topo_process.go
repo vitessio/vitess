@@ -113,6 +113,14 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if topo.IsHealthy() {
+			cli, cerr := clientv3.New(clientv3.Config{
+				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
+				DialTimeout: 5 * time.Second,
+			})
+			if cerr != nil {
+				return err
+			}
+			topo.Client = cli
 			return
 		}
 		select {
@@ -236,14 +244,6 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if topo.IsHealthy() {
-			cli, cerr := clientv3.New(clientv3.Config{
-				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
-				DialTimeout: 5 * time.Second,
-			})
-			if cerr != nil {
-				return err
-			}
-			topo.Client = cli
 			return
 		}
 		select {
