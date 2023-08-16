@@ -40,29 +40,29 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
-			input: "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + VALUES(count)",
+			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + VALUES(count)",
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
 		},
 		{
-			input: "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE account = account + VALUES(account)",
+			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE account = account + VALUES(account)",
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update account = `account` + values(`account`)",
 		},
 		{
 			// INVISIBLE should parse, but be a no-op (for now)
-			input: "create table t (pk int primary key, c1 int INVISIBLE)",
+			input:  "create table t (pk int primary key, c1 int INVISIBLE)",
 			output: "create table t (\n\tpk int primary key,\n\tc1 int\n)",
 		},
 		{
 			// INVISIBLE should parse, but be a no-op (for now)
-			input: "alter table t add column c1 int INVISIBLE",
+			input:  "alter table t add column c1 int INVISIBLE",
 			output: "alter table t add column (\n\tc1 int\n)",
 		},
 		{
-			input: "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
+			input:  "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
 			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
 		},
 		{
-			input: "CREATE TABLE webhook_events (pk int primary key, event varchar(255) DEFAULT NULL)",
+			input:  "CREATE TABLE webhook_events (pk int primary key, event varchar(255) DEFAULT NULL)",
 			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
 		},
 		{
@@ -74,11 +74,11 @@ var (
 			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
 		},
 		{
-			input: `Select 'a' "b" 'c'`,
+			input:  `Select 'a' "b" 'c'`,
 			output: "select 'abc'",
 		},
 		{
-			input: `Select concat('a' "b" 'c', "de" 'f')`,
+			input:  `Select concat('a' "b" 'c', "de" 'f')`,
 			output: "select concat('abc', 'def')",
 		},
 		{
@@ -201,13 +201,15 @@ var (
 			output: "select a, `'b'` from t",
 		}, {
 			input:                      `select "'ain't'", '"hello"' from t`,
-			output:                     `select 'ain't', "hello" from t`,
+			output:                     "select '\\'ain\\'t\\'', '\\\"hello\\\"' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      `select "1" + "2" from t`,
+			output:                     "select '1' + '2' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      `select '1' + "2" from t`,
+			output:                     "select '1' + '2' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select * from information_schema.columns",
@@ -226,11 +228,11 @@ var (
 			input: "select -1 from t where b = -2",
 		}, {
 			input:                      "select - -1 from t",
-			output:                     "select - -1 from t",
+			output:                     "select 1 from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select -   -1 from t",
-			output:                     "select -   -1 from t",
+			output:                     "select 1 from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select - -1 from t",
@@ -277,7 +279,7 @@ var (
 			input: "select /* \\0 */ '\\0' from a",
 		}, {
 			input:                      "select /* \\0 */ '\\0' from a",
-			output:                     "select /* \\0 */ \\0 from a",
+			output:                     "select /* \\0 */ '\\0' from a",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 /* drop this comment */ from t",
@@ -334,7 +336,7 @@ var (
 			input: "select a from t1 natural join lateral (select b from t2) as sq",
 		},
 		{
-			input: "select a from t1 join lateral (select b from t2) sq",
+			input:  "select a from t1 join lateral (select b from t2) sq",
 			output: "select a from t1 join lateral (select b from t2) as sq",
 		},
 		{
@@ -453,49 +455,49 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time as of '2019-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version as of '2019-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version as of '2019-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for version all use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 for version all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time from '2019-01-01' to '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time between '2019-01-01' and '2020-01-01' use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time contained in ('2019-01-01', '2020-01-01') use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 versions all use index (`By`) where b = 1",
+			input:  "select /* use */ 1 from t1 versions all use index (`By`) where b = 1",
 			output: "select /* use */ 1 from t1 for system_time all use index (`By`) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01'",
+			input:  "select /* use */ 1 from t1 for system_time as of '2019-01-01'",
 			output: "select /* use */ 1 from t1 as of '2019-01-01'",
 		}, {
 			input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
@@ -504,7 +506,7 @@ var (
 		}, {
 			input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 		}, {
-			input: "select /* use */ 1 from t1 for system_time as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+			input:  "select /* use */ 1 from t1 for system_time as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 			output: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
 		}, {
 			input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
@@ -835,14 +837,14 @@ var (
 			input: "select /* keyword a.b */ `By`.`bY` from t",
 		}, {
 			input:                      "select /* string */ 'a' from t",
-			output:                     "select /* string */ a from t",
+			output:                     "select /* string */ 'a' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
 			output: "select /* double quoted string */ 'a' from t",
 		}, {
 			input:                      "select /* double quoted string */ \"a\" from t",
-			output:                     "select /* double quoted string */ a from t",
+			output:                     "select /* double quoted string */ 'a' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* quote quote in string */ 'a''a' from t",
@@ -855,36 +857,36 @@ var (
 			output: "select /* quote in double quoted string */ 'a\\'a' from t",
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
-			output: "select /* quote in double quoted string */ a'a from t",
+			output: "select /* quote in double quoted string */ 'a\\'a' from t",
 
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* backslash quote in string */ 'a\\'a' from t",
-			output:                     "select /* backslash quote in string */ a\\'a from t",
+			output:                     "select /* backslash quote in string */ 'a\\'a' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* literal backslash in string */ 'a\\\\na' from t",
-			output: "select /* literal backslash in string */ a\\\\na from t",
+			output: "select /* literal backslash in string */ 'a\\\\na' from t",
 
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
-			output:                     "select /* all escapes */ \\0\\'\\\"\\b\\n\\r\\t\\Z\\\\ from t",
+			output:                     "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
 			output: "select /* non-escape */ 'x' from t",
 		}, {
 			input:                      "select /* non-escape */ '\\x' from t",
-			output:                     "select /* non-escape */ \\x from t",
+			output:                     "select /* non-escape */ 'x' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* unescaped backslash */ '\n' from t",
-			output:                     "select /* unescaped backslash */ \n from t",
+			output:                     "select /* unescaped backslash */ '\\n' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* escaped backslash */ '\\n' from t",
-			output:                     "select /* escaped backslash */ \\n from t",
+			output:                     "select /* escaped backslash */ '\\n' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* value argument */ :a from t",
@@ -897,6 +899,7 @@ var (
 			output: "select /* positional argument */ :v1 from t",
 		}, {
 			input:                      "select /* positional argument */ ? from t",
+			output:                     "select /* positional argument */ :v1 from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* positional argument */ ? from t limit ?",
@@ -917,6 +920,7 @@ var (
 			output: "select /* hex */ X'f0A1' from t",
 		}, {
 			input:                      "select /* hex */ x'f0A1' from t",
+			output:                     "select /* hex */ X'f0A1' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* hex caps */ X'F0a1' from t",
@@ -925,6 +929,7 @@ var (
 			output: "select /* bit literal */ B'0101' from t",
 		}, {
 			input:                      "select /* bit literal */ b'0101' from t",
+			output:                     "select /* bit literal */ B'0101' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* bit literal caps */ B'010011011010' from t",
@@ -954,6 +959,7 @@ var (
 			output: "select /* binary unary */ a - -b from t",
 		}, {
 			input:                      "select /* binary unary */ a- -b from t",
+			output:                     "select /* binary unary */ a - -b from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* - - */ - -b from t",
@@ -969,9 +975,11 @@ var (
 			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 		}, {
 			input:                      "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
+			output:                     "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
+			output:                     "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* dual */ 1 from dual",
@@ -1029,7 +1037,7 @@ var (
 			output: "select * from (select 'tables') as `tables`",
 		}, {
 			input:                      "select * from (select 'tables') tables",
-			output:                     "select * from (select tables) as `tables`",
+			output:                     "select * from (select 'tables') as `tables`",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "insert /* simple */ into a values (1)",
@@ -1146,10 +1154,10 @@ var (
 		}, {
 			input: "delete /* limit */ from a limit 100",
 		}, {
-			input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+			input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
 			output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 		}, {
-			input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+			input:  "delete a, b from a, b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from a, b where a.id = b.id and b.`name` = 'test'",
 		},
 		{
@@ -1820,14 +1828,14 @@ var (
 		}, {
 			input: "show tables as of 123",
 		}, {
-			input: "show tables for system_time as of 123",
+			input:  "show tables for system_time as of 123",
 			output: "show tables as of 123",
 		}, {
 			input: "show tables like '%keyspace%'",
 		}, {
 			input: "show tables as of 123 like '%keyspace%'",
 		}, {
-			input: "show tables for system_time as of 123 like '%keyspace%'",
+			input:  "show tables for system_time as of 123 like '%keyspace%'",
 			output: "show tables as of 123 like '%keyspace%'",
 		}, {
 			input: "show tables where 1 = 0",
@@ -2061,15 +2069,15 @@ var (
 			output: "select /* drop trailing semicolon */ 1",
 		}, {
 			input:                      "select /* cache directive */ sql_no_cache 'foo' from t",
-			output:                     "select /* cache directive */ sql_no_cache foo from t",
+			output:                     "select /* cache directive */ sql_no_cache 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
-			output:                     "select /* sql_calc_rows directive */ sql_calc_found_rows foo from t",
+			output:                     "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
-			output:                     "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows foo from t",
+			output:                     "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select binary 'a' = 'A' from t",
@@ -2093,6 +2101,7 @@ var (
 			input: "select `name`, group_concat(score) from t group by `name`",
 		}, {
 			input:                      "select concAt(  \"a\",    \"b\", \"c\"  ) from t group by `name`",
+			output:                     "select concAt('a', 'b', 'c') from t group by `name`",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select `name`, group_concat(distinct id, score order by id desc separator ':') from t group by `name`",
@@ -2281,8 +2290,8 @@ var (
 					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
 					ORDER BY max`,
 			useSelectExpressionLiteral: true,
-			output: "select pk, (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as `max`," +
-				" (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as `min` " +
+			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) `max`," +
+				" (select min(pk) from one_pk where pk > opk.pk) `min` " +
 				"from one_pk as opk " +
 				"where (select min(pk) from one_pk where pk > opk.pk) " +
 				"is not null order by `max` asc",
@@ -2302,19 +2311,20 @@ var (
 		}, {
 			input: "stream /* comment */ * from t",
 		}, {
-			input: "begin",
+			input:  "begin",
+			output: "start transaction",
 		}, {
 			input:  "begin work",
-			output: "begin",
+			output: "start transaction",
 		}, {
 			input:  "start transaction",
-			output: "begin",
+			output: "start transaction",
 		}, {
 			input:  "start transaction read only",
-			output: "begin read only",
+			output: "start transaction read only",
 		}, {
 			input:  "start transaction read write",
-			output: "begin read write",
+			output: "start transaction read write",
 		}, {
 			input: "commit",
 		}, {
@@ -2490,7 +2500,7 @@ var (
 		}, {
 			input: "call f1(a) as of '2023-10-10'",
 		}, {
-			input: "call f1(a) for system_time as of '2023-10-10'",
+			input:  "call f1(a) for system_time as of '2023-10-10'",
 			output: "call f1(a) as of '2023-10-10'",
 		}, {
 			input: "call f1(now(), rand()) as of 'uo5qcl722f891g6aisqp3ma7r41s4ha4'",
@@ -2526,11 +2536,11 @@ var (
 			output: "create definer = `me`@`%` procedure p1 (in v1 int) comment 'some_comment' not deterministic select now()",
 		}, {
 			input:                      "SELECT FORMAT(45124,2) FROM test",
-			output:                     "select FORMAT(45124,2) from test",
+			output:                     "select FORMAT(45124, 2) from test",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "SELECT FORMAT(45124,2,'de_DE') FROM test",
-			output:                     "select FORMAT(45124,2,'de_DE') from test",
+			output:                     "select FORMAT(45124, 2, 'de_DE') from test",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "CREATE USER UserName@localhost",
@@ -2873,7 +2883,7 @@ var (
 		}, {
 			input:  "create table test (pk varchar(255)) collate utf8_unicode_ci",
 			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
-		},{
+		}, {
 			input:  "select * from current",
 			output: "select * from `current`",
 		}, {
@@ -3453,15 +3463,15 @@ end`,
 	// mode treats double quotes (and backticks) as identifier quotes, and single quotes as string quotes.
 	validAnsiQuotesSQL = []parseTest{
 		{
-			input: `select "count", "foo", "bar" from t order by "COUNT"`,
+			input:  `select "count", "foo", "bar" from t order by "COUNT"`,
 			output: "select `count`, foo, bar from t order by `COUNT` asc",
 		},
 		{
-			input: `INSERT INTO hourly_logins ("applications_id", "count", "hour") VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE "count" = "count" + VALUES(count)`,
+			input:  `INSERT INTO hourly_logins ("applications_id", "count", "hour") VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE "count" = "count" + VALUES(count)`,
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
 		},
 		{
-			input: `CREATE TABLE "webhook_events" ("pk" int primary key, "event" varchar(255) DEFAULT NULL)`,
+			input:  `CREATE TABLE "webhook_events" ("pk" int primary key, "event" varchar(255) DEFAULT NULL)`,
 			output: "create table webhook_events (\n\tpk int primary key,\n\t`event` varchar(255) default null\n)",
 		},
 		{
@@ -3469,17 +3479,17 @@ end`,
 			output: "with test as (select 1 from `dual`), test_two as (select 2 from `dual`) select * from test, test_two union all (with b as (with c as (select 1, 2 from `dual`) select * from c) select * from b)",
 		},
 		{
-			input: `select '"' from t order by "foo"`,
+			input:  `select '"' from t order by "foo"`,
 			output: `select '\"' from t order by foo asc`,
 		},
 		{
 			// Assert that quote escaping is the same as when ANSI_QUOTES is off
-			input: `select '''foo'''`,
+			input:  `select '''foo'''`,
 			output: `select '\'foo\''`,
 		},
 		{
 			// Assert that quote escaping is the same as when ANSI_QUOTES is off
-			input: `select """""""foo"""""""`,
+			input:  `select """""""foo"""""""`,
 			output: "select `\"\"\"foo\"\"\"`",
 		},
 	}
@@ -4176,50 +4186,50 @@ func TestInvalid(t *testing.T) {
 		input: "select * from test order by a union select * from test",
 		err:   "syntax error",
 	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"name 'name'\n" +
-			"name 'name'",
-		err: "multiple definitions of attribute name",
-	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"definition 'definition'\n" +
-			"definition 'definition'\n",
-		err: "multiple definitions of attribute definition",
-	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"organization 'organization' identified by 4321\n" +
-			"organization 'organization' identified by 4321",
-		err: "multiple definitions of attribute organization",
-	},
-	{
-		input: "create spatial reference system 1234\n" +
-			"description 'description'\n" +
-			"description 'description'",
-		err: "multiple definitions of attribute description",
-	},
-	{
-		input: "create or replace spatial reference system 1234\n" +
-			"name 'name'\n" +
-			"name 'name'",
-		err: "multiple definitions of attribute name",
-	},
-	{
-		input: "create spatial reference system if not exists 1234\n" +
-			"name 'name'\n" +
-			"name 'name'",
-		err: "multiple definitions of attribute name",
-	},
-	{
-		input: "select * from t join lateral t2",
-		err:   "syntax error",
-	},
-	{
-		input: "select * from t join lateral (select * from t2)",
-		err:   "Every derived table must have its own alias",
-	},
+		{
+			input: "create spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"name 'name'",
+			err: "multiple definitions of attribute name",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"definition 'definition'\n" +
+				"definition 'definition'\n",
+			err: "multiple definitions of attribute definition",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"organization 'organization' identified by 4321\n" +
+				"organization 'organization' identified by 4321",
+			err: "multiple definitions of attribute organization",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"description 'description'\n" +
+				"description 'description'",
+			err: "multiple definitions of attribute description",
+		},
+		{
+			input: "create or replace spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"name 'name'",
+			err: "multiple definitions of attribute name",
+		},
+		{
+			input: "create spatial reference system if not exists 1234\n" +
+				"name 'name'\n" +
+				"name 'name'",
+			err: "multiple definitions of attribute name",
+		},
+		{
+			input: "select * from t join lateral t2",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from t join lateral (select * from t2)",
+			err:   "Every derived table must have its own alias",
+		},
 	}
 
 	for _, tcase := range invalidSQL {
@@ -4352,7 +4362,7 @@ func TestCaseSensitivity(t *testing.T) {
 			output: "select A(B, C) from b",
 		}, {
 			input:                      "select A(ALL B, C) from b",
-			output:                     "select A(ALL B, C) from b",
+			output:                     "select A(B, C) from b",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select IF(B, C) from b",
@@ -4392,7 +4402,7 @@ func TestKeywords(t *testing.T) {
 			output: "select current_timestamp()",
 		}, {
 			input:                      "select current_TIMESTAMP",
-			output:                     "select current_TIMESTAMP",
+			output:                     "select current_TIMESTAMP()",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "update t set a = current_timestamp()",
@@ -4403,16 +4413,18 @@ func TestKeywords(t *testing.T) {
 			output: "select a, current_date() from t",
 		}, {
 			input:                      "select a, current_DATE from t",
-			output:                     "select a, current_DATE from t",
+			output:                     "select a, current_DATE() from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select a, current_user from t",
 			output: "select a, current_user() from t",
 		}, {
 			input:                      "select a, current_USER from t",
+			output:                     "select a, current_USER() from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select a, Current_USER(     ) from t",
+			output:                     "select a, Current_USER() from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "insert into t(a, b) values (current_date, current_date())",
@@ -4438,7 +4450,7 @@ func TestKeywords(t *testing.T) {
 			output: "select utc_time(), utc_date(), utc_time(6)",
 		}, {
 			input:                      "select utc_TIME, UTC_date, utc_time(6)",
-			output:                     "select utc_TIME, UTC_date, utc_time(6)",
+			output:                     "select utc_TIME(), UTC_date(), utc_time(6)",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 from dual where localtime > utc_time",
@@ -4997,11 +5009,11 @@ func TestFunctionCalls(t *testing.T) {
 			output: "select LOCALTIMESTAMP()",
 		},
 		{
-			input: "SELECT CAST(foo AS DOUBLE)",
+			input:  "SELECT CAST(foo AS DOUBLE)",
 			output: "select CAST(foo as DOUBLE)",
 		},
 		{
-			input: "SELECT CAST(foo AS FLOAT)",
+			input:  "SELECT CAST(foo AS FLOAT)",
 			output: "select CAST(foo as FLOAT)",
 		},
 	}
@@ -5048,7 +5060,7 @@ func TestFunctionCalls(t *testing.T) {
 func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
-			input:  "select cast('abc' as date) from t",
+			input: "select cast('abc' as date) from t",
 		}, {
 			input:                      "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
@@ -5164,15 +5176,18 @@ func TestSubStr(t *testing.T) {
 		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:                      "select substring(a from 1 for 6) from t",
+		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:                      "select substring(a from 1 for 6) from t",
+		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:                      "select substring(a from 1  for   6) from t",
+		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:  `select substr("foo" from 1 for 2) from t`,
@@ -5185,6 +5200,7 @@ func TestSubStr(t *testing.T) {
 		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
 	}, {
 		input:                      `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output:                     "select substr(substr('foo', 1, 2), 1, 2) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
@@ -6459,17 +6475,17 @@ var (
 	invalidAnsiQuotesSQL = []parseTest{
 		{
 			// Assert that the two identifier quotes do not match each other
-			input: "select \"foo`",
+			input:  "select \"foo`",
 			output: "syntax error at position 13 near 'foo`'",
 		},
 		{
 			// Assert that the two identifier quotes do not match each other
-			input: "select `bar\"",
+			input:  "select `bar\"",
 			output: "syntax error at position 13 near 'bar\"'",
 		},
 		{
 			// Assert that single and double quotes do not auto concatenate in ANSI_QUOTES mode
-			input: "select 'a' \"b\" 'c'",
+			input:  "select 'a' \"b\" 'c'",
 			output: "syntax error at position 19 near 'c'",
 		},
 	}
@@ -7475,7 +7491,7 @@ FROM
 			x varchar(100) path "$.a"
 		)
 	) as tt;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\"\n)) as tt",
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(x varchar(100) path '$.a')) as tt",
 		},
 		{
 			input: `
@@ -7488,7 +7504,7 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) as tt;`,
-			output: "select * from json_table('[{\\\"a\\\":1, \\\"b\\\":2},{\\\"a\\\":3, \\\"b\\\":4}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\",\n\ty varchar(100) path \"$.b\"\n)) as tt",
+			output: "select * from json_table('[{\\\"a\\\":1, \\\"b\\\":2},{\\\"a\\\":3, \\\"b\\\":4}]', '$[*]' columns(x varchar(100) path '$.a', y varchar(100) path '$.b')) as tt",
 		},
 		{
 			input: `
@@ -7502,9 +7518,9 @@ FROM
 		)
 	) as t;
 	`,
-			output: "select * from json_table(concat('[{},', '{}]'), \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\",\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select * from json_table(concat('[{},', '{}]'), '$[*]' columns(" +
+				"x varchar(100) path '$.a', " +
+				"y varchar(100) path '$.b'" +
 				")) as t",
 		},
 		{
@@ -7519,9 +7535,9 @@ FROM
 		)
 	) as t;
 	`,
-			output: "select * from json_table(123, \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\",\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select * from json_table(123, '$[*]' columns(" +
+				"x varchar(100) path '$.a', " +
+				"y varchar(100) path '$.b'" +
 				")) as t",
 		},
 		{
@@ -7541,10 +7557,10 @@ JOIN
 			x varchar(100) path "$.a"
 		)
 	) t2;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
-				")) as t1 join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
+				")) as t1 join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
 				")) as t2",
 		},
 		{
@@ -7559,8 +7575,8 @@ FROM
 	) t
 JOIN
 	tt;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
 				")) as t join tt",
 		},
 		{
@@ -7575,8 +7591,8 @@ JOIN
 			x varchar(100) path "$.a"
 		)
 	) tt;`,
-			output: "select * from t join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
+			output: "select * from t join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
 				")) as tt",
 		},
 		{
@@ -7598,16 +7614,16 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
-				")) as t1 union select * from json_table('[{\\\"b\\\":1},{\\\"b\\\":2}]', \"$[*]\" columns(\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
+				")) as t1 union select * from json_table('[{\\\"b\\\":1},{\\\"b\\\":2}]', '$[*]' columns(" +
+				"y varchar(100) path '$.b'" +
 				")) as t2",
 		},
 		{
 			input: `SELECT * FROM t WHERE i in (SELECT x FROM JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(x VARCHAR(100) PATH "$.a")) AS tt);`,
-			output: "select * from t where i in (select x from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx VARCHAR(100) path \"$.a\"\n" +
+			output: "select * from t where i in (select x from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x VARCHAR(100) path '$.a'" +
 				")) as tt)",
 		},
 		{
@@ -7626,131 +7642,130 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: "select x, y from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
-				")) as t1, json_table('[{\\\"b\\\":3},{\\\"b\\\":4}]', \"$[*]\" columns(\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select x, y from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
+				")) as t1, json_table('[{\\\"b\\\":3},{\\\"b\\\":4}]', '$[*]' columns(" +
+				"y varchar(100) path '$.b'" +
 				")) as t2",
 		},
 
 		// FOR ORDINALITY TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tpk INTEGER unsigned auto_increment path \"\",\n" +
-				"\tc1 INT path \"$.c1\"\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"pk FOR ORDINALITY, " +
+				"c1 INT path '$.c1'" +
 				")) as jt",
 		},
 
 		// EXISTS TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT EXISTS PATH '$.c1')) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" exists\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT exists path '$.c1'" +
 				")) as jt",
 		},
 
 		// ON EMPTY TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" null on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT null on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" 1 on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT 1 on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '1' on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '1' on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '{\\\"abc\\\": 123}' on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" error on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' error on empty" +
 				")) as jt",
-
 		},
 
 		// ON ERROR TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" null on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT null on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" 1 on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT 1 on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '1' on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '1' on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '{\\\"abc\\\": 123}' on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" error on error\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' error on error" +
 				")) as jt",
 		},
 
 		// NESTED PATH TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (b INT PATH '$'))) AS jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tnested path \"$\" columns(\n" +
-				"\tb INT path \"$\"\n" +
-				")\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"nested path '$' columns(" +
+				"b INT path '$'" +
+				")" +
 				")) as jt",
 		},
 		// TODO: MySQL doesn't parse this, but their docs say they do.
 		// https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#:~:text=NESTED%20PATH%20(or%20simply%20NESTED%3B%20PATH%20is%20optional)
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED '$' columns (b INT PATH '$'))) AS jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tnested path \"$\" columns(\n" +
-				"\tb INT path \"$\"\n" +
-				")\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"nested path '$' columns(" +
+				"b INT path '$'" +
+				")" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (a INT PATH '$', b INT PATH '$'))) AS jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n\tnested path \"$\" columns(\n" +
-				"\ta INT path \"$\",\n" +
-				"\tb INT path \"$\"\n" +
-				")\n" +
+			output: "select * from json_table('{}', '$' columns(nested path '$' columns(" +
+				"a INT path '$', " +
+				"b INT path '$'" +
+				")" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM  JSON_TABLE('{}', 'root_path' COLUMNS( a INT PATH 'a_path', NESTED PATH 'b_path' COLUMNS (NESTED PATH '$' COLUMNS (b1 INT PATH 'b1_path')))) AS jt;`,
-			output: "select * from json_table('{}', \"root_path\" columns(\n" +
-				"\ta INT path \"a_path\",\n" +
-				"\tnested path \"b_path\" columns(\n" +
-				"\tnested path \"$\" columns(\n" +
-				"\tb1 INT path \"b1_path\"\n" +
-				")\n" +
-				")\n" +
+			output: "select * from json_table('{}', 'root_path' columns(" +
+				"a INT path 'a_path', " +
+				"nested path 'b_path' columns(" +
+				"nested path '$' columns(" +
+				"b1 INT path 'b1_path'" +
+				")" +
+				")" +
 				")) as jt",
 		},
 	}
