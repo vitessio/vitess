@@ -51,7 +51,7 @@ OnlineDDL show test_keyspace running
 OnlineDDL show test_keyspace complete
 OnlineDDL show test_keyspace failed`,
 		DisableFlagsInUseLine: true,
-		Args:                  cobra.RangeArgs(0, 2),
+		Args:                  cobra.RangeArgs(1, 2),
 		RunE:                  commandOnlineDDLShow,
 	}
 )
