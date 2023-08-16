@@ -358,10 +358,10 @@ func validateReplicationIsHealthy(t *testing.T, tablet *cluster.Vttablet) bool {
 
 	ioRunning := row.AsString("Replica_IO_Running", "")
 	require.NotEmpty(t, ioRunning)
-	ioHealthy := assert.Equalf(t, "Yes", ioRunning, "row: %v", row)
+	ioHealthy := assert.Equalf(t, "Yes", ioRunning, "Replication is broken. Replication status: %v", row)
 	sqlRunning := row.AsString("Replica_SQL_Running", "")
 	require.NotEmpty(t, sqlRunning)
-	sqlHealthy := assert.Equalf(t, "Yes", sqlRunning, "row: %v", row)
+	sqlHealthy := assert.Equalf(t, "Yes", sqlRunning, "Replication is broken. Replication status: %v", row)
 
 	return ioHealthy && sqlHealthy
 }
@@ -388,7 +388,7 @@ func waitForReplicaCatchup(t *testing.T) {
 			return
 		}
 		if !validateReplicationIsHealthy(t, replica) {
-			assert.FailNow(t, "replica is unhealthy; not waiting for catchup")
+			assert.FailNow(t, "replication is broken; not waiting for catchup")
 			return
 		}
 		select {
