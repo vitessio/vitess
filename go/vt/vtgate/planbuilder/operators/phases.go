@@ -72,6 +72,32 @@ func getPhases() []Phase {
 				return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
 			}, stopAtRoute)
 		},
+	}, {
+		Name: "break the subquery container and extract subqueries still above the route",
+		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+				sqc, ok := op.(*SubQueryContainer)
+				if !ok {
+					return op, rewrite.SameTree, nil
+				}
+				outer := sqc.Outer
+				for _, subq := range sqc.Inner {
+					switch subq := subq.(type) {
+					case *SemiJoin:
+						// push the filter on the RHS of the filter
+						subq.RHS = &Filter{
+							Source:     subq.RHS,
+							Predicates: []sqlparser.Expr{subq.rhsPredicate},
+						}
+						subq.SetOuter(outer)
+						outer = subq
+					}
+
+				}
+				return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
+			}
+			return rewrite.BottomUp(op, TableID, visit, stopAtRoute)
+		},
 	}}
 }
 

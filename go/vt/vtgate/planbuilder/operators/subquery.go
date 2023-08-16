@@ -44,6 +44,7 @@ type (
 		// WHERE tbl.id = (SELECT foo from user LIMIT 1)
 		OriginalExpression() sqlparser.Expr // tbl.id = (SELECT foo from user LIMIT 1)
 		OuterExpressionsNeeded() []*sqlparser.ColName
+		SetOuter(operator ops.Operator)
 		//outside() sqlparser.Expr            // tbl.id
 		//inside() sqlparser.Expr             // user.foo
 		//alternative() sqlparser.Expr        // tbl.id = :arg

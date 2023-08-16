@@ -1,7 +1,7 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "select 1 from unsharded join user on unsharded.id = user.id where unsharded.foo IN (select X.id from unsharded X)",
+    "query": "select user.name from unsharded join user on unsharded.id = user.id where exists (select 1 from unsharded X where X.id = unsharded.foo)",
     "plan": {
 
     }

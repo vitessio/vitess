@@ -49,8 +49,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformVindexPlan(ctx, op)
 	case *operators.UncorrelatedSubQuery:
 		return transformSubQueryPlan(ctx, op)
-	case *operators.SubQueryContainer:
-		return transformSubQueryContainer(ctx, op, isRoot)
+	case *operators.SemiJoin:
+		return transformSemiJoin(ctx, op, isRoot)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:

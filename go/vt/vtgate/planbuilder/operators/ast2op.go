@@ -165,55 +165,26 @@ func createExistsSubquery(
 	subqID := ctx.SemTable.StatementIDs[innerSel]
 	totalID := subqID.Merge(outerID)
 
-	var remainingPredicates []sqlparser.Expr
 	predicates := sqlparser.SplitAndExpression(nil, innerSel.Where.Expr)
-	var comparisonColumns [][2]*sqlparser.ColName
-	joinVars := make(map[string]*sqlparser.ColName)
+	jpc := &joinPredicateCollector{
+		joinVars: make(map[string]*sqlparser.ColName),
+		totalID:  totalID,
+		subqID:   subqID,
+		outerID:  outerID,
+	}
 
 	for _, predicate := range predicates {
-		usable, outerCol, innerCol := apa(ctx, predicate, totalID, subqID, outerID)
-		if !usable {
-			remainingPredicates = append(remainingPredicates, predicate)
-			continue
-		}
-
-		// We've established that this is a valid comparison that we can use to join the subquery to the outer query.
-		// Next we find all the columns from the outer query that we need to copy to the inner query
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			col, ok := node.(*sqlparser.ColName)
-			if !ok {
-				return true, nil
-			}
-			deps := ctx.SemTable.RecursiveDeps(col)
-			if deps.IsSolvedBy(subqID) {
-				return false, nil
-			}
-			for _, existing := range joinVars {
-				if ctx.SemTable.EqualsExprWithDeps(col, existing) {
-					return true, nil
-				}
-			}
-			bindvarName := ctx.ReservedVars.ReserveColName(col)
-			joinVars[bindvarName] = col
-			return false, nil
-		}, predicate)
-
-		// and finally we store the information about the inside and outside columns,
-		// if they can be used for sharding decisions
-		if outerCol != nil || innerCol != nil {
-			comparisonColumns = append(comparisonColumns, [2]*sqlparser.ColName{outerCol, innerCol})
-		}
+		jpc.inspectPredicate(ctx, predicate)
 	}
 
-	if len(joinVars) == 0 {
-		// we are dealing with an uncorrelated subquery
-		panic("implement me")
+	if len(jpc.joinVars) == 0 {
+		panic("uncorrelated not supported")
 	}
 
-	if remainingPredicates == nil {
+	if jpc.remainingPredicates == nil {
 		innerSel.Where = nil
 	} else {
-		innerSel.Where.Expr = sqlparser.AndExpressions(remainingPredicates...)
+		innerSel.Where.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	}
 
 	opInner, err := translateQueryToOp(ctx, innerSel)
@@ -222,64 +193,101 @@ func createExistsSubquery(
 	}
 
 	return &SemiJoin{
-		inner:             opInner,
-		JoinVars:          map[string]*sqlparser.ColName{},
-		JoinVarOffsets:    map[string]int{},
+		RHS:               opInner,
+		JoinVars:          jpc.joinVars,
 		Original:          org,
-		comparisonColumns: comparisonColumns,
+		comparisonColumns: jpc.comparisonColumns,
+		rhsPredicate:      jpc.rhsPredicate,
 	}, nil
 }
 
-func apa(
+type joinPredicateCollector struct {
+	joinVars            map[string]*sqlparser.ColName
+	comparisonColumns   [][2]*sqlparser.ColName
+	remainingPredicates []sqlparser.Expr
+	rhsPredicate        sqlparser.Expr
+
+	totalID,
+	subqID,
+	outerID semantics.TableSet
+}
+
+func (jpc *joinPredicateCollector) inspectPredicate(
 	ctx *plancontext.PlanningContext,
 	predicate sqlparser.Expr,
-	totalID semantics.TableSet,
-	subqID semantics.TableSet,
-	outerID semantics.TableSet,
-) (bool, *sqlparser.ColName, *sqlparser.ColName) {
+) {
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	// if neither of the two sides of the predicate is enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
-	if !(!deps.IsSolvedBy(subqID) && !deps.IsSolvedBy(outerID)) || !deps.IsSolvedBy(totalID) {
-		return false, nil, nil
+	if !(!deps.IsSolvedBy(jpc.subqID) && !deps.IsSolvedBy(jpc.outerID)) || !deps.IsSolvedBy(jpc.totalID) {
+		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
+		return
 	}
 
+	jpc.calcJoinVars(ctx, predicate)
+	jpc.calcJoinColumns(ctx, predicate)
+}
+
+func (jpc *joinPredicateCollector) calcJoinColumns(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
 	cmp, ok := predicate.(*sqlparser.ComparisonExpr)
 	if !ok {
-		return true, nil, nil
+		return
 	}
 
 	innerE, outerE := cmp.Left, cmp.Right
 	subDeps := ctx.SemTable.RecursiveDeps(innerE)
 	outerDeps := ctx.SemTable.RecursiveDeps(outerE)
-	if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
+	if !subDeps.IsSolvedBy(jpc.subqID) || !outerDeps.IsSolvedBy(jpc.outerID) {
 		subDeps, outerDeps = outerDeps, subDeps
 		innerE, outerE = outerE, innerE
 	}
 
 	// we check again, if we still haven't figured it out, we can't use these sides for merging or routing
-	if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
-		return true, nil, nil
+	if !subDeps.IsSolvedBy(jpc.subqID) || !outerDeps.IsSolvedBy(jpc.outerID) {
+		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
+		return
 	}
 
 	outerCol, _ := outerE.(*sqlparser.ColName)
 	innerCol, _ := innerE.(*sqlparser.ColName)
-
-	return true, outerCol, innerCol
+	if outerCol != nil || innerCol != nil {
+		jpc.comparisonColumns = append(jpc.comparisonColumns, [2]*sqlparser.ColName{outerCol, innerCol})
+	}
 }
 
-// GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
-func getSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
-	var subq *sqlparser.Subquery
-	var exp sqlparser.Expr
-	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
-		subq = lSubq
-		exp = node.Right
-	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
-		subq = rSubq
-		exp = node.Left
+// calcJoinVars finds all the columns from the outer query that we need to copy to the inner query
+// and replaces them with bindvars in the predicate for the RHS
+func (jpc *joinPredicateCollector) calcJoinVars(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
+	pre := func(node, _ sqlparser.SQLNode) bool {
+		_, isSubQuery := node.(*sqlparser.Subquery)
+		return !isSubQuery
 	}
-	return subq, exp
+
+	post := func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
+		}
+		deps := ctx.SemTable.RecursiveDeps(col)
+		if deps.IsSolvedBy(jpc.subqID) {
+			return
+		}
+
+		var bindvarName string
+		for name, existing := range jpc.joinVars {
+			if ctx.SemTable.EqualsExprWithDeps(col, existing) {
+				bindvarName = name
+			}
+		}
+		if bindvarName == "" {
+			bindvarName = ctx.ReservedVars.ReserveColName(col)
+		}
+		cursor.Replace(sqlparser.NewArgument(bindvarName))
+		jpc.joinVars[bindvarName] = col
+	}
+
+	rhsPred := sqlparser.CopyOnRewrite(predicate, pre, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
+	jpc.rhsPredicate = sqlparser.AndExpressions(jpc.rhsPredicate, rhsPred)
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {

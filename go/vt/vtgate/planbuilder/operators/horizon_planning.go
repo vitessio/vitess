@@ -135,7 +135,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *Union:
 			return tryPushDownUnion(ctx, in)
 		case *SubQueryContainer:
-			return pushOrExpandSubQueryContainer(ctx, in)
+			return pushOrMergeSubQueryContainer(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -144,7 +144,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func pushOrExpandSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	var remaining []SubQuery
 	var result *rewrite.ApplyResult
 
@@ -159,6 +159,8 @@ func pushOrExpandSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuer
 			if !pushed {
 				remaining = append(remaining, inner)
 			}
+		default:
+			remaining = append(remaining, inner)
 		}
 	}
 
