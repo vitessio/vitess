@@ -56,7 +56,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			if op.TableId != nil {
 				return pushDownDerived(ctx, op)
 			}
-		// case *SubQueryLogical:
+		// case *SubQueryContainer:
 		// 	return pushDownSubQueryLogical(ctx, op)
 		case *Filter:
 			return pushDownFilter(op)
@@ -71,7 +71,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	return compact(ctx, op)
 }
 
-// func pushDownSubQueryLogical(ctx *plancontext.PlanningContext, op *SubQueryLogical) (ops.Operator, *rewrite.ApplyResult, error) {
+// func pushDownSubQueryLogical(ctx *plancontext.PlanningContext, op *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 //
 // }
 

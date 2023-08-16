@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -77,7 +76,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 }
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
-	sqL := &SubQueryLogical{}
+	sqL := &SubQueryContainer{}
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
@@ -98,7 +97,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	return sqL.getRootOperator(op), nil
 }
 
-func (sq *SubQueryLogical) handleSubquery(
+func (sq *SubQueryContainer) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
@@ -117,7 +116,7 @@ func (sq *SubQueryLogical) handleSubquery(
 	return true, nil
 }
 
-func (sq *SubQueryLogical) getRootOperator(op ops.Operator) ops.Operator {
+func (sq *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
 	if len(sq.Inner) == 0 {
 		return op
 	}
@@ -144,69 +143,129 @@ func createExtractedSubquery(
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 ) (SubQuery, error) {
-	opInner, err := translateQueryToOp(ctx, subq.Select)
+
+	switch expr.(type) {
+	case *sqlparser.ExistsExpr:
+		return createExistsSubquery(ctx, expr, subq, outerID)
+	}
+	return nil, vterrors.VT12001("unsupported subquery: " + sqlparser.String(expr))
+}
+
+func createExistsSubquery(
+	ctx *plancontext.PlanningContext,
+	org sqlparser.Expr,
+	sq *sqlparser.Subquery,
+	outerID semantics.TableSet,
+) (SubQuery, error) {
+	innerSel, ok := sq.Select.(*sqlparser.Select)
+	if !ok || innerSel.Where == nil {
+		panic("should return uncorrelated subquery here")
+	}
+
+	subqID := ctx.SemTable.StatementIDs[innerSel]
+	totalID := subqID.Merge(outerID)
+
+	var remainingPredicates []sqlparser.Expr
+	predicates := sqlparser.SplitAndExpression(nil, innerSel.Where.Expr)
+	var comparisonColumns [][2]*sqlparser.ColName
+	joinVars := make(map[string]*sqlparser.ColName)
+
+	for _, predicate := range predicates {
+		usable, outerCol, innerCol := apa(ctx, predicate, totalID, subqID, outerID)
+		if !usable {
+			remainingPredicates = append(remainingPredicates, predicate)
+			continue
+		}
+
+		// We've established that this is a valid comparison that we can use to join the subquery to the outer query.
+		// Next we find all the columns from the outer query that we need to copy to the inner query
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if !ok {
+				return true, nil
+			}
+			deps := ctx.SemTable.RecursiveDeps(col)
+			if deps.IsSolvedBy(subqID) {
+				return false, nil
+			}
+			for _, existing := range joinVars {
+				if ctx.SemTable.EqualsExprWithDeps(col, existing) {
+					return true, nil
+				}
+			}
+			bindvarName := ctx.ReservedVars.ReserveColName(col)
+			joinVars[bindvarName] = col
+			return false, nil
+		}, predicate)
+
+		// and finally we store the information about the inside and outside columns,
+		// if they can be used for sharding decisions
+		if outerCol != nil || innerCol != nil {
+			comparisonColumns = append(comparisonColumns, [2]*sqlparser.ColName{outerCol, innerCol})
+		}
+	}
+
+	if len(joinVars) == 0 {
+		// we are dealing with an uncorrelated subquery
+		panic("implement me")
+	}
+
+	if remainingPredicates == nil {
+		innerSel.Where = nil
+	} else {
+		innerSel.Where.Expr = sqlparser.AndExpressions(remainingPredicates...)
+	}
+
+	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
 		return nil, err
 	}
-	subqID := TableID(opInner)
-	totalID := subqID.Merge(outerID)
-	sq := &SubQueryInner{
-		Inner:    opInner,
-		Original: expr,
-		sq:       subq,
-		OpCode:   opcode.PulloutValue,
-	}
 
-	switch par := expr.(type) {
-	case *sqlparser.ExistsExpr:
-		return funcName(ctx, sq, par, subqID, outerID, totalID)
-	}
-	return sq, nil
+	return &SemiJoin{
+		inner:             opInner,
+		JoinVars:          map[string]*sqlparser.ColName{},
+		JoinVarOffsets:    map[string]int{},
+		Original:          org,
+		comparisonColumns: comparisonColumns,
+	}, nil
 }
 
-func funcName(
+func apa(
 	ctx *plancontext.PlanningContext,
-	sq *SubQueryInner,
-	par sqlparser.Expr,
-	subqID,
-	outerID,
+	predicate sqlparser.Expr,
 	totalID semantics.TableSet,
-) (*SubQueryInner, error) {
-	sq.OpCode = opcode.PulloutExists
-	innerSel, ok := sq.sq.Select.(*sqlparser.Select)
-	if !ok || innerSel.Where == nil {
-		return sq, nil
+	subqID semantics.TableSet,
+	outerID semantics.TableSet,
+) (bool, *sqlparser.ColName, *sqlparser.ColName) {
+	deps := ctx.SemTable.RecursiveDeps(predicate)
+	// if neither of the two sides of the predicate is enough, but together we have all we need,
+	// then we can use this predicate to connect the subquery to the outer query
+	if !(!deps.IsSolvedBy(subqID) && !deps.IsSolvedBy(outerID)) || !deps.IsSolvedBy(totalID) {
+		return false, nil, nil
 	}
-	predicates := sqlparser.SplitAndExpression(nil, innerSel.Where.Expr)
-	for _, predicate := range predicates {
-		deps := ctx.SemTable.RecursiveDeps(predicate)
-		if !(!deps.IsSolvedBy(subqID) && !deps.IsSolvedBy(outerID)) || !deps.IsSolvedBy(totalID) {
-			continue
-		}
-		// if neither of the two sides of the predicate is enough, but together we have all we need,
-		// then we can use this predicate to connect the subquery to the outer query
-		cmp, ok := predicate.(*sqlparser.ComparisonExpr)
-		if !ok {
-			continue
-		}
 
-		subE, outerE := cmp.Left, cmp.Right
-		subDeps := ctx.SemTable.RecursiveDeps(subE)
-		outerDeps := ctx.SemTable.RecursiveDeps(outerE)
-		if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
-			subDeps, outerDeps = outerDeps, subDeps
-			subE, outerE = outerE, subE
-		}
-
-		// we check again, if we still haven't figured it out, we can't use this predicate
-		if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
-			continue
-		}
-
-		sq.outside = outerE
-		sq.inside = subE
+	cmp, ok := predicate.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return true, nil, nil
 	}
-	return sq, nil
+
+	innerE, outerE := cmp.Left, cmp.Right
+	subDeps := ctx.SemTable.RecursiveDeps(innerE)
+	outerDeps := ctx.SemTable.RecursiveDeps(outerE)
+	if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
+		subDeps, outerDeps = outerDeps, subDeps
+		innerE, outerE = outerE, innerE
+	}
+
+	// we check again, if we still haven't figured it out, we can't use these sides for merging or routing
+	if !subDeps.IsSolvedBy(subqID) || !outerDeps.IsSolvedBy(outerID) {
+		return true, nil, nil
+	}
+
+	outerCol, _ := outerE.(*sqlparser.ColName)
+	innerCol, _ := innerE.(*sqlparser.ColName)
+
+	return true, outerCol, innerCol
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
@@ -301,7 +360,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	outerID := TableID(r)
 
-	sqL := &SubQueryLogical{}
+	sqL := &SubQueryContainer{}
 	for _, predicate := range qt.Predicates {
 		if isSubq, err := sqL.handleSubquery(ctx, predicate, outerID); err != nil {
 			return nil, err
@@ -394,7 +453,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	del.OwnedVindexQuery = ovq
 
-	sqL := &SubQueryLogical{}
+	sqL := &SubQueryContainer{}
 	for _, predicate := range qt.Predicates {
 		if isSubQ, err := sqL.handleSubquery(ctx, predicate, TableID(route)); err != nil {
 			return nil, err

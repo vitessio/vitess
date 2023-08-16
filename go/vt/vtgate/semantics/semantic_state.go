@@ -116,6 +116,9 @@ type (
 		columns map[*sqlparser.Union]sqlparser.SelectExprs
 
 		comparator *sqlparser.Comparator
+
+		// StatementIDs is a map of statements and all the table IDs that are contained within
+		StatementIDs map[sqlparser.Statement]TableSet
 	}
 
 	columnName struct {

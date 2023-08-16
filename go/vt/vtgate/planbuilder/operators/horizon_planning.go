@@ -134,8 +134,8 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownDistinct(in)
 		case *Union:
 			return tryPushDownUnion(ctx, in)
-		case *SubQueryLogical:
-			return pushOrExpandSubQueryLogical(ctx, in)
+		case *SubQueryContainer:
+			return pushOrExpandSubQueryContainer(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -144,7 +144,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func pushOrExpandSubQueryLogical(ctx *plancontext.PlanningContext, in *SubQueryLogical) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushOrExpandSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	var remaining []SubQuery
 	var result *rewrite.ApplyResult
 
@@ -162,19 +162,25 @@ func pushOrExpandSubQueryLogical(ctx *plancontext.PlanningContext, in *SubQueryL
 		}
 	}
 
-	return in, rewrite.SameTree, nil
+	if len(remaining) == 0 {
+		return in.Outer, result, nil
+	}
+
+	in.Inner = remaining
+
+	return in, result, nil
 }
 
-// tryPushDownSubQueryInJoin attempts to push down a SubQueryLogical into an ApplyJoin
+// tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery, join *ApplyJoin) (bool, *rewrite.ApplyResult, error) {
 
 	lhs := TableID(join.LHS)
 	rhs := TableID(join.RHS)
-	if inner.outside() == nil {
-		return false, rewrite.SameTree, nil
-	}
 
-	deps := ctx.SemTable.RecursiveDeps(inner.outside())
+	deps := semantics.EmptyTableSet()
+	for _, colNeeded := range inner.OuterExpressionsNeeded() {
+		deps = deps.Merge(ctx.SemTable.RecursiveDeps(colNeeded))
+	}
 
 	if deps.IsSolvedBy(lhs) {
 		// we can safely push down the subquery on the LHS
@@ -191,13 +197,13 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 	return false, rewrite.SameTree, nil
 }
 
-// addSubQueryInner adds a SubQueryInner to the given operator. If the operator is a SubQueryLogical,
-// it will add the SubQueryInner to the SubQueryLogical. If the operator is something else,	it will
-// create a new SubQueryLogical with the given operator as the outer and the SubQueryInner as the inner.
+// addSubQueryInner adds a SubQueryInner to the given operator. If the operator is a SubQueryContainer,
+// it will add the SubQueryInner to the SubQueryContainer. If the operator is something else,	it will
+// create a new SubQueryContainer with the given operator as the outer and the SubQueryInner as the inner.
 func addSubQueryInner(in ops.Operator, inner SubQuery) ops.Operator {
-	sql, ok := in.(*SubQueryLogical)
+	sql, ok := in.(*SubQueryContainer)
 	if !ok {
-		return &SubQueryLogical{
+		return &SubQueryContainer{
 			Outer: in,
 			Inner: []SubQuery{inner},
 		}

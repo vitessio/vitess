@@ -50,16 +50,34 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.Uncor
 	return plan, err
 }
 
-func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.CorrelatedSubQueryOp) (logicalPlan, error) {
-	outer, err := transformToLogicalPlan(ctx, op.LHS, false)
+// transformSubQueryContainer transforms a SubQueryContainer into a logicalPlan,
+// going from the slice of subqueries to a tree of subqueries
+func transformSubQueryContainer(ctx *plancontext.PlanningContext, op *operators.SubQueryContainer, isRoot bool) (logicalPlan, error) {
+	outer, err := transformToLogicalPlan(ctx, op.Outer, isRoot)
 	if err != nil {
 		return nil, err
 	}
-	inner, err := transformToLogicalPlan(ctx, op.RHS, false)
+
+	for _, subQuery := range op.Inner {
+		switch subQuery := subQuery.(type) {
+		case *operators.SemiJoin:
+			newOp, err := transformSemiJoin(ctx, subQuery, outer)
+			if err != nil {
+				return nil, err
+			}
+			outer = newOp
+		}
+	}
+
+	return outer, nil
+}
+
+func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin, outer logicalPlan) (logicalPlan, error) {
+	inner, err := transformToLogicalPlan(ctx, op.Inner(), false)
 	if err != nil {
 		return nil, err
 	}
-	return newSemiJoin(outer, inner, op.Vars, op.LHSColumns), nil
+	return newSemiJoin(outer, inner, op.JoinVarOffsets, op.OuterExpressionsNeeded()), nil
 }
 
 func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *operators.UncorrelatedSubQuery) logicalPlan {

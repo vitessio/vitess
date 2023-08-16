@@ -18,91 +18,44 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
-	// SubQueryLogical stores the information about a query and it's subqueries.
+	// SubQueryContainer stores the information about a query and it's subqueries.
 	// The inner subqueries can be executed in any order, so we store them like this so we can see more opportunities
 	// for merging
-	SubQueryLogical struct {
+	SubQueryContainer struct {
 		Outer ops.Operator
 		Inner []SubQuery
 	}
 
 	// SubQueryInner stores the subquery information for a select statement
 	SubQueryInner struct {
-		// Inner is the Operator inside the parenthesis of the subquery.
-		// i.e: select (select 1 union select 1), the Inner here would be
-		// of type Concatenate since we have a Union.
-		Inner ops.Operator
-
-		OpCode         opcode.PulloutOpcode
-		comparisonType sqlparser.ComparisonExprOperator
-
-		// The comments below are for the following query:
-		// WHERE tbl.id = (SELECT foo from user LIMIT 1)
-		Original    sqlparser.Expr      // tbl.id = (SELECT foo from user LIMIT 1)
-		outside     sqlparser.Expr      // tbl.id
-		inside      sqlparser.Expr      // user.foo
-		alternative sqlparser.Expr      // tbl.id = :arg
-		sq          *sqlparser.Subquery // (SELECT foo from user LIMIT 1)
-
-		noColumns
-		noPredicates
 	}
 
 	SubQuery interface {
 		ops.Operator
 
 		Inner() ops.Operator
-		Outer() ops.Operator
-		OpCode() opcode.PulloutOpcode
 
 		// The comments below are for the following query:
 		// WHERE tbl.id = (SELECT foo from user LIMIT 1)
 		OriginalExpression() sqlparser.Expr // tbl.id = (SELECT foo from user LIMIT 1)
-		outside() sqlparser.Expr            // tbl.id
-		inside() sqlparser.Expr             // user.foo
-		alternative() sqlparser.Expr        // tbl.id = :arg
-		sq() *sqlparser.Subquery            // (SELECT foo from user LIMIT 1)
+		OuterExpressionsNeeded() []*sqlparser.ColName
+		//outside() sqlparser.Expr            // tbl.id
+		//inside() sqlparser.Expr             // user.foo
+		//alternative() sqlparser.Expr        // tbl.id = :arg
+		//sq() *sqlparser.Subquery            // (SELECT foo from user LIMIT 1)
 	}
 )
 
-var _ ops.Operator = (*SubQueryLogical)(nil)
-var _ ops.Operator = (*SubQueryInner)(nil)
+var _ ops.Operator = (*SubQueryContainer)(nil)
 
 // Clone implements the Operator interface
-func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
-	klone := *s
-	klone.Inner = inputs[0]
-	return &klone
-}
-
-func (s *SubQueryInner) GetOrdering() ([]ops.OrderBy, error) {
-	return s.Inner.GetOrdering()
-}
-
-// Inputs implements the Operator interface
-func (s *SubQueryInner) Inputs() []ops.Operator {
-	return []ops.Operator{s.Inner}
-}
-
-// SetInputs implements the Operator interface
-func (s *SubQueryInner) SetInputs(ops []ops.Operator) {
-	s.Inner = ops[0]
-}
-
-// ShortDescription implements the Operator interface
-func (s *SubQueryInner) ShortDescription() string {
-	return ""
-}
-
-// Clone implements the Operator interface
-func (s *SubQueryLogical) Clone(inputs []ops.Operator) ops.Operator {
-	result := &SubQueryLogical{
+func (s *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
+	result := &SubQueryContainer{
 		Outer: inputs[0],
 	}
 	for idx := range s.Inner {
@@ -115,12 +68,12 @@ func (s *SubQueryLogical) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (s *SubQueryLogical) GetOrdering() ([]ops.OrderBy, error) {
+func (s *SubQueryContainer) GetOrdering() ([]ops.OrderBy, error) {
 	return s.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (s *SubQueryLogical) Inputs() []ops.Operator {
+func (s *SubQueryContainer) Inputs() []ops.Operator {
 	operators := []ops.Operator{s.Outer}
 	for _, inner := range s.Inner {
 		operators = append(operators, inner)
@@ -129,32 +82,32 @@ func (s *SubQueryLogical) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (s *SubQueryLogical) SetInputs(ops []ops.Operator) {
+func (s *SubQueryContainer) SetInputs(ops []ops.Operator) {
 	s.Outer = ops[0]
 }
 
-func (s *SubQueryLogical) ShortDescription() string {
+func (s *SubQueryContainer) ShortDescription() string {
 	return ""
 }
 
-func (sq *SubQueryLogical) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (sq *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	newSrc, err := sq.Outer.AddPredicate(ctx, expr)
 	sq.Outer = newSrc
 	return sq, err
 }
 
-func (sq *SubQueryLogical) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+func (sq *SubQueryContainer) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
 	return sq.Outer.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sq *SubQueryLogical) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (sq *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	return sq.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sq *SubQueryLogical) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (sq *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return sq.Outer.GetColumns(ctx)
 }
 
-func (sq *SubQueryLogical) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (sq *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return sq.Outer.GetSelectExprs(ctx)
 }

@@ -121,6 +121,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		Collation:         coll,
 		ExpandedColumns:   a.rewriter.expandedColumns,
 		columns:           columns,
+		StatementIDs:      a.scoper.statementIDs,
 	}
 }
 
