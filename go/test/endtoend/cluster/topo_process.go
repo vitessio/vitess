@@ -257,8 +257,17 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", topo.Binary, <-topo.exit)
 }
 
-// TearDown shutdowns the running topo service
+// TearDown shutdowns the running topo service.
 func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool, topoFlavor string) error {
+	if topo.Client != nil {
+		switch cli := topo.Client.(type) {
+		case *clientv3.Client:
+			_ = cli.Close()
+		default:
+			log.Errorf("Unknown topo client type %T", cli)
+		}
+	}
+
 	if topoFlavor == "zk2" {
 		cmd := "shutdown"
 		if keepdata {
@@ -282,15 +291,6 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 
 		if !(*keepData || keepdata) {
 			topo.removeTopoDirectories(Cell)
-		}
-
-		if topo.Client != nil {
-			switch cli := topo.Client.(type) {
-			case *clientv3.Client:
-				_ = cli.Close()
-			default:
-				log.Errorf("Unknown topo client type %T", cli)
-			}
 		}
 
 		// Attempt graceful shutdown with SIGTERM first
