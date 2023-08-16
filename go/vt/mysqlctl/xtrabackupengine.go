@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -950,7 +951,7 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
 // xtrabackup can run while tablet is serving, hence false
-func (be *XtrabackupEngine) ShouldDrainForBackup() bool {
+func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
 	return false
 }
 
