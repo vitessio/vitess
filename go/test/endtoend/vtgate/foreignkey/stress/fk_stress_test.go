@@ -404,7 +404,7 @@ func waitForReplicaCatchup(t *testing.T) {
 	}
 }
 
-func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction) {
+func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
 	for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
 		tname := fmt.Sprintf("validate metrics: %s", workloadTable)
 		t.Run(tname, func(t *testing.T) {
@@ -472,7 +472,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		defer cancel()
 
 		t.Run("create schema", func(t *testing.T) {
-			createInitialSchema(t, tcase.onDeleteAction)
+			createInitialSchema(t, tcase.onDeleteAction, tcase.onUpdateAction)
 		})
 		t.Run("init tables", func(t *testing.T) {
 			populateTables(t)
@@ -496,17 +496,15 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 			waitForReplicaCatchup(t)
 		})
 		t.Run("validate metrics", func(t *testing.T) {
-			validateMetrics(t, tcase.onDeleteAction)
+			validateMetrics(t, tcase.onDeleteAction, tcase.onUpdateAction)
 		})
 		t.Run("validate replication health", func(t *testing.T) {
 			validateReplicationIsHealthy(t, replica)
 		})
-		if tcase.workload {
-			t.Run("validate fk", func(t *testing.T) {
-				testFKIntegrity(t, primary, tcase.onDeleteAction)
-				testFKIntegrity(t, replica, tcase.onDeleteAction)
-			})
-		}
+		t.Run("validate fk", func(t *testing.T) {
+			testFKIntegrity(t, primary, tcase.onDeleteAction, tcase.onUpdateAction)
+			testFKIntegrity(t, replica, tcase.onDeleteAction, tcase.onUpdateAction)
+		})
 	})
 }
 
@@ -537,7 +535,7 @@ func TestStressFK(t *testing.T) {
 }
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
-func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction) {
+func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -865,7 +863,7 @@ func testSelectTableMetrics(t *testing.T, tablet *cluster.Vttablet, tableName st
 //   - On the primary database, this test trivially passes because of course MySQL maintains this integrity. But remember
 //     that we remove the foreign key constraints on the replica. Also remember that cascaded writes are not written to
 //     the binary log. And so, if VTGate does not do a proper job, then a parent and child will drift apart in CASCADE writes.
-func testFKIntegrity(t *testing.T, tablet *cluster.Vttablet, onDeleteAction sqlparser.ReferenceAction) {
+func testFKIntegrity(t *testing.T, tablet *cluster.Vttablet, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
 	testName := tabletTestName(t, tablet)
 	t.Run(testName, func(t *testing.T) {
 		t.Run("matching parent-child rows", func(t *testing.T) {
