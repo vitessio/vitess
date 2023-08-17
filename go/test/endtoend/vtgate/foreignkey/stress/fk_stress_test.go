@@ -456,7 +456,12 @@ type testCase struct {
 	onlineDDLTable string
 }
 
-func executeFKTest(t *testing.T, tcase *testCase) {
+// ExecuteFKTest runs a single test case, which can be:
+// - With/out workload
+// - Either one of ON DELETE actions
+// - Either one of ON UPDATE actions
+// - Potentially running an Online DDL on an indicated table (this will not work in Vanilla MySQL, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/)
+func ExecuteFKTest(t *testing.T, tcase *testCase) {
 	workloadName := "static data"
 	if tcase.workload {
 		workloadName = "workload"
@@ -504,6 +509,7 @@ func executeFKTest(t *testing.T, tcase *testCase) {
 		}
 	})
 }
+
 func TestStressFK(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
@@ -517,7 +523,7 @@ func TestStressFK(t *testing.T) {
 			onDeleteAction: onDeleteAction,
 			onUpdateAction: sqlparser.NoAction,
 		}
-		executeFKTest(t, tcase)
+		ExecuteFKTest(t, tcase)
 	}
 
 	for _, onDeleteAction := range referenceActions {
@@ -526,7 +532,7 @@ func TestStressFK(t *testing.T) {
 			onDeleteAction: onDeleteAction,
 			onUpdateAction: sqlparser.NoAction,
 		}
-		executeFKTest(t, tcase)
+		ExecuteFKTest(t, tcase)
 	}
 }
 
