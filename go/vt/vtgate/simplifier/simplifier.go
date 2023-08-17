@@ -108,6 +108,7 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 			if test(in) {
 				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
 				simplified = true
+				// initially return false, but that made the rewriter prematurely abort, if it was the last selectExpr
 				return true
 			}
 			cursor.restore()
