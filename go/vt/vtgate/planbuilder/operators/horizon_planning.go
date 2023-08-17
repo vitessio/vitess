@@ -198,23 +198,23 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 
 	if deps.IsSolvedBy(lhs) {
 		// we can safely push down the subquery on the LHS
-		join.LHS = addSubQueryInner(join.LHS, inner)
+		join.LHS = addSubQuery(join.LHS, inner)
 		return true, rewrite.NewTree("push subquery into LHS of join", inner), nil
 	}
 
 	if deps.IsSolvedBy(rhs) && !join.LeftJoin {
 		// we can't push down filter on outer joins
-		join.RHS = addSubQueryInner(join.RHS, inner)
+		join.RHS = addSubQuery(join.RHS, inner)
 		return true, rewrite.NewTree("push subquery into RHS of join", inner), nil
 	}
 
 	return false, rewrite.SameTree, nil
 }
 
-// addSubQueryInner adds a SubQueryInner to the given operator. If the operator is a SubQueryContainer,
-// it will add the SubQueryInner to the SubQueryContainer. If the operator is something else,	it will
-// create a new SubQueryContainer with the given operator as the outer and the SubQueryInner as the inner.
-func addSubQueryInner(in ops.Operator, inner SubQuery) ops.Operator {
+// addSubQuery adds a SubQuery to the given operator. If the operator is a SubQueryContainer,
+// it will add the SubQuery to the SubQueryContainer. If the operator is something else,	it will
+// create a new SubQueryContainer with the given operator as the outer and the SubQuery as the inner.
+func addSubQuery(in ops.Operator, inner SubQuery) ops.Operator {
 	sql, ok := in.(*SubQueryContainer)
 	if !ok {
 		return &SubQueryContainer{

@@ -31,10 +31,6 @@ type (
 		Inner []SubQuery
 	}
 
-	// SubQueryInner stores the subquery information for a select statement
-	SubQueryInner struct {
-	}
-
 	SubQuery interface {
 		ops.Operator
 
