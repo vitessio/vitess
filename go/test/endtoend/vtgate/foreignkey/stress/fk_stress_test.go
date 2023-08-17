@@ -37,7 +37,10 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -129,6 +132,7 @@ var (
 	replica         *cluster.Vttablet
 	vtParams        mysql.ConnParams
 
+	onlineDDLStrategy     = "vitess --unsafe-allow-foreign-keys --cut-over-threshold=15s"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
@@ -214,6 +218,9 @@ var (
 		`ALTER TABLE stress_child2 DROP CONSTRAINT child2_parent_fk`,
 		`ALTER TABLE stress_grandchild DROP CONSTRAINT grandchild_child_fk`,
 	}
+	alterHintStatement = `
+		ALTER TABLE %s modify hint_col varchar(64) not null default '%s'
+	`
 	insertRowStatement = `
 		INSERT IGNORE INTO %s (id, parent_id, rand_val) VALUES (%d, %d, left(md5(rand()), 8))
 	`
@@ -255,7 +262,9 @@ var (
 )
 
 const (
-	maxTableRows = 4096
+	maxTableRows         = 4096
+	workloadDuration     = 5 * time.Second
+	migrationWaitTimeout = 60 * time.Second
 )
 
 // The following variables are fit for a local, strong developer box.
@@ -292,6 +301,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--watch_replication_stream",
+			"--vreplication_tablet_type", "primary",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -488,7 +498,19 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 						runMultipleConnections(ctx, t, tbl)
 					}(workloadTable)
 				}
-				time.Sleep(5 * time.Second)
+				timer := time.NewTimer(workloadDuration)
+
+				if tcase.onlineDDLTable != "" {
+					t.Run(fmt.Sprintf("online ddl: %s", tcase.onlineDDLTable), func(t *testing.T) {
+						// This cannot work with Vanilla MySQL. We put the code for testing, but we're not actually going to use it
+						// for now. The test cases all have empty tcase.onlineDDLTable
+						hint := "hint-alter"
+						uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, tcase.onlineDDLTable, hint), onlineDDLStrategy, "vtgate", hint)
+						onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+					})
+				}
+
+				<-timer.C
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 			})
@@ -572,10 +594,10 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 	})
 	t.Run("validating tables: vttablet", func(t *testing.T) {
 		// Check if table is created. Checked on tablets.
-		checkTable(t, parentTableName)
-		checkTable(t, childTableName)
-		checkTable(t, child2TableName)
-		checkTable(t, grandchildTableName)
+		checkTable(t, parentTableName, "hint_col")
+		checkTable(t, childTableName, "hint_col")
+		checkTable(t, child2TableName, "hint_col")
+		checkTable(t, grandchildTableName, "hint_col")
 	})
 	t.Run("validating tables: vtgate", func(t *testing.T) {
 		// Wait for tables to appear on VTGate
@@ -607,6 +629,56 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 	})
 }
 
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
+	if executeStrategy == "vtgate" {
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
+		if row != nil {
+			uuid = row.AsString("uuid", "")
+		}
+	} else {
+		var err error
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		assert.NoError(t, err)
+	}
+	uuid = strings.TrimSpace(uuid)
+	fmt.Println("# Generated UUID (for debug purposes):")
+	fmt.Printf("<%s>\n", uuid)
+
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
+	assert.NoError(t, err)
+
+	if !strategySetting.Strategy.IsDirect() {
+		t.Logf("===== waiting for migration %v to conclude", uuid)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+	}
+
+	if expectHint != "" {
+		stmt, err := sqlparser.Parse(alterStatement)
+		require.NoError(t, err)
+		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
+		require.True(t, ok)
+		tableName := ddlStmt.GetTable().Name.String()
+		checkTable(t, tableName, expectHint)
+	}
+
+	if !strategySetting.Strategy.IsDirect() {
+		// let's see what FK tables have been renamed to
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		artifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+		for _, artifact := range artifacts {
+			checkTable(t, artifact, "")
+		}
+	}
+
+	return uuid
+}
+
 // waitForTable waits until table is seen in VTGate
 func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -629,9 +701,13 @@ func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
 }
 
 // checkTable checks that the given table exists on all tablets
-func checkTable(t *testing.T, showTableName string) {
+func checkTable(t *testing.T, showTableName string, expectHint string) {
 	for _, tablet := range shards[0].Vttablets {
 		checkTablesCount(t, tablet, showTableName, 1)
+		if expectHint != "" {
+			createStatement := getCreateTableStatement(t, tablet, showTableName)
+			assert.Contains(t, createStatement, expectHint)
+		}
 	}
 }
 
