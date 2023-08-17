@@ -31,38 +31,37 @@ type Child struct {
 	P      Primitive
 }
 
-// delete from child where (a, b) in ::__vals
-// delete from child where (a, b) in (:t1, :t2)
-
-// "__vals" : tuple (
-
+// FK_Cascade is a primitive that implements foreign key cascading using Input as values required to execute the Child Primitive.
+// On success, it executes the Parent Primitive.
 type FK_Cascade struct {
-	// select a, b, c, d from parent where a = 1
-	Input Primitive
-
-	Child []Child
-
+	Input  Primitive
+	Child  []Child
 	Parent Primitive
 
 	txNeeded
 }
 
+// RouteType implements the Primitive interface.
 func (fkc *FK_Cascade) RouteType() string {
 	return "FK_CASCADE"
 }
 
+// GetKeyspaceName implements the Primitive interface.
 func (fkc *FK_Cascade) GetKeyspaceName() string {
 	return fkc.Parent.GetKeyspaceName()
 }
 
+// GetTableName implements the Primitive interface.
 func (fkc *FK_Cascade) GetTableName() string {
 	return fkc.Parent.GetTableName()
 }
 
-func (fkc *FK_Cascade) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+// GetFields implements the Primitive interface.
+func (fkc *FK_Cascade) GetFields(_ context.Context, _ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields should not be called")
 }
 
+// TryExecute implements the Primitive interface.
 func (fkc *FK_Cascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inputRes, err := vcursor.ExecutePrimitive(ctx, fkc.Input, bindVars, wantfields)
 	if err != nil {
@@ -92,16 +91,19 @@ func (fkc *FK_Cascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars
 		if err != nil {
 			return nil, err
 		}
+		delete(bindVars, child.BVName)
 	}
 
 	return vcursor.ExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields)
 }
 
+// TryStreamExecute implements the Primitive interface.
 func (fkc *FK_Cascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// TODO implement me
 	panic("implement me")
 }
 
+// Inputs implements the Primitive interface.
 func (fkc *FK_Cascade) Inputs() []Primitive {
 	inputs := []Primitive{fkc.Input}
 	for _, child := range fkc.Child {
