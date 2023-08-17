@@ -276,7 +276,7 @@ func fieldType(field reflect.StructField) (querypb.Type, error) {
 				}
 			}
 		default:
-			// TOOD: error
+			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported pointer type %v", ptr.Kind())
 		}
 	case reflect.Struct:
 		switch field.Type.PkgPath() {
@@ -313,7 +313,7 @@ func fieldType(field reflect.StructField) (querypb.Type, error) {
 		case reflect.Uint8:
 			typeName = "varbinary"
 		default:
-			// TODO: error
+			err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported field type %v", field.Type.Kind())
 		}
 	}
 
@@ -451,8 +451,7 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		return NewTimestamp(s), nil
 	}
 
-	// TODO: error
-	return Value{}, nil
+	return Value{}, vterrors.Errorf(0, "unsupported query field type %s", strings.ToLower(querypb.Type_name[int32(typ)]))
 }
 
 func snakeCase(s string) string {
