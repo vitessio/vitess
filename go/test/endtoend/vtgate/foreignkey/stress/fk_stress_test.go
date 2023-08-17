@@ -442,6 +442,61 @@ func TestInitialSetup(t *testing.T) {
 	}
 }
 
+type testCase struct {
+	onDeleteAction sqlparser.ReferenceAction
+	onUpdateAction sqlparser.ReferenceAction
+	workload       bool
+	onlineDDLTable string
+}
+
+func executeFKTest(t *testing.T, tcase *testCase) {
+	workloadName := "static data"
+	if tcase.workload {
+		workloadName = "workload"
+	}
+	testName := fmt.Sprintf("%s/del=%s/upd=%s", workloadName, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction])
+	t.Run(testName, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		t.Run("create schema", func(t *testing.T) {
+			createInitialSchema(t, tcase.onDeleteAction)
+		})
+		t.Run("init tables", func(t *testing.T) {
+			populateTables(t)
+		})
+		if tcase.workload {
+			t.Run("workload", func(t *testing.T) {
+				var wg sync.WaitGroup
+				for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
+					wg.Add(1)
+					go func(tbl string) {
+						defer wg.Done()
+						runMultipleConnections(ctx, t, tbl)
+					}(workloadTable)
+				}
+				time.Sleep(5 * time.Second)
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			})
+		}
+		t.Run("wait for replica", func(t *testing.T) {
+			waitForReplicaCatchup(t)
+		})
+		t.Run("validate metrics", func(t *testing.T) {
+			validateMetrics(t, tcase.onDeleteAction)
+		})
+		t.Run("validate replication health", func(t *testing.T) {
+			validateReplicationIsHealthy(t, replica)
+		})
+		if tcase.workload {
+			t.Run("validate fk", func(t *testing.T) {
+				testFKIntegrity(t, primary, tcase.onDeleteAction)
+				testFKIntegrity(t, replica, tcase.onDeleteAction)
+			})
+		}
+	})
+}
 func TestStressFK(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
@@ -456,69 +511,23 @@ func TestStressFK(t *testing.T) {
 		validateReplicationIsHealthy(t, replica)
 	})
 
-	t.Run("static data", func(t *testing.T) {
-		for _, onDeleteAction := range referenceActions {
-			t.Run(referenceActionMap[onDeleteAction], func(t *testing.T) {
-				t.Run("create schema", func(t *testing.T) {
-					createInitialSchema(t, onDeleteAction)
-				})
-				t.Run("init tables", func(t *testing.T) {
-					populateTables(t)
-				})
-				t.Run("wait for replica", func(t *testing.T) {
-					waitForReplicaCatchup(t)
-				})
-				t.Run("validate metrics", func(t *testing.T) {
-					validateMetrics(t, onDeleteAction)
-				})
-				t.Run("validate replication health", func(t *testing.T) {
-					validateReplicationIsHealthy(t, replica)
-				})
-			})
+	for _, onDeleteAction := range referenceActions {
+		tcase := &testCase{
+			workload:       false,
+			onDeleteAction: onDeleteAction,
+			onUpdateAction: sqlparser.NoAction,
 		}
-	})
-	t.Run("stress", func(t *testing.T) {
-		for _, onDeleteAction := range referenceActions {
-			t.Run(referenceActionMap[onDeleteAction], func(t *testing.T) {
-				// This tests running a workload on the table, then comparing expected metrics with
-				// actual table metrics. All this without any ALTER TABLE: this is to validate
-				// that our testing/metrics logic is sound in the first place.
-				t.Run("Workload", func(t *testing.T) {
-					ctx, cancel := context.WithCancel(context.Background())
-					t.Run("create schema", func(t *testing.T) {
-						createInitialSchema(t, onDeleteAction)
-					})
-					t.Run("init tables", func(t *testing.T) {
-						populateTables(t)
-					})
-					t.Run("workload", func(t *testing.T) {
-						var wg sync.WaitGroup
-						for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
-							wg.Add(1)
-							go func(tbl string) {
-								defer wg.Done()
-								runMultipleConnections(ctx, t, tbl)
-							}(workloadTable)
-						}
-						time.Sleep(5 * time.Second)
-						cancel() // will cause runMultipleConnections() to terminate
-						wg.Wait()
-					})
-					t.Run("wait for replica", func(t *testing.T) {
-						waitForReplicaCatchup(t)
-					})
-					validateMetrics(t, onDeleteAction)
-					t.Run("validate replication health", func(t *testing.T) {
-						validateReplicationIsHealthy(t, replica)
-					})
-					t.Run("validate fk", func(t *testing.T) {
-						testFKIntegrity(t, primary, onDeleteAction)
-						testFKIntegrity(t, replica, onDeleteAction)
-					})
-				})
-			})
+		executeFKTest(t, tcase)
+	}
+
+	for _, onDeleteAction := range referenceActions {
+		tcase := &testCase{
+			workload:       true,
+			onDeleteAction: onDeleteAction,
+			onUpdateAction: sqlparser.NoAction,
 		}
-	})
+		executeFKTest(t, tcase)
+	}
 }
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
