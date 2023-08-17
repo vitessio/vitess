@@ -995,8 +995,11 @@ func TestShowTablesWithSizes(t *testing.T) {
 	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
 }
 
+// TestTuple tests that bind variables having tuple values work with vttablet.
 func TestTuple(t *testing.T) {
 	client := framework.NewClient()
+	_, err := client.Execute(`insert into vitess_a (eid, id) values (100, 103), (193, 235)`, nil)
+	require.NoError(t, err)
 
 	bv := map[string]*querypb.BindVariable{
 		"__vals": {
@@ -1005,20 +1008,58 @@ func TestTuple(t *testing.T) {
 				{
 					Type: querypb.Type_TUPLE,
 					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("1")},
-						{Type: querypb.Type_INT64, Value: []byte("2")},
+						{Type: querypb.Type_INT64, Value: []byte("100")},
+						{Type: querypb.Type_INT64, Value: []byte("103")},
 					},
 				},
 				{
 					Type: querypb.Type_TUPLE,
 					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("3")},
-						{Type: querypb.Type_INT64, Value: []byte("4")},
+						{Type: querypb.Type_INT64, Value: []byte("87")},
+						{Type: querypb.Type_INT64, Value: []byte("4473")},
 					},
 				},
 			},
 		},
 	}
-	_, err := client.Execute("select * from vitess_test where (a, b) in ::__vals", bv)
-	require.ErrorContains(t, err, "Unknown column 'a' in 'where clause'")
+	res, err := client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(100) INT32(103) NULL NULL]]`, fmt.Sprintf("%v", res.Rows))
+
+	res, err = client.Execute("update vitess_a set name = 'a' where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, res.RowsAffected)
+
+	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(100) INT32(103) VARCHAR("a") NULL]]`, fmt.Sprintf("%v", res.Rows))
+
+	bv = map[string]*querypb.BindVariable{
+		"__vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("100")},
+						{Type: querypb.Type_INT64, Value: []byte("103")},
+					},
+				},
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("193")},
+						{Type: querypb.Type_INT64, Value: []byte("235")},
+					},
+				},
+			},
+		},
+	}
+	res, err = client.Execute("delete from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, res.RowsAffected)
+
+	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	require.Zero(t, len(res.Rows))
 }
