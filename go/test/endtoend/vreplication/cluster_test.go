@@ -323,6 +323,9 @@ func init() {
 func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
 	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
+
+	vc.CleanupDataroot(t)
+
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
 	require.NotNil(t, topo)
@@ -356,6 +359,24 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, vc.VtctldClient)
 	return vc
+}
+
+// CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
+// we can run out of disk space due to all the leftover artifacts from previous tests.
+func (vc *VitessCluster) CleanupDataroot(t *testing.T) {
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if !ok || strings.ToLower(ci) != "true" {
+		// Leave the directory in place to support local debugging.
+		return
+	}
+	dir := vc.ClusterConfig.vtdataroot
+	log.Infof("Deleting vtdataroot %s", dir)
+	err := os.RemoveAll(dir)
+	require.NoError(t, err)
+	err = os.Mkdir(dir, 0755)
+	require.NoError(t, err)
 }
 
 // AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
