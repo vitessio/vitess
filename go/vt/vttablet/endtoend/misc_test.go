@@ -994,3 +994,31 @@ func TestShowTablesWithSizes(t *testing.T) {
 	}
 	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
 }
+
+func TestTuple(t *testing.T) {
+	client := framework.NewClient()
+
+	bv := map[string]*querypb.BindVariable{
+		"__vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("1")},
+						{Type: querypb.Type_INT64, Value: []byte("2")},
+					},
+				},
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("3")},
+						{Type: querypb.Type_INT64, Value: []byte("4")},
+					},
+				},
+			},
+		},
+	}
+	_, err := client.Execute("select * from vitess_test where (a, b) in ::__vals", bv)
+	require.ErrorContains(t, err, "Unknown column 'a' in 'where clause'")
+}

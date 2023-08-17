@@ -47,7 +47,7 @@ func ValueToProto(v Value) *querypb.Value {
 
 // ProtoToValue converts a *querypb.Value to a Value.
 func ProtoToValue(v *querypb.Value) Value {
-	return MakeTrusted(v.Type, v.Value)
+	return MakeTrustedValues(v.Type, v.Value, v.Values)
 }
 
 // BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]any
