@@ -145,23 +145,24 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 }
 
 func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
+	// we can decide which pusher to use for all the inner subqueries
+	pusher := getSubqueryPusher(in.Outer)
+	if pusher == nil {
+		return in, rewrite.SameTree, nil
+	}
+
 	var remaining []SubQuery
 	var result *rewrite.ApplyResult
-
 	for _, inner := range in.Inner {
-		switch outer := in.Outer.(type) {
-		case *ApplyJoin:
-			pushed, _result, err := tryPushDownSubQueryInJoin(ctx, inner, outer)
-			if err != nil {
-				return nil, nil, err
-			}
-			result = result.Merge(_result)
-			if !pushed {
-				remaining = append(remaining, inner)
-			}
-		default:
+		pushed, _result, err := pusher(ctx, inner)
+		if err != nil {
+			return nil, nil, err
+		}
+		result = result.Merge(_result)
+		if !pushed {
 			remaining = append(remaining, inner)
 		}
+
 	}
 
 	if len(remaining) == 0 {
@@ -171,6 +172,17 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 	in.Inner = remaining
 
 	return in, result, nil
+}
+
+func getSubqueryPusher(in ops.Operator) func(ctx *plancontext.PlanningContext, inner SubQuery) (bool, *rewrite.ApplyResult, error) {
+	switch outer := in.(type) {
+	case *ApplyJoin:
+		return func(ctx *plancontext.PlanningContext, inner SubQuery) (bool, *rewrite.ApplyResult, error) {
+			return tryPushDownSubQueryInJoin(ctx, inner, outer)
+		}
+	default:
+		return nil
+	}
 }
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin

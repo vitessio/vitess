@@ -144,11 +144,73 @@ func createExtractedSubquery(
 	outerID semantics.TableSet,
 ) (SubQuery, error) {
 
-	switch expr.(type) {
+	switch expr := expr.(type) {
 	case *sqlparser.ExistsExpr:
 		return createExistsSubquery(ctx, expr, subq, outerID)
+	case *sqlparser.ComparisonExpr:
+		return createComparisonSubQuery(ctx, expr, subq, outerID)
 	}
 	return nil, vterrors.VT12001("unsupported subquery: " + sqlparser.String(expr))
+}
+
+func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlparser.ComparisonExpr, subFromOutside *sqlparser.Subquery, outerID semantics.TableSet) (SubQuery, error) {
+	subq, outside := semantics.GetSubqueryAndOtherSide(original)
+	if outside == nil || subq != subFromOutside {
+		panic("uh oh")
+	}
+
+	innerSel, ok := subq.Select.(*sqlparser.Select)
+	if !ok {
+		panic("should return uncorrelated subquery here")
+	}
+
+	subqID := ctx.SemTable.StatementIDs[innerSel]
+	totalID := subqID.Merge(outerID)
+
+	predicate := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     outside,
+	}
+
+	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		panic("can't use unexpanded projections here")
+	}
+	predicate.Right = ae.Expr
+
+	jpc := &joinPredicateCollector{
+		joinVars: make(map[string]*sqlparser.ColName),
+		totalID:  totalID,
+		subqID:   subqID,
+		outerID:  outerID,
+	}
+
+	// we can have connecting predicates both on the inside of the subquery, and in the comparison to the outer query
+	if innerSel.Where != nil {
+		for _, predicate := range sqlparser.SplitAndExpression(nil, innerSel.Where.Expr) {
+			jpc.inspectPredicate(ctx, predicate)
+		}
+	}
+	jpc.inspectPredicate(ctx, predicate)
+
+	if len(jpc.remainingPredicates) > 0 {
+		innerSel.Where = sqlparser.NewWhere(sqlparser.WhereClause, sqlparser.AndExpressions(jpc.remainingPredicates...))
+	}
+
+	innerSel.SelectExprs = []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")}}
+	opInner, err := translateQueryToOp(ctx, innerSel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SemiJoin{
+		RHS:               opInner,
+		JoinVars:          jpc.joinVars,
+		Original:          original,
+		comparisonColumns: jpc.comparisonColumns,
+		rhsPredicate:      jpc.rhsPredicate,
+	}, nil
+
 }
 
 func createExistsSubquery(
@@ -165,7 +227,6 @@ func createExistsSubquery(
 	subqID := ctx.SemTable.StatementIDs[innerSel]
 	totalID := subqID.Merge(outerID)
 
-	predicates := sqlparser.SplitAndExpression(nil, innerSel.Where.Expr)
 	jpc := &joinPredicateCollector{
 		joinVars: make(map[string]*sqlparser.ColName),
 		totalID:  totalID,
@@ -173,7 +234,7 @@ func createExistsSubquery(
 		outerID:  outerID,
 	}
 
-	for _, predicate := range predicates {
+	for _, predicate := range sqlparser.SplitAndExpression(nil, innerSel.Where.Expr) {
 		jpc.inspectPredicate(ctx, predicate)
 	}
 

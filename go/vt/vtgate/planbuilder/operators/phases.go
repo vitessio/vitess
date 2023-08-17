@@ -92,7 +92,6 @@ func getPhases() []Phase {
 						subq.SetOuter(outer)
 						outer = subq
 					}
-
 				}
 				return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
 			}

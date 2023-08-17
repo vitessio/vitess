@@ -69,6 +69,18 @@ type (
 	}
 )
 
+func (sj *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
+	sj.JoinVarOffsets = make(map[string]int, len(sj.JoinVars))
+	for bindvarName, col := range sj.JoinVars {
+		offsets, err := sj.LHS.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(col)})
+		if err != nil {
+			return err
+		}
+		sj.JoinVarOffsets[bindvarName] = offsets[0]
+	}
+	return nil
+}
+
 func (sj *SemiJoin) SetOuter(operator ops.Operator) {
 	sj.LHS = operator
 }
