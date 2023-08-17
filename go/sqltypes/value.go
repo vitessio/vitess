@@ -343,17 +343,6 @@ func (v Value) ToInt() (int, error) {
 	return strconv.Atoi(v.RawStr())
 }
 
-// ToFloat32 first parses the value as MySQL would return it as a float64, then
-// downcasts it to a float32. It may overflow if the value exceeds 32 bits.
-func (v Value) ToFloat32() (float32, error) {
-	f64, err := v.ToFloat64()
-	if err != nil {
-		return 0, err
-	}
-
-	return float32(f64), nil
-}
-
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {
