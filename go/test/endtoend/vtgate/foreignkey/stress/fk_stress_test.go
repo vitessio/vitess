@@ -404,6 +404,24 @@ func waitForReplicaCatchup(t *testing.T) {
 	}
 }
 
+func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction) {
+	for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
+		tname := fmt.Sprintf("validate metrics: %s", workloadTable)
+		t.Run(tname, func(t *testing.T) {
+			var primaryRows, replicaRows int64
+			t.Run(tabletTestName(t, primary), func(t *testing.T) {
+				primaryRows = testSelectTableMetrics(t, primary, workloadTable, onDeleteAction)
+			})
+			t.Run(tabletTestName(t, replica), func(t *testing.T) {
+				replicaRows = testSelectTableMetrics(t, replica, workloadTable, onDeleteAction)
+			})
+			t.Run("compare primary and replica", func(t *testing.T) {
+				assert.Equal(t, primaryRows, replicaRows)
+			})
+		})
+	}
+}
+
 func TestStressFK(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
@@ -435,24 +453,6 @@ func TestStressFK(t *testing.T) {
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replica)
 	})
-
-	validateMetrics := func(t *testing.T, onDeleteAction sqlparser.ReferenceAction) {
-		for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
-			tname := fmt.Sprintf("validate metrics: %s", workloadTable)
-			t.Run(tname, func(t *testing.T) {
-				var primaryRows, replicaRows int64
-				t.Run(tabletTestName(t, primary), func(t *testing.T) {
-					primaryRows = testSelectTableMetrics(t, primary, workloadTable, onDeleteAction)
-				})
-				t.Run(tabletTestName(t, replica), func(t *testing.T) {
-					replicaRows = testSelectTableMetrics(t, replica, workloadTable, onDeleteAction)
-				})
-				t.Run("compare primary and replica", func(t *testing.T) {
-					assert.Equal(t, primaryRows, replicaRows)
-				})
-			})
-		}
-	}
 
 	t.Run("static data", func(t *testing.T) {
 		for _, onDeleteAction := range referenceActions {
