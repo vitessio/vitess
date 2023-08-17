@@ -422,16 +422,7 @@ func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction) {
 	}
 }
 
-func TestStressFK(t *testing.T) {
-	defer cluster.PanicHandler(t)
-
-	if val, present := os.LookupEnv("GITHUB_ACTIONS"); present && val != "" {
-		// This is the place to fine tune the stress parameters if GitHub actions are too slow
-		maxConcurrency = maxConcurrency * 1
-		singleConnectionSleepInterval = singleConnectionSleepInterval * 1
-	}
-	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
-
+func TestInitialSetup(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 	require.Equal(t, 2, len(shards[0].Vttablets))
@@ -449,6 +440,17 @@ func TestStressFK(t *testing.T) {
 	for _, tableName := range tableNames {
 		writeMetrics[tableName] = &WriteMetrics{}
 	}
+}
+
+func TestStressFK(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	if val, present := os.LookupEnv("GITHUB_ACTIONS"); present && val != "" {
+		// This is the place to fine tune the stress parameters if GitHub actions are too slow
+		maxConcurrency = maxConcurrency * 1
+		singleConnectionSleepInterval = singleConnectionSleepInterval * 1
+	}
+	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
 
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replica)
