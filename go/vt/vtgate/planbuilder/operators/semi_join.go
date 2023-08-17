@@ -24,50 +24,37 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-type (
-	// SemiJoin is a correlated subquery that is used for filtering rows from the outer query.
-	// It is a join between the outer query and the subquery, where the subquery is the RHS.
-	// We are only interested in the existence of rows in the RHS, so we only need to know if
-	SemiJoin struct {
-		LHS ops.Operator // outer
-		RHS ops.Operator // inner
+// SemiJoin is a correlated subquery that is used for filtering rows from the outer query.
+// It is a join between the outer query and the subquery, where the subquery is the RHS.
+// We are only interested in the existence of rows in the RHS, so we only need to know if
+type SemiJoin struct {
+	LHS ops.Operator // outer
+	RHS ops.Operator // inner
 
-		// JoinCols are the columns from the LHS used for the join.
-		// These are the same columns pushed on the LHS that are now used in the Vars field
-		JoinVars map[string]*sqlparser.ColName
+	// JoinCols are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the Vars field
+	JoinVars map[string]*sqlparser.ColName
 
-		// arguments that need to be copied from the outer to inner
-		// this field is filled in at offset planning time
-		JoinVarOffsets map[string]int
+	// arguments that need to be copied from the outer to inner
+	// this field is filled in at offset planning time
+	JoinVarOffsets map[string]int
 
-		// Original is the original expression, including comparison operator or EXISTS expression
-		Original sqlparser.Expr
+	// Original is the original expression, including comparison operator or EXISTS expression
+	Original sqlparser.Expr
 
-		// inside and outside are the columns from the LHS and RHS respectively that are used in the semi join
-		// only if the expressions are pure/bare/simple ColName:s, otherwise they are not added to these lists
-		// for the predicate: tbl.id IN (SELECT bar(foo) from user WHERE tbl.id = user.id)
-		// for the predicate: EXISTS (select 1 from user where tbl.ud = bar(foo) AND tbl.id = user.id limit)
-		// We would store `tbl.id` in JoinVars, but nothing on the inside, since the expression
-		// `foo(tbl.id)` is not a bare column
-		comparisonColumns [][2]*sqlparser.ColName
+	// inside and outside are the columns from the LHS and RHS respectively that are used in the semi join
+	// only if the expressions are pure/bare/simple ColName:s, otherwise they are not added to these lists
+	// for the predicate: tbl.id IN (SELECT bar(foo) from user WHERE tbl.id = user.id)
+	// for the predicate: EXISTS (select 1 from user where tbl.ud = bar(foo) AND tbl.id = user.id limit)
+	// We would store `tbl.id` in JoinVars, but nothing on the inside, since the expression
+	// `foo(tbl.id)` is not a bare column
+	comparisonColumns [][2]*sqlparser.ColName
 
-		_sq *sqlparser.Subquery // (SELECT foo from user LIMIT 1)
+	_sq *sqlparser.Subquery // (SELECT foo from user LIMIT 1)
 
-		// if we are unable to
-		rhsPredicate sqlparser.Expr
-	}
-
-	// UncorrelatedSubQuery is a subquery that can be executed indendently of the outer query,
-	// so we pull it out and execute before the outer query, and feed the result into a bindvar
-	// that is fed to the outer query
-	UncorrelatedSubQuery struct {
-		Outer, Inner ops.Operator
-		Extracted    *sqlparser.ExtractedSubquery
-
-		noColumns
-		noPredicates
-	}
-)
+	// if we are unable to
+	rhsPredicate sqlparser.Expr
+}
 
 func (sj *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 	sj.JoinVarOffsets = make(map[string]int, len(sj.JoinVars))
@@ -101,34 +88,6 @@ func (sj *SemiJoin) OriginalExpression() sqlparser.Expr {
 
 func (sj *SemiJoin) sq() *sqlparser.Subquery {
 	return sj._sq
-}
-
-// Clone implements the Operator interface
-func (s *UncorrelatedSubQuery) Clone(inputs []ops.Operator) ops.Operator {
-	result := &UncorrelatedSubQuery{
-		Outer:     inputs[0],
-		Inner:     inputs[1],
-		Extracted: s.Extracted,
-	}
-	return result
-}
-
-func (s *UncorrelatedSubQuery) GetOrdering() ([]ops.OrderBy, error) {
-	return s.Outer.GetOrdering()
-}
-
-// Inputs implements the Operator interface
-func (s *UncorrelatedSubQuery) Inputs() []ops.Operator {
-	return []ops.Operator{s.Outer, s.Inner}
-}
-
-// SetInputs implements the Operator interface
-func (s *UncorrelatedSubQuery) SetInputs(ops []ops.Operator) {
-	s.Outer, s.Inner = ops[0], ops[1]
-}
-
-func (s *UncorrelatedSubQuery) ShortDescription() string {
-	return ""
 }
 
 // Clone implements the Operator interface

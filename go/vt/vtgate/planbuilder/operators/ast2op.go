@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -220,8 +222,14 @@ func createExistsSubquery(
 	outerID semantics.TableSet,
 ) (SubQuery, error) {
 	innerSel, ok := sq.Select.(*sqlparser.Select)
-	if !ok || innerSel.Where == nil {
-		panic("should return uncorrelated subquery here")
+	if !ok {
+		panic("yucki unions")
+	}
+
+	var expr sqlparser.Expr
+
+	if innerSel.Where != nil {
+		expr = innerSel.Where.Expr
 	}
 
 	subqID := ctx.SemTable.StatementIDs[innerSel]
@@ -234,12 +242,8 @@ func createExistsSubquery(
 		outerID:  outerID,
 	}
 
-	for _, predicate := range sqlparser.SplitAndExpression(nil, innerSel.Where.Expr) {
+	for _, predicate := range sqlparser.SplitAndExpression(nil, expr) {
 		jpc.inspectPredicate(ctx, predicate)
-	}
-
-	if len(jpc.joinVars) == 0 {
-		panic("uncorrelated not supported")
 	}
 
 	if jpc.remainingPredicates == nil {
@@ -251,6 +255,16 @@ func createExistsSubquery(
 	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(jpc.joinVars) == 0 {
+		return &UncorrelatedSubQuery{
+			Original:       org,
+			Opcode:         opcode.PulloutExists,
+			Subquery:       opInner,
+			SubqueryResult: ctx.ReservedVars.ReserveVariable("sq"),
+			HasValues:      ctx.ReservedVars.ReserveVariable("exists"),
+		}, nil
 	}
 
 	return &SemiJoin{

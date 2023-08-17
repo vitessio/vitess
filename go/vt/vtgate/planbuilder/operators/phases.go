@@ -147,8 +147,7 @@ func getQuerySignatureFor(query sqlparser.Statement) QuerySignature {
 	return signature
 }
 
-func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, inner SubQuery) (ops.Operator, error) {
-	switch subq := inner.(type) {
+func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, subq SubQuery) (ops.Operator, error) {
 	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
 	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
 	// this query is equivalent to
@@ -157,17 +156,24 @@ func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, in
 	// we can run the inner query first and then run the outer query with the results of the inner query.
 	// Long term, we should have a cost based optimizer that can make this decision for us.
 	// For now, we will prefer the IN version of these two
+	switch subq := subq.(type) {
 	case *SemiJoin:
-		// push the filter on the RHS of the filter
 		subq.RHS = &Filter{
 			Source:     subq.RHS,
 			Predicates: []sqlparser.Expr{subq.rhsPredicate},
 		}
-		subq.SetOuter(outer)
-		return subq, nil
+	case *UncorrelatedSubQuery:
+		outer = &Filter{
+			Source:     outer,
+			Predicates: []sqlparser.Expr{sqlparser.NewArgument(subq.HasValues)},
+		}
 	default:
 		return nil, vterrors.VT13001("unexpected subquery type")
 	}
+
+	subq.SetOuter(outer)
+
+	return subq, nil
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

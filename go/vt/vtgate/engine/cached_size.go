@@ -698,28 +698,6 @@ func (cached *Projection) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(80)
-	}
-	// field SubqueryResult string
-	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
-	// field HasValues string
-	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
-	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Subquery.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Underlying vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Underlying.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *RenameFields) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1129,6 +1107,28 @@ func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
 	size += cached.Keyspace.CachedSize(true)
 	// field ThrottledAppRule *vitess.io/vitess/go/vt/proto/topodata.ThrottledAppRule
 	size += cached.ThrottledAppRule.CachedSize(true)
+	return size
+}
+func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field SubqueryResult string
+	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
+	// field HasValues string
+	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
+	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Subquery.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Outer vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Outer.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 

@@ -31,16 +31,16 @@ var _ logicalPlan = (*uncorrelatedSubquery)(nil)
 // This gets built if a subquery is not correlated and can
 // therefore can be pulled out and executed upfront.
 type uncorrelatedSubquery struct {
-	order      int
-	subquery   logicalPlan
-	underlying logicalPlan
-	eSubquery  *engine.UncorrelatedSubquery
+	subquery  logicalPlan
+	outer     logicalPlan
+	eSubquery *engine.UncorrelatedSubquery
 }
 
 // newUncorrelatedSubquery builds a new uncorrelatedSubquery.
-func newUncorrelatedSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *uncorrelatedSubquery {
+func newUncorrelatedSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, subquery, outer logicalPlan) *uncorrelatedSubquery {
 	return &uncorrelatedSubquery{
 		subquery: subquery,
+		outer:    outer,
 		eSubquery: &engine.UncorrelatedSubquery{
 			Opcode:         opcode,
 			SubqueryResult: sqName,
@@ -52,13 +52,13 @@ func newUncorrelatedSubquery(opcode popcode.PulloutOpcode, sqName, hasValues str
 // Primitive implements the logicalPlan interface
 func (ps *uncorrelatedSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
-	ps.eSubquery.Underlying = ps.underlying.Primitive()
+	ps.eSubquery.Outer = ps.outer.Primitive()
 	return ps.eSubquery
 }
 
 // Wireup implements the logicalPlan interface
 func (ps *uncorrelatedSubquery) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := ps.underlying.Wireup(ctx); err != nil {
+	if err := ps.outer.Wireup(ctx); err != nil {
 		return err
 	}
 	return ps.subquery.Wireup(ctx)
@@ -69,22 +69,22 @@ func (ps *uncorrelatedSubquery) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
 		return vterrors.VT13001("uncorrelatedSubquery: wrong number of inputs")
 	}
-	ps.underlying = inputs[0]
+	ps.outer = inputs[0]
 	ps.subquery = inputs[1]
 	return nil
 }
 
 // ContainsTables implements the logicalPlan interface
 func (ps *uncorrelatedSubquery) ContainsTables() semantics.TableSet {
-	return ps.underlying.ContainsTables().Merge(ps.subquery.ContainsTables())
+	return ps.outer.ContainsTables().Merge(ps.subquery.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface
 func (ps *uncorrelatedSubquery) Inputs() []logicalPlan {
-	return []logicalPlan{ps.underlying, ps.subquery}
+	return []logicalPlan{ps.outer, ps.subquery}
 }
 
 // OutputColumns implements the logicalPlan interface
 func (ps *uncorrelatedSubquery) OutputColumns() []sqlparser.SelectExpr {
-	return ps.underlying.OutputColumns()
+	return ps.outer.OutputColumns()
 }

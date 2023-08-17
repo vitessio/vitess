@@ -38,13 +38,13 @@ type UncorrelatedSubquery struct {
 	SubqueryResult string
 	HasValues      string
 
-	Subquery   Primitive
-	Underlying Primitive
+	Subquery Primitive
+	Outer    Primitive
 }
 
 // Inputs returns the input primitives for this join
 func (ps *UncorrelatedSubquery) Inputs() []Primitive {
-	return []Primitive{ps.Subquery, ps.Underlying}
+	return []Primitive{ps.Subquery, ps.Outer}
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -54,12 +54,12 @@ func (ps *UncorrelatedSubquery) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
 func (ps *UncorrelatedSubquery) GetKeyspaceName() string {
-	return ps.Underlying.GetKeyspaceName()
+	return ps.Outer.GetKeyspaceName()
 }
 
 // GetTableName specifies the table that this primitive routes to.
 func (ps *UncorrelatedSubquery) GetTableName() string {
-	return ps.Underlying.GetTableName()
+	return ps.Outer.GetTableName()
 }
 
 // TryExecute satisfies the Primitive interface.
@@ -68,7 +68,7 @@ func (ps *UncorrelatedSubquery) TryExecute(ctx context.Context, vcursor VCursor,
 	if err != nil {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(ctx, ps.Underlying, combinedVars, wantfields)
+	return vcursor.ExecutePrimitive(ctx, ps.Outer, combinedVars, wantfields)
 }
 
 // TryStreamExecute performs a streaming exec.
@@ -77,7 +77,7 @@ func (ps *UncorrelatedSubquery) TryStreamExecute(ctx context.Context, vcursor VC
 	if err != nil {
 		return err
 	}
-	return vcursor.StreamExecutePrimitive(ctx, ps.Underlying, combinedVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ctx, ps.Outer, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
@@ -98,12 +98,12 @@ func (ps *UncorrelatedSubquery) GetFields(ctx context.Context, vcursor VCursor, 
 	case PulloutExists:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
-	return ps.Underlying.GetFields(ctx, vcursor, combinedVars)
+	return ps.Outer.GetFields(ctx, vcursor, combinedVars)
 }
 
 // NeedsTransaction implements the Primitive interface
 func (ps *UncorrelatedSubquery) NeedsTransaction() bool {
-	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
+	return ps.Subquery.NeedsTransaction() || ps.Outer.NeedsTransaction()
 }
 
 var (

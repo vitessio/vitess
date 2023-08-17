@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "select 1 from unsharded where exists(select 1 from user)",
+    "query": "",
     "plan": {
 
     }

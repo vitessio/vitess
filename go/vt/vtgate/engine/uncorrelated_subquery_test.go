@@ -58,7 +58,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
-		Underlying:     ufp,
+		Outer:          ufp,
 	}
 
 	result, err := ps.TryExecute(context.Background(), &noopVCursor{}, bindVars, false)
@@ -83,7 +83,7 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
-		Underlying:     ufp,
+		Outer:          ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -154,7 +154,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		SubqueryResult: "sq",
 		HasValues:      "has_values",
 		Subquery:       sfp,
-		Underlying:     ufp,
+		Outer:          ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -190,7 +190,7 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 		SubqueryResult: "sq",
 		HasValues:      "has_values",
 		Subquery:       sfp,
-		Underlying:     ufp,
+		Outer:          ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -234,10 +234,10 @@ func TestPulloutSubqueryExists(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:     PulloutExists,
-		HasValues:  "has_values",
-		Subquery:   sfp,
-		Underlying: ufp,
+		Opcode:    PulloutExists,
+		HasValues: "has_values",
+		Subquery:  sfp,
+		Outer:     ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -259,10 +259,10 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:     PulloutExists,
-		HasValues:  "has_values",
-		Subquery:   sfp,
-		Underlying: ufp,
+		Opcode:    PulloutExists,
+		HasValues: "has_values",
+		Subquery:  sfp,
+		Outer:     ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -314,7 +314,7 @@ func TestPulloutSubqueryStream(t *testing.T) {
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		Subquery:       sfp,
-		Underlying:     ufp,
+		Outer:          ufp,
 	}
 
 	result, err := wrapStreamExecute(ps, &noopVCursor{}, bindVars, true)
@@ -333,7 +333,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
 		HasValues:      "has_values",
-		Underlying:     ufp,
+		Outer:          ufp,
 	}
 
 	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {

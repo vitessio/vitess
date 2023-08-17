@@ -172,11 +172,11 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 	case *memorySort:
 		p.truncater.SetTruncateColumnCount(hp.qp.GetColumnCount())
 	case *uncorrelatedSubquery:
-		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.underlying)
+		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.outer)
 		if err != nil {
 			return nil, err
 		}
-		p.underlying = newUnderlyingPlan
+		p.outer = newUnderlyingPlan
 	default:
 		plan = &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
@@ -1045,7 +1045,7 @@ func pushHaving(ctx *plancontext.PlanningContext, expr sqlparser.Expr, plan logi
 		sel.AddHaving(expr)
 		return plan, nil
 	case *uncorrelatedSubquery:
-		return pushHaving(ctx, expr, node.underlying)
+		return pushHaving(ctx, expr, node.outer)
 	case *simpleProjection:
 		return nil, vterrors.VT13001("filtering on results of cross-shard derived table")
 	case *orderedAggregate:
@@ -1163,7 +1163,7 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr operators.Group
 		}
 		return nil
 	case *uncorrelatedSubquery:
-		return planGroupByGen4(ctx, groupExpr, node.underlying, wsAdded)
+		return planGroupByGen4(ctx, groupExpr, node.outer, wsAdded)
 	case *semiJoin:
 		return vterrors.VT13001("GROUP BY in a query having a correlated subquery")
 	default:
