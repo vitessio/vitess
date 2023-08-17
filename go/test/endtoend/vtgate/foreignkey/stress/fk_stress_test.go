@@ -695,8 +695,16 @@ func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 }
 
 func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
+	// Most of the UPDATEs we run are "normal" updates, but the minority will actually change the
+	// `id` column itself, which is the FOREIGN KEY parent column for some of the tables.
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, tableName, id)
+	if tableName == parentTableName || tableName == childTableName {
+		if rand.Intn(4) == 0 {
+			updatedId := rand.Int31n(int32(maxTableRows))
+			query = fmt.Sprintf(updateRowIdStatement, tableName, updatedId, id)
+		}
+	}
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
