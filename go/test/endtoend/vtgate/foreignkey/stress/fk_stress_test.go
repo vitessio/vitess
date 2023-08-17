@@ -140,6 +140,8 @@ var (
 	tableNames            = []string{parentTableName, childTableName, child2TableName, grandchildTableName}
 	reverseTableNames     []string
 
+	seedOnce sync.Once
+
 	referenceActionMap = map[sqlparser.ReferenceAction]string{
 		sqlparser.NoAction: "NO ACTION",
 		sqlparser.Cascade:  "CASCADE",
@@ -203,7 +205,7 @@ var (
 			key parent_id_idx(parent_id),
 			key created_idx(created_timestamp),
 			key updates_idx(updates),
-			CONSTRAINT grandchild_child_fk FOREIGN KEY (parent_id) REFERENCES stress_child (id) ON DELETE %s
+			CONSTRAINT grandchild_child_fk FOREIGN KEY (parent_id) REFERENCES stress_child (id) ON DELETE %s ON UPDATE %s
 		) ENGINE=InnoDB
 		`,
 	}
@@ -406,8 +408,7 @@ func waitForReplicaCatchup(t *testing.T) {
 
 func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
 	for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
-		tname := fmt.Sprintf("validate metrics: %s", workloadTable)
-		t.Run(tname, func(t *testing.T) {
+		t.Run(workloadTable, func(t *testing.T) {
 			var primaryRows, replicaRows int64
 			t.Run(tabletTestName(t, primary), func(t *testing.T) {
 				primaryRows = testSelectTableMetrics(t, primary, workloadTable, onDeleteAction, onUpdateAction)
@@ -554,17 +555,17 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 	t.Run("creating tables", func(t *testing.T) {
 		// Create the stress tables
 		var b strings.Builder
-		for _, sql := range createStatements {
-			b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
+		for i, sql := range createStatements {
+			if i == 0 {
+				// parent table, no foreign keys
+				b.WriteString(sql)
+			} else {
+				b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
+			}
 			b.WriteString(";")
 		}
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, b.String())
 		require.NoError(t, err)
-
-		rs, err := conn.ExecuteFetch("show full tables", 1000, true)
-		require.NoError(t, err)
-		require.Equal(t, 4, len(rs.Rows))
-		t.Logf("===== init: %d tables created", len(rs.Rows))
 	})
 	t.Run("wait for replica", func(t *testing.T) {
 		waitForReplicaCatchup(t)
@@ -808,19 +809,85 @@ func populateTables(t *testing.T) {
 		_, err = conn.ExecuteFetch(deleteQuery, 1000, true)
 		require.Nil(t, err)
 	}
-	t.Logf("===== populating tables")
-	for _, tableName := range tableNames {
-		// populate parent, then child, child2, then grandchild
-		for i := 0; i < maxTableRows/2; i++ {
-			generateInsert(t, tableName, conn)
+	// In an ideal world we would randomly re-seed the tables in each and every instance of the test.
+	// In reality, that takes a lot of time, and while the seeding is important, it's not the heart of
+	// the test. To that effect, the seeding works as follows:
+	// - First ever time, we randomly seed the tables (running thousands of queries). We then create *_seed
+	//   tables and clone the data in those seed tables.
+	// - 2nd test and forward: we just copy over the rows from the *_seed tables.
+	tablesSeeded := false
+	seedOnce.Do(func() {
+		for _, tableName := range tableNames {
+			t.Run(tableName, func(t *testing.T) {
+				t.Run("populating", func(t *testing.T) {
+					// populate parent, then child, child2, then grandchild
+					for i := 0; i < maxTableRows/2; i++ {
+						generateInsert(t, tableName, conn)
+					}
+					for i := 0; i < maxTableRows/4; i++ {
+						generateUpdate(t, tableName, conn)
+					}
+					for i := 0; i < maxTableRows/4; i++ {
+						generateDelete(t, tableName, conn)
+					}
+				})
+				t.Run("creating seed", func(t *testing.T) {
+					// We create the seed table in the likeness of stress_parent, because that's the only table
+					// that doesn't have FK constraints.
+					{
+						createSeedQuery := fmt.Sprintf("create table %s_seed like %s", tableName, parentTableName)
+						_, err := conn.ExecuteFetch(createSeedQuery, 1000, true)
+						require.NoError(t, err)
+					}
+					{
+						seedQuery := fmt.Sprintf("insert into %s_seed select * from %s", tableName, tableName)
+						_, err := conn.ExecuteFetch(seedQuery, 1000, true)
+						require.NoError(t, err)
+					}
+					{
+						validationQuery := fmt.Sprintf("select count(*) as c from %s_seed", tableName)
+						rs, err := conn.ExecuteFetch(validationQuery, 1000, true)
+						require.NoError(t, err)
+						row := rs.Named().Row()
+						require.NotNil(t, row)
+						require.NotZero(t, row.AsInt64("c", 0))
+					}
+				})
+			})
 		}
-		for i := 0; i < maxTableRows/4; i++ {
-			generateUpdate(t, tableName, conn)
-		}
-		for i := 0; i < maxTableRows/4; i++ {
-			generateDelete(t, tableName, conn)
-		}
+		tablesSeeded = true
+	})
+	if !tablesSeeded {
+		t.Run("reseeding", func(t *testing.T) {
+			for _, tableName := range tableNames {
+				seedQuery := fmt.Sprintf("insert into %s select * from %s_seed", tableName, tableName)
+				_, err := conn.ExecuteFetch(seedQuery, 1000, true)
+				require.NoError(t, err)
+			}
+		})
 	}
+
+	t.Run("validating table rows", func(t *testing.T) {
+		for _, tableName := range tableNames {
+			validationQuery := fmt.Sprintf(selectCountRowsStatement, tableName)
+			rs, err := conn.ExecuteFetch(validationQuery, 1000, true)
+			require.NoError(t, err)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+			numRows := row.AsInt64("num_rows", 0)
+			sumUpdates := row.AsInt64("sum_updates", 0)
+			require.NotZero(t, numRows)
+			if !tablesSeeded {
+				// We cloned the data from *_seed tables. This means we didn't populate writeMetrics. Now,
+				// this function only takes care of the base seed. We will later on run a stress workload on
+				// these tables, at the end of which we will examine the writeMetrics. We thus have to have those
+				// metrics consistent with the cloned data. It's a bit ugly, but we inject fake writeMetrics.
+				writeMetrics[tableName].deletes = 1
+				writeMetrics[tableName].inserts = numRows + writeMetrics[tableName].deletes
+				writeMetrics[tableName].updates = sumUpdates + writeMetrics[tableName].deletes
+			}
+		}
+	})
 }
 
 // testSelectTableMetrics cross references the known metrics (number of successful insert/delete/updates) on each table, with the
