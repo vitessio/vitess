@@ -173,7 +173,7 @@ var (
 			key parent_id_idx(parent_id),
 			key created_idx(created_timestamp),
 			key updates_idx(updates),
-			CONSTRAINT child_parent_fk FOREIGN KEY (parent_id) REFERENCES stress_parent (id) ON DELETE %s
+			CONSTRAINT child_parent_fk FOREIGN KEY (parent_id) REFERENCES stress_parent (id) ON DELETE %s ON UPDATE %s
 		) ENGINE=InnoDB
 		`,
 		`
@@ -188,7 +188,7 @@ var (
 			key parent_id_idx(parent_id),
 			key created_idx(created_timestamp),
 			key updates_idx(updates),
-			CONSTRAINT child2_parent_fk FOREIGN KEY (parent_id) REFERENCES stress_parent (id) ON DELETE %s
+			CONSTRAINT child2_parent_fk FOREIGN KEY (parent_id) REFERENCES stress_parent (id) ON DELETE %s ON UPDATE %s
 		) ENGINE=InnoDB
 		`,
 		`
@@ -410,10 +410,10 @@ func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction, onU
 		t.Run(tname, func(t *testing.T) {
 			var primaryRows, replicaRows int64
 			t.Run(tabletTestName(t, primary), func(t *testing.T) {
-				primaryRows = testSelectTableMetrics(t, primary, workloadTable, onDeleteAction)
+				primaryRows = testSelectTableMetrics(t, primary, workloadTable, onDeleteAction, onUpdateAction)
 			})
 			t.Run(tabletTestName(t, replica), func(t *testing.T) {
-				replicaRows = testSelectTableMetrics(t, replica, workloadTable, onDeleteAction)
+				replicaRows = testSelectTableMetrics(t, replica, workloadTable, onDeleteAction, onUpdateAction)
 			})
 			t.Run("compare primary and replica", func(t *testing.T) {
 				assert.Equal(t, primaryRows, replicaRows)
@@ -515,22 +515,26 @@ func TestStressFK(t *testing.T) {
 		validateReplicationIsHealthy(t, replica)
 	})
 
-	for _, onDeleteAction := range referenceActions {
-		tcase := &testCase{
-			workload:       false,
-			onDeleteAction: onDeleteAction,
-			onUpdateAction: sqlparser.NoAction,
+	for _, onUpdateAction := range referenceActions {
+		for _, onDeleteAction := range referenceActions {
+			tcase := &testCase{
+				workload:       false,
+				onDeleteAction: onDeleteAction,
+				onUpdateAction: onUpdateAction,
+			}
+			ExecuteFKTest(t, tcase)
 		}
-		ExecuteFKTest(t, tcase)
 	}
 
-	for _, onDeleteAction := range referenceActions {
-		tcase := &testCase{
-			workload:       true,
-			onDeleteAction: onDeleteAction,
-			onUpdateAction: sqlparser.NoAction,
+	for _, onUpdateAction := range referenceActions {
+		for _, onDeleteAction := range referenceActions {
+			tcase := &testCase{
+				workload:       true,
+				onDeleteAction: onDeleteAction,
+				onUpdateAction: onUpdateAction,
+			}
+			ExecuteFKTest(t, tcase)
 		}
-		ExecuteFKTest(t, tcase)
 	}
 }
 
@@ -551,7 +555,7 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 		// Create the stress tables
 		var b strings.Builder
 		for _, sql := range createStatements {
-			b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction]))
+			b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
 			b.WriteString(";")
 		}
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, b.String())
@@ -823,7 +827,13 @@ func populateTables(t *testing.T) {
 // actual number of rows and with the row values on those tables.
 // With CASCADE/SET NULL rules we can't do the comparison, because child tables are implicitly affected by the cascading rules,
 // and the values do not match what reported to us when we UPDATE/DELETE on the parent tables.
-func testSelectTableMetrics(t *testing.T, tablet *cluster.Vttablet, tableName string, onDeleteAction sqlparser.ReferenceAction) int64 {
+func testSelectTableMetrics(
+	t *testing.T,
+	tablet *cluster.Vttablet,
+	tableName string,
+	onDeleteAction sqlparser.ReferenceAction,
+	onUpdateAction sqlparser.ReferenceAction,
+) int64 {
 	switch onDeleteAction {
 	case sqlparser.Cascade, sqlparser.SetNull:
 		if tableName != parentTableName {
@@ -831,6 +841,8 @@ func testSelectTableMetrics(t *testing.T, tablet *cluster.Vttablet, tableName st
 			return 0
 		}
 	}
+	// metrics are unaffected by value of onUpdateAction.
+
 	writeMetrics[tableName].mu.Lock()
 	defer writeMetrics[tableName].mu.Unlock()
 
@@ -881,7 +893,7 @@ func testFKIntegrity(t *testing.T, tablet *cluster.Vttablet, onDeleteAction sqlp
 			assert.NotZero(t, len(rs.Rows))
 			t.Logf("===== matching rows: %v", len(rs.Rows))
 		})
-		if onDeleteAction != sqlparser.SetNull {
+		if onDeleteAction != sqlparser.SetNull && onUpdateAction != sqlparser.SetNull {
 			// Because with SET NULL there _are_ orphaned rows
 			t.Run("parent-child orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsChild, "")
