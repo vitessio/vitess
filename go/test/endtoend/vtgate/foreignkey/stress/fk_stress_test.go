@@ -140,12 +140,12 @@ var (
 	tableNames            = []string{parentTableName, childTableName, child2TableName, grandchildTableName}
 	reverseTableNames     []string
 
-	onDeleteActionsMap = map[sqlparser.ReferenceAction]string{
+	referenceActionMap = map[sqlparser.ReferenceAction]string{
 		sqlparser.NoAction: "NO ACTION",
 		sqlparser.Cascade:  "CASCADE",
 		sqlparser.SetNull:  "SET NULL",
 	}
-	onDeleteActions  = []sqlparser.ReferenceAction{sqlparser.NoAction, sqlparser.Cascade, sqlparser.SetNull}
+	referenceActions = []sqlparser.ReferenceAction{sqlparser.NoAction, sqlparser.Cascade, sqlparser.SetNull}
 	createStatements = []string{
 		`
 		CREATE TABLE stress_parent (
@@ -217,6 +217,9 @@ var (
 	`
 	updateRowStatement = `
 		UPDATE %s SET rand_val=left(md5(rand()), 8), updates=updates+1 WHERE id=%d
+	`
+	updateRowIdStatement = `
+		UPDATE %s SET id=%v, rand_val=left(md5(rand()), 8), updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM %s WHERE id=%d AND updates=1
@@ -452,8 +455,8 @@ func TestStressFK(t *testing.T) {
 	}
 
 	t.Run("static data", func(t *testing.T) {
-		for _, onDeleteAction := range onDeleteActions {
-			t.Run(onDeleteActionsMap[onDeleteAction], func(t *testing.T) {
+		for _, onDeleteAction := range referenceActions {
+			t.Run(referenceActionMap[onDeleteAction], func(t *testing.T) {
 				t.Run("create schema", func(t *testing.T) {
 					createInitialSchema(t, onDeleteAction)
 				})
@@ -473,8 +476,8 @@ func TestStressFK(t *testing.T) {
 		}
 	})
 	t.Run("stress", func(t *testing.T) {
-		for _, onDeleteAction := range onDeleteActions {
-			t.Run(onDeleteActionsMap[onDeleteAction], func(t *testing.T) {
+		for _, onDeleteAction := range referenceActions {
+			t.Run(referenceActionMap[onDeleteAction], func(t *testing.T) {
 				// This tests running a workload on the table, then comparing expected metrics with
 				// actual table metrics. All this without any ALTER TABLE: this is to validate
 				// that our testing/metrics logic is sound in the first place.
@@ -533,7 +536,7 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction)
 		// Create the stress tables
 		var b strings.Builder
 		for _, sql := range createStatements {
-			b.WriteString(fmt.Sprintf(sql, onDeleteActionsMap[onDeleteAction]))
+			b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction]))
 			b.WriteString(";")
 		}
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, b.String())
