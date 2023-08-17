@@ -1520,21 +1520,41 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 		return nil, err
 	}
 
-	results := map[string]*sqltypes.Result{}
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		results = map[string]*sqltypes.Result{}
+	)
 	for _, tablet := range tabletsResp.Tablets {
-		alias := topoproto.TabletAliasString(tablet.Alias)
 
-		// TODO: execute in parallel
-		fetchResp, err := s.ExecuteFetchAsDBA(ctx, &vtctldatapb.ExecuteFetchAsDBARequest{
-			TabletAlias: tablet.Alias,
-			Query:       query,
-			MaxRows:     10_000,
-		})
-		if err != nil {
-			return nil, err
-		}
-		results[alias] = sqltypes.Proto3ToResult(fetchResp.Result)
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+
+			alias := topoproto.TabletAliasString(tablet.Alias)
+			fetchResp, err := s.ExecuteFetchAsDBA(ctx, &vtctldatapb.ExecuteFetchAsDBARequest{
+				TabletAlias: tablet.Alias,
+				Query:       query,
+				MaxRows:     10_000,
+			})
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			results[alias] = sqltypes.Proto3ToResult(fetchResp.Result)
+		}(tablet)
 	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
 	// combine results. This loses sorting if there's more then 1 tablet
 	combinedResults := queryResultForTabletResults(results)
 
