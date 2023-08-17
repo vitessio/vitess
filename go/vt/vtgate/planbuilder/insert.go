@@ -68,7 +68,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(insStmt, reservedVars, semTable, vschema, version)
 
 	op, err := operators.PlanQuery(ctx, insStmt)
 	if err != nil {

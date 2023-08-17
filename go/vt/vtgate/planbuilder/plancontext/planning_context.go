@@ -23,9 +23,10 @@ import (
 )
 
 type PlanningContext struct {
-	ReservedVars *sqlparser.ReservedVars
-	SemTable     *semantics.SemTable
-	VSchema      VSchema
+	CurrentStatement sqlparser.Statement
+	ReservedVars     *sqlparser.ReservedVars
+	SemTable         *semantics.SemTable
+	VSchema          VSchema
 
 	// here we add all predicates that were created because of a join condition
 	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
@@ -45,7 +46,13 @@ type PlanningContext struct {
 	DelegateAggregation bool
 }
 
-func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {
+func NewPlanningContext(
+	statement sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+	semTable *semantics.SemTable,
+	vschema VSchema,
+	version querypb.ExecuteOptions_PlannerVersion,
+) *PlanningContext {
 	ctx := &PlanningContext{
 		ReservedVars:      reservedVars,
 		SemTable:          semTable,

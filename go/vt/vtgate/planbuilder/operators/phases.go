@@ -19,23 +19,34 @@ package operators
 import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Phase defines the different planning phases to go through to produce an optimized plan for the input query.
-type Phase struct {
-	Name string
-	// action is the action to be taken before calling plan optimization operation.
-	action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
-}
+type (
+	// Phase defines the different planning phases to go through to produce an optimized plan for the input query.
+	Phase struct {
+		Name string
+		// action is the action to be taken before calling plan optimization operation.
+		action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
+		apply  func(QuerySignature) bool
+	}
+
+	QuerySignature struct {
+		Union       bool
+		Aggregation bool
+		Distinct    bool
+		SubQueries  bool
+	}
+)
 
 // getPhases returns the phases the planner will go through.
 // It's used to control so rewriters collaborate correctly
-func getPhases() []Phase {
-	return []Phase{{
+func getPhases(query sqlparser.Statement) []Phase {
+	phases := []Phase{{
 		// Initial optimization
 		Name: "initial horizon planning optimization phase",
 	}, {
@@ -45,6 +56,7 @@ func getPhases() []Phase {
 		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 			return pullDistinctFromUNION(op)
 		},
+		apply: func(s QuerySignature) bool { return s.Union },
 	}, {
 		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
 		// need it their inputs, and then we start splitting the aggregation
@@ -60,6 +72,7 @@ func getPhases() []Phase {
 		// add the necessary Ordering operators for them
 		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		action: addOrderBysForAggregations,
+		apply:  func(s QuerySignature) bool { return s.Aggregation },
 	}, {
 		Name: "remove Distinct operator that are not required and still above a route",
 		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
@@ -72,7 +85,11 @@ func getPhases() []Phase {
 				return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
 			}, stopAtRoute)
 		},
+		apply: func(s QuerySignature) bool { return s.Distinct },
 	}, {
+		// This phase runs late, so subqueries have by this point been pushed down as far as they'll go.
+		// Next step is to extract the subqueries from the slices in the SubQueryContainer.
+		// In this step, we'll also make a decision on how we want to run the filter
 		Name: "break the subquery container and extract subqueries still above the route",
 		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 			visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -82,22 +99,75 @@ func getPhases() []Phase {
 				}
 				outer := sqc.Outer
 				for _, subq := range sqc.Inner {
-					switch subq := subq.(type) {
-					case *SemiJoin:
-						// push the filter on the RHS of the filter
-						subq.RHS = &Filter{
-							Source:     subq.RHS,
-							Predicates: []sqlparser.Expr{subq.rhsPredicate},
-						}
-						subq.SetOuter(outer)
-						outer = subq
+					newOuter, err := setOuterOnSubQuery(ctx, outer, subq)
+					if err != nil {
+						return nil, nil, err
 					}
+					outer = newOuter
 				}
 				return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
 			}
 			return rewrite.BottomUp(op, TableID, visit, stopAtRoute)
 		},
 	}}
+
+	sig := getQuerySignatureFor(query)
+	return slice.Filter(phases, func(phase Phase) bool {
+		if phase.apply == nil {
+			// if no apply function is defined, we always apply the phase
+			return true
+		}
+		return phase.apply(sig)
+	})
+}
+
+func getQuerySignatureFor(query sqlparser.Statement) QuerySignature {
+	signature := QuerySignature{}
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.Union:
+			signature.Union = true
+			if node.Distinct {
+				signature.Distinct = true
+			}
+		case *sqlparser.Subquery:
+			signature.SubQueries = true
+		case *sqlparser.Select:
+			if node.Distinct {
+				signature.Distinct = true
+			}
+			if node.GroupBy != nil {
+				signature.Aggregation = true
+			}
+		case sqlparser.AggrFunc:
+			signature.Aggregation = true
+		}
+		return true, nil
+	}, query)
+	return signature
+}
+
+func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, inner SubQuery) (ops.Operator, error) {
+	switch subq := inner.(type) {
+	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
+	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
+	// this query is equivalent to
+	// select * from user where id = 5 and exists(select 1 from music where baz = 13 and user.id = bar)
+	// Here we have two options: we can start by running the outer query and then run the inner query for each row, or
+	// we can run the inner query first and then run the outer query with the results of the inner query.
+	// Long term, we should have a cost based optimizer that can make this decision for us.
+	// For now, we will prefer the IN version of these two
+	case *SemiJoin:
+		// push the filter on the RHS of the filter
+		subq.RHS = &Filter{
+			Source:     subq.RHS,
+			Predicates: []sqlparser.Expr{subq.rhsPredicate},
+		}
+		subq.SetOuter(outer)
+		return subq, nil
+	default:
+		return nil, vterrors.VT13001("unexpected subquery type")
+	}
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

@@ -71,7 +71,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(updStmt, reservedVars, semTable, vschema, version)
 
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {

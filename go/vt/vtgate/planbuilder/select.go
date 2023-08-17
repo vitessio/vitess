@@ -221,7 +221,7 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(selStmt, reservedVars, semTable, vschema, version)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)

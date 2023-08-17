@@ -79,7 +79,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(deleteStmt, reservedVars, semTable, vschema, version)
 	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err

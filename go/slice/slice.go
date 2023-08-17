@@ -38,6 +38,7 @@ func Any[T any](s []T, fn func(T) bool) bool {
 	return false
 }
 
+// Map applies a function to each element of a slice and returns a new slice
 func Map[From, To any](in []From, f func(From) To) []To {
 	if in == nil {
 		return nil
@@ -49,6 +50,7 @@ func Map[From, To any](in []From, f func(From) To) []To {
 	return result
 }
 
+// MapWithError applies a function to each element of a slice and returns a new slice, or an error
 func MapWithError[From, To any](in []From, f func(From) (To, error)) (result []To, err error) {
 	if in == nil {
 		return nil, nil
@@ -58,6 +60,36 @@ func MapWithError[From, To any](in []From, f func(From) (To, error)) (result []T
 		result[i], err = f(col)
 		if err != nil {
 			return nil, err
+		}
+	}
+	return
+}
+
+// Filter returns a new slice containing only the elements for which the predicate returns true
+func Filter[T any](in []T, f func(T) bool) []T {
+	if in == nil {
+		return nil
+	}
+	result := make([]T, 0, len(in))
+	for _, col := range in {
+		if f(col) {
+			result = append(result, col)
+		}
+	}
+	return result
+}
+
+// FilterWithError returns a new slice containing only the elements for which the predicate returns true, or an error
+func FilterWithError[T any](in []T, f func(T) (bool, error)) (result []T, err error) {
+	if in == nil {
+		return nil, nil
+	}
+	result = make([]T, 0, len(in))
+	for _, col := range in {
+		if ok, err := f(col); err != nil {
+			return nil, err
+		} else if ok {
+			result = append(result, col)
 		}
 	}
 	return
