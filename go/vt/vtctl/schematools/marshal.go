@@ -51,7 +51,7 @@ type tSchemaMigration struct {
 }
 
 func replaceSchemaMigrationFields(result *sqltypes.Result) *sqltypes.Result {
-	// NOTE: this depends entirely on the (1) the ordering of the fields in the
+	// NOTE: this depends entirely on (1) the ordering of the fields in the
 	// embedded protobuf message and (2) that MarshalResult walks fields in the
 	// order they are defined (via reflect.VisibleFields).
 	//

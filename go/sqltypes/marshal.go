@@ -26,11 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
-// ResultMarshaller knowns how to marshal itself into a Result.
+// ResultMarshaller knows how to marshal itself into a Result.
 type ResultMarshaller interface {
 	MarshalResult() (*Result, error)
 }
@@ -263,7 +263,7 @@ func fieldType(field reflect.StructField) (querypb.Type, error) {
 				default:
 					// Impossible unless we add a new type to vttime.proto and
 					// forget to update this function.
-					err = vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown vttime proto message %s", ptr.Name())
+					err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown vttime proto message %s", ptr.Name())
 				}
 			case "time":
 				switch ptr.Name() {
@@ -272,7 +272,7 @@ func fieldType(field reflect.StructField) (querypb.Type, error) {
 				case "Duration":
 					typeName = "varchar"
 				default:
-					err = vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown time type %s", ptr.Name())
+					err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown time type %s", ptr.Name())
 				}
 			}
 		default:
@@ -289,7 +289,7 @@ func fieldType(field reflect.StructField) (querypb.Type, error) {
 			default:
 				// Impossible unless we add a new type to vttime.proto and
 				// forget to update this function.
-				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown vttime proto message %s", field.Type.Name())
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown vttime proto message %s", field.Type.Name())
 			}
 		case "time":
 			switch field.Type.Name() {
@@ -298,7 +298,7 @@ func fieldType(field reflect.StructField) (querypb.Type, error) {
 			case "Duration":
 				typeName = "varchar"
 			default:
-				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown time type %s", field.Type.Name())
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown time type %s", field.Type.Name())
 			}
 		}
 	case reflect.Int:
@@ -341,19 +341,19 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		} else if v, ok := value.(uint8); ok {
 			return NewUint8(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not uint8 or bool", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not uint8 or bool", value, value)
 		}
 	case querypb.Type_UINT16:
 		if v, ok := value.(uint16); ok {
 			return NewUint16(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not uint16", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not uint16", value, value)
 		}
 	case querypb.Type_UINT32:
 		if v, ok := value.(uint32); ok {
 			return NewUint32(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not uint32", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not uint32", value, value)
 		}
 	case querypb.Type_UINT64:
 		switch v := value.(type) {
@@ -362,25 +362,25 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		case uint:
 			return NewUint64(uint64(v)), nil
 		default:
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not uint64", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not uint64", value, value)
 		}
 	case querypb.Type_INT8:
 		if v, ok := value.(int8); ok {
 			return NewInt8(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not int8", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not int8", value, value)
 		}
 	case querypb.Type_INT16:
 		if v, ok := value.(int16); ok {
 			return NewInt16(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not int16", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not int16", value, value)
 		}
 	case querypb.Type_INT32:
 		if v, ok := value.(int32); ok {
 			return NewInt32(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not int32", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not int32", value, value)
 		}
 	case querypb.Type_INT64:
 		switch v := value.(type) {
@@ -389,19 +389,19 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		case int:
 			return NewInt64(int64(v)), nil
 		default:
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not int64", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not int64", value, value)
 		}
 	case querypb.Type_FLOAT32:
 		if v, ok := value.(float32); ok {
 			return NewFloat32(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not float32", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not float32", value, value)
 		}
 	case querypb.Type_FLOAT64:
 		if v, ok := value.(float64); ok {
 			return NewFloat64(v), nil
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not float64", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not float64", value, value)
 		}
 	case querypb.Type_VARCHAR, querypb.Type_VARBINARY:
 		var s string
@@ -410,7 +410,7 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		} else if v, ok := value.(string); ok {
 			s = v
 		} else {
-			return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not string-like", value, value)
+			return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not string-like", value, value)
 		}
 
 		if typ == querypb.Type_VARBINARY {
@@ -442,7 +442,7 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		default:
 			_s, ok := value.(string)
 			if !ok {
-				return Value{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v (%T) is not time or string-like", value, value)
+				return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v (%T) is not time or string-like", value, value)
 			}
 
 			s = _s

@@ -120,3 +120,13 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 	}
 	return err
 }
+
+// OnlineDDLShowRecent responds with recent schema migration list
+func (vtctldclient *VtctldClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
+	return vtctldclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		"show",
+		Keyspace,
+		"recent",
+	)
+}
