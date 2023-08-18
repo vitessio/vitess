@@ -33,7 +33,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"t9", "aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx", "t1", "t2"}
+		tables := []string{"t9", "aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx", "t1", "t2", "t10"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -437,4 +437,16 @@ func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
 
 	mcmp.AssertMatchesNoOrder("select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t10 where a = 100) A;",
 		`[[DECIMAL(100) DECIMAL(10) DECIMAL(10.0000)]]`)
+}
+
+func TestBuggyQueries(t *testing.T) {
+	// These queries have been found to be producing the wrong results by the query fuzzer
+	// Adding them as end2end tests to make sure we never get them wrong again
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null)")
+
+	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(t1.a) from t10 as t1, t10 as t2",
+		`[[DECIMAL(900)]]`)
 }
