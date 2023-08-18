@@ -324,7 +324,7 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
 
-	vc.CleanupDataroot(t)
+	vc.CleanupDataroot(t, true)
 
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
@@ -363,7 +363,7 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
 // we can run out of disk space due to all the leftover artifacts from previous tests.
-func (vc *VitessCluster) CleanupDataroot(t *testing.T) {
+func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 	// This is always set to "true" on GitHub Actions runners:
 	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
 	ci, ok := os.LookupEnv("CI")
@@ -375,8 +375,10 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T) {
 	log.Infof("Deleting vtdataroot %s", dir)
 	err := os.RemoveAll(dir)
 	require.NoError(t, err)
-	err = os.Mkdir(dir, 0755)
-	require.NoError(t, err)
+	if recreate {
+		err = os.Mkdir(dir, 0700)
+		require.NoError(t, err)
+	}
 }
 
 // AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
@@ -637,7 +639,7 @@ func (vc *VitessCluster) AddCell(t testing.TB, name string) (*Cell, error) {
 	return cell, nil
 }
 
-func (vc *VitessCluster) teardown(t testing.TB) {
+func (vc *VitessCluster) teardown() {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
@@ -700,13 +702,13 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
-func (vc *VitessCluster) TearDown(t testing.TB) {
+func (vc *VitessCluster) TearDown(t *testing.T) {
 	if debugMode {
 		return
 	}
 	done := make(chan bool)
 	go func() {
-		vc.teardown(t)
+		vc.teardown()
 		done <- true
 	}()
 	select {
@@ -717,6 +719,7 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 	}
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
+	vc.CleanupDataroot(t, false)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
