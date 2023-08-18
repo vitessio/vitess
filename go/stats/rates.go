@@ -17,10 +17,15 @@ limitations under the License.
 package stats
 
 import (
+	"context"
 	"encoding/json"
 	"math"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 var timeNow = time.Now
@@ -65,6 +70,8 @@ type Rates struct {
 	// totalRate is the rate of total counts per second seen in the latest
 	// sampling interval e.g. 100 queries / 5 seconds sampling interval = 20 QPS.
 	totalRate float64
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // NewRates reports rolling rate information for countTracker. samples specifies
@@ -73,9 +80,14 @@ type Rates struct {
 // If passing the special value of -1s as interval, we don't snapshot.
 // (use this for tests).
 func NewRates(name string, countTracker CountTracker, samples int, interval time.Duration) *Rates {
+	stack := debug.Stack()
+	if !strings.Contains(string(stack), "engine.go:385") && !strings.Contains(string(stack), "controller.go:77") {
+		log.Infof("NewRates(%v, %v, %v, %v, %s)", name, countTracker, samples, interval, debug.Stack())
+	}
 	if interval < 1*time.Second && interval != -1*time.Second {
 		panic("interval too small")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	rt := &Rates{
 		timeStamps:            NewRingInt64(samples + 1),
 		counts:                make(map[string]*RingInt64),
@@ -83,6 +95,8 @@ func NewRates(name string, countTracker CountTracker, samples int, interval time
 		samples:               samples + 1,
 		interval:              interval,
 		timestampLastSampling: timeNow(),
+		ctx:                   ctx,
+		cancel:                cancel,
 	}
 	if name != "" {
 		publish(name, rt)
@@ -93,12 +107,20 @@ func NewRates(name string, countTracker CountTracker, samples int, interval time
 	return rt
 }
 
+func (rt *Rates) Stop() {
+	rt.cancel()
+}
+
 func (rt *Rates) track() {
 	t := time.NewTicker(rt.interval)
 	defer t.Stop()
 	for {
-		rt.snapshot()
-		<-t.C
+		select {
+		case <-rt.ctx.Done():
+			return
+		case <-t.C:
+			rt.snapshot()
+		}
 	}
 }
 

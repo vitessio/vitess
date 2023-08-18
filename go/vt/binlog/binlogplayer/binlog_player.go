@@ -142,6 +142,11 @@ func (bps *Stats) MessageHistory() []string {
 	return strs
 }
 
+func (bps *Stats) Stop() {
+	bps.Rates.Stop()
+	bps.VReplicationLagRates.Stop()
+}
+
 // NewStats creates a new Stats structure.
 func NewStats() *Stats {
 	bps := &Stats{}

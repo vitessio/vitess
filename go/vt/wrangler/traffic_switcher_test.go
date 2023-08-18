@@ -21,9 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
@@ -71,9 +76,44 @@ const (
 	tsCheckJournals = "select val from _vt.resharding_journal where id=.*"
 )
 
+func ensureNoGoroutines(t testing.TB) {
+	var ignored = []goleak.Option{
+		goleak.IgnoreTopFunction("github.com/golang/glog.(*fileSink).flushDaemon"),
+		goleak.IgnoreTopFunction("github.com/golang/glog.(*loggingT).flushDaemon"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/dbconfigs.init.0.func1"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vtgate.resetAggregators"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vtgate.processQueryInfo"),
+		goleak.IgnoreTopFunction("github.com/patrickmn/go-cache.(*janitor).Run"),
+	}
+
+	var err error
+	for i := 0; i < 5; i++ {
+		err = goleak.Find(ignored...)
+		if err == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal(err)
+}
+
 // TestTableMigrate tests table mode migrations.
 // This has to be kept in sync with TestShardMigrate.
 func TestTableMigrateMainflow(t *testing.T) {
+	t.Cleanup(func() {
+		if t.Failed() {
+			return
+		}
+		ensureNoGoroutines(t)
+	})
+	//defer goleak.VerifyNone(t)
+
+	procs := runtime.NumGoroutine()
+	defer func() {
+		if procs != runtime.NumGoroutine() {
+			log.Errorf("TestTableMigrate: goroutine leak: %d, want %d", runtime.NumGoroutine(), procs)
+		}
+	}()
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
