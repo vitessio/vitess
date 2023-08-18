@@ -654,6 +654,10 @@ func isDistinct(op ops.Operator) bool {
 }
 
 func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	if res := compactUnion(op); res != rewrite.SameTree {
+		return op, res, nil
+	}
+
 	var sources []ops.Operator
 	var selects []sqlparser.SelectExprs
 	var err error
