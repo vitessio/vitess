@@ -99,6 +99,10 @@ const (
 	// place a hard cap on the overall time for a backup, while also not waiting
 	// forever for things that should be quick.
 	operationTimeout = 1 * time.Minute
+
+	phaseNameCatchUpReplication          = "CatchUpReplication"
+	phaseStatusCatchUpReplicationStalled = "Stalled"
+	phaseStatusCatchUpReplicationStopped = "Stopped"
 )
 
 var (
@@ -128,6 +132,17 @@ var (
 		"How long it took vtbackup to perform each phase (in seconds).",
 		"phase",
 	)
+	phaseStatus = stats.NewGaugesWithMultiLabels(
+		"PhaseStatus",
+		"Internal state of vtbackup phase.",
+		[]string{"phase", "status"},
+	)
+	phaseStatuses = map[string][]string{
+		phaseNameCatchUpReplication: {
+			phaseStatusCatchUpReplicationStalled,
+			phaseStatusCatchUpReplicationStopped,
+		},
+	}
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -202,6 +217,13 @@ func main() {
 	// Open connection to topology server.
 	topoServer := topo.Open()
 	defer topoServer.Close()
+
+	// Initialize stats.
+	for phaseName, statuses := range phaseStatuses {
+		for _, status := range statuses {
+			phaseStatus.Set([]string{phaseName, status}, int64(0))
+		}
+	}
 
 	// Try to take a backup, if it's been long enough since the last one.
 	// Skip pruning if backup wasn't fully successful. We don't want to be
@@ -433,6 +455,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
+	var lastStatus replication.ReplicationStatus
+	var status replication.ReplicationStatus
+	var statusErr error
 	waitStartTime := time.Now()
 	for {
 		select {
@@ -441,7 +466,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		case <-time.After(time.Second):
 		}
 
-		status, statusErr := mysqld.ReplicationStatus()
+		lastStatus = status
+		status, statusErr = mysqld.ReplicationStatus()
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
@@ -453,11 +479,21 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			durationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
 			break
 		}
+		if !lastStatus.Position.IsZero() {
+			if status.Position.Equal(lastStatus.Position) {
+				phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 1)
+			} else {
+				phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 0)
+			}
+		}
 		if !status.Healthy() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
+			phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 1)
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
 			}
+		} else {
+			phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 0)
 		}
 	}
 
@@ -467,14 +503,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Did we make any progress?
-	status, err := mysqld.ReplicationStatus()
-	if err != nil {
+	status, statusErr = mysqld.ReplicationStatus()
+	if statusErr != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
 	log.Infof("Replication caught up to %v", status.Position)
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
+	phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 0)
+	phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 0)
 
 	// Re-enable redo logging.
 	if disabledRedoLog {
