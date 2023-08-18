@@ -63,8 +63,9 @@ type (
 	// an integral type, the bytes are always stored as a canonical
 	// representation that matches how MySQL returns such values.
 	Value struct {
-		typ querypb.Type
-		val []byte
+		typ    querypb.Type
+		val    []byte
+		values []Value
 	}
 
 	Row = []Value
@@ -109,12 +110,19 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 // comments. Other packages can also use the function to create
 // VarBinary or VarChar values.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
+	return MakeTrustedValues(typ, val, nil)
+}
 
+func MakeTrustedValues(typ querypb.Type, val []byte, values []*querypb.Value) Value {
 	if typ == Null {
 		return NULL
 	}
-
-	return Value{typ: typ, val: val}
+	var sqlValues []Value
+	for _, v := range values {
+		sqlValues = append(sqlValues,
+			MakeTrustedValues(v.Type, v.Value, v.Values))
+	}
+	return Value{typ: typ, val: val, values: sqlValues}
 }
 
 // NewHexNum builds an Hex Value.
@@ -419,6 +427,15 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 		encodeBytesSQLStringBuilder(v.val, b)
 	case v.typ == Bit:
 		encodeBytesSQLBits(v.val, b)
+	case v.typ == Tuple:
+		b.WriteByte('(')
+		for i, bv := range v.values {
+			if i != 0 {
+				b.WriteString(", ")
+			}
+			bv.EncodeSQLStringBuilder(b)
+		}
+		b.WriteByte(')')
 	default:
 		b.Write(v.val)
 	}
