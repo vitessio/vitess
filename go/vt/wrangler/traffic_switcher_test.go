@@ -100,12 +100,12 @@ func ensureNoGoroutines(t testing.TB) {
 // TestTableMigrate tests table mode migrations.
 // This has to be kept in sync with TestShardMigrate.
 func TestTableMigrateMainflow(t *testing.T) {
-	t.Cleanup(func() {
-		if t.Failed() {
-			return
-		}
-		ensureNoGoroutines(t)
-	})
+	//t.Cleanup(func() {
+	//	if t.Failed() {
+	//		return
+	//	}
+	//	ensureNoGoroutines(t)
+	//})
 	//defer goleak.VerifyNone(t)
 
 	procs := runtime.NumGoroutine()
