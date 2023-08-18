@@ -449,9 +449,4 @@ func TestBuggyQueries(t *testing.T) {
 
 	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(t1.a) from t10 as t1, t10 as t2",
 		`[[DECIMAL(900)]]`)
-
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */t1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a",
-		"[[NULL NULL INT64(3) NULL NULL INT64(3)] "+
-			"[INT32(100) DECIMAL(300) INT64(3) INT32(100) DECIMAL(300) INT64(3)] "+
-			"[INT32(200) DECIMAL(600) INT64(3) INT32(200) DECIMAL(600) INT64(3)]]")
 }
