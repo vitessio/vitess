@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// TestDeleteCascade tests that FK_Cascade executes the child and parent primitives for a delete cascade.
+// TestDeleteCascade tests that FkCascade executes the child and parent primitives for a delete cascade.
 func TestDeleteCascade(t *testing.T) {
 	fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "1|a", "2|b")
 
@@ -56,10 +56,10 @@ func TestDeleteCascade(t *testing.T) {
 			},
 		},
 	}
-	fkc := &FK_Cascade{
-		Input:  inputP,
-		Child:  []Child{{BVName: "__vals", Cols: []int{0, 1}, P: childP}},
-		Parent: parentP,
+	fkc := &FkCascade{
+		Selection: inputP,
+		Children:  []FkChild{{BVName: "__vals", Cols: []int{0, 1}, Exec: childP}},
+		Parent:    parentP,
 	}
 
 	vc := newDMLTestVCursor("0")
@@ -74,9 +74,21 @@ func TestDeleteCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: delete from parent where foo = 48 {} true true`,
 	})
+
+	vc.Rewind()
+	err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`StreamExecuteMulti select cola, colb from parent where foo = 48 ks.0: {} `,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: delete from parent where foo = 48 {} true true`,
+	})
 }
 
-// TestUpdateCascade tests that FK_Cascade executes the child and parent primitives for an update cascade.
+// TestUpdateCascade tests that FkCascade executes the child and parent primitives for an update cascade.
 func TestUpdateCascade(t *testing.T) {
 	fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "1|a", "2|b")
 
@@ -105,10 +117,10 @@ func TestUpdateCascade(t *testing.T) {
 			},
 		},
 	}
-	fkc := &FK_Cascade{
-		Input:  inputP,
-		Child:  []Child{{BVName: "__vals", Cols: []int{0, 1}, P: childP}},
-		Parent: parentP,
+	fkc := &FkCascade{
+		Selection: inputP,
+		Children:  []FkChild{{BVName: "__vals", Cols: []int{0, 1}, Exec: childP}},
+		Parent:    parentP,
 	}
 
 	vc := newDMLTestVCursor("0")
@@ -118,6 +130,18 @@ func TestUpdateCascade(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update parent set cola = 1 where foo = 48 {} true true`,
+	})
+
+	vc.Rewind()
+	err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`StreamExecuteMulti select cola, colb from parent where foo = 48 ks.0: {} `,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
