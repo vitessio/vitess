@@ -309,6 +309,10 @@ func (er *EvalResult) isTextual() bool {
 	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
 }
 
+func (er *EvalResult) ToBoolean() bool {
+	return er.isTruthy() == boolTrue
+}
+
 func (er *EvalResult) isTruthy() boolean {
 	if er.isNull() {
 		return boolNULL
