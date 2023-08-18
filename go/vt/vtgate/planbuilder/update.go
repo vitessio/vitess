@@ -38,40 +38,32 @@ func gen4UpdateStmtPlanner(
 		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err := semantics.Analyze(updStmt, ksName, vschema)
+	ctx, err := plancontext.CreatePlanningContext(updStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
 
 	err = rewriteRoutedTables(updStmt, vschema)
 	if err != nil {
 		return nil, err
 	}
 
-	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
-		if fkManagementNotRequiredForUpdate(semTable, vschema, tables, updStmt.Exprs) {
+	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+		if fkManagementNotRequiredForUpdate(ctx.SemTable, vschema, tables, updStmt.Exprs) {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, updStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
 
-	if semTable.NotUnshardedErr != nil {
-		return nil, semTable.NotUnshardedErr
+	if ctx.SemTable.NotUnshardedErr != nil {
+		return nil, ctx.SemTable.NotUnshardedErr
 	}
 
-	err = queryRewrite(semTable, reservedVars, updStmt)
+	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {

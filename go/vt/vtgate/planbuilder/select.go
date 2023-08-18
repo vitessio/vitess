@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -73,18 +74,18 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, []string, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, []string, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
-	plan, _, tablesUsed, err := getPlan(stmt)
+	plan, tablesUsed, err := getPlan(stmt)
 	if err != nil {
 		return nil, err
 	}
 
 	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
-		plan2, _, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
+		plan2, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
 		if plan2 != nil {
 			return newPlanResult(plan2.Primitive(), tablesUsed...), nil
 		}
@@ -135,7 +136,7 @@ func buildSQLCalcFoundRowsPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (logicalPlan, []string, error) {
-	limitPlan, _, err := planSelectGen4(reservedVars, vschema, sel)
+	limitPlan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -175,33 +176,25 @@ func buildSQLCalcFoundRowsPlan(
 
 	reservedVars2 := sqlparser.NewReservedVars("vtg", reserved2)
 
-	countPlan, tablesUsed, err := planSelectGen4(reservedVars2, vschema, sel2)
+	countPlan, tablesUsed, err := newBuildSelectPlan(sel2, reservedVars2, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
 	}
 	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan}, tablesUsed, nil
 }
 
-func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (logicalPlan, []string, error) {
-	plan, _, tablesUsed, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	return plan, tablesUsed, nil
-}
-
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, []string, error)) (logicalPlan, *semantics.SemTable, []string) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, []string, error)) (logicalPlan, []string) {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
-		return nil, nil, nil
+		return nil, nil
 	}
-	plan2, st, op, err := getPlan(rewritten)
+	plan2, op, err := getPlan(rewritten)
 	if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 		// we only use this new plan if it's better than the old one we got
-		return plan2, st, op
+		return plan2, op
 	}
-	return nil, nil, nil
+	return nil, nil
 }
 
 func newBuildSelectPlan(
@@ -209,65 +202,57 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (plan logicalPlan, semTable *semantics.SemTable, tablesUsed []string, err error) {
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err = semantics.Analyze(selStmt, ksName, vschema)
+) (logicalPlan, []string, error) {
+	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
-
-	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
+	if ks, _ := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+		plan, tablesUsed, err := selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		plan = pushCommentDirectivesOnPlan(plan, selStmt)
-		return plan, semTable, tablesUsed, err
+		return plan, tablesUsed, err
 	}
 
 	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
-	if semTable.NotUnshardedErr != nil {
-		return nil, nil, nil, semTable.NotUnshardedErr
+	if ctx.SemTable.NotUnshardedErr != nil {
+		return nil, nil, ctx.SemTable.NotUnshardedErr
 	}
 
-	err = queryRewrite(semTable, reservedVars, selStmt)
+	op, err := createSelectOperator(ctx, selStmt, reservedVars)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	op, err := operators.PlanQuery(ctx, selStmt)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	plan, err = transformToLogicalPlan(ctx, op, true)
-	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	optimizePlan(plan)
 
-	sel, isSel := selStmt.(*sqlparser.Select)
-	if isSel {
+	if sel, isSel := selStmt.(*sqlparser.Select); isSel {
 		if err = setMiscFunc(plan, sel); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 	}
 
 	if err = plan.Wireup(ctx); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
+	}
+	return pushCommentDirectivesOnPlan(plan, selStmt), operators.TablesUsed(op), nil
+}
+
+func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {
+	err := queryRewrite(ctx.SemTable, reservedVars, selStmt)
+	if err != nil {
+		return nil, err
 	}
 
-	plan = pushCommentDirectivesOnPlan(plan, selStmt)
-
-	return plan, semTable, operators.TablesUsed(op), nil
+	return operators.PlanQuery(ctx, selStmt)
 }
 
 // optimizePlan removes unnecessary simpleProjections that have been created while planning

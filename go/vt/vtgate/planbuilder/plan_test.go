@@ -183,8 +183,10 @@ func TestOne(t *testing.T) {
 	reset := oprewriters.EnableDebugPrinting()
 	defer reset()
 
+	lv := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, lv)
 	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(t, "vschemas/schema.json", true),
+		V: lv,
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)

@@ -215,6 +215,87 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
+	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
+	// Create the delete operator first.
+	del, err := createDeleteOperator(ctx, deleteStmt, qt, vindexTable, routing)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now we check for the foreign key mode and make changes if required.
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmanaged foreign-key-mode, we don't need to do anything.
+	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+		return del, nil
+	}
+	childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
+	// If there are no foreign key constraints, then we don't need to do anything.
+	if len(childFks) == 0 {
+		return del, nil
+	}
+	// If the delete statement has a limit, we don't support it yet.
+	if deleteStmt.Limit != nil {
+		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
+	}
+
+	var fkChildren []ops.Operator
+	var selectExprs []sqlparser.SelectExpr
+	for _, fk := range childFks {
+		if isRestrict(fk.OnDelete) {
+			return nil, vterrors.VT12002()
+		}
+		var cols []int
+		for _, column := range fk.ParentColumns {
+			cols = append(cols, len(selectExprs))
+			selectExprs = append(selectExprs, aeWrap(sqlparser.NewColName(column.String())))
+		}
+
+		bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
+		var valTuple sqlparser.ValTuple
+		for _, column := range fk.ChildColumns {
+			valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+		}
+		compExpr := &sqlparser.ComparisonExpr{
+			Operator: sqlparser.InOp,
+			Left:     valTuple,
+			Right:    sqlparser.NewListArg(bvName),
+		}
+		childDel := &sqlparser.Delete{
+			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName(fk.Table.String()), "")},
+			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
+		}
+		childDelOp, err := createOpFromStmt(ctx, childDel)
+		if err != nil {
+			return nil, err
+		}
+		fkChildren = append(fkChildren, &FkChild{
+			BVName: bvName,
+			Cols:   cols,
+			Op:     childDelOp,
+		})
+	}
+	selectionStmt := &sqlparser.Select{
+		SelectExprs: selectExprs,
+		From:        delClone.TableExprs,
+		Where:       delClone.Where,
+	}
+	selection, err := createOpFromStmt(ctx, selectionStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FkCascade{
+		Selection: selection,
+		Children:  fkChildren,
+		Parent:    del,
+	}, nil
+}
+
+func createDeleteOperator(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete, qt *QueryTable, vindexTable *vindexes.Table, routing Routing) (ops.Operator, error) {
 	del := &Delete{
 		QTable: qt,
 		VTable: vindexTable,
@@ -223,17 +304,6 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	route := &Route{
 		Source:  del,
 		Routing: routing,
-	}
-
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
-		if len(childFks) > 0 {
-			return nil, vterrors.VT12003()
-		}
 	}
 
 	if !vindexTable.Keyspace.Sharded {
@@ -280,6 +350,25 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	}
 	subq.Outer = route
 	return subq, nil
+}
+
+func isRestrict(onDelete sqlparser.ReferenceAction) bool {
+	switch onDelete {
+	case sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction:
+		return true
+	default:
+		return false
+	}
+}
+
+func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+	newCtx, err := plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
+	if err != nil {
+		return nil, err
+	}
+	ctx = newCtx
+
+	return PlanQuery(ctx, stmt)
 }
 
 func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (ops.Operator, error) {
