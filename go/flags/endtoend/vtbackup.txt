@@ -3,8 +3,9 @@ Usage of vtbackup:
       --alsologtostderr                                             log to standard error as well as files
       --azblob_backup_account_key_file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob_backup_account_name string                           Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
+      --azblob_backup_buffer_size int                               The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
       --azblob_backup_container_name string                         Azure Blob Container Name.
-      --azblob_backup_parallelism int                               Azure Blob operation parallelism (requires extra memory when increased). (default 1)
+      --azblob_backup_parallelism int                               Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size). (default 1)
       --azblob_backup_storage_root string                           Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
       --backup_engine_implementation string                         Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                               if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)

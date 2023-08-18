@@ -23,7 +23,10 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -166,7 +169,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 	dr.drLog.Log(fmt.Sprintf("Migrate streams to %s:", dr.ts.TargetKeyspaceName()))
 	for key, streams := range sm.Streams() {
 		for _, stream := range streams {
-			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, mysql.EncodePosition(stream.Position), stream.BinlogSource))
+			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, replication.EncodePosition(stream.Position), stream.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -178,7 +181,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 		tabletStreams := templates
 		for _, vrs := range tabletStreams {
 			logs = append(logs, fmt.Sprintf("\t Keyspace %s, Shard %s, Tablet %d, Workflow %s, Id %d, Pos %v, BinLogSource %s",
-				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, mysql.EncodePosition(vrs.Position), vrs.BinlogSource))
+				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, replication.EncodePosition(vrs.Position), vrs.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -381,5 +384,13 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 		return nil
 	}
 	dr.drLog.Log("The sequence caches will be reset on the source since sequence tables are being moved")
+	return nil
+}
+
+func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
+	slices.Sort(sortedBackingTableNames)
+	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
+		strings.Join(sortedBackingTableNames, ",")))
 	return nil
 }

@@ -436,6 +436,34 @@ func TestNormalizeValidSQL(t *testing.T) {
 	}
 }
 
+func TestNormalizeOneCasae(t *testing.T) {
+	testOne := struct {
+		input, output string
+	}{
+		input:  "",
+		output: "",
+	}
+	if testOne.input == "" {
+		t.Skip("empty test case")
+	}
+	tree, err := Parse(testOne.input)
+	require.NoError(t, err, testOne.input)
+	// Skip the test for the queries that do not run the normalizer
+	if !CanNormalize(tree) {
+		return
+	}
+	bv := make(map[string]*querypb.BindVariable)
+	known := make(BindVars)
+	err = Normalize(tree, NewReservedVars("vtg", known), bv)
+	require.NoError(t, err)
+	normalizerOutput := String(tree)
+	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
+		return
+	}
+	_, err = Parse(normalizerOutput)
+	require.NoError(t, err, normalizerOutput)
+}
+
 func TestGetBindVars(t *testing.T) {
 	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
 	if err != nil {

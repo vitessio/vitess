@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -346,10 +346,10 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 		return nil
 	}
 	// Try and convert the error to a MySQL error
-	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(origErr).(*mysql.SQLError)
+	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(origErr).(*sqlerror.SQLError)
 	// If it is a MySQL error and its code is of duplicate entry, then we would like to continue
 	// Otherwise, we return the error
-	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERDupEntry) {
+	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERDupEntry) {
 		return origErr
 	}
 	for i, row := range rowsColValues {

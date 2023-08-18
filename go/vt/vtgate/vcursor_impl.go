@@ -27,7 +27,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -903,6 +904,16 @@ func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
 }
 
+// SetMigrationContext implements the SessionActions interface
+func (vc *vcursorImpl) SetMigrationContext(migrationContext string) {
+	vc.safeSession.SetMigrationContext(migrationContext)
+}
+
+// GetMigrationContext implements the SessionActions interface
+func (vc *vcursorImpl) GetMigrationContext() string {
+	return vc.safeSession.GetMigrationContext()
+}
+
 // GetSessionUUID implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionUUID() string {
 	return vc.safeSession.GetSessionUUID()
@@ -992,7 +1003,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-			Code:    uint32(mysql.ERNotSupportedYet),
+			Code:    uint32(sqlerror.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
 		})
 	}
@@ -1004,14 +1015,21 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 		return
 	}
 	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-		Code:    uint32(mysql.ERNotSupportedYet),
+		Code:    uint32(sqlerror.ERNotSupportedYet),
 		Message: message,
 	})
 }
 
 // ForeignKeyMode implements the VCursor interface
-func (vc *vcursorImpl) ForeignKeyMode() string {
-	return strings.ToLower(foreignKeyMode)
+func (vc *vcursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	if strings.ToLower(foreignKeyMode) == "disallow" {
+		return vschemapb.Keyspace_FK_DISALLOW, nil
+	}
+	ks := vc.vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return 0, vterrors.VT14004(keyspace)
+	}
+	return ks.ForeignKeyMode, nil
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

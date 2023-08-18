@@ -31,6 +31,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
@@ -609,7 +611,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 		Keyspace:            "test",
 		Shard:               "-",
 		StartTime:           time.Now(),
-		RestoreToPos:        mysql.Position{},
+		RestoreToPos:        replication.Position{},
 		DryRun:              false,
 		Stats:               stats,
 	}

@@ -27,12 +27,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -427,7 +427,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 func (qe *QueryEngine) IsMySQLReachable() error {
 	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.AppWithDB())
 	if err != nil {
-		if mysql.IsTooManyConnectionsErr(err) {
+		if sqlerror.IsTooManyConnectionsErr(err) {
 			return nil
 		}
 		return err

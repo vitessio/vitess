@@ -17,11 +17,9 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMariadbSetReplicationSourceCommand(t *testing.T) {
@@ -76,52 +74,4 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
-}
-
-func TestMariadbRetrieveSourceServerId(t *testing.T) {
-	resultMap := map[string]string{
-		"Master_Server_Id": "1",
-		"Gtid_Slave_Pos":   "0-101-2320",
-	}
-
-	want := ReplicationStatus{SourceServerID: 1}
-	got, err := parseMariadbReplicationStatus(resultMap)
-	require.NoError(t, err)
-	assert.Equal(t, got.SourceServerID, want.SourceServerID, fmt.Sprintf("got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID))
-}
-
-func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
-	resultMap := map[string]string{
-		"Exec_Master_Log_Pos":   "1307",
-		"Relay_Master_Log_File": "master-bin.000002",
-		"Read_Master_Log_Pos":   "1308",
-		"Master_Log_File":       "master-bin.000003",
-		"Gtid_Slave_Pos":        "0-101-2320",
-		"Relay_Log_Pos":         "1309",
-		"Relay_Log_File":        "relay-bin.000004",
-	}
-
-	want := ReplicationStatus{
-		FilePosition:                           Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
-		RelayLogSourceBinlogEquivalentPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
-		RelayLogFilePosition:                   Position{GTIDSet: filePosGTID{file: "relay-bin.000004", pos: 1309}},
-	}
-	got, err := parseMariadbReplicationStatus(resultMap)
-	require.NoError(t, err)
-	assert.Equalf(t, got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet)
-	assert.Equal(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, fmt.Sprintf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet))
-	assert.Equal(t, got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet, fmt.Sprintf("got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet))
-}
-
-func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {
-	resultMap := map[string]string{
-		"Exec_Master_Log_Pos":   "1307",
-		"Relay_Master_Log_File": "master-bin.000002",
-		"Read_Master_Log_Pos":   "1308",
-		"Master_Log_File":       "master-bin.000003",
-		"Gtid_Slave_Pos":        "0-101-2320",
-	}
-	got, err := parseMariadbReplicationStatus(resultMap)
-	require.NoError(t, err)
-	assert.Truef(t, got.RelayLogPosition.IsZero(), "Got a filled in RelayLogPosition. For MariaDB we should get back nil, because MariaDB does not return the retrieved GTIDSet. got: %#v", got.RelayLogPosition)
 }

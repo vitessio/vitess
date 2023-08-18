@@ -61,6 +61,10 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+ifdef VT_EXTRA_BUILD_LDFLAGS
+export EXTRA_BUILD_LDFLAGS := $(VT_EXTRA_BUILD_LDFLAGS)
+endif
+
 # This should be the root of the vitess Git directory.
 ifndef VTROOT
 export VTROOT=${PWD}
@@ -76,7 +80,7 @@ ifndef NOBANNER
 endif
 	bash ./build.env
 	go build -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-o ${VTROOTBIN} ./go/...
 
 # build the vitess binaries statically
@@ -89,7 +93,7 @@ endif
 	# Binaries will be placed in ${VTROOTBIN}.
 	CGO_ENABLED=0 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
@@ -111,7 +115,7 @@ endif
 	mkdir -p ${VTROOTBIN}/${GOOS}_${GOARCH}
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build         \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN}/${GOOS}_${GOARCH} ./go/...
 
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
@@ -125,7 +129,7 @@ endif
 	bash ./build.env
 	go build -trimpath \
 		$(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-gcflags -'N -l' \
 		-o ${VTROOTBIN} ./go/...
 
@@ -273,7 +277,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=19
+BOOTSTRAP_VERSION=20
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -326,6 +330,9 @@ DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 percona57 ubi7.pe
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
+
+docker_lite_push:
+	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
 
 docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 

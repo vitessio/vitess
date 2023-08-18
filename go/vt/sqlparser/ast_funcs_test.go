@@ -134,3 +134,41 @@ func TestSQLTypeToQueryType(t *testing.T) {
 		})
 	}
 }
+
+// TestColumns_Indexes verifies the functionality of Indexes method on Columns.
+func TestColumns_Indexes(t *testing.T) {
+	tests := []struct {
+		name          string
+		cols          Columns
+		subSetCols    Columns
+		indexesWanted []int
+	}{
+		{
+			name:       "Not a subset",
+			cols:       MakeColumns("col1", "col2", "col3"),
+			subSetCols: MakeColumns("col2", "col4"),
+		}, {
+			name:          "Subset with 1 value",
+			cols:          MakeColumns("col1", "col2", "col3"),
+			subSetCols:    MakeColumns("col2"),
+			indexesWanted: []int{1},
+		}, {
+			name:          "Subset with multiple values",
+			cols:          MakeColumns("col1", "col2", "col3", "col4", "col5"),
+			subSetCols:    MakeColumns("col3", "col5", "col1"),
+			indexesWanted: []int{2, 4, 0},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isSubset, indexes := tt.cols.Indexes(tt.subSetCols)
+			if tt.indexesWanted == nil {
+				require.False(t, isSubset)
+				require.Nil(t, indexes)
+				return
+			}
+			require.True(t, isSubset)
+			require.EqualValues(t, tt.indexesWanted, indexes)
+		})
+	}
+}

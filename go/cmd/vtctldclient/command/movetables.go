@@ -226,7 +226,6 @@ var (
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		SourceShards                 []string
-		ExternalClusterName          string
 		AllTables                    bool
 		IncludeTables                []string
 		ExcludeTables                []string
@@ -237,13 +236,14 @@ var (
 		StopAfterCopy                bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
-		Cells                    []string
-		TabletTypes              []topodatapb.TabletType
-		MaxReplicationLagAllowed time.Duration
-		EnableReverseReplication bool
-		Timeout                  time.Duration
-		DryRun                   bool
-		Direction                workflow.TrafficSwitchDirection
+		Cells                     []string
+		TabletTypes               []topodatapb.TabletType
+		MaxReplicationLagAllowed  time.Duration
+		EnableReverseReplication  bool
+		Timeout                   time.Duration
+		DryRun                    bool
+		InitializeTargetSequences bool
+		Direction                 workflow.TrafficSwitchDirection
 	}{}
 )
 
@@ -271,6 +271,8 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		Workflow:                  moveTablesOptions.Workflow,
 		TargetKeyspace:            moveTablesOptions.TargetKeyspace,
 		SourceKeyspace:            moveTablesCreateOptions.SourceKeyspace,
+		SourceShards:              moveTablesCreateOptions.SourceShards,
+		SourceTimeZone:            moveTablesCreateOptions.SourceTimeZone,
 		Cells:                     moveTablesCreateOptions.Cells,
 		TabletTypes:               moveTablesCreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
@@ -278,6 +280,7 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		IncludeTables:             moveTablesCreateOptions.IncludeTables,
 		ExcludeTables:             moveTablesCreateOptions.ExcludeTables,
 		OnDdl:                     moveTablesCreateOptions.OnDDL,
+		DeferSecondaryKeys:        moveTablesCreateOptions.DeferSecondaryKeys,
 		AutoStart:                 moveTablesCreateOptions.AutoStart,
 		StopAfterCopy:             moveTablesCreateOptions.StopAfterCopy,
 	}
@@ -450,14 +453,15 @@ func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
-		Keyspace:                 moveTablesOptions.TargetKeyspace,
-		Workflow:                 moveTablesOptions.Workflow,
-		TabletTypes:              moveTablesSwitchTrafficOptions.TabletTypes,
-		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
-		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
-		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
-		EnableReverseReplication: moveTablesSwitchTrafficOptions.EnableReverseReplication,
-		Direction:                int32(moveTablesSwitchTrafficOptions.Direction),
+		Keyspace:                  moveTablesOptions.TargetKeyspace,
+		Workflow:                  moveTablesOptions.Workflow,
+		TabletTypes:               moveTablesSwitchTrafficOptions.TabletTypes,
+		MaxReplicationLagAllowed:  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
+		Timeout:                   protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
+		DryRun:                    moveTablesSwitchTrafficOptions.DryRun,
+		EnableReverseReplication:  moveTablesSwitchTrafficOptions.EnableReverseReplication,
+		InitializeTargetSequences: moveTablesSwitchTrafficOptions.InitializeTargetSequences,
+		Direction:                 int32(moveTablesSwitchTrafficOptions.Direction),
 	}
 	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
 	if err != nil {
@@ -510,12 +514,14 @@ func init() {
 	MoveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
 	MoveTablesCreate.Flags().StringSliceVarP(&moveTablesCreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial MoveTables (experimental)")
+	MoveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC")
 	MoveTablesCreate.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesCreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY)")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AllTables, "all-tables", false, "Copy all tables from the source")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.IncludeTables, "tables", nil, "Source tables to copy")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying")
 	MoveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
+	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTables.AddCommand(MoveTablesCreate)
@@ -532,14 +538,16 @@ func init() {
 	MoveTablesSwitchTraffic.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesSwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
+	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover")
 	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	MoveTables.AddCommand(MoveTablesSwitchTraffic)
 
 	MoveTablesReverseTraffic.Flags().StringSliceVarP(&moveTablesSwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in")
-	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
-	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
-	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover")
 	MoveTablesReverseTraffic.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesSwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
+	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
+	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original target keyspace to support switching traffic again")
+	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTables.AddCommand(MoveTablesReverseTraffic)
 }

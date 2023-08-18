@@ -57,6 +57,11 @@ const (
 	RestoreState = "restore_in_progress"
 	// BackupTimestampFormat is the format in which we save BackupTime and FinishedTime
 	BackupTimestampFormat = "2006-01-02.150405"
+
+	// closeTimeout is the timeout for closing backup files after writing.
+	// The value is a bit arbitrary. How long does it make sense to wait for a Close()? With a cloud-based implementation,
+	// network might be an issue. _Seconds_ are probably too short. The whereabouts of a minute us a reasonable value.
+	closeTimeout = 1 * time.Minute
 )
 
 const (
@@ -146,6 +151,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
+	params.Logger.Infof("Starting backup %v", bh.Name())
 
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()

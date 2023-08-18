@@ -32,10 +32,11 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
-	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -244,13 +245,13 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.GTIDMode = fullStatus.GtidMode
 			instance.ServerUUID = fullStatus.ServerUuid
 			if fullStatus.PrimaryStatus != nil {
-				GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
+				GtidExecutedPos, err := replication.DecodePosition(fullStatus.PrimaryStatus.Position)
 				errorChan <- err
 				if err == nil && GtidExecutedPos.GTIDSet != nil {
 					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
 				}
 			}
-			GtidPurgedPos, err := vitessmysql.DecodePosition(fullStatus.GtidPurged)
+			GtidPurgedPos, err := replication.DecodePosition(fullStatus.GtidPurged)
 			errorChan <- err
 			if err == nil && GtidPurgedPos.GTIDSet != nil {
 				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
@@ -268,8 +269,8 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	if fullStatus.ReplicationStatus != nil {
 		instance.HasReplicationCredentials = fullStatus.ReplicationStatus.SourceUser != ""
 
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.IoState))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.SqlState))
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.SqlState))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
 
@@ -379,7 +380,7 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
-				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
 	}
@@ -414,7 +415,7 @@ func getKeyspaceShardName(keyspace, shard string) string {
 }
 
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
-	pos, err := vitessmysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil || pos.GTIDSet == nil {
 		return BinlogCoordinates{}, err
 	}

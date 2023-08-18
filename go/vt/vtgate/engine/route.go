@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
@@ -250,7 +250,7 @@ func (route *Route) executeShards(
 		partialSuccessScatterQueries.Add(1)
 
 		for _, err := range errs {
-			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			serr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
 		}
 	}
@@ -339,7 +339,7 @@ func (route *Route) streamExecuteShards(
 			}
 			partialSuccessScatterQueries.Add(1)
 			for _, err := range errs {
-				sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				sErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
 			}
 		}

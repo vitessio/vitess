@@ -27,11 +27,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/constants/sidecar"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -402,8 +402,8 @@ func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBCon
 	}
 
 	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(escapedTableNames, ", "))
-	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
-	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
+	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
+	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
 
 	// Reload the schema in a transaction.
 	_, err := conn.Exec(ctx, "begin", 1, false)

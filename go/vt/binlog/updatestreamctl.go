@@ -17,13 +17,12 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
 
-	"context"
-
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -250,7 +249,7 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 
 // StreamKeyRange is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(trans *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -290,7 +289,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 
 // StreamTables is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(trans *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}

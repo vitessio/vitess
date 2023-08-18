@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -2361,7 +2362,7 @@ func primaryPosition(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mysql.EncodePosition(pos)
+	return replication.EncodePosition(pos)
 }
 
 func setVSchema(t *testing.T, vschema string) {

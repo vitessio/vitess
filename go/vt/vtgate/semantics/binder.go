@@ -116,6 +116,20 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.CountStar:
 		b.bindCountStar(node)
+	case *sqlparser.Union:
+		info := b.tc.unionInfo[node]
+		// TODO: this check can be removed and available type information should be used.
+		if !info.isAuthoritative {
+			return nil
+		}
+
+		for i, expr := range info.exprs {
+			ae := expr.(*sqlparser.AliasedExpr)
+			b.recursive[ae.Expr] = info.recursive[i]
+			if t := info.types[i]; t != nil {
+				b.typer.exprTypes[ae.Expr] = *t
+			}
+		}
 	}
 	return nil
 }

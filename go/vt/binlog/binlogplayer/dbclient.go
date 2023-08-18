@@ -20,11 +20,12 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -55,7 +56,7 @@ type dbClientImplWithSidecarDBReplacement struct {
 
 // NewDBClient creates a DBClient instance
 func NewDBClient(params dbconfigs.Connector) DBClient {
-	if sidecardb.GetName() != sidecardb.DefaultName {
+	if sidecar.GetName() != sidecar.DefaultName {
 		return &dbClientImplWithSidecarDBReplacement{
 			dbClientImpl{dbConfig: params},
 		}
@@ -66,7 +67,7 @@ func NewDBClient(params dbconfigs.Connector) DBClient {
 }
 
 func (dc *dbClientImpl) handleError(err error) {
-	if mysql.IsConnErr(err) {
+	if sqlerror.IsConnErr(err) {
 		dc.Close()
 	}
 }
@@ -141,7 +142,7 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

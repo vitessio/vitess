@@ -601,31 +601,6 @@ func (node *ColName) Equal(c *ColName) bool {
 	return node.Name.Equal(c.Name) && node.Qualifier == c.Qualifier
 }
 
-// Aggregates is a map of all aggregate functions.
-var Aggregates = map[string]bool{
-	"avg":          true,
-	"bit_and":      true,
-	"bit_or":       true,
-	"bit_xor":      true,
-	"count":        true,
-	"group_concat": true,
-	"max":          true,
-	"min":          true,
-	"std":          true,
-	"stddev_pop":   true,
-	"stddev_samp":  true,
-	"stddev":       true,
-	"sum":          true,
-	"var_pop":      true,
-	"var_samp":     true,
-	"variance":     true,
-}
-
-// IsAggregate returns true if the function is an aggregate.
-func (node *FuncExpr) IsAggregate() bool {
-	return Aggregates[node.Name.Lowered()]
-}
-
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
 	return IdentifierCI{
@@ -666,6 +641,19 @@ func NewTableNameWithQualifier(name, qualifier string) TableName {
 	}
 }
 
+// NewSubquery makes a new Subquery
+func NewSubquery(selectStatement SelectStatement) *Subquery {
+	return &Subquery{Select: selectStatement}
+}
+
+// NewDerivedTable makes a new DerivedTable
+func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+	return &DerivedTable{
+		Lateral: lateral,
+		Select:  selectStatement,
+	}
+}
+
 // NewAliasedTableExpr makes a new AliasedTableExpr with an alias
 func NewAliasedTableExpr(simpleTableExpr SimpleTableExpr, alias string) *AliasedTableExpr {
 	return &AliasedTableExpr{
@@ -700,12 +688,21 @@ func NewAliasedExpr(expr Expr, alias string) *AliasedExpr {
 	}
 }
 
+func (ae *AliasedExpr) SetAlias(alias string) {
+	ae.As = NewIdentifierCI(alias)
+}
+
 // NewOrder makes a new Order
 func NewOrder(expr Expr, direction OrderDirection) *Order {
 	return &Order{
 		Expr:      expr,
 		Direction: direction,
 	}
+}
+
+// NewNotExpr makes a new NotExpr
+func NewNotExpr(expr Expr) *NotExpr {
+	return &NotExpr{Expr: expr}
 }
 
 // NewComparisonExpr makes a new ComparisonExpr
@@ -715,6 +712,20 @@ func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr
 		Left:     left,
 		Right:    right,
 		Escape:   escape,
+	}
+}
+
+// NewExistsExpr makes a new ExistsExpr
+func NewExistsExpr(subquery *Subquery) *ExistsExpr {
+	return &ExistsExpr{Subquery: subquery}
+}
+
+// NewCaseExpr makes a new CaseExpr
+func NewCaseExpr(expr Expr, whens []*When, elseExpr Expr) *CaseExpr {
+	return &CaseExpr{
+		Expr:  expr,
+		Whens: whens,
+		Else:  elseExpr,
 	}
 }
 
@@ -740,14 +751,6 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 			Type: IntVal,
 			Val:  fmt.Sprint(rowCount),
 		},
-	}
-}
-
-// NewDerivedTable makes a new DerivedTable
-func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
-	return &DerivedTable{
-		Lateral: lateral,
-		Select:  selectStatement,
 	}
 }
 
@@ -1067,6 +1070,11 @@ func (node *Select) MakeDistinct() {
 	node.Distinct = true
 }
 
+// IsDistinct implements the SelectStatement interface
+func (node *Select) IsDistinct() bool {
+	return node.Distinct
+}
+
 // GetColumnCount return SelectExprs count.
 func (node *Select) GetColumnCount() int {
 	return len(node.SelectExprs)
@@ -1190,6 +1198,11 @@ func (node *Union) SetWith(with *With) {
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.Distinct = true
+}
+
+// IsDistinct implements the SelectStatement interface
+func (node *Union) IsDistinct() bool {
+	return node.Distinct
 }
 
 // GetColumnCount implements the SelectStatement interface
@@ -2171,28 +2184,6 @@ func isExprLiteral(expr Expr) bool {
 	}
 }
 
-func defaultRequiresParens(ct *ColumnType) bool {
-	// in 5.7 null value should be without parenthesis, in 8.0 it is allowed either way.
-	// so it is safe to not keep parenthesis around null.
-	if _, isNullVal := ct.Options.Default.(*NullVal); isNullVal {
-		return false
-	}
-
-	switch strings.ToUpper(ct.Type) {
-	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
-		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
-		"LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
-		"MULTIPOLYGON", "GEOMETRYCOLLECTION":
-		return true
-	}
-
-	if isExprLiteral(ct.Options.Default) || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-		return false
-	}
-
-	return true
-}
-
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
 func RemoveKeyspaceFromColName(expr Expr) {
 	RemoveKeyspace(expr)
@@ -2493,4 +2484,59 @@ func (ty KillType) ToString() string {
 	default:
 		return ConnectionStr
 	}
+}
+
+// Indexes returns true, if the list of columns contains all the elements in the other list.
+// It also returns the indexes of the columns in the list.
+func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
+	var indexes []int
+	for _, subSetCol := range subSetCols {
+		colFound := false
+		for idx, col := range cols {
+			if col.Equal(subSetCol) {
+				colFound = true
+				indexes = append(indexes, idx)
+				break
+			}
+		}
+		if !colFound {
+			return false, nil
+		}
+	}
+	return true, indexes
+}
+
+// MakeColumns is used to make a list of columns from a list of strings.
+// This function is meant to be used in testing code.
+func MakeColumns(colNames ...string) Columns {
+	var cols Columns
+	for _, name := range colNames {
+		cols = append(cols, NewIdentifierCI(name))
+	}
+	return cols
+}
+
+func VisitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+	v := visitor{}
+	return v.visitAllSelects(in, f)
+}
+
+type visitor struct {
+	idx int
+}
+
+func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+	switch sel := in.(type) {
+	case *Select:
+		err := f(sel, v.idx)
+		v.idx++
+		return err
+	case *Union:
+		err := v.visitAllSelects(sel.Left, f)
+		if err != nil {
+			return err
+		}
+		return v.visitAllSelects(sel.Right, f)
+	}
+	panic("switch should be exhaustive")
 }

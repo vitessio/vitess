@@ -411,7 +411,7 @@ func TestVSchemaForeignKeys(t *testing.T) {
 	require.NoError(t, vschema.Keyspaces["main"].Error)
 
 	// add fk containst a keyspace.
-	vschema.addForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
+	vschema.AddForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.Columns{sqlparser.NewIdentifierCI("c2")},
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
 			ReferencedTable:   sqlparser.NewTableName("t1"),

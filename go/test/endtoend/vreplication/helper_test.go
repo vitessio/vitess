@@ -40,6 +40,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -762,7 +763,7 @@ func (lg *loadGenerator) start() {
 				_, err := conn.ExecuteFetch(query, 1, false)
 				atomic.AddInt64(&totalQueries, 1)
 				if err != nil {
-					sqlErr := err.(*mysql.SQLError)
+					sqlErr := err.(*sqlerror.SQLError)
 					if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
 						log.Infof("startLoad: denied tables error executing query: %d:%v", sqlErr.Number(), err)
 						atomic.AddInt64(&deniedErrors, 1)

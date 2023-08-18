@@ -29,7 +29,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -152,7 +154,7 @@ type tableDiffer struct {
 type shardStreamer struct {
 	primary          *topo.TabletInfo
 	tablet           *topodatapb.Tablet
-	position         mysql.Position
+	position         replication.Position
 	snapshotPosition string
 	result           chan *sqltypes.Result
 	err              error
@@ -911,8 +913,8 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 		if participant.position.IsZero() {
 			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.primary.Alias.String())
 		}
-		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
-		if err := df.ts.TabletManagerClient().WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
+		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), replication.EncodePosition(participant.position))
+		if err := df.ts.TabletManagerClient().WaitForPosition(waitCtx, participant.tablet, replication.EncodePosition(participant.position)); err != nil {
 			log.Errorf("WaitForPosition error: %s", err)
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
@@ -1029,7 +1031,7 @@ func (df *vdiff) restartTargets(ctx context.Context) error {
 		// Let's retry a few times if we get a retryable error.
 		for i := 1; i <= 3; i++ {
 			_, err = df.ts.TabletManagerClient().VReplicationExec(ctx, target.primary.Tablet, query)
-			if err == nil || !mysql.IsEphemeralError(err) {
+			if err == nil || !sqlerror.IsEphemeralError(err) {
 				break
 			}
 			log.Warningf("Encountered the following error while restarting the %q VReplication workflow on %q, will retry (attempt #%d): %v",

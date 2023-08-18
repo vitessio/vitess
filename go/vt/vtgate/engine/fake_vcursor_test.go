@@ -159,6 +159,14 @@ func (t *noopVCursor) GetDDLStrategy() string {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetMigrationContext(migrationContext string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetMigrationContext() string {
+	panic("implement me")
+}
+
 func (t *noopVCursor) GetSessionUUID() string {
 	panic("implement me")
 }
