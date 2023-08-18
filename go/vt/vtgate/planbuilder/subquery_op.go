@@ -36,7 +36,7 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.Uncor
 }
 
 func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin, isRoot bool) (logicalPlan, error) {
-	outer, err := transformToLogicalPlan(ctx, op.LHS, isRoot)
+	outer, err := transformToLogicalPlan(ctx, op.Outer, isRoot)
 	if err != nil {
 		return nil, err
 	}

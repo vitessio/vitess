@@ -193,7 +193,29 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 			jpc.inspectPredicate(ctx, predicate)
 		}
 	}
-	jpc.inspectPredicate(ctx, predicate)
+
+	if len(jpc.joinVars) == 0 {
+		// this is an uncorrelated subquery
+		opInner, err := translateQueryToOp(ctx, innerSel)
+		if err != nil {
+			return nil, err
+		}
+
+		u := &UncorrelatedSubQuery{
+			Original: original,
+			Subquery: opInner,
+			Opcode:   opcode.PulloutValue,
+		}
+
+		switch original.Operator {
+		case sqlparser.InOp:
+			u.Opcode = opcode.PulloutIn
+		case sqlparser.NotInOp:
+			u.Opcode = opcode.PulloutNotIn
+		}
+
+		return u, nil
+	}
 
 	if len(jpc.remainingPredicates) > 0 {
 		innerSel.Where = sqlparser.NewWhere(sqlparser.WhereClause, sqlparser.AndExpressions(jpc.remainingPredicates...))
@@ -206,7 +228,7 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 	}
 
 	return &SemiJoin{
-		RHS:               opInner,
+		Subquery:          opInner,
 		JoinVars:          jpc.joinVars,
 		Original:          original,
 		comparisonColumns: jpc.comparisonColumns,
@@ -259,16 +281,14 @@ func createExistsSubquery(
 
 	if len(jpc.joinVars) == 0 {
 		return &UncorrelatedSubQuery{
-			Original:       org,
-			Opcode:         opcode.PulloutExists,
-			Subquery:       opInner,
-			SubqueryResult: ctx.ReservedVars.ReserveVariable("sq"),
-			HasValues:      ctx.ReservedVars.ReserveVariable("exists"),
+			Original: org,
+			Opcode:   opcode.PulloutExists,
+			Subquery: opInner,
 		}, nil
 	}
 
 	return &SemiJoin{
-		RHS:               opInner,
+		Subquery:          opInner,
 		JoinVars:          jpc.joinVars,
 		Original:          org,
 		comparisonColumns: jpc.comparisonColumns,

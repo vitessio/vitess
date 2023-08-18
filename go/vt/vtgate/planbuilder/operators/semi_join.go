@@ -28,8 +28,8 @@ import (
 // It is a join between the outer query and the subquery, where the subquery is the RHS.
 // We are only interested in the existence of rows in the RHS, so we only need to know if
 type SemiJoin struct {
-	LHS ops.Operator // outer
-	RHS ops.Operator // inner
+	Outer    ops.Operator
+	Subquery ops.Operator
 
 	// JoinCols are the columns from the LHS used for the join.
 	// These are the same columns pushed on the LHS that are now used in the Vars field
@@ -48,6 +48,7 @@ type SemiJoin struct {
 	// for the predicate: EXISTS (select 1 from user where tbl.ud = bar(foo) AND tbl.id = user.id limit)
 	// We would store `tbl.id` in JoinVars, but nothing on the inside, since the expression
 	// `foo(tbl.id)` is not a bare column
+	// the first offset is the outer column, and the second is the inner
 	comparisonColumns [][2]*sqlparser.ColName
 
 	_sq *sqlparser.Subquery // (SELECT foo from user LIMIT 1)
@@ -59,7 +60,7 @@ type SemiJoin struct {
 func (sj *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 	sj.JoinVarOffsets = make(map[string]int, len(sj.JoinVars))
 	for bindvarName, col := range sj.JoinVars {
-		offsets, err := sj.LHS.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(col)})
+		offsets, err := sj.Outer.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(col)})
 		if err != nil {
 			return err
 		}
@@ -69,7 +70,7 @@ func (sj *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 }
 
 func (sj *SemiJoin) SetOuter(operator ops.Operator) {
-	sj.LHS = operator
+	sj.Outer = operator
 }
 
 func (sj *SemiJoin) OuterExpressionsNeeded() []*sqlparser.ColName {
@@ -79,7 +80,7 @@ func (sj *SemiJoin) OuterExpressionsNeeded() []*sqlparser.ColName {
 var _ SubQuery = (*SemiJoin)(nil)
 
 func (sj *SemiJoin) Inner() ops.Operator {
-	return sj.RHS
+	return sj.Subquery
 }
 
 func (sj *SemiJoin) OriginalExpression() sqlparser.Expr {
@@ -95,10 +96,10 @@ func (sj *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
 	klone := *sj
 	switch len(inputs) {
 	case 1:
-		klone.RHS = inputs[0]
+		klone.Subquery = inputs[0]
 	case 2:
-		klone.LHS = inputs[0]
-		klone.RHS = inputs[1]
+		klone.Outer = inputs[0]
+		klone.Subquery = inputs[1]
 	default:
 		panic("wrong number of inputs")
 	}
@@ -113,21 +114,21 @@ func (sj *SemiJoin) GetOrdering() ([]ops.OrderBy, error) {
 
 // Inputs implements the Operator interface
 func (sj *SemiJoin) Inputs() []ops.Operator {
-	if sj.LHS == nil {
-		return []ops.Operator{sj.RHS}
+	if sj.Outer == nil {
+		return []ops.Operator{sj.Subquery}
 	}
 
-	return []ops.Operator{sj.LHS, sj.RHS}
+	return []ops.Operator{sj.Outer, sj.Subquery}
 }
 
 // SetInputs implements the Operator interface
 func (sj *SemiJoin) SetInputs(inputs []ops.Operator) {
 	switch len(inputs) {
 	case 1:
-		sj.RHS = inputs[0]
+		sj.Subquery = inputs[0]
 	case 2:
-		sj.LHS = inputs[0]
-		sj.RHS = inputs[1]
+		sj.Outer = inputs[0]
+		sj.Subquery = inputs[1]
 	default:
 		panic("wrong number of inputs")
 	}
@@ -143,11 +144,11 @@ func (sj *SemiJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 }
 
 func (sj *SemiJoin) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return sj.LHS.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
+	return sj.Outer.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
 func (sj *SemiJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
-	return sj.LHS.FindCol(ctx, expr, underRoute)
+	return sj.Outer.FindCol(ctx, expr, underRoute)
 }
 
 func (sj *SemiJoin) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {

@@ -61,6 +61,7 @@ func NewPlanningContext(
 		SkipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
+		CurrentStatement:  statement,
 	}
 	return ctx
 }

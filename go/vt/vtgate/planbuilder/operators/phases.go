@@ -53,19 +53,14 @@ func getPhases(query sqlparser.Statement) []Phase {
 		Name: "pull distinct from UNION",
 		// to make it easier to compact UNIONs together, we keep the `distinct` flag in the UNION op until this
 		// phase. Here we will place a DISTINCT op on top of the UNION, and turn the UNION into a UNION ALL
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return pullDistinctFromUNION(op)
-		},
-		apply: func(s QuerySignature) bool { return s.Union },
+		action: pullDistinctFromUNION,
+		apply:  func(s QuerySignature) bool { return s.Union },
 	}, {
 		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
 		// need it their inputs, and then we start splitting the aggregation
 		// so parts run on MySQL and parts run on VTGate
-		Name: "add filter columns to projection or aggregation",
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			ctx.DelegateAggregation = true
-			return addColumnsToInput(ctx, op)
-		},
+		Name:   "add filter columns to projection or aggregation",
+		action: enableDelegateAggregatiion,
 	}, {
 		// addOrderBysForAggregations runs after we have pushed aggregations as far down as they'll go
 		// addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
@@ -74,41 +69,16 @@ func getPhases(query sqlparser.Statement) []Phase {
 		action: addOrderBysForAggregations,
 		apply:  func(s QuerySignature) bool { return s.Aggregation },
 	}, {
-		Name: "remove Distinct operator that are not required and still above a route",
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
-				d, ok := innerOp.(*Distinct)
-				if !ok || d.Required {
-					return innerOp, rewrite.SameTree, nil
-				}
-
-				return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
-			}, stopAtRoute)
-		},
-		apply: func(s QuerySignature) bool { return s.Distinct },
+		Name:   "remove Distinct operator that are not required and still above a route",
+		action: removePerformanceDistinctAboveRoute,
+		apply:  func(s QuerySignature) bool { return s.Distinct },
 	}, {
 		// This phase runs late, so subqueries have by this point been pushed down as far as they'll go.
 		// Next step is to extract the subqueries from the slices in the SubQueryContainer.
 		// In this step, we'll also make a decision on how we want to run the filter
-		Name: "break the subquery container and extract subqueries still above the route",
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-				sqc, ok := op.(*SubQueryContainer)
-				if !ok {
-					return op, rewrite.SameTree, nil
-				}
-				outer := sqc.Outer
-				for _, subq := range sqc.Inner {
-					newOuter, err := setOuterOnSubQuery(ctx, outer, subq)
-					if err != nil {
-						return nil, nil, err
-					}
-					outer = newOuter
-				}
-				return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
-			}
-			return rewrite.BottomUp(op, TableID, visit, stopAtRoute)
-		},
+		Name:   "break the subquery container and extract subqueries still above the route",
+		action: extractSubqueriesFromContainer,
+		apply:  func(s QuerySignature) bool { return s.SubQueries },
 	}}
 
 	sig := getQuerySignatureFor(query)
@@ -147,6 +117,41 @@ func getQuerySignatureFor(query sqlparser.Statement) QuerySignature {
 	return signature
 }
 
+func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		d, ok := innerOp.(*Distinct)
+		if !ok || d.Required {
+			return innerOp, rewrite.SameTree, nil
+		}
+
+		return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
+	}, stopAtRoute)
+}
+
+func enableDelegateAggregatiion(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	ctx.DelegateAggregation = true
+	return addColumnsToInput(ctx, op)
+}
+
+func extractSubqueriesFromContainer(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		sqc, ok := op.(*SubQueryContainer)
+		if !ok {
+			return op, rewrite.SameTree, nil
+		}
+		outer := sqc.Outer
+		for _, subq := range sqc.Inner {
+			newOuter, err := setOuterOnSubQuery(ctx, outer, subq)
+			if err != nil {
+				return nil, nil, err
+			}
+			outer = newOuter
+		}
+		return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
+	}
+	return rewrite.BottomUp(op, TableID, visit, stopAtRoute)
+}
+
 func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, subq SubQuery) (ops.Operator, error) {
 	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
 	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
@@ -155,17 +160,34 @@ func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, su
 	// Here we have two options: we can start by running the outer query and then run the inner query for each row, or
 	// we can run the inner query first and then run the outer query with the results of the inner query.
 	// Long term, we should have a cost based optimizer that can make this decision for us.
-	// For now, we will prefer the IN version of these two
 	switch subq := subq.(type) {
 	case *SemiJoin:
-		subq.RHS = &Filter{
-			Source:     subq.RHS,
+		subq.Subquery = &Filter{
+			Source:     subq.Subquery,
 			Predicates: []sqlparser.Expr{subq.rhsPredicate},
 		}
 	case *UncorrelatedSubQuery:
+		subRes, hasValues := ctx.ReservedVars.ReserveSubQueryWithHasValues()
+		subq.SubqueryResult = subRes
+		subq.HasValues = hasValues
+		noSubQueries := func(node, parent sqlparser.SQLNode) bool {
+			_, ok := node.(*sqlparser.Subquery)
+			return !ok
+		}
+		removeSubquery := func(cursor *sqlparser.CopyOnWriteCursor) {
+			_, ok := cursor.Node().(*sqlparser.Subquery)
+			if !ok {
+				return
+			}
+			cursor.Replace(sqlparser.NewArgument(subRes))
+		}
+		newPred := sqlparser.CopyOnRewrite(subq.Original, noSubQueries, removeSubquery, ctx.SemTable.CopyDependenciesOnSQLNodes)
 		outer = &Filter{
-			Source:     outer,
-			Predicates: []sqlparser.Expr{sqlparser.NewArgument(subq.HasValues)},
+			Source: outer,
+			Predicates: []sqlparser.Expr{
+				sqlparser.NewArgument(subq.HasValues),
+				newPred.(sqlparser.Expr),
+			},
 		}
 	default:
 		return nil, vterrors.VT13001("unexpected subquery type")
