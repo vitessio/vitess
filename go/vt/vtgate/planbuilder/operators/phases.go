@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -74,10 +75,10 @@ func getPhases(query sqlparser.Statement) []Phase {
 		apply:  func(s QuerySignature) bool { return s.Distinct },
 	}, {
 		// This phase runs late, so subqueries have by this point been pushed down as far as they'll go.
-		// Next step is to extract the subqueries from the slices in the SubQueryContainer.
-		// In this step, we'll also make a decision on how we want to run the filter
-		Name:   "break the subquery container and extract subqueries still above the route",
-		action: extractSubqueriesFromContainer,
+		// Next step is to extract the subqueries from the slices in the SubQueryContainer
+		// and plan for how to run them on the vtgate
+		Name:   "settle subqueries above the route",
+		action: settleSubqueries,
 		apply:  func(s QuerySignature) bool { return s.SubQueries },
 	}}
 
@@ -133,7 +134,7 @@ func enableDelegateAggregatiion(ctx *plancontext.PlanningContext, op ops.Operato
 	return addColumnsToInput(ctx, op)
 }
 
-func extractSubqueriesFromContainer(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		sqc, ok := op.(*SubQueryContainer)
 		if !ok {
@@ -141,7 +142,7 @@ func extractSubqueriesFromContainer(ctx *plancontext.PlanningContext, op ops.Ope
 		}
 		outer := sqc.Outer
 		for _, subq := range sqc.Inner {
-			newOuter, err := setOuterOnSubQuery(ctx, outer, subq)
+			newOuter, err := settleSubquery(ctx, outer, subq)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -152,43 +153,20 @@ func extractSubqueriesFromContainer(ctx *plancontext.PlanningContext, op ops.Ope
 	return rewrite.BottomUp(op, TableID, visit, stopAtRoute)
 }
 
-func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, subq SubQuery) (ops.Operator, error) {
+// settleSubquery is run when the subqueries have been pushed as far down as they can go.
+// At this point, we know that the subqueries will not be pushed under a Route, so we need to
+// plan for how to run them on the vtgate
+func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq SubQuery) (ops.Operator, error) {
 	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
 	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
 	// this query is equivalent to
 	// select * from user where id = 5 and exists(select 1 from music where baz = 13 and user.id = bar)
-	// Here we have two options: we can start by running the outer query and then run the inner query for each row, or
-	// we can run the inner query first and then run the outer query with the results of the inner query.
 	// Long term, we should have a cost based optimizer that can make this decision for us.
 	switch subq := subq.(type) {
 	case *SemiJoin:
-		subq.Subquery = &Filter{
-			Source:     subq.Subquery,
-			Predicates: []sqlparser.Expr{subq.rhsPredicate},
-		}
+		settleSemiJoin(subq)
 	case *UncorrelatedSubQuery:
-		subRes, hasValues := ctx.ReservedVars.ReserveSubQueryWithHasValues()
-		subq.SubqueryResult = subRes
-		subq.HasValues = hasValues
-		noSubQueries := func(node, parent sqlparser.SQLNode) bool {
-			_, ok := node.(*sqlparser.Subquery)
-			return !ok
-		}
-		removeSubquery := func(cursor *sqlparser.CopyOnWriteCursor) {
-			_, ok := cursor.Node().(*sqlparser.Subquery)
-			if !ok {
-				return
-			}
-			cursor.Replace(sqlparser.NewArgument(subRes))
-		}
-		newPred := sqlparser.CopyOnRewrite(subq.Original, noSubQueries, removeSubquery, ctx.SemTable.CopyDependenciesOnSQLNodes)
-		outer = &Filter{
-			Source: outer,
-			Predicates: []sqlparser.Expr{
-				sqlparser.NewArgument(subq.HasValues),
-				newPred.(sqlparser.Expr),
-			},
-		}
+		outer = settleUncorrelatedSubquery(ctx, outer, subq)
 	default:
 		return nil, vterrors.VT13001("unexpected subquery type")
 	}
@@ -196,6 +174,46 @@ func setOuterOnSubQuery(ctx *plancontext.PlanningContext, outer ops.Operator, su
 	subq.SetOuter(outer)
 
 	return subq, nil
+}
+
+func settleSemiJoin(sj *SemiJoin) {
+	sj.Subquery = &Filter{
+		Source:     sj.Subquery,
+		Predicates: []sqlparser.Expr{sj.rhsPredicate},
+	}
+}
+
+func settleUncorrelatedSubquery(
+	ctx *plancontext.PlanningContext,
+	outer ops.Operator,
+	subq *UncorrelatedSubQuery,
+) ops.Operator {
+	subRes, hasValues := ctx.ReservedVars.ReserveSubQueryWithHasValues()
+	subq.SubqueryResult = subRes
+	subq.HasValues = hasValues
+	noSubQueries := func(node, parent sqlparser.SQLNode) bool {
+		_, ok := node.(*sqlparser.Subquery)
+		return !ok
+	}
+	removeSubquery := func(cursor *sqlparser.CopyOnWriteCursor) {
+		_, ok := cursor.Node().(*sqlparser.Subquery)
+		if !ok {
+			return
+		}
+		cursor.Replace(sqlparser.NewArgument(subRes))
+	}
+
+	newPred := sqlparser.CopyOnRewrite(subq.Original, noSubQueries, removeSubquery, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	predicates := []sqlparser.Expr{newPred.(sqlparser.Expr)}
+	switch subq.Opcode {
+	case opcode.PulloutIn, opcode.PulloutNotIn:
+		predicates = append(predicates, sqlparser.NewArgument(subq.HasValues))
+	}
+	outer = &Filter{
+		Source:     outer,
+		Predicates: predicates,
+	}
+	return outer
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
