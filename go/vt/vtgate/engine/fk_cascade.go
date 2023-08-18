@@ -25,6 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// FkChild contains the Child Primitive to be executed collecting the values from the Selection Primitive using the column indexes.
+// BVName is used to pass the value as bind variable to the Child Primitive.
 type FkChild struct {
 	BVName string
 	Cols   []int // indexes
@@ -34,9 +36,12 @@ type FkChild struct {
 // FkCascade is a primitive that implements foreign key cascading using Selection as values required to execute the FkChild Primitives.
 // On success, it executes the Parent Primitive.
 type FkCascade struct {
+	// Selection is the Primitive that is used to find the rows that are going to be modified in the child tables.
 	Selection Primitive
-	Children  []FkChild
-	Parent    Primitive
+	// Children is a list of child foreign key Primitives that are executed using rows from the Selection Primitive.
+	Children []FkChild
+	// Parent is the Primitive that is executed after the children are modified.
+	Parent Primitive
 
 	txNeeded
 }
