@@ -55,3 +55,15 @@ func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
 	}
 	backup.ExecTestIncrementalBackupAndRestoreToTimestamp(t, tcase)
 }
+
+// TestIncrementalBackupOnTwoTablets runs a series of interleaved backups on two different replicas: full and incremental.
+// Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
+// one another.
+func TestIncrementalBackupOnTwoTablets(t *testing.T) {
+	tcase := &backup.PITRTestCase{
+		Name:           "BuiltinBackup",
+		SetupType:      backup.BuiltinBackup,
+		ComprssDetails: nil,
+	}
+	backup.ExecTestIncrementalBackupOnTwoTablets(t, tcase)
+}

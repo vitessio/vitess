@@ -53,5 +53,6 @@ type iswitcher interface {
 	deleteShardRoutingRules(ctx context.Context) error
 	addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error
 	resetSequences(ctx context.Context) error
+	initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error
 	logs() *[]string
 }

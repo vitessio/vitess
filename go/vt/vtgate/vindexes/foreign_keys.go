@@ -107,16 +107,13 @@ func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstrain
 	return nil
 }
 
-// CrossShardParentFKs returns all the parent fk constraints on this table that are not shard scoped.
-func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
-	if len(t.ParentForeignKeys) == 0 {
-		return
-	}
+// ParentFKsNeedsHandling returns all the parent fk constraints on this table that are not shard scoped.
+func (t *Table) ParentFKsNeedsHandling() (fks []ParentFKInfo) {
 	for _, fk := range t.ParentForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
 		if fk.Table.Keyspace.Name != t.Keyspace.Name {
-			crossShardFKs = append(crossShardFKs, fk)
+			fks = append(fks, fk)
 			continue
 		}
 		// If the keyspaces match and they are unsharded, then the fk defintion
@@ -125,42 +122,81 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 			continue
 		}
 
-		// If the primary vindexes don't match between the parent and child table,
-		// we cannot infer that the fk constraint in shard scoped.
-		primaryVindex := t.ColumnVindexes[0]
-		if fk.Table.ColumnVindexes[0].Vindex != primaryVindex.Vindex {
-			crossShardFKs = append(crossShardFKs, fk)
-			continue
-		}
-
-		childFkContatined, childFkIndexes := fk.ChildColumns.Indexes(primaryVindex.Columns)
-		if !childFkContatined {
-			// PrimaryVindex is not part of the foreign key constraint on the children side.
-			// So it is a cross-shard foreign key.
-			crossShardFKs = append(crossShardFKs, fk)
-			continue
-		}
-
-		// We need to run the same check for the parent columns.
-		parentFkContatined, parentFkIndexes := fk.ParentColumns.Indexes(fk.Table.ColumnVindexes[0].Columns)
-		if !parentFkContatined {
-			crossShardFKs = append(crossShardFKs, fk)
-			continue
-		}
-
-		// Both the child and parent table contain the foreign key and that the vindexes are the same,
-		// now we need to make sure, that the indexes of both match.
-		// For example, consider the following tables,
-		//	t1 (primary vindex (x,y))
-		//	t2 (primary vindex (a,b))
-		//	If we have a foreign key constraint from t1(x,y) to t2(b,a), then they are not shard scoped.
-		//	Let's say in t1, (1,3) will be in -80 and (3,1) will be in 80-, then in t2 (1,3) will end up in 80-.
-		for i := range parentFkIndexes {
-			if parentFkIndexes[i] != childFkIndexes[i] {
-				crossShardFKs = append(crossShardFKs, fk)
-				break
-			}
+		if !isShardScoped(fk.Table, t, fk.ParentColumns, fk.ChildColumns) {
+			fks = append(fks, fk)
 		}
 	}
 	return
+}
+
+// ChildFKsNeedsHandling retuns the child foreign keys that needs to be handled by the vtgate.
+// This can be either the foreign key is not shard scoped or the child tables needs cascading.
+func (t *Table) ChildFKsNeedsHandling(getAction func(fk ChildFKInfo) sqlparser.ReferenceAction) (fks []ChildFKInfo) {
+	for _, fk := range t.ChildForeignKeys {
+		// If the keyspaces are different, then the fk definition
+		// is going to go across shards.
+		if fk.Table.Keyspace.Name != t.Keyspace.Name {
+			fks = append(fks, fk)
+			continue
+		}
+		// If the action is not Restrict, then it needs a cascade.
+		switch getAction(fk) {
+		case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
+			fks = append(fks, fk)
+			continue
+		}
+		// sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction
+		// all the actions means the same thing i.e. Restrict
+		// do not allow modification if there is a child row.
+		// Check if the restrict is shard scoped.
+		if !isShardScoped(t, fk.Table, fk.ParentColumns, fk.ChildColumns) {
+			fks = append(fks, fk)
+		}
+	}
+	return
+}
+
+func UpdateAction(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnUpdate }
+func DeleteAction(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnDelete }
+
+func isShardScoped(pTable *Table, cTable *Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
+	if !pTable.Keyspace.Sharded {
+		return true
+	}
+
+	pPrimaryVdx := pTable.ColumnVindexes[0]
+	cPrimaryVdx := cTable.ColumnVindexes[0]
+
+	// If the primary vindexes don't match between the parent and child table,
+	// we cannot infer that the fk constraint in shard scoped.
+	if cPrimaryVdx.Vindex != pPrimaryVdx.Vindex {
+		return false
+	}
+
+	childFkContatined, childFkIndexes := cCols.Indexes(cPrimaryVdx.Columns)
+	if !childFkContatined {
+		// PrimaryVindex is not part of the foreign key constraint on the children side.
+		// So it is a cross-shard foreign key.
+		return false
+	}
+
+	// We need to run the same check for the parent columns.
+	parentFkContatined, parentFkIndexes := pCols.Indexes(pPrimaryVdx.Columns)
+	if !parentFkContatined {
+		return false
+	}
+
+	// Both the child and parent table contain the foreign key and that the vindexes are the same,
+	// now we need to make sure, that the indexes of both match.
+	// For example, consider the following tables,
+	//	t1 (primary vindex (x,y))
+	//	t2 (primary vindex (a,b))
+	//	If we have a foreign key constraint from t1(x,y) to t2(b,a), then they are not shard scoped.
+	//	Let's say in t1, (1,3) will be in -80 and (3,1) will be in 80-, then in t2 (1,3) will end up in 80-.
+	for i := range parentFkIndexes {
+		if parentFkIndexes[i] != childFkIndexes[i] {
+			return false
+		}
+	}
+	return true
 }

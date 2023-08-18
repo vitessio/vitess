@@ -42,12 +42,16 @@ var (
 
 // ValueToProto converts Value to a *querypb.Value.
 func ValueToProto(v Value) *querypb.Value {
-	return &querypb.Value{Type: v.typ, Value: v.val}
+	var protoValues []*querypb.Value
+	for _, value := range v.values {
+		protoValues = append(protoValues, ValueToProto(value))
+	}
+	return &querypb.Value{Type: v.typ, Value: v.val, Values: protoValues}
 }
 
 // ProtoToValue converts a *querypb.Value to a Value.
 func ProtoToValue(v *querypb.Value) Value {
-	return MakeTrusted(v.Type, v.Value)
+	return MakeTrustedValues(v.Type, v.Value, v.Values)
 }
 
 // BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]any
