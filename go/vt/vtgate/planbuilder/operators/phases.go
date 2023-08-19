@@ -33,20 +33,13 @@ type (
 		Name string
 		// action is the action to be taken before calling plan optimization operation.
 		action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
-		apply  func(QuerySignature) bool
-	}
-
-	QuerySignature struct {
-		Union       bool
-		Aggregation bool
-		Distinct    bool
-		SubQueries  bool
+		apply  func(semantics.QuerySignature) bool
 	}
 )
 
 // getPhases returns the phases the planner will go through.
 // It's used to control so rewriters collaborate correctly
-func getPhases(query sqlparser.Statement) []Phase {
+func getPhases(ctx *plancontext.PlanningContext) []Phase {
 	phases := []Phase{{
 		// Initial optimization
 		Name: "initial horizon planning optimization phase",
@@ -55,7 +48,7 @@ func getPhases(query sqlparser.Statement) []Phase {
 		// to make it easier to compact UNIONs together, we keep the `distinct` flag in the UNION op until this
 		// phase. Here we will place a DISTINCT op on top of the UNION, and turn the UNION into a UNION ALL
 		action: pullDistinctFromUNION,
-		apply:  func(s QuerySignature) bool { return s.Union },
+		apply:  func(s semantics.QuerySignature) bool { return s.Union },
 	}, {
 		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
 		// need it their inputs, and then we start splitting the aggregation
@@ -68,54 +61,27 @@ func getPhases(query sqlparser.Statement) []Phase {
 		// add the necessary Ordering operators for them
 		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		action: addOrderBysForAggregations,
-		apply:  func(s QuerySignature) bool { return s.Aggregation },
+		apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
 	}, {
 		Name:   "remove Distinct operator that are not required and still above a route",
 		action: removePerformanceDistinctAboveRoute,
-		apply:  func(s QuerySignature) bool { return s.Distinct },
+		apply:  func(s semantics.QuerySignature) bool { return s.Distinct },
 	}, {
 		// This phase runs late, so subqueries have by this point been pushed down as far as they'll go.
 		// Next step is to extract the subqueries from the slices in the SubQueryContainer
 		// and plan for how to run them on the vtgate
 		Name:   "settle subqueries above the route",
 		action: settleSubqueries,
-		apply:  func(s QuerySignature) bool { return s.SubQueries },
+		apply:  func(s semantics.QuerySignature) bool { return s.SubQueries },
 	}}
 
-	sig := getQuerySignatureFor(query)
 	return slice.Filter(phases, func(phase Phase) bool {
 		if phase.apply == nil {
 			// if no apply function is defined, we always apply the phase
 			return true
 		}
-		return phase.apply(sig)
+		return phase.apply(ctx.SemTable.QuerySignature)
 	})
-}
-
-func getQuerySignatureFor(query sqlparser.Statement) QuerySignature {
-	signature := QuerySignature{}
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.Union:
-			signature.Union = true
-			if node.Distinct {
-				signature.Distinct = true
-			}
-		case *sqlparser.Subquery:
-			signature.SubQueries = true
-		case *sqlparser.Select:
-			if node.Distinct {
-				signature.Distinct = true
-			}
-			if node.GroupBy != nil {
-				signature.Aggregation = true
-			}
-		case sqlparser.AggrFunc:
-			signature.Aggregation = true
-		}
-		return true, nil
-	}, query)
-	return signature
 }
 
 func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {

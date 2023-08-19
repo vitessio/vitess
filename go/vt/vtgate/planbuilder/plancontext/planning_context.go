@@ -23,10 +23,9 @@ import (
 )
 
 type PlanningContext struct {
-	CurrentStatement sqlparser.Statement
-	ReservedVars     *sqlparser.ReservedVars
-	SemTable         *semantics.SemTable
-	VSchema          VSchema
+	ReservedVars *sqlparser.ReservedVars
+	SemTable     *semantics.SemTable
+	VSchema      VSchema
 
 	// here we add all predicates that were created because of a join condition
 	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
@@ -47,7 +46,6 @@ type PlanningContext struct {
 }
 
 func NewPlanningContext(
-	statement sqlparser.Statement,
 	reservedVars *sqlparser.ReservedVars,
 	semTable *semantics.SemTable,
 	vschema VSchema,
@@ -61,7 +59,6 @@ func NewPlanningContext(
 		SkipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
-		CurrentStatement:  statement,
 	}
 	return ctx
 }

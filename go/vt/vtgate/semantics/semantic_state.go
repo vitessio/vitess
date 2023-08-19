@@ -67,6 +67,14 @@ type (
 	// ExprDependencies stores the tables that an expression depends on as a map
 	ExprDependencies map[sqlparser.Expr]TableSet
 
+	// QuerySignature is used to identify shortcuts in the planning process
+	QuerySignature struct {
+		Union       bool
+		Aggregation bool
+		Distinct    bool
+		SubQueries  bool
+	}
+
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
 		// Tables stores information about the tables in the query, including derived tables
@@ -119,6 +127,9 @@ type (
 
 		// StatementIDs is a map of statements and all the table IDs that are contained within
 		StatementIDs map[sqlparser.Statement]TableSet
+
+		// QuerySignature is used to identify shortcuts in the planning process
+		QuerySignature QuerySignature
 	}
 
 	columnName struct {

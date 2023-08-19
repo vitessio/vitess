@@ -88,10 +88,8 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
-	phases := getPhases(ctx.CurrentStatement)
 	op = root
-
-	for _, phase := range phases {
+	for _, phase := range getPhases(ctx) {
 		if phase.action != nil {
 			op, err = phase.action(ctx, op)
 			if err != nil {
