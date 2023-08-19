@@ -63,13 +63,12 @@ func NewToxiproxyctl(binary string, apiPort, mysqlPort int, mysqlctl *Mysqlctl, 
 
 	// The original initFile does not have any users who can access through TCP/IP connection.
 	// Here we update the init file to create the user.
-	// We're using IPv6 localhost because that's what toxiproxy uses by default.
 	initDb, _ := os.ReadFile(mysqlctl.InitFile)
 	createUserCmd := fmt.Sprintf(`
 		# Admin user for TCP/IP connection with all privileges.
-		CREATE USER '%s'@'::1';
-		GRANT ALL ON *.* TO '%s'@'::1';
-		GRANT GRANT OPTION ON *.* TO '%s'@'::1';
+		CREATE USER '%s'@'127.0.0.1';
+		GRANT ALL ON *.* TO '%s'@'127.0.0.1';
+		GRANT GRANT OPTION ON *.* TO '%s'@'127.0.0.1';
 	`, dbaUser, dbaUser, dbaUser)
 	sql, err := getInitDBSQL(string(initDb), createUserCmd)
 	if err != nil {
