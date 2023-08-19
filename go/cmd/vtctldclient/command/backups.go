@@ -129,8 +129,8 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 	stream, err := client.BackupShard(commandCtx, &vtctldatapb.BackupShardRequest{
 		Keyspace:     keyspace,
 		Shard:        shard,
-		AllowPrimary: backupOptions.AllowPrimary,
-		Concurrency:  backupOptions.Concurrency,
+		AllowPrimary: backupShardOptions.AllowPrimary,
+		Concurrency:  backupShardOptions.Concurrency,
 	})
 	if err != nil {
 		return err
