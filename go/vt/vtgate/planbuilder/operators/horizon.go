@@ -51,18 +51,18 @@ type Horizon struct {
 	ColumnsOffset []int
 }
 
+func newHorizon(src ops.Operator, query sqlparser.SelectStatement) *Horizon {
+	return &Horizon{Source: src, Query: query}
+}
+
 // Clone implements the Operator interface
 func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
-	return &Horizon{
-		Source:        inputs[0],
-		Query:         h.Query,
-		Alias:         h.Alias,
-		ColumnAliases: sqlparser.CloneColumns(h.ColumnAliases),
-		Columns:       slices.Clone(h.Columns),
-		ColumnsOffset: slices.Clone(h.ColumnsOffset),
-		TableId:       h.TableId,
-		QP:            h.QP,
-	}
+	klone := *h
+	klone.Source = inputs[0]
+	klone.ColumnAliases = sqlparser.CloneColumns(h.ColumnAliases)
+	klone.Columns = slices.Clone(h.Columns)
+	klone.ColumnsOffset = slices.Clone(h.ColumnsOffset)
+	return &klone
 }
 
 // findOutputColumn returns the index on which the given name is found in the slice of

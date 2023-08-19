@@ -63,7 +63,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	}
 
 	if sel.Where == nil {
-		return &Horizon{Source: op, Query: sel}, nil
+		return newHorizon(op, sel), nil
 	}
 
 	src, err := addWherePredicates(ctx, sel.Where.Expr, op)
@@ -71,10 +71,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 		return nil, err
 	}
 
-	return &Horizon{
-		Source: src,
-		Query:  sel,
-	}, nil
+	return newHorizon(src, sel), nil
 }
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
@@ -405,7 +402,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 
 	unionCols := ctx.SemTable.SelectExprs(node)
 	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
-	return &Horizon{Source: union, Query: node}, nil
+	return newHorizon(union, node), nil
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
@@ -942,30 +939,26 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		qg.Tables = append(qg.Tables, qt)
 		return qg, nil
 	case *sqlparser.DerivedTable:
+		if onlyTable && tbl.Select.GetLimit() == nil {
+			tbl.Select.SetOrderBy(nil)
+		}
+
 		inner, err := translateQueryToOp(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
 		if horizon, ok := inner.(*Horizon); ok {
-			inner = horizon.Source
+			horizon.TableId = &tableID
+			horizon.Alias = tableExpr.As.String()
+			horizon.ColumnAliases = tableExpr.Columns
+			qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
+			if err != nil {
+				return nil, err
+			}
+			horizon.QP = qp
 		}
 
-		if onlyTable && tbl.Select.GetLimit() == nil {
-			tbl.Select.SetOrderBy(nil)
-		}
-		qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Horizon{
-			TableId:       &tableID,
-			Alias:         tableExpr.As.String(),
-			Source:        inner,
-			Query:         tbl.Select,
-			ColumnAliases: tableExpr.Columns,
-			QP:            qp,
-		}, nil
+		return inner, nil
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
 	}
