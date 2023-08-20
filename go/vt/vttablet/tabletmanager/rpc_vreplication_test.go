@@ -596,6 +596,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
 	defer tenv.deleteTablet(sourceTablet.tablet)
 	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
 
 	tenv.mysqld.Schema = defaultSchema
 	tenv.mysqld.Schema.DatabaseSchema = tenv.dbName
