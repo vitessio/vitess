@@ -92,6 +92,11 @@ func SchemaMigrationStrategyName(strategy vtctldatapb.SchemaMigration_Strategy) 
 		return "unknown"
 	}
 
+	switch strategy {
+	case vtctldatapb.SchemaMigration_GHOST, vtctldatapb.SchemaMigration_PTOSC:
+		name = strings.Join([]string{name[:2], name[2:]}, "-")
+	}
+
 	return strings.ToLower(name)
 }
 
