@@ -28,6 +28,7 @@ import (
 
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -977,6 +978,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	var vschema *vschemapb.Keyspace
+	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
 	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
@@ -1019,6 +1021,9 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 	if !vschema.Sharded {
+		// Save the original in case we need to restore it for a late failure
+		// in the defer().
+		origVSchema = proto.Clone(vschema).(*vschemapb.Keyspace)
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
@@ -1078,6 +1083,12 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			}
 			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
+			}
+			if origVSchema == nil { // There's no previous version to restore
+				return
+			}
+			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
 	}()

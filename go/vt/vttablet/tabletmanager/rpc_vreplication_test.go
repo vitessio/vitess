@@ -726,6 +726,10 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		&sqltypes.Result{RowsAffected: 1},
 	)
 
+	// Save the current target vschema.
+	vs, err := tenv.ts.GetVSchema(ctx, targetKs)
+	require.NoError(t, err, "failed to get target vschema")
+
 	_, err = ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       wf,
 		SourceKeyspace: sourceKs,
@@ -741,4 +745,9 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	rules, err := topotools.GetRoutingRules(ctx, tenv.ts)
 	require.NoError(t, err, "failed to get routing rules")
 	require.Equal(t, 0, len(rules), "expected no routing rules to be present")
+
+	// Check that our vschema changes were also rolled back.
+	vs2, err := tenv.ts.GetVSchema(ctx, targetKs)
+	require.NoError(t, err, "failed to get target vschema")
+	require.Equal(t, vs, vs2, "expected vschema to be unchanged")
 }

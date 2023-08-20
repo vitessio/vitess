@@ -144,6 +144,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 
 	var vschema *vschemapb.Keyspace
+	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -206,6 +207,9 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 		if !vschema.Sharded {
+			// Save the original in case we need to restore it for a late failure
+			// in the defer().
+			origVSchema = proto.Clone(vschema).(*vschemapb.Keyspace)
 			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 				return err
 			}
@@ -266,6 +270,12 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 			if cerr := wr.dropArtifacts(ctx, false, &switcher{ts: ts, wr: wr}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
+			}
+			if origVSchema == nil { // There's no previous version to restore
+				return
+			}
+			if cerr := wr.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
 	}()
