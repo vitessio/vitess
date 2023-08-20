@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -59,7 +58,7 @@ func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Stra
 	upperName := strings.ToUpper(name)
 	switch upperName {
 	case "GH-OST", "PT-OSC":
-		// more backward compatibility since the protobuf message names don't
+		// more compatibility since the protobuf message names don't
 		// have the dash.
 		upperName = strings.ReplaceAll(upperName, "-", "")
 	default:
@@ -68,12 +67,6 @@ func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Stra
 	strategy, ok := vtctldatapb.SchemaMigration_Strategy_value[upperName]
 	if !ok {
 		return 0, fmt.Errorf("unknown schema migration strategy: '%v'", name)
-	}
-
-	if upperName != name {
-		// TODO (andrew): Remove special handling for lower/uppercase and
-		// gh-ost=>ghost/pt-osc=>ptosc support. (file issue for this).
-		log.Warningf("detected legacy strategy name syntax; parsed %q as %q. this will break in the next version.", upperName, name)
 	}
 
 	return vtctldatapb.SchemaMigration_Strategy(strategy), nil
@@ -87,10 +80,6 @@ func ParseSchemaMigrationStatus(name string) (vtctldatapb.SchemaMigration_Status
 	val, ok := vtctldatapb.SchemaMigration_Status_value[key]
 	if !ok {
 		return 0, fmt.Errorf("unknown enum name for SchemaMigration_Status: %s", name)
-	}
-
-	if name != key {
-		log.Warningf("legacy status name %s parsed as %s. this will break in a future release.", name, key)
 	}
 
 	return vtctldatapb.SchemaMigration_Status(val), nil
