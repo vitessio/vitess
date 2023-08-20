@@ -249,6 +249,51 @@ func (cached *Filter) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *FkCascade) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Selection vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Selection.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Children []vitess.io/vitess/go/vt/vtgate/engine.FkChild
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Children)) * int64(56))
+		for _, elem := range cached.Children {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Parent vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Parent.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *FkChild) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field BVName string
+	size += hack.RuntimeAllocSize(int64(len(cached.BVName)))
+	// field Cols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Exec.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Generate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -826,7 +871,7 @@ func (cached *Rows) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.rows)) * int64(24))
 		for _, elem := range cached.rows {
 			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(32))
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(56))
 				for _, elem := range elem {
 					size += elem.CachedSize(false)
 				}

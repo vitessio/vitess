@@ -298,35 +298,15 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
       "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
-            "Table": "`user`",
-            "Values": [
-              "INT64(1)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1 union all select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1 union select id from `user` where id = 1 union all select id from `user`",
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
@@ -926,8 +906,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select col, weight_string(col) from unsharded where 1 != 1",
-                "Query": "select distinct col, weight_string(col) from unsharded",
+                "FieldQuery": "select col, weight_string(col) from (select col from unsharded where 1 != 1 union select col2 from unsharded where 1 != 1) as dt where 1 != 1",
+                "Query": "select col, weight_string(col) from (select col from unsharded union select col2 from unsharded) as dt",
                 "Table": "unsharded"
               },
               {
@@ -937,31 +917,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                "Query": "select distinct id, weight_string(id) from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select col2, weight_string(col2) from unsharded where 1 != 1",
-                "Query": "select distinct col2, weight_string(col2) from unsharded",
-                "Table": "unsharded"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col, weight_string(col) from user_extra where 1 != 1",
-                "Query": "select distinct col, weight_string(col) from user_extra",
-                "Table": "user_extra"
+                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select col from user_extra where 1 != 1) as dt where 1 != 1",
+                "Query": "select id, weight_string(id) from (select id from `user` union select col from user_extra) as dt",
+                "Table": "`user`, user_extra"
               }
             ]
           }

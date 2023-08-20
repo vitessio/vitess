@@ -160,6 +160,21 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		Routing: routing,
 	}
 
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode == vschemapb.Keyspace_FK_MANAGED {
+		parentFKs := vindexTable.ParentFKsNeedsHandling()
+		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
+		if (len(childFks) > 0 || len(parentFKs) > 0) &&
+			ColumnModified(updStmt.Exprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+				return parentFKs, childFks
+			}) {
+			return nil, vterrors.VT12003()
+		}
+	}
+
 	subq, err := createSubqueryFromStatement(ctx, updStmt)
 	if err != nil {
 		return nil, err
@@ -169,6 +184,24 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	}
 	subq.Outer = r
 	return subq, nil
+}
+
+// ColumnModified checks if any column in the parent table is being updated which has a child foreign key.
+func ColumnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo)) bool {
+	for _, updateExpr := range exprs {
+		parentFKs, childFks := getFks(updateExpr)
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		for _, parentFk := range parentFKs {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (ops.Operator, error) {
@@ -197,7 +230,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		childFks := vindexTable.ChildFKsNeedsHandling()
+		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
 		if len(childFks) > 0 {
 			return nil, vterrors.VT12003()
 		}
@@ -279,7 +312,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.CrossShardParentFKs()
+		parentFKs := vindexTable.ParentFKsNeedsHandling()
 		if len(parentFKs) > 0 {
 			return nil, vterrors.VT12002()
 		}

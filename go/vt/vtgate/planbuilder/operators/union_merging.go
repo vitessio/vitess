@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -108,7 +109,12 @@ func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
 // this function is very similar to mergeJoinInputs
-func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, lhsExprs, rhsExprs sqlparser.SelectExprs, distinct bool) (ops.Operator, sqlparser.SelectExprs, error) {
+func mergeUnionInputs(
+	ctx *plancontext.PlanningContext,
+	lhs, rhs ops.Operator,
+	lhsExprs, rhsExprs sqlparser.SelectExprs,
+	distinct bool,
+) (ops.Operator, sqlparser.SelectExprs, error) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil, nil
@@ -116,32 +122,57 @@ func mergeUnionInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, l
 
 	switch {
 	// if either side is a dual query, we can always merge them together
-	case b == dual:
+	// an unsharded/reference route can be merged with anything going to that keyspace
+	case b == dual || (b == anyShard && sameKeyspace):
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
-	case a == dual:
+	case a == dual || (a == anyShard && sameKeyspace):
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
-	case a == anyShard && sameKeyspace:
+
+	case a == none:
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
-	case b == anyShard && sameKeyspace:
+	case b == none:
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
+
 	case a == sharded && b == sharded && sameKeyspace:
-		// If the two routes fully match, they can be merged together.
-		tblA := routingA.(*ShardedRouting)
-		tblB := routingB.(*ShardedRouting)
-		if tblA.RouteOpCode == engine.Scatter && tblB.RouteOpCode == engine.Scatter {
-			return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+		res, exprs, err := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
+		if err != nil || res != nil {
+			return res, exprs, err
 		}
-		if tblA.RouteOpCode != engine.EqualUnique || tblB.RouteOpCode != engine.EqualUnique {
-			break
-		}
+	}
+	return nil, nil, nil
+}
+
+func tryMergeUnionShardedRouting(
+	ctx *plancontext.PlanningContext,
+	routeA, routeB *Route,
+	exprsA, exprsB sqlparser.SelectExprs,
+	distinct bool,
+) (ops.Operator, sqlparser.SelectExprs, error) {
+	tblA := routeA.Routing.(*ShardedRouting)
+	tblB := routeB.Routing.(*ShardedRouting)
+
+	scatterA := tblA.RouteOpCode == engine.Scatter
+	scatterB := tblB.RouteOpCode == engine.Scatter
+	uniqueA := tblA.RouteOpCode == engine.EqualUnique
+	uniqueB := tblB.RouteOpCode == engine.EqualUnique
+
+	switch {
+	case scatterA:
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA)
+
+	case scatterB:
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblB)
+
+	case uniqueA && uniqueB:
 		aVdx := tblA.SelectedVindex()
 		bVdx := tblB.SelectedVindex()
 		aExpr := tblA.VindexExpressions()
 		bExpr := tblB.VindexExpressions()
 		if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-			return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB)
+			return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA)
 		}
 	}
+
 	return nil, nil, nil
 }
 
@@ -186,4 +217,43 @@ func createMergedUnion(
 		MergedWith: []*Route{rhsRoute},
 		Routing:    routing,
 	}, selectExprs, nil
+}
+
+func compactUnion(u *Union) *rewrite.ApplyResult {
+	if u.distinct {
+		// first we remove unnecessary DISTINCTs
+		for idx, source := range u.Sources {
+			d, ok := source.(*Distinct)
+			if !ok || !d.Required {
+				continue
+			}
+			u.Sources[idx] = d.Source
+		}
+	}
+
+	var newSources []ops.Operator
+	var newSelects []sqlparser.SelectExprs
+	merged := false
+
+	for idx, source := range u.Sources {
+		other, ok := source.(*Union)
+
+		if ok && (u.distinct || !other.distinct) {
+			newSources = append(newSources, other.Sources...)
+			newSelects = append(newSelects, other.Selects...)
+			merged = true
+			continue
+		}
+
+		newSources = append(newSources, source)
+		newSelects = append(newSelects, u.Selects[idx])
+	}
+
+	if !merged {
+		return rewrite.SameTree
+	}
+
+	u.Sources = newSources
+	u.Selects = newSelects
+	return rewrite.NewTree("merged UNIONs", u)
 }
