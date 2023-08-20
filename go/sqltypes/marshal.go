@@ -449,6 +449,8 @@ func structToQueryValue(value any, field reflect.StructField, typ querypb.Type) 
 		}
 
 		return NewTimestamp(s), nil
+	case querypb.Type_NULL_TYPE:
+		return NewValue(Null, nil)
 	}
 
 	return Value{}, vterrors.Errorf(0, "unsupported query field type %s", strings.ToLower(querypb.Type_name[int32(typ)]))
