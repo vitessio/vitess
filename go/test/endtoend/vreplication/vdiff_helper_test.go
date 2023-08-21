@@ -110,12 +110,20 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 				// The timestamp format allows us to compare them lexicographically.
 				// We don't test that the ETA always increases as it can decrease based on how
 				// quickly we're doing work.
-				if info.Progress.ETA != "" {
-					// If we're operating at the second boundary then the ETA can be up
-					// to 1 second in the past due to using second based precision.
-					loc, _ := time.LoadLocation("UTC")
-					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
-				}
+
+				// Commenting out this check for now as it is quite flaky in Github CI: we sometimes get a difference of
+				// more than 1s between the ETA and the current time, empirically seen 2s when it has failed,
+				// but presumably it can be higher. Keeping the code here for now in case we want to re-enable it.
+
+				/*
+					if info.Progress.ETA != "" {
+						// If we're operating at the second boundary then the ETA can be up
+						// to 1 second in the past due to using second based precision.
+						loc, _ := time.LoadLocation("UTC")
+						require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
+					}
+				*/
+
 				if !first {
 					require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
 				}
