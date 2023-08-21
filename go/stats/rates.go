@@ -20,12 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"math"
-	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 var timeNow = time.Now
@@ -80,10 +76,6 @@ type Rates struct {
 // If passing the special value of -1s as interval, we don't snapshot.
 // (use this for tests).
 func NewRates(name string, countTracker CountTracker, samples int, interval time.Duration) *Rates {
-	stack := debug.Stack()
-	if !strings.Contains(string(stack), "engine.go:385") && !strings.Contains(string(stack), "controller.go:77") {
-		log.Infof("NewRates(%v, %v, %v, %v, %s)", name, countTracker, samples, interval, debug.Stack())
-	}
 	if interval < 1*time.Second && interval != -1*time.Second {
 		panic("interval too small")
 	}

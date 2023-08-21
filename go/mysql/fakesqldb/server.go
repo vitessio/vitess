@@ -237,7 +237,6 @@ func (db *DB) Close() {
 
 	tmpDir := path.Dir(db.socketFile)
 	os.RemoveAll(tmpDir)
-
 }
 
 // CloseAllConnections can be used to provoke MySQL client errors for open
