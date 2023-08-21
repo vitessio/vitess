@@ -57,22 +57,166 @@
   {
     "comment": "Delete in a table with cross-shard foreign keys disallowed",
     "query": "delete from tbl1",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
     "comment": "Delete in a table with not all column shard-scoped foreign keys - disallowed",
     "query": "delete from tbl7",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
-    "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade not allowed",
+    "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade",
     "query": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Children": [
+          {
+            "OperatorType": "FkCascadeChild",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Delete",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
+                "Table": "multicol_tbl2"
+              }
+            ]
+          }
+        ],
+        "Parent": {
+          "OperatorType": "Delete",
+          "Variant": "EqualUnique",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
+          "Table": "multicol_tbl1",
+          "Values": [
+            "INT64(1)",
+            "INT64(2)",
+            "INT64(3)"
+          ],
+          "Vindex": "multicolIdx"
+        },
+        "Selection": {
+          "OperatorType": "Route",
+          "Variant": "EqualUnique",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
+          "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 lock in share mode",
+          "Table": "multicol_tbl1",
+          "Values": [
+            "INT64(1)",
+            "INT64(2)",
+            "INT64(3)"
+          ],
+          "Vindex": "multicolIdx"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.multicol_tbl1",
+        "sharded_fk_allow.multicol_tbl2"
+      ]
+    }
   },
   {
-    "comment": "Delete in a table with shard-scoped foreign keys with cascade disallowed",
+    "comment": "Delete in a table with shard-scoped foreign keys with cascade",
     "query": "delete from tbl5",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl5",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Children": [
+          {
+            "OperatorType": "FkCascadeChild",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Delete",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from tbl4 where (col4) in ::fkc_vals",
+                "Table": "tbl4"
+              }
+            ]
+          },
+          {
+            "OperatorType": "FkCascadeChild",
+            "BvName": "fkc_vals1",
+            "Cols": [
+              1
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Delete",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
+                "Table": "tbl4"
+              }
+            ]
+          }
+        ],
+        "Parent": {
+          "OperatorType": "Delete",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "delete from tbl5",
+          "Table": "tbl5"
+        },
+        "Selection": {
+          "OperatorType": "Route",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
+          "Query": "select col5, t5col5 from tbl5 lock in share mode",
+          "Table": "tbl5"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl4",
+        "sharded_fk_allow.tbl5"
+      ]
+    }
   },
   {
     "comment": "update in unsharded table with restrict",

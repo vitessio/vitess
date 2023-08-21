@@ -67,7 +67,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
 		return nil, err
 	}

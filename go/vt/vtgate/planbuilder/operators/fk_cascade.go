@@ -22,7 +22,7 @@ import (
 
 type FkCascade struct {
 	Selection ops.Operator
-	Children  []ops.Operator
+	Children  []*FkChild
 	Parent    ops.Operator
 
 	noColumns
@@ -35,7 +35,9 @@ func (fkc *FkCascade) Inputs() []ops.Operator {
 	var inputs []ops.Operator
 	inputs = append(inputs, fkc.Parent)
 	inputs = append(inputs, fkc.Selection)
-	inputs = append(inputs, fkc.Children...)
+	for _, child := range fkc.Children {
+		inputs = append(inputs, child)
+	}
 	return inputs
 }
 
@@ -45,7 +47,12 @@ func (fkc *FkCascade) SetInputs(operators []ops.Operator) {
 	}
 	fkc.Parent = operators[0]
 	fkc.Selection = operators[1]
-	fkc.Children = operators[2:]
+	for idx, operator := range operators {
+		if idx < 2 {
+			continue
+		}
+		fkc.Children[idx-2] = operator.(*FkChild)
+	}
 }
 
 // Clone implements the Operator interface
@@ -53,11 +60,17 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 	if len(inputs) < 2 {
 		panic("incorrect count of inputs for FkCascade")
 	}
-	return &FkCascade{
+	newFkc := &FkCascade{
 		Parent:    inputs[0],
 		Selection: inputs[1],
-		Children:  inputs[2:],
 	}
+	for idx, operator := range inputs {
+		if idx < 2 {
+			continue
+		}
+		newFkc.Children = append(newFkc.Children, operator.(*FkChild))
+	}
+	return newFkc
 }
 
 func (fkc *FkCascade) GetOrdering() ([]ops.OrderBy, error) {

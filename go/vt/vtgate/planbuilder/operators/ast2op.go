@@ -242,7 +242,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
 	}
 
-	var fkChildren []ops.Operator
+	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
 	for _, fk := range childFks {
 		// Any RESTRICT type foreign keys that arrive here,

@@ -227,7 +227,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
 		return nil, nil, err
 	}
