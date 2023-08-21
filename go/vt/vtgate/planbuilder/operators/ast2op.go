@@ -287,7 +287,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 			})
 		case sqlparser.SetNull:
 			// We now construct the update query for the child table.
-			// The query looks something like this - `UPDATE <child_table> SET <child_columns_in_fk> = NULL WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+			// The query looks something like this - `UPDATE <child_table> SET <child_column_in_fk> = NULL [AND <another_child_column_in_fk> = NULL]... WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
 			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
 			var valTuple sqlparser.ValTuple
 			var updExprs sqlparser.UpdateExprs

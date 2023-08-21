@@ -703,6 +703,14 @@
             }
           ]
         },
+        "tbl9": {
+          "column_vindexes": [
+            {
+              "column": "col9",
+              "name": "hash_vin"
+            }
+          ]
+        },
         "tbl10": {
           "column_vindexes": [
             {
@@ -721,7 +729,10 @@
         "u_tbl3": {},
         "u_tbl4": {},
         "u_tbl5": {},
-        "u_tbl6": {}
+        "u_tbl6": {},
+        "u_tbl7": {},
+        "u_tbl8": {},
+        "u_tbl9": {}
       }
     }
   }

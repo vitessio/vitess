@@ -224,6 +224,65 @@
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: hash_vin"
   },
   {
+    "comment": "Delete in a table with unsharded foreign key with SET NULL",
+    "query": "delete from u_tbl9 where col9 = 5",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from u_tbl9 where col9 = 5",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Children": [
+          {
+            "OperatorType": "FkCascadeChild",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              }
+            ]
+          }
+        ],
+        "Parent": {
+          "OperatorType": "Delete",
+          "Variant": "Unsharded",
+          "Keyspace": {
+            "Name": "unsharded_fk_allow",
+            "Sharded": false
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "delete from u_tbl9 where col9 = 5",
+          "Table": "u_tbl9"
+        },
+        "Selection": {
+          "OperatorType": "Route",
+          "Variant": "Unsharded",
+          "Keyspace": {
+            "Name": "unsharded_fk_allow",
+            "Sharded": false
+          },
+          "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
+          "Query": "select col9 from u_tbl9 where col9 = 5 lock in share mode",
+          "Table": "u_tbl9"
+        }
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl8",
+        "unsharded_fk_allow.u_tbl9"
+      ]
+    }
+  },
+  {
     "comment": "update in unsharded table with restrict",
     "query": "update u_tbl5 set col5 = 'foo' where id = 1",
     "plan": {
