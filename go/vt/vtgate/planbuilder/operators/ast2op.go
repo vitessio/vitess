@@ -285,7 +285,39 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 				Cols:   cols,
 				Op:     childDelOp,
 			})
-		default:
+		case sqlparser.SetNull:
+			// We now construct the update query for the child table.
+			// The query looks something like this - `UPDATE <child_table> SET <child_columns_in_fk> = NULL WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
+			var valTuple sqlparser.ValTuple
+			var updExprs sqlparser.UpdateExprs
+			for _, column := range fk.ChildColumns {
+				valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+				updExprs = append(updExprs, &sqlparser.UpdateExpr{
+					Name: sqlparser.NewColName(column.String()),
+					Expr: &sqlparser.NullVal{},
+				})
+			}
+			compExpr := &sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left:     valTuple,
+				Right:    sqlparser.NewListArg(bvName),
+			}
+			childUpd := &sqlparser.Update{
+				Exprs:      updExprs,
+				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
+				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
+			}
+			childUpdOp, err := createOpFromStmt(ctx, childUpd)
+			if err != nil {
+				return nil, err
+			}
+			fkChildren = append(fkChildren, &FkChild{
+				BVName: bvName,
+				Cols:   cols,
+				Op:     childUpdOp,
+			})
+		case sqlparser.SetDefault:
 			return nil, vterrors.VT12003()
 		}
 	}

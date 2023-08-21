@@ -221,7 +221,7 @@
   {
     "comment": "Delete in a table with shard-scoped foreign keys with SET NULL",
     "query": "delete from tbl8 where col8 = 1",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: hash_vin"
   },
   {
     "comment": "update in unsharded table with restrict",
