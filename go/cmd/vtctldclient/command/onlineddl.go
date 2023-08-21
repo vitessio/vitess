@@ -39,6 +39,22 @@ var (
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(2),
 	}
+	OnlineDDLCleanup = &cobra.Command{
+		Use:                   "cleanup <keyspace> <uuid>",
+		Short:                 "Mark a given schema migration ready for artifact cleanup.",
+		Example:               "OnlineDDL cleanup test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLCleanup,
+	}
+	OnlineDDLRetry = &cobra.Command{
+		Use:                   "retry <keyspace> <uuid>",
+		Short:                 "Mark a given schema migration for retry.",
+		Example:               "vtctl OnlineDDL retry test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLRetry,
+	}
 	OnlineDDLShow = &cobra.Command{
 		Use:   "show",
 		Short: "Display information about online DDL operations.",
@@ -55,6 +71,58 @@ OnlineDDL show test_keyspace failed`,
 		RunE:                  commandOnlineDDLShow,
 	}
 )
+
+func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	uuid := cmd.Flags().Arg(1)
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return fmt.Errorf("%s is not a valid UUID", uuid)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.CleanupSchemaMigration(commandCtx, &vtctldatapb.CleanupSchemaMigrationRequest{
+		Keyspace: keyspace,
+		Uuid:     uuid,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandOnlineDDLRetry(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	uuid := cmd.Flags().Arg(1)
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return fmt.Errorf("%s is not a valid UUID", uuid)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.RetrySchemaMigration(commandCtx, &vtctldatapb.RetrySchemaMigrationRequest{
+		Keyspace: keyspace,
+		Uuid:     uuid,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
 
 var onlineDDLShowArgs = struct {
 	JSON     bool
@@ -126,6 +194,9 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	OnlineDDL.AddCommand(OnlineDDLCleanup)
+	OnlineDDL.AddCommand(OnlineDDLRetry)
+
 	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "Output JSON instead of human-readable table.")
 	OnlineDDLShow.Flags().StringVar(&onlineDDLShowArgs.OrderStr, "order", "asc", "Sort the results by `id` property of the Schema migration.")
 	OnlineDDLShow.Flags().Uint64Var(&onlineDDLShowArgs.Limit, "limit", 0, "Limit number of rows returned in output.")
