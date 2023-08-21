@@ -334,7 +334,7 @@
   {
     "comment": "Update in a table with cross-shard foreign keys disallowed",
     "query": "update tbl1 set t1col1 = 'foo' where col1 = 1",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
     "comment": "Update in a table with cross-shard foreign keys, column not in update expression - allowed",
@@ -361,7 +361,7 @@
   {
     "comment": "Update in a table with column modified not shard-scoped foreign key whereas other column referencing same table is - disallowed",
     "query": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
     "comment": "Update in a table with shard-scoped foreign keys with cascade disallowed",
@@ -404,5 +404,72 @@
     "comment": "delete table with shard scoped foreign key set default - disallowed",
     "query": "delete from tbl20 where col = 'bar'",
     "plan": "VT09016: Cannot delete or update a parent row: a foreign key constraint fails"
+  },
+  {
+    "comment": "Delete table with cross-shard foreign key with set null - should be eventually allowed",
+    "query": "delete from tbl9 where col9 = 34",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl9 where col9 = 34",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Children": [
+          {
+            "OperatorType": "FkCascadeChild",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Update",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
+                "Table": "tbl4"
+              }
+            ]
+          }
+        ],
+        "Parent": {
+          "OperatorType": "Delete",
+          "Variant": "EqualUnique",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "delete from tbl9 where col9 = 34",
+          "Table": "tbl9",
+          "Values": [
+            "INT64(34)"
+          ],
+          "Vindex": "hash_vin"
+        },
+        "Selection": {
+          "OperatorType": "Route",
+          "Variant": "EqualUnique",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "FieldQuery": "select col9 from tbl9 where 1 != 1",
+          "Query": "select col9 from tbl9 where col9 = 34 lock in share mode",
+          "Table": "tbl9",
+          "Values": [
+            "INT64(34)"
+          ],
+          "Vindex": "hash_vin"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl4",
+        "sharded_fk_allow.tbl9"
+      ]
+    }
   }
 ]

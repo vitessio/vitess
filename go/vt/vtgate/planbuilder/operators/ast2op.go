@@ -115,14 +115,133 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 
-	assignments := make(map[string]sqlparser.Expr)
-	for _, set := range updStmt.Exprs {
-		assignments[set.Name.Name.String()] = set.Expr
-	}
-
 	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "update")
 	if err != nil {
 		return nil, err
+	}
+
+	updClone := sqlparser.CloneRefOfUpdate(updStmt)
+	updOp, err := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
+	if err != nil {
+		return nil, err
+	}
+
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	// Unmanaged foreign-key-mode, we don't need to do anything.
+	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+		return updOp, nil
+	}
+
+	parentFKs := vindexTable.ParentFKsNeedsHandling()
+	childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
+	if len(childFks) == 0 && len(parentFKs) == 0 {
+		return updOp, nil
+	}
+
+	parentFKs, childFks = fkNeedsHandling(updStmt.Exprs, parentFKs, childFks)
+	if len(parentFKs) > 0 {
+		return nil, vterrors.VT12003()
+	}
+
+	// If there are no foreign key constraints, then we don't need to do anything.
+	if len(childFks) == 0 {
+		return updOp, nil
+	}
+
+	// If the delete statement has a limit, we don't support it yet.
+	if updStmt.Limit != nil {
+		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
+	}
+
+	var fkChildren []*FkChild
+	var selectExprs []sqlparser.SelectExpr
+	for _, fk := range childFks {
+		// Any RESTRICT type foreign keys that arrive here,
+		// are cross-shard/cross-keyspace RESTRICT cases, which we don't currently support.
+		if isRestrict(fk.OnUpdate) {
+			return nil, vterrors.VT12002()
+		}
+
+		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
+		var cols []int
+		for _, column := range fk.ParentColumns {
+			cols = append(cols, len(selectExprs))
+			selectExprs = append(selectExprs, aeWrap(sqlparser.NewColName(column.String())))
+		}
+		var childUpdateExprs sqlparser.UpdateExprs
+		for _, updateExpr := range updClone.Exprs {
+			colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
+			if colIdx >= 0 {
+				childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
+					Name: sqlparser.NewColName(fk.ParentColumns[colIdx].String()),
+					Expr: updateExpr.Expr,
+				})
+			}
+		}
+
+		switch fk.OnUpdate {
+		case sqlparser.Cascade:
+			// We now construct the update query for the child table.
+			// The query looks something like this - `UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
+			var valTuple sqlparser.ValTuple
+			for _, column := range fk.ChildColumns {
+				valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+			}
+			compExpr := &sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left:     valTuple,
+				Right:    sqlparser.NewListArg(bvName),
+			}
+			childUpd := &sqlparser.Update{
+				Exprs:      childUpdateExprs,
+				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
+				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
+			}
+			childDelOp, err := createOpFromStmt(ctx, childUpd)
+			if err != nil {
+				return nil, err
+			}
+			fkChildren = append(fkChildren, &FkChild{
+				BVName: bvName,
+				Cols:   cols,
+				Op:     childDelOp,
+			})
+
+		case sqlparser.SetNull:
+			return nil, vterrors.VT12003()
+		case sqlparser.SetDefault:
+			return nil, vterrors.VT09016()
+		}
+	}
+
+	// We now create the selection operator to select the parent columns for the foreign key constraints.
+	// The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_update>`
+	// TODO (@Harshit, @GuptaManan100): Compress the columns in the SELECT statement, if there are multiple foreign key constraints using the same columns.
+	selectionStmt := &sqlparser.Select{
+		SelectExprs: selectExprs,
+		From:        updClone.TableExprs,
+		Where:       updClone.Where,
+	}
+	selection, err := createOpFromStmt(ctx, selectionStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FkCascade{
+		Selection: selection,
+		Children:  fkChildren,
+		Parent:    updOp,
+	}, nil
+}
+
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
+	assignments := make(map[string]sqlparser.Expr)
+	for _, set := range updStmt.Exprs {
+		assignments[set.Name.Name.String()] = set.Expr
 	}
 
 	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
@@ -136,7 +255,6 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	}
 
 	for _, predicate := range qt.Predicates {
-		var err error
 		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
@@ -160,21 +278,6 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		Routing: routing,
 	}
 
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.ParentFKsNeedsHandling()
-		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
-		if (len(childFks) > 0 || len(parentFKs) > 0) &&
-			ColumnModified(updStmt.Exprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-				return parentFKs, childFks
-			}) {
-			return nil, vterrors.VT12003()
-		}
-	}
-
 	subq, err := createSubqueryFromStatement(ctx, updStmt)
 	if err != nil {
 		return nil, err
@@ -184,6 +287,51 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	}
 	subq.Outer = r
 	return subq, nil
+}
+
+func fkNeedsHandling(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+	pFksRequiredMap := map[*vindexes.ParentFKInfo]bool{}
+	cFksRequiredMap := map[*vindexes.ChildFKInfo]bool{}
+	for _, updateExpr := range updateExprs {
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				cFksRequiredMap[&childFk] = true
+			}
+		}
+		for _, parentFk := range parentFks {
+			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+			if isNull {
+				continue
+			}
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				pFksRequiredMap[&parentFk] = true
+			}
+		}
+	}
+	for _, parentFk := range parentFks {
+		for _, updateExpr := range updateExprs {
+			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+			if isNull {
+				continue
+			}
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				pFksRequiredMap[&parentFk] = false
+			}
+		}
+	}
+	var pFksNeedsHandling []vindexes.ParentFKInfo
+	var cFksNeedsHandling []vindexes.ChildFKInfo
+	for parentFk, required := range pFksRequiredMap {
+		if required {
+			pFksNeedsHandling = append(pFksNeedsHandling, *parentFk)
+		}
+	}
+	for childFk, required := range cFksRequiredMap {
+		if required {
+			cFksNeedsHandling = append(cFksNeedsHandling, *childFk)
+		}
+	}
+	return pFksNeedsHandling, cFksNeedsHandling
 }
 
 // ColumnModified checks if any column in the parent table is being updated which has a child foreign key.
@@ -196,6 +344,10 @@ func ColumnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.Upd
 			}
 		}
 		for _, parentFk := range parentFKs {
+			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+			if isNull {
+				continue
+			}
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				return true
 			}
@@ -217,7 +369,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
 	// Create the delete operator first.
-	del, err := createDeleteOperator(ctx, deleteStmt, qt, vindexTable, routing)
+	delOp, err := createDeleteOperator(ctx, deleteStmt, qt, vindexTable, routing)
 	if err != nil {
 		return nil, err
 	}
@@ -230,12 +382,12 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	// Unmanaged foreign-key-mode, we don't need to do anything.
 	if ksMode != vschemapb.Keyspace_FK_MANAGED {
-		return del, nil
+		return delOp, nil
 	}
 	childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
-		return del, nil
+		return delOp, nil
 	}
 	// If the delete statement has a limit, we don't support it yet.
 	if deleteStmt.Limit != nil {
@@ -337,7 +489,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	return &FkCascade{
 		Selection: selection,
 		Children:  fkChildren,
-		Parent:    del,
+		Parent:    delOp,
 	}, nil
 }
 

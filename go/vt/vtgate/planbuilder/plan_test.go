@@ -132,6 +132,9 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tbl5 referencing tbl8 that is shard scoped of SET-NULL types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl5", createFkDefinition([]string{"col5"}, "tbl8", []string{"col8"}, sqlparser.SetNull, sqlparser.SetNull))
 
+		// FK from tbl4 referencing tbl9 that is not shard scoped of SET-NULL types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col_ref"}, "tbl9", []string{"col9"}, sqlparser.SetNull, sqlparser.SetNull))
+
 		// FK from tbl6 referencing tbl7 that is shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col6"}, "tbl7", []string{"t7col7"}, sqlparser.NoAction, sqlparser.NoAction))
