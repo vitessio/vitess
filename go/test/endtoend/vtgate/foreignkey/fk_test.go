@@ -84,6 +84,18 @@ func TestDeleteWithFK(t *testing.T) {
 	// we also verify that the rows in the child table were deleted.
 	qr = utils.Exec(t, conn, `select * from multicol_tbl2 where cola = 100`)
 	assert.Zero(t, qr.Rows)
+
+	// Unsharded keyspace tests
+	utils.Exec(t, conn, `use uks`)
+	// insert some data.
+	utils.Exec(t, conn, `insert into u_t1(id, col1) values (100, 123), (10, 12), (1, 13), (1000, 1234)`)
+	utils.Exec(t, conn, `insert into u_t2(id, col2) values (342, 123), (19, 1234)`)
+
+	// Delete from u_t1 which has a foreign key constraint to t2 with SET NULL type.
+	qr = utils.Exec(t, conn, `delete from u_t1 where id = 100`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// Verify the result in u_t2 as well
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(342) NULL] [INT64(19) INT64(1234)]]`)
 }
 
 // TestUpdations tests that update work as expected when foreign key management is enabled in Vitess.
