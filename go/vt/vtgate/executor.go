@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -118,6 +119,9 @@ type Executor struct {
 	// truncateErrorLen truncates errors sent to client if they are above this value
 	// (0 means do not truncate).
 	truncateErrorLen int
+
+	// queryLogger is passed in for logging from this vtgate executor.
+	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 }
 
 var executorOnce sync.Once
@@ -138,6 +142,7 @@ func NewExecutor(
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	queryLogger *streamlog.StreamLogger[*logstats.LogStats],
 ) *Executor {
 	e := &Executor{
 		serv:            serv,
@@ -152,6 +157,7 @@ func NewExecutor(
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
 		pv:              pv,
+		queryLogger:     queryLogger,
 	}
 
 	vschemaacl.Init()
@@ -215,7 +221,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 
 	logStats.SaveEndTime()
-	QueryLogger.Send(logStats)
+	e.queryLogger.Send(logStats)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 	return result, err
 }
@@ -349,7 +355,7 @@ func (e *Executor) StreamExecute(
 	}
 
 	logStats.SaveEndTime()
-	QueryLogger.Send(logStats)
+	e.queryLogger.Send(logStats)
 	return vterrors.TruncateError(err, truncateErrorLen)
 
 }
@@ -1267,7 +1273,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	// it was a no-op record (i.e. didn't issue any queries)
 	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
 		logStats.SaveEndTime()
-		QueryLogger.Send(logStats)
+		e.queryLogger.Send(logStats)
 	}
 	return fld, vterrors.TruncateError(err, truncateErrorLen)
 }
@@ -1505,4 +1511,14 @@ func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, qu
 		return nil, nil, err
 	}
 	return plan, stmt, nil
+}
+
+func (e *Executor) Close() {
+	e.scatterConn.Close()
+	topo, err := e.serv.GetTopoServer()
+	if err != nil {
+		panic(err)
+	}
+	topo.Close()
+	e.plans.Close()
 }

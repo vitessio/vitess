@@ -125,13 +125,13 @@ func init() {
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
 
-func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createExecutorEnv(ctx context.Context) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	serv := newSandboxForCells([]string{cell})
-	serv.topoServer.CreateKeyspace(context.Background(), "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecar.DefaultName})
+	serv := newSandboxForCells(ctx, []string{cell})
+	serv.topoServer.CreateKeyspace(ctx, "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecar.DefaultName})
 	// Force a new cache to use for lookups of the sidecar database identifier
 	// in use by each keyspace -- as we want to use a different load function
 	// than the one already created by the vtgate as it uses a different topo.
@@ -148,7 +148,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	if !created {
 		log.Fatal("Failed to [re]create a sidecar database identifier cache!")
 	}
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestResolver(ctx, hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	// Create these connections so scatter queries don't fail.
@@ -170,7 +170,8 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4)
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	// create a new session each time so that ShardSessions don't get re-used across tests
@@ -180,13 +181,13 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	return executor, sbc1, sbc2, sbclookup
 }
 
-func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createCustomExecutor(ctx context.Context, vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
-	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
@@ -194,7 +195,8 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4)
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -202,13 +204,13 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	return executor, sbc1, sbc2, sbclookup
 }
 
-func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createCustomExecutorSetValues(ctx context.Context, vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
-	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	sbcs := []*sandboxconn.SandboxConn{}
 	for _, shard := range shards {
@@ -223,7 +225,8 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4)
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -231,9 +234,9 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 	return executor, sbcs[0], sbcs[1], sbclookup
 }
 
-func executorExecSession(executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func executorExecSession(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	return executor.Execute(
-		context.Background(),
+		ctx,
 		nil,
 		"TestExecute",
 		NewSafeSession(session),
@@ -241,23 +244,23 @@ func executorExecSession(executor *Executor, sql string, bv map[string]*querypb.
 		bv)
 }
 
-func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return executorExecSession(executor, sql, bv, primarySession)
+func executorExec(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return executorExecSession(ctx, executor, sql, bv, primarySession)
 }
 
-func executorPrepare(executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func executorPrepare(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return executor.Prepare(
-		context.Background(),
+		ctx,
 		"TestExecute",
 		NewSafeSession(primarySession),
 		sql,
 		bv)
 }
 
-func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
+func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
 	err = executor.StreamExecute(
-		context.Background(),
+		ctx,
 		nil,
 		"TestExecuteStream",
 		NewSafeSession(nil),
@@ -362,14 +365,14 @@ func getQueryLog(logChan chan *logstats.LogStats) *logstats.LogStats {
 // is a repeat query.
 var testPlannedQueries = map[string]bool{}
 
-func testQueryLog(t *testing.T, logChan chan *logstats.LogStats, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
+func testQueryLog(t *testing.T, executor *Executor, logChan chan *logstats.LogStats, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
 	t.Helper()
 
 	logStats := getQueryLog(logChan)
 	require.NotNil(t, logStats)
 
 	var log bytes.Buffer
-	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
+	streamlog.GetFormatter(executor.queryLogger)(&log, nil, logStats)
 	fields := strings.Split(log.String(), "\t")
 
 	// fields[0] is the method
@@ -425,8 +428,8 @@ func testQueryLog(t *testing.T, logChan chan *logstats.LogStats, method, stmtTyp
 	return logStats
 }
 
-func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
-	sc := newTestScatterConn(hc, serv, cell)
+func newTestResolver(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
+	sc := newTestScatterConn(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
 	return NewResolver(srvResolver, serv, cell, sc)
 }

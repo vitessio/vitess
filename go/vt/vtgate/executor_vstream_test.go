@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -38,9 +39,12 @@ import (
 // TestVStreamSQLUnsharded tests the experimental 'vstream * from' vtgate olap query
 func TestVStreamSQLUnsharded(t *testing.T) {
 	t.Skip("this test is failing due to races") // FIXME
-	executor, _, _, sbcLookup := createExecutorEnv()
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	executor, _, _, sbcLookup := createExecutorEnv(ctx)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 	send1 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
 		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "t1", Fields: []*querypb.Field{
@@ -76,8 +80,6 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 	sql := "vstream * from t1"
 
 	results := make(chan *sqltypes.Result, 20)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	go func() {
 		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
 			results <- qr

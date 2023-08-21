@@ -17,16 +17,22 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDDLFlags(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	defer func() {
 		enableOnlineDDL = true

@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -48,7 +49,7 @@ type testopts struct {
 	shardmap map[string]map[string]*topo.ShardInfo
 }
 
-func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
+func initTest(ctx context.Context, mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
 	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
@@ -64,7 +65,7 @@ func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExpl
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(string(vSchema), string(schema), shardmap, opts)
+	vte, err := Init(ctx, string(vSchema), string(schema), shardmap, opts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -85,7 +86,10 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 
 func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		vte := initTest(mode, opts, topts, t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		vte := initTest(ctx, mode, opts, topts, t)
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := os.ReadFile(sqlFile)
@@ -171,7 +175,10 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
 
 	tests := []struct {
 		SQL string
@@ -208,7 +215,10 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	sql := "select 1 from user where id = 1"
 	explains, err := vte.Run(sql)
 	require.NoError(t, err, "vtexplain error")
@@ -344,6 +354,9 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vschema := `{
   "ks1": {
     "sharded": true,
@@ -353,7 +366,7 @@ func TestInit(t *testing.T) {
   }
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
-	_, err := Init(vschema, schema, "", defaultTestOpts())
+	_, err := Init(ctx, vschema, schema, "", defaultTestOpts())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

@@ -301,6 +301,11 @@ func Init(
 		LFU:            queryPlanCacheLFU,
 	}
 
+	queryLogger, err := initQueryLogger(rpcVTGate)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
+
 	executor := NewExecutor(
 		ctx,
 		serv,
@@ -313,6 +318,7 @@ func Init(
 		si,
 		noScatter,
 		pv,
+		queryLogger,
 	)
 
 	// connect the schema tracker with the vschema manager
@@ -370,10 +376,6 @@ func Init(
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	rpcVTGate.registerDebugEnvHandler()
-	err = initQueryLogger(rpcVTGate)
-	if err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
-	}
 
 	initAPI(gw.hc)
 	return rpcVTGate

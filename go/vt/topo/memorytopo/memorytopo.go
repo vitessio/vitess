@@ -236,14 +236,13 @@ func (n *node) PropagateWatchError(err error) {
 // NewServerAndFactory returns a new MemoryTopo and the backing factory for all
 // the cells. It will create one cell for each parameter passed in.  It will log.Exit out
 // in case of a problem.
-func NewServerAndFactory(cells ...string) (*topo.Server, *Factory) {
+func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(1 << 60)),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
-	ctx := context.Background()
 	ts, err := topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
 		log.Exitf("topo.NewWithFactory() failed: %v", err)
@@ -258,8 +257,8 @@ func NewServerAndFactory(cells ...string) (*topo.Server, *Factory) {
 }
 
 // NewServer returns the new server
-func NewServer(cells ...string) *topo.Server {
-	server, _ := NewServerAndFactory(cells...)
+func NewServer(ctx context.Context, cells ...string) *topo.Server {
+	server, _ := NewServerAndFactory(ctx, cells...)
 	return server
 }
 

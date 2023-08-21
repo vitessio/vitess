@@ -443,7 +443,7 @@ var sigChan chan os.Signal
 var vtgateHandle *vtgateHandler
 
 // initTLSConfig inits tls config for the given mysql listener
-func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool, mysqlMinTLSVersion uint16) error {
+func initTLSConfig(ctx context.Context, mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool, mysqlMinTLSVersion uint16) error {
 	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
 	if err != nil {
 		log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
@@ -454,13 +454,18 @@ func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mys
 	sigChan = make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
-		for range sigChan {
-			serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
-			if err != nil {
-				log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
-			} else {
-				log.Info("grpcutils.TLSServerConfig updated")
-				mysqlListener.TLSConfig.Store(serverConfig)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sigChan:
+				serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
+				if err != nil {
+					log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
+				} else {
+					log.Info("grpcutils.TLSServerConfig updated")
+					mysqlListener.TLSConfig.Store(serverConfig)
+				}
 			}
 		}
 	}()
@@ -524,7 +529,7 @@ func initMySQLProtocol() {
 				log.Exitf("mysql.NewListener failed: %v", err)
 			}
 
-			_ = initTLSConfig(mysqlListener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion)
+			_ = initTLSConfig(context.Background(), mysqlListener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion)
 		}
 		mysqlListener.AllowClearTextWithoutTLS.Store(mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold

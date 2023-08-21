@@ -55,6 +55,7 @@ func makeTestOutput(t *testing.T) string {
 }
 
 func TestPlan(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/schema.json", true),
 		TabletType_:   topodatapb.TabletType_PRIMARY,

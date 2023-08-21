@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -34,14 +36,19 @@ import (
 )
 
 func TestQueryzHandler(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	// single shard query
 	sql := "select id from user where id = 1"
-	_, err := executorExec(executor, sql, nil)
+	_, err := executorExec(ctx, executor, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
 	plan1 := assertCacheContains(t, executor, nil, "select id from `user` where id = 1")
@@ -49,14 +56,14 @@ func TestQueryzHandler(t *testing.T) {
 
 	// scatter
 	sql = "select id from user"
-	_, err = executorExec(executor, sql, nil)
+	_, err = executorExec(ctx, executor, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
 	plan2 := assertCacheContains(t, executor, nil, "select id from `user`")
 	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
@@ -69,7 +76,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})

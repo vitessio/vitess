@@ -220,9 +220,9 @@ type sandboxTopo struct {
 // the given cells.
 //
 // when this version is used, WatchSrvVSchema can properly simulate watches
-func newSandboxForCells(cells []string) *sandboxTopo {
+func newSandboxForCells(ctx context.Context, cells []string) *sandboxTopo {
 	return &sandboxTopo{
-		topoServer: memorytopo.NewServer(cells...),
+		topoServer: memorytopo.NewServer(ctx, cells...),
 	}
 }
 
@@ -313,6 +313,9 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 	current, updateChan, _ := sct.topoServer.WatchSrvVSchema(ctx, cell)
 	if !callback(current.Value, nil) {
 		panic("sandboxTopo callback returned false")
+	}
+	if updateChan == nil {
+		panic("sandboxTopo updateChan is nil")
 	}
 	currentHash := GetSrvVSchemaHash(current.Value)
 	go func() {

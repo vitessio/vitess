@@ -58,11 +58,16 @@ import (
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	save := warnMemoryRows
 	warnMemoryRows = 3
 	defer func() { warnMemoryRows = save }()
 
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	initial := warnings.Counts()["ResultsExceeded"]
@@ -81,11 +86,16 @@ func TestExecutorResultsExceeded(t *testing.T) {
 }
 
 func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	save := maxMemoryRows
 	maxMemoryRows = 3
 	defer func() { maxMemoryRows = save }()
 
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
 	fn := func(r *sqltypes.Result) error {
@@ -118,11 +128,16 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 }
 
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"})
 
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	// begin.
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, "begin", nil)
@@ -130,14 +145,14 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary", SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 0, sbclookup.CommitCount.Load(), "commit count")
-	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
-	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
@@ -152,7 +167,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Load(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
-	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
@@ -168,9 +183,9 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.RollbackCount.Load(), "rollback count")
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
-	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
@@ -191,7 +206,12 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{
@@ -210,11 +230,16 @@ func TestDirectTargetRewrites(t *testing.T) {
 }
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"})
 
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	// begin.
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, "begin", nil)
@@ -224,7 +249,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Load(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
-	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
@@ -236,10 +261,10 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Load())
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
@@ -255,14 +280,19 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	if rollbackCount := sbclookup.RollbackCount.Load(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
-	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 }
 
 func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	oltpOptions := &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}
 	session := NewSafeSession(&vtgatepb.Session{
 		TargetString: "@primary",
@@ -271,8 +301,8 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 		SessionUUID:  "suuid",
 	})
 
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	var results []*sqltypes.Result
 
@@ -295,7 +325,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.Zero(t, sbclookup.CommitCount.Load())
-	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
@@ -307,10 +337,10 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Load())
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
@@ -327,12 +357,17 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 }
 
 func TestExecutorDeleteMetadata(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_v1= '1'"
@@ -359,11 +394,16 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 }
 
 func TestExecutorAutocommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	// autocommit = 0
 	startCount := sbclookup.CommitCount.Load()
@@ -374,7 +414,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
-	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
@@ -385,7 +425,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	// autocommit = 1
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "set autocommit=1", nil)
 	require.NoError(t, err)
-	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set @@autocommit = 1", 0)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@autocommit = 1", 0)
 
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Load(), startCount+1; got != want {
@@ -397,7 +437,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
 	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
@@ -406,7 +446,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	startCount = sbclookup.CommitCount.Load()
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
@@ -418,7 +458,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
@@ -435,7 +475,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if got, want := sbclookup.CommitCount.Load(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
-	_ = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 
 	// transition autocommit from 0 to 1 in the middle of a transaction.
 	startCount = sbclookup.CommitCount.Load()
@@ -459,7 +499,12 @@ func TestExecutorAutocommit(t *testing.T) {
 }
 
 func TestExecutorShowColumns(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ""})
 
 	queries := []string{
@@ -510,7 +555,12 @@ func assertMatchesNoOrder(t *testing.T, expected, got string) {
 }
 
 func TestExecutorShow(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
@@ -1068,7 +1118,12 @@ func TestExecutorShow(t *testing.T) {
 }
 
 func TestExecutorShowTargeted(t *testing.T) {
-	executor, _, sbc2, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, sbc2, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
 
 	queries := []string{
@@ -1094,7 +1149,12 @@ func TestExecutorShowTargeted(t *testing.T) {
 }
 
 func TestExecutorUse(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
 
 	stmts := []string{
@@ -1125,7 +1185,12 @@ func TestExecutorUse(t *testing.T) {
 }
 
 func TestExecutorComment(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	stmts := []string{
 		"/*! SET autocommit=1*/",
@@ -1145,7 +1210,12 @@ func TestExecutorComment(t *testing.T) {
 }
 
 func TestExecutorOther(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1237,10 +1307,14 @@ func TestExecutorOther(t *testing.T) {
 }
 
 func TestExecutorDDL(t *testing.T) {
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1328,7 +1402,7 @@ func TestExecutorDDL(t *testing.T) {
 				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
 			}
 
-			testQueryLog(t, logChan, "TestExecute", stmtType, stmt, tc.shardQueryCnt)
+			testQueryLog(t, executor, logChan, "TestExecute", stmtType, stmt, tc.shardQueryCnt)
 		}
 	}
 
@@ -1352,16 +1426,21 @@ func TestExecutorDDL(t *testing.T) {
 		_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
 		if stmt.hasErr {
 			require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail")
-			testQueryLog(t, logChan, "TestExecute", "", stmt.input, 0)
+			testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
 		} else {
 			require.NoError(t, err)
-			testQueryLog(t, logChan, "TestExecute", "DDL", stmt.input, 8)
+			testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
 		}
 	}
 }
 
 func TestExecutorDDLFk(t *testing.T) {
-	executor, _, _, sbc := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbc := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	mName := "TestExecutorDDLFk"
 	stmts := []string{
@@ -1388,11 +1467,16 @@ func TestExecutorDDLFk(t *testing.T) {
 }
 
 func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
@@ -1416,11 +1500,16 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -1486,11 +1575,16 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -1538,7 +1632,12 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 }
 
 func TestExecutorVindexDDLACL(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
@@ -1583,7 +1682,12 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
@@ -1591,7 +1695,12 @@ func TestExecutorUnrecognized(t *testing.T) {
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 
 	stats := r.VSchemaStats()
 
@@ -1614,18 +1723,23 @@ func TestVSchemaStats(t *testing.T) {
 var pv = querypb.ExecuteOptions_Gen4
 
 func TestGetPlanUnnormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 := "select * from music_user_map where id = 1"
-	plan1, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	plan1, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	wantSQL := query1 + " /* comment */"
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 
-	plan2, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	plan2, logStats2 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	if plan1 != plan2 {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
@@ -1633,14 +1747,14 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
-	plan3, logStats3 := getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	plan3, logStats3 := getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
 	if logStats3.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
-	plan4, logStats4 := getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	plan4, logStats4 := getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	if plan3 != plan4 {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
@@ -1685,7 +1799,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 	return plan
 }
 
-func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
+func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 	vcursor.safeSession = &SafeSession{
 		Session: &vtgatepb.Session{
@@ -1703,11 +1817,16 @@ func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, 
 }
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	query1 := "select * from music_user_map where id = 1"
 
-	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
+	_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
 	assertCacheSize(t, r.plans, 0)
 
 	wantSQL := query1 + " /* comment */"
@@ -1715,7 +1834,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 
-	_, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
+	_, logStats2 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 1)
 
 	wantSQL = query1 + " /* comment 2 */"
@@ -1724,69 +1843,81 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	}
 
 	// Skip cache using directive
-	r, _, _, _ = createExecutorEnv()
+	r, _, _, _ = createExecutorEnv(ctx)
+	defer r.Close()
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
-	getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 0)
 
 	query1 = "insert into user(id) values (1), (2)"
-	getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 1)
 
 	// the target string will be resolved and become part of the plan cache key, which adds a new entry
 	ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	getPlanCached(t, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 
 	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
 	ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	getPlanCached(t, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 := "select * from music_user_map where id = 1"
-	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
+	_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 0)
 	wantSQL := "select * from music_user_map where id = :id /* INT64 */ /* comment */"
 	assert.Equal(t, wantSQL, logStats1.SQL)
 
-	_, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
+	_, logStats2 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 1)
 	assert.Equal(t, wantSQL, logStats2.SQL)
 
 	// Skip cache using directive
-	r, _, _, _ = createExecutorEnv()
+	r, _, _, _ = createExecutorEnv(ctx)
+	defer r.Close()
 	r.normalize = true
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
-	getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 0)
 
 	query1 = "insert into user(id) values (1), (2)"
-	getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 1)
 
 	// the target string will be resolved and become part of the plan cache key, which adds a new entry
 	ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	getPlanCached(t, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 
 	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
 	ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	getPlanCached(t, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
+	getPlanCached(t, ctx, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 }
 
 func TestGetPlanNormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
@@ -1795,8 +1926,8 @@ func TestGetPlanNormalized(t *testing.T) {
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :id /* INT64 */"
 
-	plan1, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false)
-	plan2, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
+	plan1, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false)
+	plan2, logStats2 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 
 	assert.Equal(t, plan1, plan2)
 	assertCacheContains(t, r, emptyvc, normalized)
@@ -1806,18 +1937,18 @@ func TestGetPlanNormalized(t *testing.T) {
 	wantSQL = normalized + " /* comment 2 */"
 	assert.Equal(t, wantSQL, logStats2.SQL)
 
-	plan3, logStats3 := getPlanCached(t, r, emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false)
+	plan3, logStats3 := getPlanCached(t, ctx, r, emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 3 */"
 	assert.Equal(t, wantSQL, logStats3.SQL)
 
 	var logStats5 *logstats.LogStats
-	plan3, logStats5 = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
+	plan3, logStats5 = getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 5 */"
 	assert.Equal(t, wantSQL, logStats5.SQL)
 
-	plan4, _ := getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
+	plan4, _ := getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan4)
 	assertCacheContains(t, r, emptyvc, normalized)
 	assertCacheContains(t, r, unshardedvc, normalized)
@@ -1842,7 +1973,12 @@ func TestGetPlanPriority(t *testing.T) {
 		testCase := aTestCase
 
 		t.Run(testCase.name, func(t *testing.T) {
-			r, _, _, _ := createExecutorEnv()
+			defer utils.EnsureNoLeaks(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			r, _, _, _ := createExecutorEnv(ctx)
+			defer r.Close()
 			r.normalize = true
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
@@ -1866,11 +2002,16 @@ func TestGetPlanPriority(t *testing.T) {
 }
 
 func TestPassthroughDDL(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	primarySession.TargetString = "TestExecutor"
 
 	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
-	_, err := executorExec(executor, alterDDL, nil)
+	_, err := executorExec(ctx, executor, alterDDL, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           alterDDL,
@@ -1889,7 +2030,7 @@ func TestPassthroughDDL(t *testing.T) {
 	primarySession.TargetString = "TestExecutor/40-60"
 	executor.normalize = true
 
-	_, err = executorExec(executor, alterDDL, nil)
+	_, err = executorExec(ctx, executor, alterDDL, nil)
 	require.NoError(t, err)
 	require.Nil(t, sbc1.Queries)
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -1902,7 +2043,7 @@ func TestPassthroughDDL(t *testing.T) {
 	primarySession.TargetString = "TestExecutor[-]"
 	executor.normalize = true
 
-	_, err = executorExec(executor, alterDDL, nil)
+	_, err = executorExec(ctx, executor, alterDDL, nil)
 	require.NoError(t, err)
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
@@ -1915,7 +2056,12 @@ func TestPassthroughDDL(t *testing.T) {
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1937,7 +2083,12 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1960,7 +2111,12 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 }
 
 func TestParseTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r, _, _, _ := createExecutorEnv(ctx)
+	defer r.Close()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1982,10 +2138,15 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestDebugVSchema(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
 
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.ServeHTTP(resp, req)
 	v := make(map[string]any)
 	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
@@ -2000,6 +2161,10 @@ func TestDebugVSchema(t *testing.T) {
 }
 
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	saveMax := maxPayloadSize
 	saveWarn := warnPayloadSize
 	maxPayloadSize = 10
@@ -2009,7 +2174,8 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 		warnPayloadSize = saveWarn
 	}()
 
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
 	testMaxPayloadSizeExceeded := []string{
@@ -2046,7 +2212,12 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 }
 
 func TestOlapSelectDatabase(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{Autocommit: true}
@@ -2063,7 +2234,12 @@ func TestOlapSelectDatabase(t *testing.T) {
 }
 
 func TestExecutorClearsWarnings(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
 	})
@@ -2074,10 +2250,17 @@ func TestExecutorClearsWarnings(t *testing.T) {
 
 // TestServingKeyspaces tests that the dual queries are routed to the correct keyspaces from the list of serving keyspaces.
 func TestServingKeyspaces(t *testing.T) {
-	buffer.EnableBuffering()
-	defer buffer.DisableBuffering()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	executor, sbc1, _, sbclookup := createExecutorEnv()
+	buffer.SetBufferingModeInTestingEnv(true)
+	defer func() {
+		buffer.SetBufferingModeInTestingEnv(false)
+	}()
+
+	executor, sbc1, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.pv = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
 	require.True(t, ok)
@@ -2119,7 +2302,12 @@ func TestServingKeyspaces(t *testing.T) {
 }
 
 func TestExecutorOtherRead(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2194,27 +2382,37 @@ func TestExecutorOtherRead(t *testing.T) {
 }
 
 func TestExecutorVExplain(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.normalize = true
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	bindVars := map[string]*querypb.BindVariable{}
-	result, err := executorExec(executor, "vexplain plan select * from user", bindVars)
+	result, err := executorExec(ctx, executor, "vexplain plan select * from user", bindVars)
 	require.NoError(t, err)
 
 	require.Equal(t,
 		`[[VARCHAR("{\n\t\"OperatorType\": \"Route\",\n\t\"Variant\": \"Scatter\",\n\t\"Keyspace\": {\n\t\t\"Name\": \"TestExecutor\",\n\t\t\"Sharded\": true\n\t},\n\t\"FieldQuery\": \"select * from `+"`user`"+` where 1 != 1\",\n\t\"Query\": \"select * from `+"`user`"+`\",\n\t\"Table\": \"`+"`user`"+`\"\n}")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
-	result, err = executorExec(executor, "vexplain plan select 42", bindVars)
+	result, err = executorExec(ctx, executor, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
 	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"INT64(42) as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
 func TestExecutorOtherAdmin(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2288,9 +2486,14 @@ func TestExecutorOtherAdmin(t *testing.T) {
 }
 
 func TestExecutorSavepointInTx(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
-	defer QueryLogger.Unsubscribe(logChan)
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
+	defer executor.Close()
+	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: false, TargetString: "@primary"})
 	_, err := exec(executor, session, "savepoint a")
@@ -2358,21 +2561,26 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	}}
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
-	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
-	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
-	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
 }
 
 func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
-	defer QueryLogger.Unsubscribe(logChan)
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
+	defer executor.Close()
+	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
 	sbc1.SetResults([]*sqltypes.Result{
@@ -2425,20 +2633,25 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
-	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
-	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
-	testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 2)
 }
 
 func TestExecutorSavepointWithoutTx(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
-	defer QueryLogger.Unsubscribe(logChan)
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
+	defer executor.Close()
+	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary", InTransaction: false})
 	_, err := exec(executor, session, "savepoint a")
@@ -2468,18 +2681,23 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	}}
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
-	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
-	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
-	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 }
 
 func TestExecutorCallProc(t *testing.T) {
-	executor, sbc1, sbc2, sbcUnsharded := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, sbcUnsharded := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2544,11 +2762,15 @@ func TestExecutorCallProc(t *testing.T) {
 }
 
 func TestExecutorTempTable(t *testing.T) {
-	executor, _, _, sbcUnsharded := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbcUnsharded := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.warnShardedOnly = true
 	creatQuery := "create temporary table temp_t(id bigint primary key)"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
-	ctx := context.Background()
 	_, err := executor.Execute(ctx, nil, "TestExecutorTempTable", session, creatQuery, nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, sbcUnsharded.ExecCount.Load())
@@ -2563,10 +2785,14 @@ func TestExecutorTempTable(t *testing.T) {
 }
 
 func TestExecutorShowVitessMigrations(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	showQuery := "show vitess_migrations"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
-	ctx := context.Background()
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
 	require.NoError(t, err)
 	assert.Contains(t, sbc1.StringQueries(), "show vitess_migrations")
@@ -2574,16 +2800,25 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 }
 
 func TestExecutorDescHash(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	showQuery := "desc hash_index"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
-	ctx := context.Background()
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
 	require.NoError(t, err)
 }
 
 func TestExecutorVExplainQueries(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, sbclookup := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	sbclookup.SetResults([]*sqltypes.Result{
@@ -2608,7 +2843,12 @@ func TestExecutorVExplainQueries(t *testing.T) {
 }
 
 func TestExecutorStartTxnStmt(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	tcases := []struct {
@@ -2653,7 +2893,12 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 }
 
 func TestExecutorPrepareExecute(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
@@ -2692,11 +2937,16 @@ func TestExecutorPrepareExecute(t *testing.T) {
 }
 
 func TestExecutorTruncateErrors(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	save := truncateErrorLen
 	truncateErrorLen = 32
 	defer func() { truncateErrorLen = save }()
 
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{})
 	fn := func(r *sqltypes.Result) error {
 		return nil
@@ -2713,7 +2963,12 @@ func TestExecutorTruncateErrors(t *testing.T) {
 }
 
 func TestExecutorFlushStmt(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	tcs := []struct {
 		targetStr string
@@ -2770,7 +3025,12 @@ func TestExecutorFlushStmt(t *testing.T) {
 
 // TestExecutorKillStmt tests the kill statements on executor.
 func TestExecutorKillStmt(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 
 	tcs := []struct {
 		errStr   string

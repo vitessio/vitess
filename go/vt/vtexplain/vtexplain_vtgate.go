@@ -50,9 +50,9 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-func (vte *VTExplain) initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
+func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShardMapStr string, opts *Options) error {
 	vte.explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	vte.explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
+	vte.explainTopo.TopoServer = memorytopo.NewServer(ctx, vtexplainCell)
 	vte.healthCheck = discovery.NewFakeHealthCheck(nil)
 
 	resolver := vte.newFakeResolver(opts, vte.explainTopo, vtexplainCell)
@@ -73,10 +73,8 @@ func (vte *VTExplain) initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts 
 
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
-	vte.vtgateExecutor = vtgate.NewExecutor(context.Background(), vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, cache.DefaultConfig, schemaTracker, false, opts.PlannerVersion)
-
 	queryLogBufferSize := 10
-	vtgate.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, cache.DefaultConfig, schemaTracker, false, opts.PlannerVersion, streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil
 }

@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/replication"
 
@@ -271,6 +272,10 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateCRL(root, tlstest.CA)
@@ -282,7 +287,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	if err := initTLSConfig(ctx, listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 
@@ -301,7 +306,11 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 
 // TestKillMethods test the mysql plugin for kill method calls.
 func TestKillMethods(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	executor, _, _, _ := createExecutorEnv(ctx)
+	defer executor.Close()
 	vh := newVtgateHandler(&VTGate{executor: executor})
 
 	// connection does not exist
@@ -319,21 +328,21 @@ func TestKillMethods(t *testing.T) {
 	// connection exists
 
 	// updating context.
-	ctx, cancel := context.WithCancel(context.Background())
-	mysqlConn.UpdateCancelCtx(cancel)
+	cancelCtx, cancelFunc := context.WithCancel(context.Background())
+	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill query
 	err = vh.KillQuery(1)
 	assert.NoError(t, err)
-	require.EqualError(t, ctx.Err(), "context canceled")
+	require.EqualError(t, cancelCtx.Err(), "context canceled")
 
 	// updating context.
-	ctx, cancel = context.WithCancel(context.Background())
-	mysqlConn.UpdateCancelCtx(cancel)
+	cancelCtx, cancelFunc = context.WithCancel(context.Background())
+	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill connection
 	err = vh.KillConnection(context.Background(), 1)
 	assert.NoError(t, err)
-	require.EqualError(t, ctx.Err(), "context canceled")
+	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())
 }

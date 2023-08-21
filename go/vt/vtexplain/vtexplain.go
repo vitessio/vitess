@@ -21,6 +21,7 @@ package vtexplain
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -180,7 +181,7 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplain, error) {
+func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
@@ -200,7 +201,7 @@ func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplai
 		Autocommit:   true,
 	}}
 	vte.setGlobalTabletEnv(tabletEnv)
-	err = vte.initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
+	err = vte.initVtgateExecutor(ctx, vSchemaStr, ksShardMapStr, opts)
 	if err != nil {
 		return nil, fmt.Errorf("initVtgateExecutor: %v", err.Error())
 	}
