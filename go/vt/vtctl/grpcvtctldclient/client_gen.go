@@ -317,6 +317,15 @@ func (client *gRPCVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.G
 	return client.c.GetSchema(ctx, in, opts...)
 }
 
+// GetSchemaMigrations is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSchemaMigrations(ctx, in, opts...)
+}
+
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	if client.c == nil {

@@ -120,6 +120,12 @@ service Vtctld {
   // GetSchema returns the schema for a tablet, or just the schema for the
   // specified tables in that tablet.
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
+  // GetSchemaMigrations returns one or more online schema migrations for the
+  // specified keyspace, analagous to `SHOW VITESS_MIGRATIONS`.
+  //
+  // Different fields in the request message result in different filtering
+  // behaviors. See the documentation on GetSchemaMigrationsRequest for details.
+  rpc GetSchemaMigrations(vtctldata.GetSchemaMigrationsRequest) returns (vtctldata.GetSchemaMigrationsResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
   // GetShardRoutingRules returns the VSchema shard routing rules.
