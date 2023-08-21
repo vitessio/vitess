@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/cache"
@@ -99,11 +100,12 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
+	session := &vtgatepb.Session{TargetString: "@primary"}
 	err = executor.StreamExecute(
 		ctx,
 		nil,
 		"TestExecuteStream",
-		NewSafeSession(primarySession),
+		NewSafeSession(session),
 		sql,
 		nil,
 		func(qr *sqltypes.Result) error {

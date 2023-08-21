@@ -36,8 +36,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -575,7 +573,10 @@ func TestUnsharded(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "select id from music_user_map where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select id from music_user_map where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from music_user_map where id = 1",
@@ -591,7 +592,10 @@ func TestUnshardedComments(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "/* leading */ select id from music_user_map where id = 1 /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "/* leading */ select id from music_user_map where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
@@ -599,7 +603,7 @@ func TestUnshardedComments(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 
-	_, err = executorExec(ctx, executor, "update music_user_map set id = 1 /* trailing */", nil)
+	_, err = executorExec(ctx, executor, session, "update music_user_map set id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
@@ -611,7 +615,7 @@ func TestUnshardedComments(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	sbclookup.Queries = nil
-	_, err = executorExec(ctx, executor, "delete from music_user_map /* trailing */", nil)
+	_, err = executorExec(ctx, executor, session, "delete from music_user_map /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "delete from music_user_map /* trailing */",
@@ -620,7 +624,7 @@ func TestUnshardedComments(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	sbclookup.Queries = nil
-	_, err = executorExec(ctx, executor, "insert into music_user_map values (1) /* trailing */", nil)
+	_, err = executorExec(ctx, executor, session, "insert into music_user_map values (1) /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "insert into music_user_map values (1) /* trailing */",
@@ -673,11 +677,15 @@ func TestStreamBuffering(t *testing.T) {
 	}})
 
 	var results []*sqltypes.Result
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+
 	err := executor.StreamExecute(
 		context.Background(),
 		nil,
 		"TestStreamBuffering",
-		NewSafeSession(primarySession),
+		NewSafeSession(session),
 		"select id from music_user_map where id = 1",
 		nil,
 		func(qr *sqltypes.Result) error {
@@ -745,11 +753,14 @@ func TestStreamLimitOffset(t *testing.T) {
 	}})
 
 	results := make(chan *sqltypes.Result, 10)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	err := executor.StreamExecute(
 		context.Background(),
 		nil,
 		"TestStreamLimitOffset",
-		NewSafeSession(primarySession),
+		NewSafeSession(session),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
 		func(qr *sqltypes.Result) error {
@@ -790,13 +801,16 @@ func TestSelectLastInsertId(t *testing.T) {
 	defer cancel()
 	executor, _, _, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	primarySession.LastInsertId = 52
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+		LastInsertId: 52,
+	}
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select last_insert_id()"
-	result, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
@@ -815,10 +829,14 @@ func TestSelectSystemVariables(t *testing.T) {
 	defer cancel()
 	executor, _, _, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	primarySession.ReadAfterWrite = &vtgatepb.ReadAfterWrite{
-		ReadAfterWriteGtid:    "a fine gtid",
-		ReadAfterWriteTimeout: 13,
-		SessionTrackGtids:     true,
+
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+		ReadAfterWrite: &vtgatepb.ReadAfterWrite{
+			ReadAfterWriteGtid:    "a fine gtid",
+			ReadAfterWriteTimeout: 13,
+			SessionTrackGtids:     true,
+		},
 	}
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
@@ -828,7 +846,7 @@ func TestSelectSystemVariables(t *testing.T) {
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
 		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@migration_context, @@socket, @@query_timeout"
 
-	result, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
@@ -879,19 +897,16 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	primarySession.Autocommit = true
-	primarySession.EnableSystemSettings = true
-	primarySession.QueryTimeout = 75
-
-	defer func() {
-		primarySession.Autocommit = false
-		primarySession.EnableSystemSettings = false
-		primarySession.QueryTimeout = 0
-	}()
+	session := &vtgatepb.Session{
+		TargetString:         "@primary",
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		QueryTimeout:         75,
+	}
 
 	sql := "select @@autocommit, @@enable_system_settings, @@query_timeout"
 
-	result, err := executorExec(ctx, executor, sql, nil)
+	result, err := executorExec(ctx, executor, session, sql, nil)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
@@ -919,7 +934,10 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select @foo"
-	result, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -931,8 +949,8 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 	}
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 
-	primarySession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{"bar"})}
-	result, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	session = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{"bar"})}
+	result, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -955,12 +973,15 @@ func TestFoundRows(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	// run this extra query so we can assert on the number of rows found
-	_, err := executorExec(ctx, executor, "select 42", map[string]*querypb.BindVariable{})
+	_, err := executorExec(ctx, executor, session, "select 42", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	sql := "select found_rows()"
-	result, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "found_rows()", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
@@ -983,18 +1004,21 @@ func TestRowCount(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(ctx, executor, "select 42", map[string]*querypb.BindVariable{})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select 42", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	testRowCount(t, ctx, executor, -1)
+	testRowCount(t, ctx, executor, session, -1)
 
-	_, err = executorExec(ctx, executor, "delete from user where id in (42, 24)", map[string]*querypb.BindVariable{})
+	_, err = executorExec(ctx, executor, session, "delete from user where id in (42, 24)", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	testRowCount(t, ctx, executor, 2)
+	testRowCount(t, ctx, executor, session, 2)
 }
 
-func testRowCount(t *testing.T, ctx context.Context, executor *Executor, wantRowCount int64) {
+func testRowCount(t *testing.T, ctx context.Context, executor *Executor, session *vtgatepb.Session, wantRowCount int64) {
 	t.Helper()
-	result, err := executorExec(ctx, executor, "select row_count()", map[string]*querypb.BindVariable{})
+	result, err := executorExec(ctx, executor, session, "select row_count()", map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "row_count()", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
@@ -1014,7 +1038,11 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 	executor.normalize = true
-	primarySession.LastInsertId = 52
+
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+		LastInsertId: 52,
+	}
 
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -1028,7 +1056,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	sbc1.SetResults(result1)
 
 	sql := "select last_insert_id() as id union select last_insert_id() as id"
-	got, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	got, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -1052,7 +1080,10 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select id from music_user_map where id = last_insert_id()"
-	_, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from music_user_map where id = :__lastInsertId",
@@ -1081,7 +1112,10 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 		}},
 	}}
 	sbc1.SetResults(result1)
-	_, err := executorExec(ctx, executor, "select * from (select last_insert_id()) as t", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select * from (select last_insert_id()) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select t.`last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
@@ -1098,12 +1132,11 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 	executor.normalize = true
-	primarySession.LastInsertId = 12345
-	defer func() {
-		// clean up global state
-		primarySession.LastInsertId = 0
-	}()
-	rs, err := executorExec(ctx, executor, "select (select last_insert_id()) as x", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+		LastInsertId: 12345,
+	}
+	rs, err := executorExec(ctx, executor, session, "select (select last_insert_id()) as x", nil)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -1128,7 +1161,9 @@ func TestSelectDatabase(t *testing.T) {
 	defer executor.Close()
 	executor.normalize = true
 	sql := "select database()"
-	newSession := proto.Clone(primarySession).(*vtgatepb.Session)
+	newSession := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	session := NewSafeSession(newSession)
 	session.TargetString = "TestExecutor@primary"
 	result, err := executor.Execute(
@@ -1169,7 +1204,10 @@ func TestSelectBindvars(t *testing.T) {
 	)})
 
 	sql := "select id from `user` where id = :id"
-	_, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
 	require.NoError(t, err)
@@ -1184,7 +1222,7 @@ func TestSelectBindvars(t *testing.T) {
 
 	// Test with StringBindVariable
 	sql = "select id from `user` where `name` in (:name1, :name2)"
-	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.StringBindVariable("foo1"),
 		"name2": sqltypes.StringBindVariable("foo2"),
 	})
@@ -1203,7 +1241,7 @@ func TestSelectBindvars(t *testing.T) {
 
 	// Test with BytesBindVariable
 	sql = "select id from `user` where `name` in (:name1, :name2)"
-	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 	})
@@ -1232,7 +1270,7 @@ func TestSelectBindvars(t *testing.T) {
 	}})
 
 	sql = "select id from user where name = :name"
-	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"name": sqltypes.StringBindVariable("nonexistent"),
 	})
 	require.NoError(t, err)
@@ -1266,7 +1304,10 @@ func TestSelectEqual(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "select id from user where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from `user` where id = 1",
@@ -1278,7 +1319,7 @@ func TestSelectEqual(t *testing.T) {
 	}
 	sbc1.Queries = nil
 
-	_, err = executorExec(ctx, executor, "select id from user where id = 3", nil)
+	_, err = executorExec(ctx, executor, session, "select id from user where id = 3", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from `user` where id = 3",
@@ -1293,7 +1334,7 @@ func TestSelectEqual(t *testing.T) {
 	}
 	sbc2.Queries = nil
 
-	_, err = executorExec(ctx, executor, "select id from user where id = '3'", nil)
+	_, err = executorExec(ctx, executor, session, "select id from user where id = '3'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from `user` where id = '3'",
@@ -1312,7 +1353,7 @@ func TestSelectEqual(t *testing.T) {
 		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
 		"foo|1",
 	)})
-	_, err = executorExec(ctx, executor, "select id from user where name = 'foo'", nil)
+	_, err = executorExec(ctx, executor, session, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from `user` where `name` = 'foo'",
@@ -1338,7 +1379,10 @@ func TestSelectINFromOR(t *testing.T) {
 	defer executor.Close()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
-	_, err := executorExec(ctx, executor, "select 1 from user where id = 1 and name = 'apa' or id = 2 and name = 'toto'", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select 1 from user where id = 1 and name = 'apa' or id = 2 and name = 'toto'", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "select 1 from `user` where id = 1 and `name` = 'apa' or id = 2 and `name` = 'toto'",
@@ -1356,7 +1400,10 @@ func TestSelectDual(t *testing.T) {
 	executor, sbc1, _, lookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "select @@aa.bb from dual", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select @@aa.bb from dual", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select @@`aa.bb` from dual",
@@ -1364,7 +1411,7 @@ func TestSelectDual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
-	_, err = executorExec(ctx, executor, "select @@aa.bb from TestUnsharded.dual", nil)
+	_, err = executorExec(ctx, executor, session, "select @@aa.bb from TestUnsharded.dual", nil)
 	require.NoError(t, err)
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
@@ -1376,7 +1423,10 @@ func TestSelectComments(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "/* leading */ select id from `user` where id = 1 /* trailing */",
@@ -1397,7 +1447,10 @@ func TestSelectNormalize(t *testing.T) {
 	defer executor.Close()
 	executor.normalize = true
 
-	_, err := executorExec(ctx, executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "/* leading */ select id from `user` where id = :id /* INT64 */ /* trailing */",
@@ -1412,8 +1465,8 @@ func TestSelectNormalize(t *testing.T) {
 	sbc1.Queries = nil
 
 	// Force the query to go to the "wrong" shard and ensure that normalization still happens
-	primarySession.TargetString = "TestExecutor/40-60"
-	_, err = executorExec(ctx, executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
+	session.TargetString = "TestExecutor/40-60"
+	_, err = executorExec(ctx, executor, session, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "/* leading */ select id from `user` where id = :id /* INT64 */ /* trailing */",
@@ -1424,7 +1477,6 @@ func TestSelectNormalize(t *testing.T) {
 	require.Empty(t, sbc1.Queries)
 	utils.MustMatch(t, wantQueries, sbc2.Queries, "sbc2.Queries")
 	sbc2.Queries = nil
-	primarySession.TargetString = ""
 }
 
 func TestSelectCaseSensitivity(t *testing.T) {
@@ -1434,7 +1486,10 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "select Id from user where iD = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select Id from user where iD = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select Id from `user` where iD = 1",
@@ -1470,7 +1525,10 @@ func TestSelectKeyRange(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "select krcol_unique, krcol from keyrange_table where krcol = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select krcol_unique, krcol from keyrange_table where krcol = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select krcol_unique, krcol from keyrange_table where krcol = 1",
@@ -1490,7 +1548,10 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "select krcol_unique, krcol from keyrange_table where krcol_unique = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select krcol_unique, krcol from keyrange_table where krcol_unique = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select krcol_unique, krcol from keyrange_table where krcol_unique = 1",
@@ -1511,7 +1572,10 @@ func TestSelectIN(t *testing.T) {
 	defer executor.Close()
 
 	// Constant in IN clause is just a number, not a bind variable.
-	_, err := executorExec(ctx, executor, "select id from user where id in (1)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "select id from user where id in (1)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from `user` where id in (1)",
@@ -1526,7 +1590,7 @@ func TestSelectIN(t *testing.T) {
 	// They result in two different queries on two shards.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
-	_, err = executorExec(ctx, executor, "select id from user where id in (1, 3)", nil)
+	_, err = executorExec(ctx, executor, session, "select id from user where id in (1, 3)", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from `user` where id in ::__vals",
@@ -1547,7 +1611,7 @@ func TestSelectIN(t *testing.T) {
 	// This is using []any for the bind variable list.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
-	_, err = executorExec(ctx, executor, "select id from user where id in ::vals", map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, "select id from user where id in ::vals", map[string]*querypb.BindVariable{
 		"vals": sqltypes.TestBindVariable([]any{int64(1), int64(3)}),
 	})
 	require.NoError(t, err)
@@ -1575,7 +1639,7 @@ func TestSelectIN(t *testing.T) {
 		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
 		"foo|1",
 	)})
-	_, err = executorExec(ctx, executor, "select id from user where name = 'foo'", nil)
+	_, err = executorExec(ctx, executor, session, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from `user` where `name` = 'foo'",
@@ -1672,7 +1736,10 @@ func TestSelectScatter(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select id from `user`"
-	_, err := executorExec(ctx, executor, sql, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from `user`",
@@ -1690,7 +1757,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	defer cancel()
 
 	// Special setup: Don't use createExecutorEnv.
-	primarySession = &vtgatepb.Session{
+	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
 	cell := "aa"
@@ -1714,7 +1781,7 @@ func TestSelectScatterPartial(t *testing.T) {
 
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
-	results, err := executorExec(ctx, executor, "select id from `user`", nil)
+	results, err := executorExec(ctx, executor, session, "select id from `user`", nil)
 	wantErr := "TestExecutor.40-60.primary"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
@@ -1728,7 +1795,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
-	results, err = executorExec(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
+	results, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.NoError(t, err)
 	if results == nil || len(results.Rows) != 7 {
 		t.Errorf("want 7 results, got %v", results)
@@ -1744,11 +1811,11 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 
-	_, err = executorExec(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
+	_, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.Error(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
-	_, err = executorExec(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", nil)
+	_, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", nil)
 	require.Error(t, err)
 }
 
@@ -1948,7 +2015,10 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	defer executor.Close()
 
 	query := "select col1, col2 from user order by col2 desc"
-	gotResult, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	gotResult, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
@@ -2017,7 +2087,10 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	defer executor.Close()
 
 	query := "select col1, textcol from user order by textcol desc"
-	gotResult, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	gotResult, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
@@ -2209,7 +2282,10 @@ func TestSelectScatterAggregate(t *testing.T) {
 	defer executor.Close()
 
 	query := "select col, sum(foo) from user group by col"
-	gotResult, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	gotResult, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
@@ -2338,7 +2414,10 @@ func TestSelectScatterLimit(t *testing.T) {
 	defer executor.Close()
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
-	gotResult, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	gotResult, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
@@ -2458,7 +2537,10 @@ func TestSimpleJoin(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3"
-	result, err := executorExec(ctx, executor, sql, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
@@ -2500,7 +2582,10 @@ func TestJoinComments(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3 /* trailing */"
-	_, err := executorExec(ctx, executor, sql, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from `user` as u1 where u1.id = 1 /* trailing */",
@@ -2582,7 +2667,10 @@ func TestVarJoin(t *testing.T) {
 	}}
 	sbc1.SetResults(result1)
 	sql := "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1"
-	_, err := executorExec(ctx, executor, sql, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
@@ -2667,7 +2755,10 @@ func TestLeftJoin(t *testing.T) {
 	sbc1.SetResults(result1)
 	sbc2.SetResults(emptyResult)
 	sql := "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1"
-	result, err := executorExec(ctx, executor, sql, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -2752,7 +2843,10 @@ func TestEmptyJoin(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}})
-	result, err := executorExec(ctx, executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
@@ -2838,7 +2932,10 @@ func TestEmptyJoinRecursive(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}})
-	result, err := executorExec(ctx, executor, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
@@ -2933,7 +3030,10 @@ func TestCrossShardSubquery(t *testing.T) {
 		}},
 	}}
 	sbc1.SetResults(result1)
-	result, err := executorExec(ctx, executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
@@ -3064,7 +3164,10 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 		},
 	}}
 	sbc1.SetResults(result1)
-	result, err := executorExec(ctx, executor, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where 1 != 1) as t where 1 != 1",
@@ -3099,7 +3202,10 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select id from `user` where id = :id"
-	_, err := executorPrepare(ctx, executor, sql, map[string]*querypb.BindVariable{
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorPrepare(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
 	require.NoError(t, err)
@@ -3126,7 +3232,10 @@ func TestSelectDatabasePrepare(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "select database()"
-	_, err := executorPrepare(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorPrepare(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 }
 
@@ -3172,7 +3281,10 @@ func TestSelectWithUnionAll(t *testing.T) {
 			"vtg2":   bv,
 		},
 	}}
-	_, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
@@ -3667,7 +3779,10 @@ func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from zip_detail"
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -3690,7 +3805,10 @@ func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := fmt.Sprintf("select * from %s.zip_detail", KsTestSharded)
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -3713,7 +3831,10 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from user join zip_detail on user.zip_detail_id = zip_detail.id"
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -3729,7 +3850,7 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	sbc2.Queries = nil
 
 	query = "select * from simple join zip_detail on simple.zip_detail_id = zip_detail.id"
-	_, err = executorExec(ctx, executor, query, nil)
+	_, err = executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
@@ -3752,7 +3873,10 @@ func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select user.id from user join TestUnsharded.zip_detail on user.zip_detail_id = TestUnsharded.zip_detail.id"
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 
 	shardedWantQueries := []*querypb.BoundQuery{
@@ -3770,7 +3894,7 @@ func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	sbc2.Queries = nil
 
 	query = "select simple.id from simple join TestExecutor.zip_detail on simple.zip_detail_id = TestExecutor.zip_detail.id"
-	_, err = executorExec(ctx, executor, query, nil)
+	_, err = executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	unshardedWantQueries := []*querypb.BoundQuery{
 		{
@@ -4063,7 +4187,10 @@ func TestSelectAggregationNoData(t *testing.T) {
 				sbc.SetResults([]*sqltypes.Result{tc.sandboxRes})
 				sbc.Queries = nil
 			}
-			qr, err := executorExec(ctx, executor, tc.sql, nil)
+			session := &vtgatepb.Session{
+				TargetString: "@primary",
+			}
+			qr, err := executorExec(ctx, executor, session, tc.sql, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
 			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))
@@ -4208,7 +4335,10 @@ func TestSelectAggregationData(t *testing.T) {
 				sbc.SetResults([]*sqltypes.Result{tc.sandboxRes})
 				sbc.Queries = nil
 			}
-			qr, err := executorExec(ctx, executor, tc.sql, nil)
+			session := &vtgatepb.Session{
+				TargetString: "@primary",
+			}
+			qr, err := executorExec(ctx, executor, session, tc.sql, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
 			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))

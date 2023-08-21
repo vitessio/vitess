@@ -174,10 +174,6 @@ func createExecutorEnv(ctx context.Context) (executor *Executor, sbc1, sbc2, sbc
 	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
-	// create a new session each time so that ShardSessions don't get re-used across tests
-	primarySession = &vtgatepb.Session{
-		TargetString: "@primary",
-	}
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -197,10 +193,6 @@ func createCustomExecutor(ctx context.Context, vschema string) (executor *Execut
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
-	// create a new session each time so that ShardSessions don't get re-used across tests
-	primarySession = &vtgatepb.Session{
-		TargetString: "@primary",
-	}
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -227,10 +219,6 @@ func createCustomExecutorSetValues(ctx context.Context, vschema string, values [
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
-	// create a new session each time so that ShardSessions don't get re-used across tests
-	primarySession = &vtgatepb.Session{
-		TargetString: "@primary",
-	}
 	return executor, sbcs[0], sbcs[1], sbclookup
 }
 
@@ -244,15 +232,15 @@ func executorExecSession(ctx context.Context, executor *Executor, sql string, bv
 		bv)
 }
 
-func executorExec(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return executorExecSession(ctx, executor, sql, bv, primarySession)
+func executorExec(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return executorExecSession(ctx, executor, sql, bv, session)
 }
 
-func executorPrepare(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return executor.Prepare(
 		ctx,
 		"TestExecute",
-		NewSafeSession(primarySession),
+		NewSafeSession(session),
 		sql,
 		bv)
 }

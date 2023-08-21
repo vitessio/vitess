@@ -47,39 +47,6 @@ var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
-var primarySession *vtgatepb.Session
-
-func init() {
-	createSandbox(KsTestUnsharded).VSchema = `
-{
-	"sharded": false,
-	"tables": {
-		"t1": {}
-	}
-}
-`
-	createSandbox(KsTestBadVSchema).VSchema = `
-{
-	"sharded": true,
-	"tables": {
-		"t2": {
-			"auto_increment": {
-				"column": "id",
-				"sequence": "id_seq"
-			}
-		}
-	}
-}
-`
-	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
-	transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
-
-	mysqlServerPort = 0
-	mysqlAuthServerImpl = "none"
-	initMySQLProtocol()
-}
-
 func TestVTGateExecute(t *testing.T) {
 	counts := rpcVTGate.timings.Timings.Counts()
 
@@ -367,10 +334,14 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	for _, sbc := range sbcs {
 		before(sbc)
 	}
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+
 	_, _, err := rpcVTGate.Execute(
 		context.Background(),
 		nil,
-		primarySession,
+		session,
 		"select id from t1",
 		nil,
 	)
@@ -393,7 +364,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	_, err = rpcVTGate.StreamExecute(
 		context.Background(),
 		nil,
-		primarySession,
+		session,
 		"select id from t1",
 		nil,
 		func(r *sqltypes.Result) error {
@@ -420,10 +391,6 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 func TestErrorPropagation(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	// create a new session each time so that ShardSessions don't get re-used across tests
-	primarySession = &vtgatepb.Session{
-		TargetString: "@primary",
-	}
 
 	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbcrdonly := hcVTGateTest.AddTestTablet("aa", "1.1.1.2", 1001, KsTestUnsharded, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
@@ -651,8 +618,8 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc2 := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 2, KsTestSharded, "40-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc3 := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 3, KsTestSharded, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	logChan := rpcVTGate.executor.queryLogger.Subscribe("Test")
+	defer rpcVTGate.executor.queryLogger.Unsubscribe(logChan)
 
 	session := &vtgatepb.Session{Autocommit: true}
 	require.True(t, session.GetAutocommit())
@@ -724,12 +691,12 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	}}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLog(t, logChan, "Execute", "BEGIN", "begin", 0)
-	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
-	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
+	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "BEGIN", "begin", 0)
+	testQueryLog(t, rpcVTGate.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
+	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, rpcVTGate.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
+	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
 }
 
 func TestVSchemaVindexUnknownParams(t *testing.T) {

@@ -48,7 +48,10 @@ func TestUpdateEqual(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	// Update by primary vindex.
-	_, err := executorExec(ctx, executor, "update user set a=2 where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update user set a=2 where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "update `user` set a = 2 where id = 1",
@@ -59,7 +62,7 @@ func TestUpdateEqual(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update `user` set a = 2 where id = 1", 1)
 
 	sbc1.Queries = nil
-	_, err = executorExec(ctx, executor, "update user set a=2 where id = 3", nil)
+	_, err = executorExec(ctx, executor, session, "update user set a=2 where id = 3", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "update `user` set a = 2 where id = 3",
@@ -72,7 +75,7 @@ func TestUpdateEqual(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.SetResults([]*sqltypes.Result{{}})
-	_, err = executorExec(ctx, executor, "update music set a=2 where id = 2", nil)
+	_, err = executorExec(ctx, executor, session, "update music set a=2 where id = 2", nil)
 	require.NoError(t, err)
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
@@ -96,7 +99,7 @@ func TestUpdateEqual(t *testing.T) {
 	),
 	})
 
-	_, err = executorExec(ctx, executor, "update user2 set `name`='myname', lastname='mylastname' where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "update user2 set `name`='myname', lastname='mylastname' where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
@@ -154,7 +157,10 @@ func TestUpdateFromSubQuery(t *testing.T) {
 	}})
 
 	// Update by primary vindex, but first execute subquery
-	_, err := executorExec(ctx, executor, "update user set a=(select count(*) from user where id = 3) where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update user set a=(select count(*) from user where id = 3) where id = 1", nil)
 	require.NoError(t, err)
 	wantQueriesSbc1 := []*querypb.BoundQuery{{
 		Sql: "update `user` set a = :__sq1 where id = 1",
@@ -185,7 +191,10 @@ func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update t2_lookup set lu_col = 5 where wo_lu_col = 2", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -562,7 +571,10 @@ func TestUpdateMultiOwned(t *testing.T) {
 			"1|10|20|30|40|50|60|0|0",
 		),
 	})
-	_, err := executorExec(ctx, executor, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,7 +628,10 @@ func TestUpdateComments(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "update user set a=2 where id = 1 /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "update `user` set a = 2 where id = 1 /* trailing */",
@@ -634,7 +649,10 @@ func TestUpdateNormalize(t *testing.T) {
 	defer executor.Close()
 
 	executor.normalize = true
-	_, err := executorExec(ctx, executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "/* leading */ update `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
@@ -648,8 +666,8 @@ func TestUpdateNormalize(t *testing.T) {
 	sbc1.Queries = nil
 
 	// Force the query to go to the "wrong" shard and ensure that normalization still happens
-	primarySession.TargetString = "TestExecutor/40-60"
-	_, err = executorExec(ctx, executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
+	session.TargetString = "TestExecutor/40-60"
+	_, err = executorExec(ctx, executor, session, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "/* leading */ update `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
@@ -661,7 +679,6 @@ func TestUpdateNormalize(t *testing.T) {
 	assertQueries(t, sbc1, nil)
 	assertQueries(t, sbc2, wantQueries)
 	sbc2.Queries = nil
-	primarySession.TargetString = ""
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -683,7 +700,10 @@ func TestDeleteEqual(t *testing.T) {
 			sqltypes.NewVarChar("myname"),
 		}},
 	}})
-	_, err := executorExec(ctx, executor, "delete from user where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select Id, `name` from `user` where id = 1 for update",
@@ -706,7 +726,7 @@ func TestDeleteEqual(t *testing.T) {
 	sbc.Queries = nil
 	sbclookup.Queries = nil
 	sbc.SetResults([]*sqltypes.Result{{}})
-	_, err = executorExec(ctx, executor, "delete from user where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "delete from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select Id, `name` from `user` where id = 1 for update",
@@ -721,7 +741,7 @@ func TestDeleteEqual(t *testing.T) {
 	sbc.Queries = nil
 	sbclookup.Queries = nil
 	sbclookup.SetResults([]*sqltypes.Result{{}})
-	_, err = executorExec(ctx, executor, "delete from music where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "delete from music where id = 1", nil)
 	require.NoError(t, err)
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
@@ -737,7 +757,7 @@ func TestDeleteEqual(t *testing.T) {
 	sbc.Queries = nil
 	sbclookup.Queries = nil
 	sbclookup.SetResults([]*sqltypes.Result{{}})
-	_, err = executorExec(ctx, executor, "delete from user_extra where user_id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "delete from user_extra where user_id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "delete from user_extra where user_id = 1",
@@ -753,7 +773,7 @@ func TestDeleteEqual(t *testing.T) {
 		"1|1|foo",
 	),
 	})
-	_, err = executorExec(ctx, executor, "delete from user2 where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "delete from user2 where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
@@ -787,7 +807,10 @@ func TestUpdateScatter(t *testing.T) {
 	defer cancel()
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	_, err := executorExec(ctx, executor, "update user_extra set col = 2", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update user_extra set col = 2", nil)
 	require.NoError(t, err)
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
@@ -804,7 +827,10 @@ func TestDeleteScatter(t *testing.T) {
 	defer cancel()
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	_, err := executorExec(ctx, executor, "delete from user_extra", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from user_extra", nil)
 	require.NoError(t, err)
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
@@ -835,7 +861,10 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 		"1|2|2|2|2|2|1|0",
 	)})
 
-	_, err := executorExec(ctx, executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -894,7 +923,10 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 		"1|2|2|2|2|2|2|0",
 	)})
 
-	_, err := executorExec(ctx, executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -958,7 +990,10 @@ func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "delete from t2_lookup where wo_lu_col = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from t2_lookup where wo_lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -1046,7 +1081,10 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 		"1|1|1|1|1|1|1",
 	)})
 
-	_, err := executorExec(ctx, executor, "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -1130,7 +1168,10 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 		"1|1|1|1|1|1|2",
 	)})
 
-	_, err := executorExec(ctx, executor, "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -1235,7 +1276,10 @@ func TestDeleteByDestination(t *testing.T) {
 	defer cancel()
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	_, err := executorExec(ctx, executor, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
 	require.NoError(t, err)
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
@@ -1265,7 +1309,10 @@ func TestDeleteComments(t *testing.T) {
 			sqltypes.NewVarChar("myname"),
 		}},
 	}})
-	_, err := executorExec(ctx, executor, "delete from user where id = 1 /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select Id, `name` from `user` where id = 1 for update /* trailing */",
@@ -1296,7 +1343,10 @@ func TestInsertSharded(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(ctx, executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
@@ -1323,7 +1373,7 @@ func TestInsertSharded(t *testing.T) {
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
-	_, err = executorExec(ctx, executor, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
@@ -1348,7 +1398,7 @@ func TestInsertSharded(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (3, 2, 'myname2')", 1)
 
 	sbc1.Queries = nil
-	_, err = executorExec(ctx, executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
@@ -1368,7 +1418,7 @@ func TestInsertSharded(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
-	_, err = executorExec(ctx, executor, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2 /* INT64 */, :_name_0)",
@@ -1405,7 +1455,10 @@ func TestInsertShardedKeyrange(t *testing.T) {
 	defer executor.Close()
 
 	// If a unique vindex returns a keyrange, we fail the insert
-	_, err := executorExec(ctx, executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
 	require.EqualError(t, err, "could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)")
 }
 
@@ -1539,7 +1592,10 @@ func TestInsertShardedIgnore(t *testing.T) {
 	// Fifth row: first shard.
 	// Sixth row: second shard (because 3 hash maps to 40-60).
 	query := "insert ignore into insert_ignore_test(pv, owned, verify) values (1, 1, 1), (2, 2, 2), (3, 3, 1), (4, 4, 4), (5, 5, 1), (6, 6, 3)"
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0),(:_pv_4, :_owned_4, :_verify_4)",
@@ -1641,7 +1697,7 @@ func TestInsertShardedIgnore(t *testing.T) {
 		{},
 	})
 	query = "insert ignore into insert_ignore_test(pv, owned, verify) values (1, 1, 1)"
-	qr, err := executorExec(ctx, executor, query, nil)
+	qr, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	if !qr.Equal(&sqltypes.Result{}) {
 		t.Errorf("qr: %v, want empty result", qr)
@@ -1672,7 +1728,10 @@ func TestInsertOnDupKey(t *testing.T) {
 		"1|1",
 	)})
 	query := "insert into insert_ignore_test(pv, owned, verify) values (1, 1, 1) on duplicate key update col = 2"
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0) on duplicate key update col = 2",
@@ -1716,16 +1775,16 @@ func TestAutocommitFail(t *testing.T) {
 
 	query := "insert into user (id) values (1)"
 	sbc1.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 1
-	primarySession.Reset()
-	primarySession.Autocommit = true
-	defer func() {
-		primarySession.Autocommit = false
-	}()
-	_, err := executorExec(ctx, executor, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+		Autocommit:   true,
+	}
+
+	_, err := executorExec(ctx, executor, session, query, nil)
 	require.Error(t, err)
 
 	// make sure we have closed and rolled back any transactions started
-	assert.False(t, primarySession.InTransaction, "left with tx open")
+	assert.False(t, session.InTransaction, "left with tx open")
 }
 
 func TestInsertComments(t *testing.T) {
@@ -1735,7 +1794,10 @@ func TestInsertComments(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0) /* trailing */",
@@ -1771,7 +1833,10 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := executorExec(ctx, executor, "insert into user(v, `name`) values (2, 'myname')", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "insert into user(v, `name`) values (2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(v, `name`, id) values (2, :_name_0, :_Id_0)",
@@ -1816,7 +1881,10 @@ func TestInsertAutoincSharded(t *testing.T) {
 		InsertID:     2,
 	}
 	sbc.SetResults([]*sqltypes.Result{wantResult})
-	result, err := executorExec(ctx, router, "insert into user_extra(user_id) values (2)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, router, session, "insert into user_extra(user_id) values (2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
@@ -1828,7 +1896,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
-	assert.EqualValues(t, 2, primarySession.LastInsertId)
+	assert.EqualValues(t, 2, session.LastInsertId)
 }
 
 func TestInsertGeneratorUnsharded(t *testing.T) {
@@ -1837,7 +1905,10 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	defer cancel()
 	executor, _, _, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
-	result, err := executorExec(ctx, executor, "insert into main1(id, name) values (null, 'myname')", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "insert into main1(id, name) values (null, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select next :n /* INT64 */ values from user_seq",
@@ -1877,7 +1948,10 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	}
 	sbclookup.SetResults([]*sqltypes.Result{wantResult})
 
-	result, err := executorExec(ctx, router, query, nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, router, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
@@ -1896,7 +1970,10 @@ func TestInsertLookupOwned(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "insert into music(user_id, id) values (2, 3)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into music(user_id, id) values (2, 3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, id) values (:_user_id_0, :_id_0)",
@@ -1931,7 +2008,10 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := executorExec(ctx, executor, "insert into music(user_id) values (2)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "insert into music(user_id) values (2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, id) values (:_user_id_0, :_id_0)",
@@ -1967,7 +2047,10 @@ func TestInsertLookupUnowned(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "insert into music_extra(user_id, music_id) values (2, 3)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into music_extra(user_id, music_id) values (2, 3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music_extra(user_id, music_id) values (:_user_id_0, :_music_id_0)",
@@ -1997,7 +2080,10 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"3|1",
 	)})
-	_, err := executorExec(ctx, executor, "insert into music_extra_reversed(music_id) values (3)", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into music_extra_reversed(music_id) values (3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id_0, :_user_id_0)",
@@ -2095,7 +2181,10 @@ func TestMultiInsertSharded(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
 
-	_, err := executorExec(ctx, executor, "insert into user(id, v, name) values (1, 1, 'myname1'),(3, 3, 'myname3')", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 1, 'myname1'),(3, 3, 'myname3')", nil)
 	require.NoError(t, err)
 	wantQueries1 := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0)",
@@ -2137,7 +2226,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
 	sbc2.Queries = nil
-	_, err = executorExec(ctx, executor, "insert into user(id, v, name) values (1, 1, 'myname1'),(2, 2, 'myname2')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 1, 'myname1'),(2, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0),(:_Id_1, 2, :_name_1)",
@@ -2168,7 +2257,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
 	sbc2.Queries = nil
-	_, err = executorExec(ctx, executor, "insert into user2(id, `name`, lastname) values (2, 'myname', 'mylastname'), (3, 'myname2', 'mylastname2')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into user2(id, `name`, lastname) values (2, 'myname', 'mylastname'), (3, 'myname2', 'mylastname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
@@ -2210,7 +2299,10 @@ func TestMultiInsertGenerator(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := executorExec(ctx, executor, "insert into music(user_id, `name`) values (:u, 'myname1'),(:u, 'myname2')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "insert into music(user_id, `name`) values (:u, 'myname1'),(:u, 'myname2')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, `name`, id) values (:_user_id_0, 'myname1', :_id_0),(:_user_id_1, 'myname2', :_id_1)",
@@ -2259,7 +2351,10 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := executorExec(ctx, executor, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'),(2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'),(2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(id, user_id, `name`) values (:_id_0, :_user_id_0, 'myname1'),(:_id_1, :_user_id_1, 'myname2'),(:_id_2, :_user_id_2, 'myname3')",
@@ -2331,7 +2426,10 @@ func TestInsertBadAutoInc(t *testing.T) {
 	defer executor.Close()
 
 	// If auto inc table cannot be found, the table should not be added to vschema.
-	_, err := executorExec(ctx, executor, "insert into bad_auto(v, name) values (1, 'myname')", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into bad_auto(v, name) values (1, 'myname')", nil)
 	want := "table bad_auto not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("bad auto inc err: %v, want %v", err, want)
@@ -2404,8 +2502,10 @@ func TestKeyDestRangeQuery(t *testing.T) {
 			executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 			defer executor.Close()
 
-			primarySession.TargetString = tc.targetString
-			_, err := executorExec(ctx, executor, tc.inputQuery, nil)
+			session := &vtgatepb.Session{
+				TargetString: tc.targetString,
+			}
+			_, err := executorExec(ctx, executor, session, tc.inputQuery, nil)
 			require.NoError(t, err)
 
 			if tc.expectedSbc1Query == "" {
@@ -2428,12 +2528,12 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	defer cancel()
 	executor, _, _, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	primarySession.TargetString = "TestExecutor[-]"
-	_, err := executorExec(ctx, executor, insertInput, nil)
+	session := &vtgatepb.Session{
+		TargetString: "TestExecutor[-]",
+	}
+	_, err := executorExec(ctx, executor, session, insertInput, nil)
 
 	require.EqualError(t, err, "VT03023: INSERT not supported when targeting a key range: TestExecutor[-]")
-
-	primarySession.TargetString = ""
 }
 
 func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
@@ -2456,7 +2556,10 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorPrepare(ctx, executor, "update music set a = :a0 where id = :id0", map[string]*querypb.BindVariable{
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorPrepare(ctx, executor, session, "update music set a = :a0 where id = :id0", map[string]*querypb.BindVariable{
 		"a0":  sqltypes.Int64BindVariable(3),
 		"id0": sqltypes.Int64BindVariable(2),
 	})
@@ -2478,7 +2581,10 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorPrepare(ctx, executor, "insert into user(id, v, name) values (:_Id0, 2, ':_name_0')", map[string]*querypb.BindVariable{
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorPrepare(ctx, executor, session, "insert into user(id, v, name) values (:_Id0, 2, ':_name_0')", map[string]*querypb.BindVariable{
 		"_Id0":    sqltypes.Int64BindVariable(1),
 		"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
 		"__seq0":  sqltypes.Int64BindVariable(1),
@@ -2499,7 +2605,10 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	defer cancel()
 	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
 	defer executor.Close()
-	_, err := executorPrepare(ctx, executor, "delete from user where id = :id0", map[string]*querypb.BindVariable{
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorPrepare(ctx, executor, session, "delete from user where id = :id0", map[string]*querypb.BindVariable{
 		"id0": sqltypes.Int64BindVariable(1),
 	})
 	require.NoError(t, err)
@@ -2520,8 +2629,11 @@ func TestUpdateLastInsertID(t *testing.T) {
 	executor.normalize = true
 
 	sql := "update user set a = last_insert_id() where id = 1"
-	primarySession.LastInsertId = 43
-	_, err := executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{})
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+		LastInsertId: 43,
+	}
+	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "update `user` set a = :__lastInsertId where id = :id /* INT64 */",
@@ -2543,7 +2655,10 @@ func TestUpdateReference(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(ctx, executor, "update zip_detail set status = 'CLOSED' where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "update zip_detail set status = 'CLOSED' where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "update zip_detail set `status` = 'CLOSED' where id = 1",
@@ -2557,7 +2672,7 @@ func TestUpdateReference(t *testing.T) {
 
 	sbclookup.Queries = nil
 
-	_, err = executorExec(ctx, executor, "update TestUnsharded.zip_detail set status = 'CLOSED' where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "update TestUnsharded.zip_detail set status = 'CLOSED' where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "update zip_detail set `status` = 'CLOSED' where id = 1",
@@ -2572,7 +2687,7 @@ func TestUpdateReference(t *testing.T) {
 
 	sbclookup.Queries = nil
 
-	_, err = executorExec(ctx, executor, "update TestExecutor.zip_detail set status = 'CLOSED' where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "update TestExecutor.zip_detail set status = 'CLOSED' where id = 1", nil)
 	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
 
@@ -2586,7 +2701,10 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("uniq_col|keyspace_id", "int64|varbinary"), "1|N±\u0090ɢú\u0016\u009C"),
 	})
-	_, err := executorExec(ctx, executor, "delete from t1 where unq_col = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from t1 where unq_col = 1", nil)
 	require.NoError(t, err)
 	tupleBindVar, _ := sqltypes.BuildBindVariable([]int64{1})
 	sbc1wantQueries := []*querypb.BoundQuery{{
@@ -2617,7 +2735,10 @@ func TestDeleteReference(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(ctx, executor, "delete from zip_detail where id = 1", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "delete from zip_detail where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "delete from zip_detail where id = 1",
@@ -2631,7 +2752,7 @@ func TestDeleteReference(t *testing.T) {
 
 	sbclookup.Queries = nil
 
-	_, err = executorExec(ctx, executor, "delete from zip_detail where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "delete from zip_detail where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "delete from zip_detail where id = 1",
@@ -2645,7 +2766,7 @@ func TestDeleteReference(t *testing.T) {
 
 	sbclookup.Queries = nil
 
-	_, err = executorExec(ctx, executor, "delete from TestExecutor.zip_detail where id = 1", nil)
+	_, err = executorExec(ctx, executor, session, "delete from TestExecutor.zip_detail where id = 1", nil)
 	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
 
@@ -3084,7 +3205,10 @@ func TestInsertReference(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(ctx, executor, "insert into zip_detail(id, status) values (1, 'CLOSED')", nil)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into zip_detail(id, status) values (1, 'CLOSED')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "insert into zip_detail(id, `status`) values (1, 'CLOSED')",
@@ -3098,7 +3222,7 @@ func TestInsertReference(t *testing.T) {
 
 	sbclookup.Queries = nil
 
-	_, err = executorExec(ctx, executor, "insert into TestUnsharded.zip_detail(id, status) values (1, 'CLOSED')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into TestUnsharded.zip_detail(id, status) values (1, 'CLOSED')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "insert into zip_detail(id, `status`) values (1, 'CLOSED')",
@@ -3113,6 +3237,6 @@ func TestInsertReference(t *testing.T) {
 
 	sbclookup.Queries = nil
 
-	_, err = executorExec(ctx, executor, "insert into TestExecutor.zip_detail(id, status) values (1, 'CLOSED')", nil)
+	_, err = executorExec(ctx, executor, session, "insert into TestExecutor.zip_detail(id, status) values (1, 'CLOSED')", nil)
 	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }

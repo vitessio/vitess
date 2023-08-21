@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/utils"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -46,9 +47,10 @@ func TestQueryzHandler(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv(ctx)
 	defer executor.Close()
 
+	session := &vtgatepb.Session{TargetString: "@primary"}
 	// single shard query
 	sql := "select id from user where id = 1"
-	_, err := executorExec(ctx, executor, sql, nil)
+	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
 	plan1 := assertCacheContains(t, executor, nil, "select id from `user` where id = 1")
@@ -56,14 +58,14 @@ func TestQueryzHandler(t *testing.T) {
 
 	// scatter
 	sql = "select id from user"
-	_, err = executorExec(ctx, executor, sql, nil)
+	_, err = executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
 	plan2 := assertCacheContains(t, executor, nil, "select id from `user`")
 	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
@@ -76,7 +78,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(ctx, executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})

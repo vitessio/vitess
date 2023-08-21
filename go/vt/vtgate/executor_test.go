@@ -2008,10 +2008,12 @@ func TestPassthroughDDL(t *testing.T) {
 
 	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
 	defer executor.Close()
-	primarySession.TargetString = "TestExecutor"
+	session := &vtgatepb.Session{
+		TargetString: "TestExecutor",
+	}
 
 	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
-	_, err := executorExec(ctx, executor, alterDDL, nil)
+	_, err := executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           alterDDL,
@@ -2027,23 +2029,22 @@ func TestPassthroughDDL(t *testing.T) {
 	sbc2.Queries = nil
 
 	// Force the query to go to only one shard. Normalization doesn't make any difference.
-	primarySession.TargetString = "TestExecutor/40-60"
+	session.TargetString = "TestExecutor/40-60"
 	executor.normalize = true
 
-	_, err = executorExec(ctx, executor, alterDDL, nil)
+	_, err = executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
 	require.Nil(t, sbc1.Queries)
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 	sbc2.Queries = nil
-	primarySession.TargetString = ""
 
 	// Use range query
-	primarySession.TargetString = "TestExecutor[-]"
+	session.TargetString = "TestExecutor[-]"
 	executor.normalize = true
 
-	_, err = executorExec(ctx, executor, alterDDL, nil)
+	_, err = executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
@@ -2052,7 +2053,6 @@ func TestPassthroughDDL(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 	sbc2.Queries = nil
-	primarySession.TargetString = ""
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
@@ -2393,14 +2393,17 @@ func TestExecutorVExplain(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	bindVars := map[string]*querypb.BindVariable{}
-	result, err := executorExec(ctx, executor, "vexplain plan select * from user", bindVars)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	result, err := executorExec(ctx, executor, session, "vexplain plan select * from user", bindVars)
 	require.NoError(t, err)
 
 	require.Equal(t,
 		`[[VARCHAR("{\n\t\"OperatorType\": \"Route\",\n\t\"Variant\": \"Scatter\",\n\t\"Keyspace\": {\n\t\t\"Name\": \"TestExecutor\",\n\t\t\"Sharded\": true\n\t},\n\t\"FieldQuery\": \"select * from `+"`user`"+` where 1 != 1\",\n\t\"Query\": \"select * from `+"`user`"+`\",\n\t\"Table\": \"`+"`user`"+`\"\n}")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
-	result, err = executorExec(ctx, executor, "vexplain plan select 42", bindVars)
+	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
 	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"INT64(42) as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
