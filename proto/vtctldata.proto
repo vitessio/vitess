@@ -413,6 +413,15 @@ message ChangeTabletTypeResponse {
   bool was_dry_run = 3;
 }
 
+message CleanupSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CleanupSchemaMigrationResponse {
+  repeated string uuid_list = 1;
+}
+
 message CreateKeyspaceRequest {
   // Name is the name of the keyspace.
   string name = 1;
@@ -1208,6 +1217,15 @@ message RestoreFromBackupResponse {
   string keyspace = 2;
   string shard = 3;
   logutil.Event event = 4;
+}
+
+message RetrySchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message RetrySchemaMigrationResponse {
+  repeated string uuid_list = 1;
 }
 
 message RunHealthCheckRequest {

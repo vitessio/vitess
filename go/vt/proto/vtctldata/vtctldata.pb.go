@@ -2388,6 +2388,108 @@ func (x *ChangeTabletTypeResponse) GetWasDryRun() bool {
 	return false
 }
 
+type CleanupSchemaMigrationRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Uuid     string `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *CleanupSchemaMigrationRequest) Reset() {
+	*x = CleanupSchemaMigrationRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[25]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CleanupSchemaMigrationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CleanupSchemaMigrationRequest) ProtoMessage() {}
+
+func (x *CleanupSchemaMigrationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[25]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CleanupSchemaMigrationRequest.ProtoReflect.Descriptor instead.
+func (*CleanupSchemaMigrationRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CleanupSchemaMigrationRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *CleanupSchemaMigrationRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type CleanupSchemaMigrationResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UuidList []string `protobuf:"bytes,1,rep,name=uuid_list,json=uuidList,proto3" json:"uuid_list,omitempty"`
+}
+
+func (x *CleanupSchemaMigrationResponse) Reset() {
+	*x = CleanupSchemaMigrationResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[26]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CleanupSchemaMigrationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CleanupSchemaMigrationResponse) ProtoMessage() {}
+
+func (x *CleanupSchemaMigrationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[26]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CleanupSchemaMigrationResponse.ProtoReflect.Descriptor instead.
+func (*CleanupSchemaMigrationResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *CleanupSchemaMigrationResponse) GetUuidList() []string {
+	if x != nil {
+		return x.UuidList
+	}
+	return nil
+}
+
 type CreateKeyspaceRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2421,7 +2523,7 @@ type CreateKeyspaceRequest struct {
 func (x *CreateKeyspaceRequest) Reset() {
 	*x = CreateKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[25]
+		mi := &file_vtctldata_proto_msgTypes[27]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2434,7 +2536,7 @@ func (x *CreateKeyspaceRequest) String() string {
 func (*CreateKeyspaceRequest) ProtoMessage() {}
 
 func (x *CreateKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[25]
+	mi := &file_vtctldata_proto_msgTypes[27]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2447,7 +2549,7 @@ func (x *CreateKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*CreateKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{25}
+	return file_vtctldata_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CreateKeyspaceRequest) GetName() string {
@@ -2525,7 +2627,7 @@ type CreateKeyspaceResponse struct {
 func (x *CreateKeyspaceResponse) Reset() {
 	*x = CreateKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[26]
+		mi := &file_vtctldata_proto_msgTypes[28]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2538,7 +2640,7 @@ func (x *CreateKeyspaceResponse) String() string {
 func (*CreateKeyspaceResponse) ProtoMessage() {}
 
 func (x *CreateKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[26]
+	mi := &file_vtctldata_proto_msgTypes[28]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2551,7 +2653,7 @@ func (x *CreateKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*CreateKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{26}
+	return file_vtctldata_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateKeyspaceResponse) GetKeyspace() *Keyspace {
@@ -2581,7 +2683,7 @@ type CreateShardRequest struct {
 func (x *CreateShardRequest) Reset() {
 	*x = CreateShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[27]
+		mi := &file_vtctldata_proto_msgTypes[29]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2594,7 +2696,7 @@ func (x *CreateShardRequest) String() string {
 func (*CreateShardRequest) ProtoMessage() {}
 
 func (x *CreateShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[27]
+	mi := &file_vtctldata_proto_msgTypes[29]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2607,7 +2709,7 @@ func (x *CreateShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateShardRequest.ProtoReflect.Descriptor instead.
 func (*CreateShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{27}
+	return file_vtctldata_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CreateShardRequest) GetKeyspace() string {
@@ -2656,7 +2758,7 @@ type CreateShardResponse struct {
 func (x *CreateShardResponse) Reset() {
 	*x = CreateShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[28]
+		mi := &file_vtctldata_proto_msgTypes[30]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2669,7 +2771,7 @@ func (x *CreateShardResponse) String() string {
 func (*CreateShardResponse) ProtoMessage() {}
 
 func (x *CreateShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[28]
+	mi := &file_vtctldata_proto_msgTypes[30]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2682,7 +2784,7 @@ func (x *CreateShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateShardResponse.ProtoReflect.Descriptor instead.
 func (*CreateShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{28}
+	return file_vtctldata_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *CreateShardResponse) GetKeyspace() *Keyspace {
@@ -2718,7 +2820,7 @@ type DeleteCellInfoRequest struct {
 func (x *DeleteCellInfoRequest) Reset() {
 	*x = DeleteCellInfoRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[29]
+		mi := &file_vtctldata_proto_msgTypes[31]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2731,7 +2833,7 @@ func (x *DeleteCellInfoRequest) String() string {
 func (*DeleteCellInfoRequest) ProtoMessage() {}
 
 func (x *DeleteCellInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[29]
+	mi := &file_vtctldata_proto_msgTypes[31]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2744,7 +2846,7 @@ func (x *DeleteCellInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCellInfoRequest.ProtoReflect.Descriptor instead.
 func (*DeleteCellInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{29}
+	return file_vtctldata_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DeleteCellInfoRequest) GetName() string {
@@ -2770,7 +2872,7 @@ type DeleteCellInfoResponse struct {
 func (x *DeleteCellInfoResponse) Reset() {
 	*x = DeleteCellInfoResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[30]
+		mi := &file_vtctldata_proto_msgTypes[32]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2783,7 +2885,7 @@ func (x *DeleteCellInfoResponse) String() string {
 func (*DeleteCellInfoResponse) ProtoMessage() {}
 
 func (x *DeleteCellInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[30]
+	mi := &file_vtctldata_proto_msgTypes[32]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2796,7 +2898,7 @@ func (x *DeleteCellInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCellInfoResponse.ProtoReflect.Descriptor instead.
 func (*DeleteCellInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{30}
+	return file_vtctldata_proto_rawDescGZIP(), []int{32}
 }
 
 type DeleteCellsAliasRequest struct {
@@ -2810,7 +2912,7 @@ type DeleteCellsAliasRequest struct {
 func (x *DeleteCellsAliasRequest) Reset() {
 	*x = DeleteCellsAliasRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[31]
+		mi := &file_vtctldata_proto_msgTypes[33]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2823,7 +2925,7 @@ func (x *DeleteCellsAliasRequest) String() string {
 func (*DeleteCellsAliasRequest) ProtoMessage() {}
 
 func (x *DeleteCellsAliasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[31]
+	mi := &file_vtctldata_proto_msgTypes[33]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2836,7 +2938,7 @@ func (x *DeleteCellsAliasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCellsAliasRequest.ProtoReflect.Descriptor instead.
 func (*DeleteCellsAliasRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{31}
+	return file_vtctldata_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *DeleteCellsAliasRequest) GetName() string {
@@ -2855,7 +2957,7 @@ type DeleteCellsAliasResponse struct {
 func (x *DeleteCellsAliasResponse) Reset() {
 	*x = DeleteCellsAliasResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[32]
+		mi := &file_vtctldata_proto_msgTypes[34]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2868,7 +2970,7 @@ func (x *DeleteCellsAliasResponse) String() string {
 func (*DeleteCellsAliasResponse) ProtoMessage() {}
 
 func (x *DeleteCellsAliasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[32]
+	mi := &file_vtctldata_proto_msgTypes[34]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2881,7 +2983,7 @@ func (x *DeleteCellsAliasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCellsAliasResponse.ProtoReflect.Descriptor instead.
 func (*DeleteCellsAliasResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{32}
+	return file_vtctldata_proto_rawDescGZIP(), []int{34}
 }
 
 type DeleteKeyspaceRequest struct {
@@ -2903,7 +3005,7 @@ type DeleteKeyspaceRequest struct {
 func (x *DeleteKeyspaceRequest) Reset() {
 	*x = DeleteKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[33]
+		mi := &file_vtctldata_proto_msgTypes[35]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2916,7 +3018,7 @@ func (x *DeleteKeyspaceRequest) String() string {
 func (*DeleteKeyspaceRequest) ProtoMessage() {}
 
 func (x *DeleteKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[33]
+	mi := &file_vtctldata_proto_msgTypes[35]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2929,7 +3031,7 @@ func (x *DeleteKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{33}
+	return file_vtctldata_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *DeleteKeyspaceRequest) GetKeyspace() string {
@@ -2962,7 +3064,7 @@ type DeleteKeyspaceResponse struct {
 func (x *DeleteKeyspaceResponse) Reset() {
 	*x = DeleteKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[34]
+		mi := &file_vtctldata_proto_msgTypes[36]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2975,7 +3077,7 @@ func (x *DeleteKeyspaceResponse) String() string {
 func (*DeleteKeyspaceResponse) ProtoMessage() {}
 
 func (x *DeleteKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[34]
+	mi := &file_vtctldata_proto_msgTypes[36]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2988,7 +3090,7 @@ func (x *DeleteKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{34}
+	return file_vtctldata_proto_rawDescGZIP(), []int{36}
 }
 
 type DeleteShardsRequest struct {
@@ -3014,7 +3116,7 @@ type DeleteShardsRequest struct {
 func (x *DeleteShardsRequest) Reset() {
 	*x = DeleteShardsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[35]
+		mi := &file_vtctldata_proto_msgTypes[37]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3027,7 +3129,7 @@ func (x *DeleteShardsRequest) String() string {
 func (*DeleteShardsRequest) ProtoMessage() {}
 
 func (x *DeleteShardsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[35]
+	mi := &file_vtctldata_proto_msgTypes[37]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3040,7 +3142,7 @@ func (x *DeleteShardsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteShardsRequest.ProtoReflect.Descriptor instead.
 func (*DeleteShardsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{35}
+	return file_vtctldata_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *DeleteShardsRequest) GetShards() []*Shard {
@@ -3080,7 +3182,7 @@ type DeleteShardsResponse struct {
 func (x *DeleteShardsResponse) Reset() {
 	*x = DeleteShardsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[36]
+		mi := &file_vtctldata_proto_msgTypes[38]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3093,7 +3195,7 @@ func (x *DeleteShardsResponse) String() string {
 func (*DeleteShardsResponse) ProtoMessage() {}
 
 func (x *DeleteShardsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[36]
+	mi := &file_vtctldata_proto_msgTypes[38]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3106,7 +3208,7 @@ func (x *DeleteShardsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteShardsResponse.ProtoReflect.Descriptor instead.
 func (*DeleteShardsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{36}
+	return file_vtctldata_proto_rawDescGZIP(), []int{38}
 }
 
 type DeleteSrvVSchemaRequest struct {
@@ -3120,7 +3222,7 @@ type DeleteSrvVSchemaRequest struct {
 func (x *DeleteSrvVSchemaRequest) Reset() {
 	*x = DeleteSrvVSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[37]
+		mi := &file_vtctldata_proto_msgTypes[39]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3133,7 +3235,7 @@ func (x *DeleteSrvVSchemaRequest) String() string {
 func (*DeleteSrvVSchemaRequest) ProtoMessage() {}
 
 func (x *DeleteSrvVSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[37]
+	mi := &file_vtctldata_proto_msgTypes[39]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3146,7 +3248,7 @@ func (x *DeleteSrvVSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSrvVSchemaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSrvVSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{37}
+	return file_vtctldata_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *DeleteSrvVSchemaRequest) GetCell() string {
@@ -3165,7 +3267,7 @@ type DeleteSrvVSchemaResponse struct {
 func (x *DeleteSrvVSchemaResponse) Reset() {
 	*x = DeleteSrvVSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[38]
+		mi := &file_vtctldata_proto_msgTypes[40]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3178,7 +3280,7 @@ func (x *DeleteSrvVSchemaResponse) String() string {
 func (*DeleteSrvVSchemaResponse) ProtoMessage() {}
 
 func (x *DeleteSrvVSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[38]
+	mi := &file_vtctldata_proto_msgTypes[40]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3191,7 +3293,7 @@ func (x *DeleteSrvVSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSrvVSchemaResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSrvVSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{38}
+	return file_vtctldata_proto_rawDescGZIP(), []int{40}
 }
 
 type DeleteTabletsRequest struct {
@@ -3209,7 +3311,7 @@ type DeleteTabletsRequest struct {
 func (x *DeleteTabletsRequest) Reset() {
 	*x = DeleteTabletsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[39]
+		mi := &file_vtctldata_proto_msgTypes[41]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3222,7 +3324,7 @@ func (x *DeleteTabletsRequest) String() string {
 func (*DeleteTabletsRequest) ProtoMessage() {}
 
 func (x *DeleteTabletsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[39]
+	mi := &file_vtctldata_proto_msgTypes[41]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3235,7 +3337,7 @@ func (x *DeleteTabletsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTabletsRequest.ProtoReflect.Descriptor instead.
 func (*DeleteTabletsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{39}
+	return file_vtctldata_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DeleteTabletsRequest) GetTabletAliases() []*topodata.TabletAlias {
@@ -3261,7 +3363,7 @@ type DeleteTabletsResponse struct {
 func (x *DeleteTabletsResponse) Reset() {
 	*x = DeleteTabletsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[40]
+		mi := &file_vtctldata_proto_msgTypes[42]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3274,7 +3376,7 @@ func (x *DeleteTabletsResponse) String() string {
 func (*DeleteTabletsResponse) ProtoMessage() {}
 
 func (x *DeleteTabletsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[40]
+	mi := &file_vtctldata_proto_msgTypes[42]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3287,7 +3389,7 @@ func (x *DeleteTabletsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTabletsResponse.ProtoReflect.Descriptor instead.
 func (*DeleteTabletsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{40}
+	return file_vtctldata_proto_rawDescGZIP(), []int{42}
 }
 
 type EmergencyReparentShardRequest struct {
@@ -3321,7 +3423,7 @@ type EmergencyReparentShardRequest struct {
 func (x *EmergencyReparentShardRequest) Reset() {
 	*x = EmergencyReparentShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[41]
+		mi := &file_vtctldata_proto_msgTypes[43]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3334,7 +3436,7 @@ func (x *EmergencyReparentShardRequest) String() string {
 func (*EmergencyReparentShardRequest) ProtoMessage() {}
 
 func (x *EmergencyReparentShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[41]
+	mi := &file_vtctldata_proto_msgTypes[43]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3347,7 +3449,7 @@ func (x *EmergencyReparentShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmergencyReparentShardRequest.ProtoReflect.Descriptor instead.
 func (*EmergencyReparentShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{41}
+	return file_vtctldata_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *EmergencyReparentShardRequest) GetKeyspace() string {
@@ -3419,7 +3521,7 @@ type EmergencyReparentShardResponse struct {
 func (x *EmergencyReparentShardResponse) Reset() {
 	*x = EmergencyReparentShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[42]
+		mi := &file_vtctldata_proto_msgTypes[44]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3432,7 +3534,7 @@ func (x *EmergencyReparentShardResponse) String() string {
 func (*EmergencyReparentShardResponse) ProtoMessage() {}
 
 func (x *EmergencyReparentShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[42]
+	mi := &file_vtctldata_proto_msgTypes[44]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3445,7 +3547,7 @@ func (x *EmergencyReparentShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmergencyReparentShardResponse.ProtoReflect.Descriptor instead.
 func (*EmergencyReparentShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{42}
+	return file_vtctldata_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *EmergencyReparentShardResponse) GetKeyspace() string {
@@ -3497,7 +3599,7 @@ type ExecuteFetchAsAppRequest struct {
 func (x *ExecuteFetchAsAppRequest) Reset() {
 	*x = ExecuteFetchAsAppRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[43]
+		mi := &file_vtctldata_proto_msgTypes[45]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3510,7 +3612,7 @@ func (x *ExecuteFetchAsAppRequest) String() string {
 func (*ExecuteFetchAsAppRequest) ProtoMessage() {}
 
 func (x *ExecuteFetchAsAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[43]
+	mi := &file_vtctldata_proto_msgTypes[45]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3523,7 +3625,7 @@ func (x *ExecuteFetchAsAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteFetchAsAppRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteFetchAsAppRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{43}
+	return file_vtctldata_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ExecuteFetchAsAppRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -3565,7 +3667,7 @@ type ExecuteFetchAsAppResponse struct {
 func (x *ExecuteFetchAsAppResponse) Reset() {
 	*x = ExecuteFetchAsAppResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[44]
+		mi := &file_vtctldata_proto_msgTypes[46]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3578,7 +3680,7 @@ func (x *ExecuteFetchAsAppResponse) String() string {
 func (*ExecuteFetchAsAppResponse) ProtoMessage() {}
 
 func (x *ExecuteFetchAsAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[44]
+	mi := &file_vtctldata_proto_msgTypes[46]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3591,7 +3693,7 @@ func (x *ExecuteFetchAsAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteFetchAsAppResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteFetchAsAppResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{44}
+	return file_vtctldata_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
@@ -3626,7 +3728,7 @@ type ExecuteFetchAsDBARequest struct {
 func (x *ExecuteFetchAsDBARequest) Reset() {
 	*x = ExecuteFetchAsDBARequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[45]
+		mi := &file_vtctldata_proto_msgTypes[47]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3639,7 +3741,7 @@ func (x *ExecuteFetchAsDBARequest) String() string {
 func (*ExecuteFetchAsDBARequest) ProtoMessage() {}
 
 func (x *ExecuteFetchAsDBARequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[45]
+	mi := &file_vtctldata_proto_msgTypes[47]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3652,7 +3754,7 @@ func (x *ExecuteFetchAsDBARequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteFetchAsDBARequest.ProtoReflect.Descriptor instead.
 func (*ExecuteFetchAsDBARequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{45}
+	return file_vtctldata_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ExecuteFetchAsDBARequest) GetTabletAlias() *topodata.TabletAlias {
@@ -3701,7 +3803,7 @@ type ExecuteFetchAsDBAResponse struct {
 func (x *ExecuteFetchAsDBAResponse) Reset() {
 	*x = ExecuteFetchAsDBAResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[46]
+		mi := &file_vtctldata_proto_msgTypes[48]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3714,7 +3816,7 @@ func (x *ExecuteFetchAsDBAResponse) String() string {
 func (*ExecuteFetchAsDBAResponse) ProtoMessage() {}
 
 func (x *ExecuteFetchAsDBAResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[46]
+	mi := &file_vtctldata_proto_msgTypes[48]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3727,7 +3829,7 @@ func (x *ExecuteFetchAsDBAResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteFetchAsDBAResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteFetchAsDBAResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{46}
+	return file_vtctldata_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ExecuteFetchAsDBAResponse) GetResult() *query.QueryResult {
@@ -3749,7 +3851,7 @@ type ExecuteHookRequest struct {
 func (x *ExecuteHookRequest) Reset() {
 	*x = ExecuteHookRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[47]
+		mi := &file_vtctldata_proto_msgTypes[49]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3762,7 +3864,7 @@ func (x *ExecuteHookRequest) String() string {
 func (*ExecuteHookRequest) ProtoMessage() {}
 
 func (x *ExecuteHookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[47]
+	mi := &file_vtctldata_proto_msgTypes[49]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3775,7 +3877,7 @@ func (x *ExecuteHookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteHookRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteHookRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{47}
+	return file_vtctldata_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ExecuteHookRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -3803,7 +3905,7 @@ type ExecuteHookResponse struct {
 func (x *ExecuteHookResponse) Reset() {
 	*x = ExecuteHookResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[48]
+		mi := &file_vtctldata_proto_msgTypes[50]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3816,7 +3918,7 @@ func (x *ExecuteHookResponse) String() string {
 func (*ExecuteHookResponse) ProtoMessage() {}
 
 func (x *ExecuteHookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[48]
+	mi := &file_vtctldata_proto_msgTypes[50]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3829,7 +3931,7 @@ func (x *ExecuteHookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteHookResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteHookResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{48}
+	return file_vtctldata_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ExecuteHookResponse) GetHookResult() *tabletmanagerdata.ExecuteHookResponse {
@@ -3850,7 +3952,7 @@ type FindAllShardsInKeyspaceRequest struct {
 func (x *FindAllShardsInKeyspaceRequest) Reset() {
 	*x = FindAllShardsInKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[49]
+		mi := &file_vtctldata_proto_msgTypes[51]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3863,7 +3965,7 @@ func (x *FindAllShardsInKeyspaceRequest) String() string {
 func (*FindAllShardsInKeyspaceRequest) ProtoMessage() {}
 
 func (x *FindAllShardsInKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[49]
+	mi := &file_vtctldata_proto_msgTypes[51]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3876,7 +3978,7 @@ func (x *FindAllShardsInKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindAllShardsInKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*FindAllShardsInKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{49}
+	return file_vtctldata_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *FindAllShardsInKeyspaceRequest) GetKeyspace() string {
@@ -3897,7 +3999,7 @@ type FindAllShardsInKeyspaceResponse struct {
 func (x *FindAllShardsInKeyspaceResponse) Reset() {
 	*x = FindAllShardsInKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[50]
+		mi := &file_vtctldata_proto_msgTypes[52]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3910,7 +4012,7 @@ func (x *FindAllShardsInKeyspaceResponse) String() string {
 func (*FindAllShardsInKeyspaceResponse) ProtoMessage() {}
 
 func (x *FindAllShardsInKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[50]
+	mi := &file_vtctldata_proto_msgTypes[52]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3923,7 +4025,7 @@ func (x *FindAllShardsInKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindAllShardsInKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*FindAllShardsInKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{50}
+	return file_vtctldata_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *FindAllShardsInKeyspaceResponse) GetShards() map[string]*Shard {
@@ -3959,7 +4061,7 @@ type GetBackupsRequest struct {
 func (x *GetBackupsRequest) Reset() {
 	*x = GetBackupsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[51]
+		mi := &file_vtctldata_proto_msgTypes[53]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3972,7 +4074,7 @@ func (x *GetBackupsRequest) String() string {
 func (*GetBackupsRequest) ProtoMessage() {}
 
 func (x *GetBackupsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[51]
+	mi := &file_vtctldata_proto_msgTypes[53]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3985,7 +4087,7 @@ func (x *GetBackupsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBackupsRequest.ProtoReflect.Descriptor instead.
 func (*GetBackupsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{51}
+	return file_vtctldata_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *GetBackupsRequest) GetKeyspace() string {
@@ -4034,7 +4136,7 @@ type GetBackupsResponse struct {
 func (x *GetBackupsResponse) Reset() {
 	*x = GetBackupsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[52]
+		mi := &file_vtctldata_proto_msgTypes[54]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4047,7 +4149,7 @@ func (x *GetBackupsResponse) String() string {
 func (*GetBackupsResponse) ProtoMessage() {}
 
 func (x *GetBackupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[52]
+	mi := &file_vtctldata_proto_msgTypes[54]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4060,7 +4162,7 @@ func (x *GetBackupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBackupsResponse.ProtoReflect.Descriptor instead.
 func (*GetBackupsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{52}
+	return file_vtctldata_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *GetBackupsResponse) GetBackups() []*mysqlctl.BackupInfo {
@@ -4081,7 +4183,7 @@ type GetCellInfoRequest struct {
 func (x *GetCellInfoRequest) Reset() {
 	*x = GetCellInfoRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[53]
+		mi := &file_vtctldata_proto_msgTypes[55]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4094,7 +4196,7 @@ func (x *GetCellInfoRequest) String() string {
 func (*GetCellInfoRequest) ProtoMessage() {}
 
 func (x *GetCellInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[53]
+	mi := &file_vtctldata_proto_msgTypes[55]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4107,7 +4209,7 @@ func (x *GetCellInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCellInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetCellInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{53}
+	return file_vtctldata_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetCellInfoRequest) GetCell() string {
@@ -4128,7 +4230,7 @@ type GetCellInfoResponse struct {
 func (x *GetCellInfoResponse) Reset() {
 	*x = GetCellInfoResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[54]
+		mi := &file_vtctldata_proto_msgTypes[56]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4141,7 +4243,7 @@ func (x *GetCellInfoResponse) String() string {
 func (*GetCellInfoResponse) ProtoMessage() {}
 
 func (x *GetCellInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[54]
+	mi := &file_vtctldata_proto_msgTypes[56]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4154,7 +4256,7 @@ func (x *GetCellInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCellInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetCellInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{54}
+	return file_vtctldata_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *GetCellInfoResponse) GetCellInfo() *topodata.CellInfo {
@@ -4173,7 +4275,7 @@ type GetCellInfoNamesRequest struct {
 func (x *GetCellInfoNamesRequest) Reset() {
 	*x = GetCellInfoNamesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[55]
+		mi := &file_vtctldata_proto_msgTypes[57]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4186,7 +4288,7 @@ func (x *GetCellInfoNamesRequest) String() string {
 func (*GetCellInfoNamesRequest) ProtoMessage() {}
 
 func (x *GetCellInfoNamesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[55]
+	mi := &file_vtctldata_proto_msgTypes[57]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4199,7 +4301,7 @@ func (x *GetCellInfoNamesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCellInfoNamesRequest.ProtoReflect.Descriptor instead.
 func (*GetCellInfoNamesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{55}
+	return file_vtctldata_proto_rawDescGZIP(), []int{57}
 }
 
 type GetCellInfoNamesResponse struct {
@@ -4213,7 +4315,7 @@ type GetCellInfoNamesResponse struct {
 func (x *GetCellInfoNamesResponse) Reset() {
 	*x = GetCellInfoNamesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[56]
+		mi := &file_vtctldata_proto_msgTypes[58]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4226,7 +4328,7 @@ func (x *GetCellInfoNamesResponse) String() string {
 func (*GetCellInfoNamesResponse) ProtoMessage() {}
 
 func (x *GetCellInfoNamesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[56]
+	mi := &file_vtctldata_proto_msgTypes[58]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4239,7 +4341,7 @@ func (x *GetCellInfoNamesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCellInfoNamesResponse.ProtoReflect.Descriptor instead.
 func (*GetCellInfoNamesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{56}
+	return file_vtctldata_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *GetCellInfoNamesResponse) GetNames() []string {
@@ -4258,7 +4360,7 @@ type GetCellsAliasesRequest struct {
 func (x *GetCellsAliasesRequest) Reset() {
 	*x = GetCellsAliasesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[57]
+		mi := &file_vtctldata_proto_msgTypes[59]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4271,7 +4373,7 @@ func (x *GetCellsAliasesRequest) String() string {
 func (*GetCellsAliasesRequest) ProtoMessage() {}
 
 func (x *GetCellsAliasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[57]
+	mi := &file_vtctldata_proto_msgTypes[59]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4284,7 +4386,7 @@ func (x *GetCellsAliasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCellsAliasesRequest.ProtoReflect.Descriptor instead.
 func (*GetCellsAliasesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{57}
+	return file_vtctldata_proto_rawDescGZIP(), []int{59}
 }
 
 type GetCellsAliasesResponse struct {
@@ -4298,7 +4400,7 @@ type GetCellsAliasesResponse struct {
 func (x *GetCellsAliasesResponse) Reset() {
 	*x = GetCellsAliasesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[58]
+		mi := &file_vtctldata_proto_msgTypes[60]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4311,7 +4413,7 @@ func (x *GetCellsAliasesResponse) String() string {
 func (*GetCellsAliasesResponse) ProtoMessage() {}
 
 func (x *GetCellsAliasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[58]
+	mi := &file_vtctldata_proto_msgTypes[60]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4324,7 +4426,7 @@ func (x *GetCellsAliasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCellsAliasesResponse.ProtoReflect.Descriptor instead.
 func (*GetCellsAliasesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{58}
+	return file_vtctldata_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *GetCellsAliasesResponse) GetAliases() map[string]*topodata.CellsAlias {
@@ -4345,7 +4447,7 @@ type GetFullStatusRequest struct {
 func (x *GetFullStatusRequest) Reset() {
 	*x = GetFullStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[59]
+		mi := &file_vtctldata_proto_msgTypes[61]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4358,7 +4460,7 @@ func (x *GetFullStatusRequest) String() string {
 func (*GetFullStatusRequest) ProtoMessage() {}
 
 func (x *GetFullStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[59]
+	mi := &file_vtctldata_proto_msgTypes[61]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4371,7 +4473,7 @@ func (x *GetFullStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFullStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetFullStatusRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{59}
+	return file_vtctldata_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GetFullStatusRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -4392,7 +4494,7 @@ type GetFullStatusResponse struct {
 func (x *GetFullStatusResponse) Reset() {
 	*x = GetFullStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[60]
+		mi := &file_vtctldata_proto_msgTypes[62]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4405,7 +4507,7 @@ func (x *GetFullStatusResponse) String() string {
 func (*GetFullStatusResponse) ProtoMessage() {}
 
 func (x *GetFullStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[60]
+	mi := &file_vtctldata_proto_msgTypes[62]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4418,7 +4520,7 @@ func (x *GetFullStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFullStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetFullStatusResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{60}
+	return file_vtctldata_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *GetFullStatusResponse) GetStatus() *replicationdata.FullStatus {
@@ -4437,7 +4539,7 @@ type GetKeyspacesRequest struct {
 func (x *GetKeyspacesRequest) Reset() {
 	*x = GetKeyspacesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[61]
+		mi := &file_vtctldata_proto_msgTypes[63]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4450,7 +4552,7 @@ func (x *GetKeyspacesRequest) String() string {
 func (*GetKeyspacesRequest) ProtoMessage() {}
 
 func (x *GetKeyspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[61]
+	mi := &file_vtctldata_proto_msgTypes[63]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4463,7 +4565,7 @@ func (x *GetKeyspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyspacesRequest.ProtoReflect.Descriptor instead.
 func (*GetKeyspacesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{61}
+	return file_vtctldata_proto_rawDescGZIP(), []int{63}
 }
 
 type GetKeyspacesResponse struct {
@@ -4477,7 +4579,7 @@ type GetKeyspacesResponse struct {
 func (x *GetKeyspacesResponse) Reset() {
 	*x = GetKeyspacesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[62]
+		mi := &file_vtctldata_proto_msgTypes[64]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4490,7 +4592,7 @@ func (x *GetKeyspacesResponse) String() string {
 func (*GetKeyspacesResponse) ProtoMessage() {}
 
 func (x *GetKeyspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[62]
+	mi := &file_vtctldata_proto_msgTypes[64]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4503,7 +4605,7 @@ func (x *GetKeyspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyspacesResponse.ProtoReflect.Descriptor instead.
 func (*GetKeyspacesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{62}
+	return file_vtctldata_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *GetKeyspacesResponse) GetKeyspaces() []*Keyspace {
@@ -4524,7 +4626,7 @@ type GetKeyspaceRequest struct {
 func (x *GetKeyspaceRequest) Reset() {
 	*x = GetKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[63]
+		mi := &file_vtctldata_proto_msgTypes[65]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4537,7 +4639,7 @@ func (x *GetKeyspaceRequest) String() string {
 func (*GetKeyspaceRequest) ProtoMessage() {}
 
 func (x *GetKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[63]
+	mi := &file_vtctldata_proto_msgTypes[65]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4550,7 +4652,7 @@ func (x *GetKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*GetKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{63}
+	return file_vtctldata_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *GetKeyspaceRequest) GetKeyspace() string {
@@ -4571,7 +4673,7 @@ type GetKeyspaceResponse struct {
 func (x *GetKeyspaceResponse) Reset() {
 	*x = GetKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[64]
+		mi := &file_vtctldata_proto_msgTypes[66]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4584,7 +4686,7 @@ func (x *GetKeyspaceResponse) String() string {
 func (*GetKeyspaceResponse) ProtoMessage() {}
 
 func (x *GetKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[64]
+	mi := &file_vtctldata_proto_msgTypes[66]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4597,7 +4699,7 @@ func (x *GetKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*GetKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{64}
+	return file_vtctldata_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GetKeyspaceResponse) GetKeyspace() *Keyspace {
@@ -4618,7 +4720,7 @@ type GetPermissionsRequest struct {
 func (x *GetPermissionsRequest) Reset() {
 	*x = GetPermissionsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[65]
+		mi := &file_vtctldata_proto_msgTypes[67]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4631,7 +4733,7 @@ func (x *GetPermissionsRequest) String() string {
 func (*GetPermissionsRequest) ProtoMessage() {}
 
 func (x *GetPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[65]
+	mi := &file_vtctldata_proto_msgTypes[67]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4644,7 +4746,7 @@ func (x *GetPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*GetPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{65}
+	return file_vtctldata_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *GetPermissionsRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -4665,7 +4767,7 @@ type GetPermissionsResponse struct {
 func (x *GetPermissionsResponse) Reset() {
 	*x = GetPermissionsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[66]
+		mi := &file_vtctldata_proto_msgTypes[68]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4678,7 +4780,7 @@ func (x *GetPermissionsResponse) String() string {
 func (*GetPermissionsResponse) ProtoMessage() {}
 
 func (x *GetPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[66]
+	mi := &file_vtctldata_proto_msgTypes[68]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4691,7 +4793,7 @@ func (x *GetPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*GetPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{66}
+	return file_vtctldata_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *GetPermissionsResponse) GetPermissions() *tabletmanagerdata.Permissions {
@@ -4710,7 +4812,7 @@ type GetRoutingRulesRequest struct {
 func (x *GetRoutingRulesRequest) Reset() {
 	*x = GetRoutingRulesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[67]
+		mi := &file_vtctldata_proto_msgTypes[69]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4723,7 +4825,7 @@ func (x *GetRoutingRulesRequest) String() string {
 func (*GetRoutingRulesRequest) ProtoMessage() {}
 
 func (x *GetRoutingRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[67]
+	mi := &file_vtctldata_proto_msgTypes[69]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4736,7 +4838,7 @@ func (x *GetRoutingRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoutingRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetRoutingRulesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{67}
+	return file_vtctldata_proto_rawDescGZIP(), []int{69}
 }
 
 type GetRoutingRulesResponse struct {
@@ -4750,7 +4852,7 @@ type GetRoutingRulesResponse struct {
 func (x *GetRoutingRulesResponse) Reset() {
 	*x = GetRoutingRulesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[68]
+		mi := &file_vtctldata_proto_msgTypes[70]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4763,7 +4865,7 @@ func (x *GetRoutingRulesResponse) String() string {
 func (*GetRoutingRulesResponse) ProtoMessage() {}
 
 func (x *GetRoutingRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[68]
+	mi := &file_vtctldata_proto_msgTypes[70]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4776,7 +4878,7 @@ func (x *GetRoutingRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoutingRulesResponse.ProtoReflect.Descriptor instead.
 func (*GetRoutingRulesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{68}
+	return file_vtctldata_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetRoutingRulesResponse) GetRoutingRules() *vschema.RoutingRules {
@@ -4815,7 +4917,7 @@ type GetSchemaRequest struct {
 func (x *GetSchemaRequest) Reset() {
 	*x = GetSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[69]
+		mi := &file_vtctldata_proto_msgTypes[71]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4828,7 +4930,7 @@ func (x *GetSchemaRequest) String() string {
 func (*GetSchemaRequest) ProtoMessage() {}
 
 func (x *GetSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[69]
+	mi := &file_vtctldata_proto_msgTypes[71]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4841,7 +4943,7 @@ func (x *GetSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaRequest.ProtoReflect.Descriptor instead.
 func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{69}
+	return file_vtctldata_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetSchemaRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -4904,7 +5006,7 @@ type GetSchemaResponse struct {
 func (x *GetSchemaResponse) Reset() {
 	*x = GetSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[70]
+		mi := &file_vtctldata_proto_msgTypes[72]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4917,7 +5019,7 @@ func (x *GetSchemaResponse) String() string {
 func (*GetSchemaResponse) ProtoMessage() {}
 
 func (x *GetSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[70]
+	mi := &file_vtctldata_proto_msgTypes[72]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4930,7 +5032,7 @@ func (x *GetSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaResponse.ProtoReflect.Descriptor instead.
 func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{70}
+	return file_vtctldata_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GetSchemaResponse) GetSchema() *tabletmanagerdata.SchemaDefinition {
@@ -4976,7 +5078,7 @@ type GetSchemaMigrationsRequest struct {
 func (x *GetSchemaMigrationsRequest) Reset() {
 	*x = GetSchemaMigrationsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[71]
+		mi := &file_vtctldata_proto_msgTypes[73]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4989,7 +5091,7 @@ func (x *GetSchemaMigrationsRequest) String() string {
 func (*GetSchemaMigrationsRequest) ProtoMessage() {}
 
 func (x *GetSchemaMigrationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[71]
+	mi := &file_vtctldata_proto_msgTypes[73]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5002,7 +5104,7 @@ func (x *GetSchemaMigrationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaMigrationsRequest.ProtoReflect.Descriptor instead.
 func (*GetSchemaMigrationsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{71}
+	return file_vtctldata_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *GetSchemaMigrationsRequest) GetKeyspace() string {
@@ -5072,7 +5174,7 @@ type GetSchemaMigrationsResponse struct {
 func (x *GetSchemaMigrationsResponse) Reset() {
 	*x = GetSchemaMigrationsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[72]
+		mi := &file_vtctldata_proto_msgTypes[74]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5085,7 +5187,7 @@ func (x *GetSchemaMigrationsResponse) String() string {
 func (*GetSchemaMigrationsResponse) ProtoMessage() {}
 
 func (x *GetSchemaMigrationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[72]
+	mi := &file_vtctldata_proto_msgTypes[74]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5098,7 +5200,7 @@ func (x *GetSchemaMigrationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaMigrationsResponse.ProtoReflect.Descriptor instead.
 func (*GetSchemaMigrationsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{72}
+	return file_vtctldata_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *GetSchemaMigrationsResponse) GetMigrations() []*SchemaMigration {
@@ -5120,7 +5222,7 @@ type GetShardRequest struct {
 func (x *GetShardRequest) Reset() {
 	*x = GetShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[73]
+		mi := &file_vtctldata_proto_msgTypes[75]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5133,7 +5235,7 @@ func (x *GetShardRequest) String() string {
 func (*GetShardRequest) ProtoMessage() {}
 
 func (x *GetShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[73]
+	mi := &file_vtctldata_proto_msgTypes[75]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5146,7 +5248,7 @@ func (x *GetShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShardRequest.ProtoReflect.Descriptor instead.
 func (*GetShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{73}
+	return file_vtctldata_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *GetShardRequest) GetKeyspace() string {
@@ -5174,7 +5276,7 @@ type GetShardResponse struct {
 func (x *GetShardResponse) Reset() {
 	*x = GetShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[74]
+		mi := &file_vtctldata_proto_msgTypes[76]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5187,7 +5289,7 @@ func (x *GetShardResponse) String() string {
 func (*GetShardResponse) ProtoMessage() {}
 
 func (x *GetShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[74]
+	mi := &file_vtctldata_proto_msgTypes[76]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5200,7 +5302,7 @@ func (x *GetShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShardResponse.ProtoReflect.Descriptor instead.
 func (*GetShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{74}
+	return file_vtctldata_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *GetShardResponse) GetShard() *Shard {
@@ -5219,7 +5321,7 @@ type GetShardRoutingRulesRequest struct {
 func (x *GetShardRoutingRulesRequest) Reset() {
 	*x = GetShardRoutingRulesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[75]
+		mi := &file_vtctldata_proto_msgTypes[77]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5232,7 +5334,7 @@ func (x *GetShardRoutingRulesRequest) String() string {
 func (*GetShardRoutingRulesRequest) ProtoMessage() {}
 
 func (x *GetShardRoutingRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[75]
+	mi := &file_vtctldata_proto_msgTypes[77]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5245,7 +5347,7 @@ func (x *GetShardRoutingRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShardRoutingRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetShardRoutingRulesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{75}
+	return file_vtctldata_proto_rawDescGZIP(), []int{77}
 }
 
 type GetShardRoutingRulesResponse struct {
@@ -5259,7 +5361,7 @@ type GetShardRoutingRulesResponse struct {
 func (x *GetShardRoutingRulesResponse) Reset() {
 	*x = GetShardRoutingRulesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[76]
+		mi := &file_vtctldata_proto_msgTypes[78]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5272,7 +5374,7 @@ func (x *GetShardRoutingRulesResponse) String() string {
 func (*GetShardRoutingRulesResponse) ProtoMessage() {}
 
 func (x *GetShardRoutingRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[76]
+	mi := &file_vtctldata_proto_msgTypes[78]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5285,7 +5387,7 @@ func (x *GetShardRoutingRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShardRoutingRulesResponse.ProtoReflect.Descriptor instead.
 func (*GetShardRoutingRulesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{76}
+	return file_vtctldata_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetShardRoutingRulesResponse) GetShardRoutingRules() *vschema.ShardRoutingRules {
@@ -5306,7 +5408,7 @@ type GetSrvKeyspaceNamesRequest struct {
 func (x *GetSrvKeyspaceNamesRequest) Reset() {
 	*x = GetSrvKeyspaceNamesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[77]
+		mi := &file_vtctldata_proto_msgTypes[79]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5319,7 +5421,7 @@ func (x *GetSrvKeyspaceNamesRequest) String() string {
 func (*GetSrvKeyspaceNamesRequest) ProtoMessage() {}
 
 func (x *GetSrvKeyspaceNamesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[77]
+	mi := &file_vtctldata_proto_msgTypes[79]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5332,7 +5434,7 @@ func (x *GetSrvKeyspaceNamesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvKeyspaceNamesRequest.ProtoReflect.Descriptor instead.
 func (*GetSrvKeyspaceNamesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{77}
+	return file_vtctldata_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *GetSrvKeyspaceNamesRequest) GetCells() []string {
@@ -5354,7 +5456,7 @@ type GetSrvKeyspaceNamesResponse struct {
 func (x *GetSrvKeyspaceNamesResponse) Reset() {
 	*x = GetSrvKeyspaceNamesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[78]
+		mi := &file_vtctldata_proto_msgTypes[80]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5367,7 +5469,7 @@ func (x *GetSrvKeyspaceNamesResponse) String() string {
 func (*GetSrvKeyspaceNamesResponse) ProtoMessage() {}
 
 func (x *GetSrvKeyspaceNamesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[78]
+	mi := &file_vtctldata_proto_msgTypes[80]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5380,7 +5482,7 @@ func (x *GetSrvKeyspaceNamesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvKeyspaceNamesResponse.ProtoReflect.Descriptor instead.
 func (*GetSrvKeyspaceNamesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{78}
+	return file_vtctldata_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *GetSrvKeyspaceNamesResponse) GetNames() map[string]*GetSrvKeyspaceNamesResponse_NameList {
@@ -5404,7 +5506,7 @@ type GetSrvKeyspacesRequest struct {
 func (x *GetSrvKeyspacesRequest) Reset() {
 	*x = GetSrvKeyspacesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[79]
+		mi := &file_vtctldata_proto_msgTypes[81]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5417,7 +5519,7 @@ func (x *GetSrvKeyspacesRequest) String() string {
 func (*GetSrvKeyspacesRequest) ProtoMessage() {}
 
 func (x *GetSrvKeyspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[79]
+	mi := &file_vtctldata_proto_msgTypes[81]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5430,7 +5532,7 @@ func (x *GetSrvKeyspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvKeyspacesRequest.ProtoReflect.Descriptor instead.
 func (*GetSrvKeyspacesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{79}
+	return file_vtctldata_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *GetSrvKeyspacesRequest) GetKeyspace() string {
@@ -5459,7 +5561,7 @@ type GetSrvKeyspacesResponse struct {
 func (x *GetSrvKeyspacesResponse) Reset() {
 	*x = GetSrvKeyspacesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[80]
+		mi := &file_vtctldata_proto_msgTypes[82]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5472,7 +5574,7 @@ func (x *GetSrvKeyspacesResponse) String() string {
 func (*GetSrvKeyspacesResponse) ProtoMessage() {}
 
 func (x *GetSrvKeyspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[80]
+	mi := &file_vtctldata_proto_msgTypes[82]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5485,7 +5587,7 @@ func (x *GetSrvKeyspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvKeyspacesResponse.ProtoReflect.Descriptor instead.
 func (*GetSrvKeyspacesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{80}
+	return file_vtctldata_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *GetSrvKeyspacesResponse) GetSrvKeyspaces() map[string]*topodata.SrvKeyspace {
@@ -5522,7 +5624,7 @@ type UpdateThrottlerConfigRequest struct {
 func (x *UpdateThrottlerConfigRequest) Reset() {
 	*x = UpdateThrottlerConfigRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[81]
+		mi := &file_vtctldata_proto_msgTypes[83]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5535,7 +5637,7 @@ func (x *UpdateThrottlerConfigRequest) String() string {
 func (*UpdateThrottlerConfigRequest) ProtoMessage() {}
 
 func (x *UpdateThrottlerConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[81]
+	mi := &file_vtctldata_proto_msgTypes[83]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5548,7 +5650,7 @@ func (x *UpdateThrottlerConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateThrottlerConfigRequest.ProtoReflect.Descriptor instead.
 func (*UpdateThrottlerConfigRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{81}
+	return file_vtctldata_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *UpdateThrottlerConfigRequest) GetKeyspace() string {
@@ -5623,7 +5725,7 @@ type UpdateThrottlerConfigResponse struct {
 func (x *UpdateThrottlerConfigResponse) Reset() {
 	*x = UpdateThrottlerConfigResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[82]
+		mi := &file_vtctldata_proto_msgTypes[84]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5636,7 +5738,7 @@ func (x *UpdateThrottlerConfigResponse) String() string {
 func (*UpdateThrottlerConfigResponse) ProtoMessage() {}
 
 func (x *UpdateThrottlerConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[82]
+	mi := &file_vtctldata_proto_msgTypes[84]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5649,7 +5751,7 @@ func (x *UpdateThrottlerConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateThrottlerConfigResponse.ProtoReflect.Descriptor instead.
 func (*UpdateThrottlerConfigResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{82}
+	return file_vtctldata_proto_rawDescGZIP(), []int{84}
 }
 
 type GetSrvVSchemaRequest struct {
@@ -5663,7 +5765,7 @@ type GetSrvVSchemaRequest struct {
 func (x *GetSrvVSchemaRequest) Reset() {
 	*x = GetSrvVSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[83]
+		mi := &file_vtctldata_proto_msgTypes[85]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5676,7 +5778,7 @@ func (x *GetSrvVSchemaRequest) String() string {
 func (*GetSrvVSchemaRequest) ProtoMessage() {}
 
 func (x *GetSrvVSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[83]
+	mi := &file_vtctldata_proto_msgTypes[85]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5689,7 +5791,7 @@ func (x *GetSrvVSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvVSchemaRequest.ProtoReflect.Descriptor instead.
 func (*GetSrvVSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{83}
+	return file_vtctldata_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *GetSrvVSchemaRequest) GetCell() string {
@@ -5710,7 +5812,7 @@ type GetSrvVSchemaResponse struct {
 func (x *GetSrvVSchemaResponse) Reset() {
 	*x = GetSrvVSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[84]
+		mi := &file_vtctldata_proto_msgTypes[86]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5723,7 +5825,7 @@ func (x *GetSrvVSchemaResponse) String() string {
 func (*GetSrvVSchemaResponse) ProtoMessage() {}
 
 func (x *GetSrvVSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[84]
+	mi := &file_vtctldata_proto_msgTypes[86]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5736,7 +5838,7 @@ func (x *GetSrvVSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvVSchemaResponse.ProtoReflect.Descriptor instead.
 func (*GetSrvVSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{84}
+	return file_vtctldata_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *GetSrvVSchemaResponse) GetSrvVSchema() *vschema.SrvVSchema {
@@ -5757,7 +5859,7 @@ type GetSrvVSchemasRequest struct {
 func (x *GetSrvVSchemasRequest) Reset() {
 	*x = GetSrvVSchemasRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[85]
+		mi := &file_vtctldata_proto_msgTypes[87]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5770,7 +5872,7 @@ func (x *GetSrvVSchemasRequest) String() string {
 func (*GetSrvVSchemasRequest) ProtoMessage() {}
 
 func (x *GetSrvVSchemasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[85]
+	mi := &file_vtctldata_proto_msgTypes[87]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5783,7 +5885,7 @@ func (x *GetSrvVSchemasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvVSchemasRequest.ProtoReflect.Descriptor instead.
 func (*GetSrvVSchemasRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{85}
+	return file_vtctldata_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *GetSrvVSchemasRequest) GetCells() []string {
@@ -5805,7 +5907,7 @@ type GetSrvVSchemasResponse struct {
 func (x *GetSrvVSchemasResponse) Reset() {
 	*x = GetSrvVSchemasResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[86]
+		mi := &file_vtctldata_proto_msgTypes[88]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5818,7 +5920,7 @@ func (x *GetSrvVSchemasResponse) String() string {
 func (*GetSrvVSchemasResponse) ProtoMessage() {}
 
 func (x *GetSrvVSchemasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[86]
+	mi := &file_vtctldata_proto_msgTypes[88]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5831,7 +5933,7 @@ func (x *GetSrvVSchemasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSrvVSchemasResponse.ProtoReflect.Descriptor instead.
 func (*GetSrvVSchemasResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{86}
+	return file_vtctldata_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *GetSrvVSchemasResponse) GetSrvVSchemas() map[string]*vschema.SrvVSchema {
@@ -5852,7 +5954,7 @@ type GetTabletRequest struct {
 func (x *GetTabletRequest) Reset() {
 	*x = GetTabletRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[87]
+		mi := &file_vtctldata_proto_msgTypes[89]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5865,7 +5967,7 @@ func (x *GetTabletRequest) String() string {
 func (*GetTabletRequest) ProtoMessage() {}
 
 func (x *GetTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[87]
+	mi := &file_vtctldata_proto_msgTypes[89]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5878,7 +5980,7 @@ func (x *GetTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTabletRequest.ProtoReflect.Descriptor instead.
 func (*GetTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{87}
+	return file_vtctldata_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *GetTabletRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -5899,7 +6001,7 @@ type GetTabletResponse struct {
 func (x *GetTabletResponse) Reset() {
 	*x = GetTabletResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[88]
+		mi := &file_vtctldata_proto_msgTypes[90]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5912,7 +6014,7 @@ func (x *GetTabletResponse) String() string {
 func (*GetTabletResponse) ProtoMessage() {}
 
 func (x *GetTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[88]
+	mi := &file_vtctldata_proto_msgTypes[90]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5925,7 +6027,7 @@ func (x *GetTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTabletResponse.ProtoReflect.Descriptor instead.
 func (*GetTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{88}
+	return file_vtctldata_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *GetTabletResponse) GetTablet() *topodata.Tablet {
@@ -5967,7 +6069,7 @@ type GetTabletsRequest struct {
 func (x *GetTabletsRequest) Reset() {
 	*x = GetTabletsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[89]
+		mi := &file_vtctldata_proto_msgTypes[91]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5980,7 +6082,7 @@ func (x *GetTabletsRequest) String() string {
 func (*GetTabletsRequest) ProtoMessage() {}
 
 func (x *GetTabletsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[89]
+	mi := &file_vtctldata_proto_msgTypes[91]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5993,7 +6095,7 @@ func (x *GetTabletsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTabletsRequest.ProtoReflect.Descriptor instead.
 func (*GetTabletsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{89}
+	return file_vtctldata_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *GetTabletsRequest) GetKeyspace() string {
@@ -6049,7 +6151,7 @@ type GetTabletsResponse struct {
 func (x *GetTabletsResponse) Reset() {
 	*x = GetTabletsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[90]
+		mi := &file_vtctldata_proto_msgTypes[92]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6062,7 +6164,7 @@ func (x *GetTabletsResponse) String() string {
 func (*GetTabletsResponse) ProtoMessage() {}
 
 func (x *GetTabletsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[90]
+	mi := &file_vtctldata_proto_msgTypes[92]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6075,7 +6177,7 @@ func (x *GetTabletsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTabletsResponse.ProtoReflect.Descriptor instead.
 func (*GetTabletsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{90}
+	return file_vtctldata_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *GetTabletsResponse) GetTablets() []*topodata.Tablet {
@@ -6096,7 +6198,7 @@ type GetTopologyPathRequest struct {
 func (x *GetTopologyPathRequest) Reset() {
 	*x = GetTopologyPathRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[91]
+		mi := &file_vtctldata_proto_msgTypes[93]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6109,7 +6211,7 @@ func (x *GetTopologyPathRequest) String() string {
 func (*GetTopologyPathRequest) ProtoMessage() {}
 
 func (x *GetTopologyPathRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[91]
+	mi := &file_vtctldata_proto_msgTypes[93]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6122,7 +6224,7 @@ func (x *GetTopologyPathRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTopologyPathRequest.ProtoReflect.Descriptor instead.
 func (*GetTopologyPathRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{91}
+	return file_vtctldata_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *GetTopologyPathRequest) GetPath() string {
@@ -6143,7 +6245,7 @@ type GetTopologyPathResponse struct {
 func (x *GetTopologyPathResponse) Reset() {
 	*x = GetTopologyPathResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[92]
+		mi := &file_vtctldata_proto_msgTypes[94]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6156,7 +6258,7 @@ func (x *GetTopologyPathResponse) String() string {
 func (*GetTopologyPathResponse) ProtoMessage() {}
 
 func (x *GetTopologyPathResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[92]
+	mi := &file_vtctldata_proto_msgTypes[94]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6169,7 +6271,7 @@ func (x *GetTopologyPathResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTopologyPathResponse.ProtoReflect.Descriptor instead.
 func (*GetTopologyPathResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{92}
+	return file_vtctldata_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *GetTopologyPathResponse) GetCell() *TopologyCell {
@@ -6195,7 +6297,7 @@ type TopologyCell struct {
 func (x *TopologyCell) Reset() {
 	*x = TopologyCell{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[93]
+		mi := &file_vtctldata_proto_msgTypes[95]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6208,7 +6310,7 @@ func (x *TopologyCell) String() string {
 func (*TopologyCell) ProtoMessage() {}
 
 func (x *TopologyCell) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[93]
+	mi := &file_vtctldata_proto_msgTypes[95]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6221,7 +6323,7 @@ func (x *TopologyCell) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopologyCell.ProtoReflect.Descriptor instead.
 func (*TopologyCell) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{93}
+	return file_vtctldata_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *TopologyCell) GetName() string {
@@ -6263,7 +6365,7 @@ type GetVSchemaRequest struct {
 func (x *GetVSchemaRequest) Reset() {
 	*x = GetVSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[94]
+		mi := &file_vtctldata_proto_msgTypes[96]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6276,7 +6378,7 @@ func (x *GetVSchemaRequest) String() string {
 func (*GetVSchemaRequest) ProtoMessage() {}
 
 func (x *GetVSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[94]
+	mi := &file_vtctldata_proto_msgTypes[96]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6289,7 +6391,7 @@ func (x *GetVSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVSchemaRequest.ProtoReflect.Descriptor instead.
 func (*GetVSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{94}
+	return file_vtctldata_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *GetVSchemaRequest) GetKeyspace() string {
@@ -6310,7 +6412,7 @@ type GetVersionRequest struct {
 func (x *GetVersionRequest) Reset() {
 	*x = GetVersionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[95]
+		mi := &file_vtctldata_proto_msgTypes[97]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6323,7 +6425,7 @@ func (x *GetVersionRequest) String() string {
 func (*GetVersionRequest) ProtoMessage() {}
 
 func (x *GetVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[95]
+	mi := &file_vtctldata_proto_msgTypes[97]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6336,7 +6438,7 @@ func (x *GetVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVersionRequest.ProtoReflect.Descriptor instead.
 func (*GetVersionRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{95}
+	return file_vtctldata_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *GetVersionRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -6357,7 +6459,7 @@ type GetVersionResponse struct {
 func (x *GetVersionResponse) Reset() {
 	*x = GetVersionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[96]
+		mi := &file_vtctldata_proto_msgTypes[98]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6370,7 +6472,7 @@ func (x *GetVersionResponse) String() string {
 func (*GetVersionResponse) ProtoMessage() {}
 
 func (x *GetVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[96]
+	mi := &file_vtctldata_proto_msgTypes[98]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6383,7 +6485,7 @@ func (x *GetVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVersionResponse.ProtoReflect.Descriptor instead.
 func (*GetVersionResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{96}
+	return file_vtctldata_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *GetVersionResponse) GetVersion() string {
@@ -6404,7 +6506,7 @@ type GetVSchemaResponse struct {
 func (x *GetVSchemaResponse) Reset() {
 	*x = GetVSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[97]
+		mi := &file_vtctldata_proto_msgTypes[99]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6417,7 +6519,7 @@ func (x *GetVSchemaResponse) String() string {
 func (*GetVSchemaResponse) ProtoMessage() {}
 
 func (x *GetVSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[97]
+	mi := &file_vtctldata_proto_msgTypes[99]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6430,7 +6532,7 @@ func (x *GetVSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVSchemaResponse.ProtoReflect.Descriptor instead.
 func (*GetVSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{97}
+	return file_vtctldata_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *GetVSchemaResponse) GetVSchema() *vschema.Keyspace {
@@ -6455,7 +6557,7 @@ type GetWorkflowsRequest struct {
 func (x *GetWorkflowsRequest) Reset() {
 	*x = GetWorkflowsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[98]
+		mi := &file_vtctldata_proto_msgTypes[100]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6468,7 +6570,7 @@ func (x *GetWorkflowsRequest) String() string {
 func (*GetWorkflowsRequest) ProtoMessage() {}
 
 func (x *GetWorkflowsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[98]
+	mi := &file_vtctldata_proto_msgTypes[100]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6481,7 +6583,7 @@ func (x *GetWorkflowsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkflowsRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkflowsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{98}
+	return file_vtctldata_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *GetWorkflowsRequest) GetKeyspace() string {
@@ -6523,7 +6625,7 @@ type GetWorkflowsResponse struct {
 func (x *GetWorkflowsResponse) Reset() {
 	*x = GetWorkflowsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[99]
+		mi := &file_vtctldata_proto_msgTypes[101]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6536,7 +6638,7 @@ func (x *GetWorkflowsResponse) String() string {
 func (*GetWorkflowsResponse) ProtoMessage() {}
 
 func (x *GetWorkflowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[99]
+	mi := &file_vtctldata_proto_msgTypes[101]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6549,7 +6651,7 @@ func (x *GetWorkflowsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkflowsResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkflowsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{99}
+	return file_vtctldata_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *GetWorkflowsResponse) GetWorkflows() []*Workflow {
@@ -6574,7 +6676,7 @@ type InitShardPrimaryRequest struct {
 func (x *InitShardPrimaryRequest) Reset() {
 	*x = InitShardPrimaryRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[100]
+		mi := &file_vtctldata_proto_msgTypes[102]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6587,7 +6689,7 @@ func (x *InitShardPrimaryRequest) String() string {
 func (*InitShardPrimaryRequest) ProtoMessage() {}
 
 func (x *InitShardPrimaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[100]
+	mi := &file_vtctldata_proto_msgTypes[102]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6600,7 +6702,7 @@ func (x *InitShardPrimaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitShardPrimaryRequest.ProtoReflect.Descriptor instead.
 func (*InitShardPrimaryRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{100}
+	return file_vtctldata_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *InitShardPrimaryRequest) GetKeyspace() string {
@@ -6649,7 +6751,7 @@ type InitShardPrimaryResponse struct {
 func (x *InitShardPrimaryResponse) Reset() {
 	*x = InitShardPrimaryResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[101]
+		mi := &file_vtctldata_proto_msgTypes[103]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6662,7 +6764,7 @@ func (x *InitShardPrimaryResponse) String() string {
 func (*InitShardPrimaryResponse) ProtoMessage() {}
 
 func (x *InitShardPrimaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[101]
+	mi := &file_vtctldata_proto_msgTypes[103]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6675,7 +6777,7 @@ func (x *InitShardPrimaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitShardPrimaryResponse.ProtoReflect.Descriptor instead.
 func (*InitShardPrimaryResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{101}
+	return file_vtctldata_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *InitShardPrimaryResponse) GetEvents() []*logutil.Event {
@@ -6721,7 +6823,7 @@ type MoveTablesCreateRequest struct {
 func (x *MoveTablesCreateRequest) Reset() {
 	*x = MoveTablesCreateRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[102]
+		mi := &file_vtctldata_proto_msgTypes[104]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6734,7 +6836,7 @@ func (x *MoveTablesCreateRequest) String() string {
 func (*MoveTablesCreateRequest) ProtoMessage() {}
 
 func (x *MoveTablesCreateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[102]
+	mi := &file_vtctldata_proto_msgTypes[104]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6747,7 +6849,7 @@ func (x *MoveTablesCreateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCreateRequest.ProtoReflect.Descriptor instead.
 func (*MoveTablesCreateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{102}
+	return file_vtctldata_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *MoveTablesCreateRequest) GetWorkflow() string {
@@ -6881,7 +6983,7 @@ type MoveTablesCreateResponse struct {
 func (x *MoveTablesCreateResponse) Reset() {
 	*x = MoveTablesCreateResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[103]
+		mi := &file_vtctldata_proto_msgTypes[105]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6894,7 +6996,7 @@ func (x *MoveTablesCreateResponse) String() string {
 func (*MoveTablesCreateResponse) ProtoMessage() {}
 
 func (x *MoveTablesCreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[103]
+	mi := &file_vtctldata_proto_msgTypes[105]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6907,7 +7009,7 @@ func (x *MoveTablesCreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCreateResponse.ProtoReflect.Descriptor instead.
 func (*MoveTablesCreateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{103}
+	return file_vtctldata_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *MoveTablesCreateResponse) GetSummary() string {
@@ -6940,7 +7042,7 @@ type MoveTablesCompleteRequest struct {
 func (x *MoveTablesCompleteRequest) Reset() {
 	*x = MoveTablesCompleteRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[104]
+		mi := &file_vtctldata_proto_msgTypes[106]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6953,7 +7055,7 @@ func (x *MoveTablesCompleteRequest) String() string {
 func (*MoveTablesCompleteRequest) ProtoMessage() {}
 
 func (x *MoveTablesCompleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[104]
+	mi := &file_vtctldata_proto_msgTypes[106]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6966,7 +7068,7 @@ func (x *MoveTablesCompleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCompleteRequest.ProtoReflect.Descriptor instead.
 func (*MoveTablesCompleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{104}
+	return file_vtctldata_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *MoveTablesCompleteRequest) GetWorkflow() string {
@@ -7023,7 +7125,7 @@ type MoveTablesCompleteResponse struct {
 func (x *MoveTablesCompleteResponse) Reset() {
 	*x = MoveTablesCompleteResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[105]
+		mi := &file_vtctldata_proto_msgTypes[107]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7036,7 +7138,7 @@ func (x *MoveTablesCompleteResponse) String() string {
 func (*MoveTablesCompleteResponse) ProtoMessage() {}
 
 func (x *MoveTablesCompleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[105]
+	mi := &file_vtctldata_proto_msgTypes[107]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7049,7 +7151,7 @@ func (x *MoveTablesCompleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCompleteResponse.ProtoReflect.Descriptor instead.
 func (*MoveTablesCompleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{105}
+	return file_vtctldata_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *MoveTablesCompleteResponse) GetSummary() string {
@@ -7077,7 +7179,7 @@ type PingTabletRequest struct {
 func (x *PingTabletRequest) Reset() {
 	*x = PingTabletRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[106]
+		mi := &file_vtctldata_proto_msgTypes[108]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7090,7 +7192,7 @@ func (x *PingTabletRequest) String() string {
 func (*PingTabletRequest) ProtoMessage() {}
 
 func (x *PingTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[106]
+	mi := &file_vtctldata_proto_msgTypes[108]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7103,7 +7205,7 @@ func (x *PingTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingTabletRequest.ProtoReflect.Descriptor instead.
 func (*PingTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{106}
+	return file_vtctldata_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *PingTabletRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -7122,7 +7224,7 @@ type PingTabletResponse struct {
 func (x *PingTabletResponse) Reset() {
 	*x = PingTabletResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[107]
+		mi := &file_vtctldata_proto_msgTypes[109]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7135,7 +7237,7 @@ func (x *PingTabletResponse) String() string {
 func (*PingTabletResponse) ProtoMessage() {}
 
 func (x *PingTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[107]
+	mi := &file_vtctldata_proto_msgTypes[109]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7148,7 +7250,7 @@ func (x *PingTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingTabletResponse.ProtoReflect.Descriptor instead.
 func (*PingTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{107}
+	return file_vtctldata_proto_rawDescGZIP(), []int{109}
 }
 
 type PlannedReparentShardRequest struct {
@@ -7183,7 +7285,7 @@ type PlannedReparentShardRequest struct {
 func (x *PlannedReparentShardRequest) Reset() {
 	*x = PlannedReparentShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[108]
+		mi := &file_vtctldata_proto_msgTypes[110]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7196,7 +7298,7 @@ func (x *PlannedReparentShardRequest) String() string {
 func (*PlannedReparentShardRequest) ProtoMessage() {}
 
 func (x *PlannedReparentShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[108]
+	mi := &file_vtctldata_proto_msgTypes[110]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7209,7 +7311,7 @@ func (x *PlannedReparentShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedReparentShardRequest.ProtoReflect.Descriptor instead.
 func (*PlannedReparentShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{108}
+	return file_vtctldata_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *PlannedReparentShardRequest) GetKeyspace() string {
@@ -7267,7 +7369,7 @@ type PlannedReparentShardResponse struct {
 func (x *PlannedReparentShardResponse) Reset() {
 	*x = PlannedReparentShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[109]
+		mi := &file_vtctldata_proto_msgTypes[111]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7280,7 +7382,7 @@ func (x *PlannedReparentShardResponse) String() string {
 func (*PlannedReparentShardResponse) ProtoMessage() {}
 
 func (x *PlannedReparentShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[109]
+	mi := &file_vtctldata_proto_msgTypes[111]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7293,7 +7395,7 @@ func (x *PlannedReparentShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedReparentShardResponse.ProtoReflect.Descriptor instead.
 func (*PlannedReparentShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{109}
+	return file_vtctldata_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *PlannedReparentShardResponse) GetKeyspace() string {
@@ -7339,7 +7441,7 @@ type RebuildKeyspaceGraphRequest struct {
 func (x *RebuildKeyspaceGraphRequest) Reset() {
 	*x = RebuildKeyspaceGraphRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[110]
+		mi := &file_vtctldata_proto_msgTypes[112]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7352,7 +7454,7 @@ func (x *RebuildKeyspaceGraphRequest) String() string {
 func (*RebuildKeyspaceGraphRequest) ProtoMessage() {}
 
 func (x *RebuildKeyspaceGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[110]
+	mi := &file_vtctldata_proto_msgTypes[112]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7365,7 +7467,7 @@ func (x *RebuildKeyspaceGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildKeyspaceGraphRequest.ProtoReflect.Descriptor instead.
 func (*RebuildKeyspaceGraphRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{110}
+	return file_vtctldata_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *RebuildKeyspaceGraphRequest) GetKeyspace() string {
@@ -7398,7 +7500,7 @@ type RebuildKeyspaceGraphResponse struct {
 func (x *RebuildKeyspaceGraphResponse) Reset() {
 	*x = RebuildKeyspaceGraphResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[111]
+		mi := &file_vtctldata_proto_msgTypes[113]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7411,7 +7513,7 @@ func (x *RebuildKeyspaceGraphResponse) String() string {
 func (*RebuildKeyspaceGraphResponse) ProtoMessage() {}
 
 func (x *RebuildKeyspaceGraphResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[111]
+	mi := &file_vtctldata_proto_msgTypes[113]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7424,7 +7526,7 @@ func (x *RebuildKeyspaceGraphResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildKeyspaceGraphResponse.ProtoReflect.Descriptor instead.
 func (*RebuildKeyspaceGraphResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{111}
+	return file_vtctldata_proto_rawDescGZIP(), []int{113}
 }
 
 type RebuildVSchemaGraphRequest struct {
@@ -7440,7 +7542,7 @@ type RebuildVSchemaGraphRequest struct {
 func (x *RebuildVSchemaGraphRequest) Reset() {
 	*x = RebuildVSchemaGraphRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[112]
+		mi := &file_vtctldata_proto_msgTypes[114]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7453,7 +7555,7 @@ func (x *RebuildVSchemaGraphRequest) String() string {
 func (*RebuildVSchemaGraphRequest) ProtoMessage() {}
 
 func (x *RebuildVSchemaGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[112]
+	mi := &file_vtctldata_proto_msgTypes[114]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7466,7 +7568,7 @@ func (x *RebuildVSchemaGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildVSchemaGraphRequest.ProtoReflect.Descriptor instead.
 func (*RebuildVSchemaGraphRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{112}
+	return file_vtctldata_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *RebuildVSchemaGraphRequest) GetCells() []string {
@@ -7485,7 +7587,7 @@ type RebuildVSchemaGraphResponse struct {
 func (x *RebuildVSchemaGraphResponse) Reset() {
 	*x = RebuildVSchemaGraphResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[113]
+		mi := &file_vtctldata_proto_msgTypes[115]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7498,7 +7600,7 @@ func (x *RebuildVSchemaGraphResponse) String() string {
 func (*RebuildVSchemaGraphResponse) ProtoMessage() {}
 
 func (x *RebuildVSchemaGraphResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[113]
+	mi := &file_vtctldata_proto_msgTypes[115]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7511,7 +7613,7 @@ func (x *RebuildVSchemaGraphResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildVSchemaGraphResponse.ProtoReflect.Descriptor instead.
 func (*RebuildVSchemaGraphResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{113}
+	return file_vtctldata_proto_rawDescGZIP(), []int{115}
 }
 
 type RefreshStateRequest struct {
@@ -7525,7 +7627,7 @@ type RefreshStateRequest struct {
 func (x *RefreshStateRequest) Reset() {
 	*x = RefreshStateRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[114]
+		mi := &file_vtctldata_proto_msgTypes[116]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7538,7 +7640,7 @@ func (x *RefreshStateRequest) String() string {
 func (*RefreshStateRequest) ProtoMessage() {}
 
 func (x *RefreshStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[114]
+	mi := &file_vtctldata_proto_msgTypes[116]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7551,7 +7653,7 @@ func (x *RefreshStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateRequest.ProtoReflect.Descriptor instead.
 func (*RefreshStateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{114}
+	return file_vtctldata_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *RefreshStateRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -7570,7 +7672,7 @@ type RefreshStateResponse struct {
 func (x *RefreshStateResponse) Reset() {
 	*x = RefreshStateResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[115]
+		mi := &file_vtctldata_proto_msgTypes[117]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7583,7 +7685,7 @@ func (x *RefreshStateResponse) String() string {
 func (*RefreshStateResponse) ProtoMessage() {}
 
 func (x *RefreshStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[115]
+	mi := &file_vtctldata_proto_msgTypes[117]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7596,7 +7698,7 @@ func (x *RefreshStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateResponse.ProtoReflect.Descriptor instead.
 func (*RefreshStateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{115}
+	return file_vtctldata_proto_rawDescGZIP(), []int{117}
 }
 
 type RefreshStateByShardRequest struct {
@@ -7612,7 +7714,7 @@ type RefreshStateByShardRequest struct {
 func (x *RefreshStateByShardRequest) Reset() {
 	*x = RefreshStateByShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[116]
+		mi := &file_vtctldata_proto_msgTypes[118]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7625,7 +7727,7 @@ func (x *RefreshStateByShardRequest) String() string {
 func (*RefreshStateByShardRequest) ProtoMessage() {}
 
 func (x *RefreshStateByShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[116]
+	mi := &file_vtctldata_proto_msgTypes[118]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7638,7 +7740,7 @@ func (x *RefreshStateByShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateByShardRequest.ProtoReflect.Descriptor instead.
 func (*RefreshStateByShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{116}
+	return file_vtctldata_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *RefreshStateByShardRequest) GetKeyspace() string {
@@ -7675,7 +7777,7 @@ type RefreshStateByShardResponse struct {
 func (x *RefreshStateByShardResponse) Reset() {
 	*x = RefreshStateByShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[117]
+		mi := &file_vtctldata_proto_msgTypes[119]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7688,7 +7790,7 @@ func (x *RefreshStateByShardResponse) String() string {
 func (*RefreshStateByShardResponse) ProtoMessage() {}
 
 func (x *RefreshStateByShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[117]
+	mi := &file_vtctldata_proto_msgTypes[119]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7701,7 +7803,7 @@ func (x *RefreshStateByShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateByShardResponse.ProtoReflect.Descriptor instead.
 func (*RefreshStateByShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{117}
+	return file_vtctldata_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *RefreshStateByShardResponse) GetIsPartialRefresh() bool {
@@ -7729,7 +7831,7 @@ type ReloadSchemaRequest struct {
 func (x *ReloadSchemaRequest) Reset() {
 	*x = ReloadSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[118]
+		mi := &file_vtctldata_proto_msgTypes[120]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7742,7 +7844,7 @@ func (x *ReloadSchemaRequest) String() string {
 func (*ReloadSchemaRequest) ProtoMessage() {}
 
 func (x *ReloadSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[118]
+	mi := &file_vtctldata_proto_msgTypes[120]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7755,7 +7857,7 @@ func (x *ReloadSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaRequest.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{118}
+	return file_vtctldata_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *ReloadSchemaRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -7774,7 +7876,7 @@ type ReloadSchemaResponse struct {
 func (x *ReloadSchemaResponse) Reset() {
 	*x = ReloadSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[119]
+		mi := &file_vtctldata_proto_msgTypes[121]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7787,7 +7889,7 @@ func (x *ReloadSchemaResponse) String() string {
 func (*ReloadSchemaResponse) ProtoMessage() {}
 
 func (x *ReloadSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[119]
+	mi := &file_vtctldata_proto_msgTypes[121]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7800,7 +7902,7 @@ func (x *ReloadSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaResponse.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{119}
+	return file_vtctldata_proto_rawDescGZIP(), []int{121}
 }
 
 type ReloadSchemaKeyspaceRequest struct {
@@ -7820,7 +7922,7 @@ type ReloadSchemaKeyspaceRequest struct {
 func (x *ReloadSchemaKeyspaceRequest) Reset() {
 	*x = ReloadSchemaKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[120]
+		mi := &file_vtctldata_proto_msgTypes[122]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7833,7 +7935,7 @@ func (x *ReloadSchemaKeyspaceRequest) String() string {
 func (*ReloadSchemaKeyspaceRequest) ProtoMessage() {}
 
 func (x *ReloadSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[120]
+	mi := &file_vtctldata_proto_msgTypes[122]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7846,7 +7948,7 @@ func (x *ReloadSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{120}
+	return file_vtctldata_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *ReloadSchemaKeyspaceRequest) GetKeyspace() string {
@@ -7888,7 +7990,7 @@ type ReloadSchemaKeyspaceResponse struct {
 func (x *ReloadSchemaKeyspaceResponse) Reset() {
 	*x = ReloadSchemaKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[121]
+		mi := &file_vtctldata_proto_msgTypes[123]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7901,7 +8003,7 @@ func (x *ReloadSchemaKeyspaceResponse) String() string {
 func (*ReloadSchemaKeyspaceResponse) ProtoMessage() {}
 
 func (x *ReloadSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[121]
+	mi := &file_vtctldata_proto_msgTypes[123]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7914,7 +8016,7 @@ func (x *ReloadSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{121}
+	return file_vtctldata_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *ReloadSchemaKeyspaceResponse) GetEvents() []*logutil.Event {
@@ -7940,7 +8042,7 @@ type ReloadSchemaShardRequest struct {
 func (x *ReloadSchemaShardRequest) Reset() {
 	*x = ReloadSchemaShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[122]
+		mi := &file_vtctldata_proto_msgTypes[124]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7953,7 +8055,7 @@ func (x *ReloadSchemaShardRequest) String() string {
 func (*ReloadSchemaShardRequest) ProtoMessage() {}
 
 func (x *ReloadSchemaShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[122]
+	mi := &file_vtctldata_proto_msgTypes[124]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7966,7 +8068,7 @@ func (x *ReloadSchemaShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaShardRequest.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{122}
+	return file_vtctldata_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *ReloadSchemaShardRequest) GetKeyspace() string {
@@ -8015,7 +8117,7 @@ type ReloadSchemaShardResponse struct {
 func (x *ReloadSchemaShardResponse) Reset() {
 	*x = ReloadSchemaShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[123]
+		mi := &file_vtctldata_proto_msgTypes[125]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8028,7 +8130,7 @@ func (x *ReloadSchemaShardResponse) String() string {
 func (*ReloadSchemaShardResponse) ProtoMessage() {}
 
 func (x *ReloadSchemaShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[123]
+	mi := &file_vtctldata_proto_msgTypes[125]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8041,7 +8143,7 @@ func (x *ReloadSchemaShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaShardResponse.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{123}
+	return file_vtctldata_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *ReloadSchemaShardResponse) GetEvents() []*logutil.Event {
@@ -8064,7 +8166,7 @@ type RemoveBackupRequest struct {
 func (x *RemoveBackupRequest) Reset() {
 	*x = RemoveBackupRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[124]
+		mi := &file_vtctldata_proto_msgTypes[126]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8077,7 +8179,7 @@ func (x *RemoveBackupRequest) String() string {
 func (*RemoveBackupRequest) ProtoMessage() {}
 
 func (x *RemoveBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[124]
+	mi := &file_vtctldata_proto_msgTypes[126]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8090,7 +8192,7 @@ func (x *RemoveBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBackupRequest.ProtoReflect.Descriptor instead.
 func (*RemoveBackupRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{124}
+	return file_vtctldata_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *RemoveBackupRequest) GetKeyspace() string {
@@ -8123,7 +8225,7 @@ type RemoveBackupResponse struct {
 func (x *RemoveBackupResponse) Reset() {
 	*x = RemoveBackupResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[125]
+		mi := &file_vtctldata_proto_msgTypes[127]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8136,7 +8238,7 @@ func (x *RemoveBackupResponse) String() string {
 func (*RemoveBackupResponse) ProtoMessage() {}
 
 func (x *RemoveBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[125]
+	mi := &file_vtctldata_proto_msgTypes[127]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8149,7 +8251,7 @@ func (x *RemoveBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBackupResponse.ProtoReflect.Descriptor instead.
 func (*RemoveBackupResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{125}
+	return file_vtctldata_proto_rawDescGZIP(), []int{127}
 }
 
 type RemoveKeyspaceCellRequest struct {
@@ -8171,7 +8273,7 @@ type RemoveKeyspaceCellRequest struct {
 func (x *RemoveKeyspaceCellRequest) Reset() {
 	*x = RemoveKeyspaceCellRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[126]
+		mi := &file_vtctldata_proto_msgTypes[128]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8184,7 +8286,7 @@ func (x *RemoveKeyspaceCellRequest) String() string {
 func (*RemoveKeyspaceCellRequest) ProtoMessage() {}
 
 func (x *RemoveKeyspaceCellRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[126]
+	mi := &file_vtctldata_proto_msgTypes[128]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8197,7 +8299,7 @@ func (x *RemoveKeyspaceCellRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveKeyspaceCellRequest.ProtoReflect.Descriptor instead.
 func (*RemoveKeyspaceCellRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{126}
+	return file_vtctldata_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *RemoveKeyspaceCellRequest) GetKeyspace() string {
@@ -8237,7 +8339,7 @@ type RemoveKeyspaceCellResponse struct {
 func (x *RemoveKeyspaceCellResponse) Reset() {
 	*x = RemoveKeyspaceCellResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[127]
+		mi := &file_vtctldata_proto_msgTypes[129]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8250,7 +8352,7 @@ func (x *RemoveKeyspaceCellResponse) String() string {
 func (*RemoveKeyspaceCellResponse) ProtoMessage() {}
 
 func (x *RemoveKeyspaceCellResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[127]
+	mi := &file_vtctldata_proto_msgTypes[129]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8263,7 +8365,7 @@ func (x *RemoveKeyspaceCellResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveKeyspaceCellResponse.ProtoReflect.Descriptor instead.
 func (*RemoveKeyspaceCellResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{127}
+	return file_vtctldata_proto_rawDescGZIP(), []int{129}
 }
 
 type RemoveShardCellRequest struct {
@@ -8286,7 +8388,7 @@ type RemoveShardCellRequest struct {
 func (x *RemoveShardCellRequest) Reset() {
 	*x = RemoveShardCellRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[128]
+		mi := &file_vtctldata_proto_msgTypes[130]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8299,7 +8401,7 @@ func (x *RemoveShardCellRequest) String() string {
 func (*RemoveShardCellRequest) ProtoMessage() {}
 
 func (x *RemoveShardCellRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[128]
+	mi := &file_vtctldata_proto_msgTypes[130]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8312,7 +8414,7 @@ func (x *RemoveShardCellRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveShardCellRequest.ProtoReflect.Descriptor instead.
 func (*RemoveShardCellRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{128}
+	return file_vtctldata_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *RemoveShardCellRequest) GetKeyspace() string {
@@ -8359,7 +8461,7 @@ type RemoveShardCellResponse struct {
 func (x *RemoveShardCellResponse) Reset() {
 	*x = RemoveShardCellResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[129]
+		mi := &file_vtctldata_proto_msgTypes[131]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8372,7 +8474,7 @@ func (x *RemoveShardCellResponse) String() string {
 func (*RemoveShardCellResponse) ProtoMessage() {}
 
 func (x *RemoveShardCellResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[129]
+	mi := &file_vtctldata_proto_msgTypes[131]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8385,7 +8487,7 @@ func (x *RemoveShardCellResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveShardCellResponse.ProtoReflect.Descriptor instead.
 func (*RemoveShardCellResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{129}
+	return file_vtctldata_proto_rawDescGZIP(), []int{131}
 }
 
 type ReparentTabletRequest struct {
@@ -8401,7 +8503,7 @@ type ReparentTabletRequest struct {
 func (x *ReparentTabletRequest) Reset() {
 	*x = ReparentTabletRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[130]
+		mi := &file_vtctldata_proto_msgTypes[132]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8414,7 +8516,7 @@ func (x *ReparentTabletRequest) String() string {
 func (*ReparentTabletRequest) ProtoMessage() {}
 
 func (x *ReparentTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[130]
+	mi := &file_vtctldata_proto_msgTypes[132]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8427,7 +8529,7 @@ func (x *ReparentTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReparentTabletRequest.ProtoReflect.Descriptor instead.
 func (*ReparentTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{130}
+	return file_vtctldata_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *ReparentTabletRequest) GetTablet() *topodata.TabletAlias {
@@ -8453,7 +8555,7 @@ type ReparentTabletResponse struct {
 func (x *ReparentTabletResponse) Reset() {
 	*x = ReparentTabletResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[131]
+		mi := &file_vtctldata_proto_msgTypes[133]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8466,7 +8568,7 @@ func (x *ReparentTabletResponse) String() string {
 func (*ReparentTabletResponse) ProtoMessage() {}
 
 func (x *ReparentTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[131]
+	mi := &file_vtctldata_proto_msgTypes[133]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8479,7 +8581,7 @@ func (x *ReparentTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReparentTabletResponse.ProtoReflect.Descriptor instead.
 func (*ReparentTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{131}
+	return file_vtctldata_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *ReparentTabletResponse) GetKeyspace() string {
@@ -8526,7 +8628,7 @@ type RestoreFromBackupRequest struct {
 func (x *RestoreFromBackupRequest) Reset() {
 	*x = RestoreFromBackupRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[132]
+		mi := &file_vtctldata_proto_msgTypes[134]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8539,7 +8641,7 @@ func (x *RestoreFromBackupRequest) String() string {
 func (*RestoreFromBackupRequest) ProtoMessage() {}
 
 func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[132]
+	mi := &file_vtctldata_proto_msgTypes[134]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8552,7 +8654,7 @@ func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupRequest.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{132}
+	return file_vtctldata_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *RestoreFromBackupRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -8605,7 +8707,7 @@ type RestoreFromBackupResponse struct {
 func (x *RestoreFromBackupResponse) Reset() {
 	*x = RestoreFromBackupResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[133]
+		mi := &file_vtctldata_proto_msgTypes[135]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8618,7 +8720,7 @@ func (x *RestoreFromBackupResponse) String() string {
 func (*RestoreFromBackupResponse) ProtoMessage() {}
 
 func (x *RestoreFromBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[133]
+	mi := &file_vtctldata_proto_msgTypes[135]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8631,7 +8733,7 @@ func (x *RestoreFromBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupResponse.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{133}
+	return file_vtctldata_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *RestoreFromBackupResponse) GetTabletAlias() *topodata.TabletAlias {
@@ -8662,6 +8764,108 @@ func (x *RestoreFromBackupResponse) GetEvent() *logutil.Event {
 	return nil
 }
 
+type RetrySchemaMigrationRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Uuid     string `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *RetrySchemaMigrationRequest) Reset() {
+	*x = RetrySchemaMigrationRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[136]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RetrySchemaMigrationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetrySchemaMigrationRequest) ProtoMessage() {}
+
+func (x *RetrySchemaMigrationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[136]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetrySchemaMigrationRequest.ProtoReflect.Descriptor instead.
+func (*RetrySchemaMigrationRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{136}
+}
+
+func (x *RetrySchemaMigrationRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *RetrySchemaMigrationRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type RetrySchemaMigrationResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UuidList []string `protobuf:"bytes,1,rep,name=uuid_list,json=uuidList,proto3" json:"uuid_list,omitempty"`
+}
+
+func (x *RetrySchemaMigrationResponse) Reset() {
+	*x = RetrySchemaMigrationResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[137]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RetrySchemaMigrationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetrySchemaMigrationResponse) ProtoMessage() {}
+
+func (x *RetrySchemaMigrationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[137]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetrySchemaMigrationResponse.ProtoReflect.Descriptor instead.
+func (*RetrySchemaMigrationResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{137}
+}
+
+func (x *RetrySchemaMigrationResponse) GetUuidList() []string {
+	if x != nil {
+		return x.UuidList
+	}
+	return nil
+}
+
 type RunHealthCheckRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -8673,7 +8877,7 @@ type RunHealthCheckRequest struct {
 func (x *RunHealthCheckRequest) Reset() {
 	*x = RunHealthCheckRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[134]
+		mi := &file_vtctldata_proto_msgTypes[138]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8686,7 +8890,7 @@ func (x *RunHealthCheckRequest) String() string {
 func (*RunHealthCheckRequest) ProtoMessage() {}
 
 func (x *RunHealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[134]
+	mi := &file_vtctldata_proto_msgTypes[138]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8699,7 +8903,7 @@ func (x *RunHealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunHealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*RunHealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{134}
+	return file_vtctldata_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *RunHealthCheckRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -8718,7 +8922,7 @@ type RunHealthCheckResponse struct {
 func (x *RunHealthCheckResponse) Reset() {
 	*x = RunHealthCheckResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[135]
+		mi := &file_vtctldata_proto_msgTypes[139]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8731,7 +8935,7 @@ func (x *RunHealthCheckResponse) String() string {
 func (*RunHealthCheckResponse) ProtoMessage() {}
 
 func (x *RunHealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[135]
+	mi := &file_vtctldata_proto_msgTypes[139]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8744,7 +8948,7 @@ func (x *RunHealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunHealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{135}
+	return file_vtctldata_proto_rawDescGZIP(), []int{139}
 }
 
 type SetKeyspaceDurabilityPolicyRequest struct {
@@ -8759,7 +8963,7 @@ type SetKeyspaceDurabilityPolicyRequest struct {
 func (x *SetKeyspaceDurabilityPolicyRequest) Reset() {
 	*x = SetKeyspaceDurabilityPolicyRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[136]
+		mi := &file_vtctldata_proto_msgTypes[140]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8772,7 +8976,7 @@ func (x *SetKeyspaceDurabilityPolicyRequest) String() string {
 func (*SetKeyspaceDurabilityPolicyRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceDurabilityPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[136]
+	mi := &file_vtctldata_proto_msgTypes[140]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8785,7 +8989,7 @@ func (x *SetKeyspaceDurabilityPolicyRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use SetKeyspaceDurabilityPolicyRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceDurabilityPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{136}
+	return file_vtctldata_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *SetKeyspaceDurabilityPolicyRequest) GetKeyspace() string {
@@ -8814,7 +9018,7 @@ type SetKeyspaceDurabilityPolicyResponse struct {
 func (x *SetKeyspaceDurabilityPolicyResponse) Reset() {
 	*x = SetKeyspaceDurabilityPolicyResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[137]
+		mi := &file_vtctldata_proto_msgTypes[141]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8827,7 +9031,7 @@ func (x *SetKeyspaceDurabilityPolicyResponse) String() string {
 func (*SetKeyspaceDurabilityPolicyResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceDurabilityPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[137]
+	mi := &file_vtctldata_proto_msgTypes[141]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8840,7 +9044,7 @@ func (x *SetKeyspaceDurabilityPolicyResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use SetKeyspaceDurabilityPolicyResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceDurabilityPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{137}
+	return file_vtctldata_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *SetKeyspaceDurabilityPolicyResponse) GetKeyspace() *topodata.Keyspace {
@@ -8865,7 +9069,7 @@ type SetKeyspaceServedFromRequest struct {
 func (x *SetKeyspaceServedFromRequest) Reset() {
 	*x = SetKeyspaceServedFromRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[138]
+		mi := &file_vtctldata_proto_msgTypes[142]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8878,7 +9082,7 @@ func (x *SetKeyspaceServedFromRequest) String() string {
 func (*SetKeyspaceServedFromRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceServedFromRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[138]
+	mi := &file_vtctldata_proto_msgTypes[142]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8891,7 +9095,7 @@ func (x *SetKeyspaceServedFromRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceServedFromRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceServedFromRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{138}
+	return file_vtctldata_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *SetKeyspaceServedFromRequest) GetKeyspace() string {
@@ -8941,7 +9145,7 @@ type SetKeyspaceServedFromResponse struct {
 func (x *SetKeyspaceServedFromResponse) Reset() {
 	*x = SetKeyspaceServedFromResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[139]
+		mi := &file_vtctldata_proto_msgTypes[143]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8954,7 +9158,7 @@ func (x *SetKeyspaceServedFromResponse) String() string {
 func (*SetKeyspaceServedFromResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceServedFromResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[139]
+	mi := &file_vtctldata_proto_msgTypes[143]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8967,7 +9171,7 @@ func (x *SetKeyspaceServedFromResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceServedFromResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceServedFromResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{139}
+	return file_vtctldata_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *SetKeyspaceServedFromResponse) GetKeyspace() *topodata.Keyspace {
@@ -8989,7 +9193,7 @@ type SetKeyspaceShardingInfoRequest struct {
 func (x *SetKeyspaceShardingInfoRequest) Reset() {
 	*x = SetKeyspaceShardingInfoRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[140]
+		mi := &file_vtctldata_proto_msgTypes[144]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9002,7 +9206,7 @@ func (x *SetKeyspaceShardingInfoRequest) String() string {
 func (*SetKeyspaceShardingInfoRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceShardingInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[140]
+	mi := &file_vtctldata_proto_msgTypes[144]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9015,7 +9219,7 @@ func (x *SetKeyspaceShardingInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceShardingInfoRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceShardingInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{140}
+	return file_vtctldata_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *SetKeyspaceShardingInfoRequest) GetKeyspace() string {
@@ -9044,7 +9248,7 @@ type SetKeyspaceShardingInfoResponse struct {
 func (x *SetKeyspaceShardingInfoResponse) Reset() {
 	*x = SetKeyspaceShardingInfoResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[141]
+		mi := &file_vtctldata_proto_msgTypes[145]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9057,7 +9261,7 @@ func (x *SetKeyspaceShardingInfoResponse) String() string {
 func (*SetKeyspaceShardingInfoResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceShardingInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[141]
+	mi := &file_vtctldata_proto_msgTypes[145]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9070,7 +9274,7 @@ func (x *SetKeyspaceShardingInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceShardingInfoResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceShardingInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{141}
+	return file_vtctldata_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *SetKeyspaceShardingInfoResponse) GetKeyspace() *topodata.Keyspace {
@@ -9093,7 +9297,7 @@ type SetShardIsPrimaryServingRequest struct {
 func (x *SetShardIsPrimaryServingRequest) Reset() {
 	*x = SetShardIsPrimaryServingRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[142]
+		mi := &file_vtctldata_proto_msgTypes[146]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9106,7 +9310,7 @@ func (x *SetShardIsPrimaryServingRequest) String() string {
 func (*SetShardIsPrimaryServingRequest) ProtoMessage() {}
 
 func (x *SetShardIsPrimaryServingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[142]
+	mi := &file_vtctldata_proto_msgTypes[146]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9119,7 +9323,7 @@ func (x *SetShardIsPrimaryServingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardIsPrimaryServingRequest.ProtoReflect.Descriptor instead.
 func (*SetShardIsPrimaryServingRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{142}
+	return file_vtctldata_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *SetShardIsPrimaryServingRequest) GetKeyspace() string {
@@ -9155,7 +9359,7 @@ type SetShardIsPrimaryServingResponse struct {
 func (x *SetShardIsPrimaryServingResponse) Reset() {
 	*x = SetShardIsPrimaryServingResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[143]
+		mi := &file_vtctldata_proto_msgTypes[147]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9168,7 +9372,7 @@ func (x *SetShardIsPrimaryServingResponse) String() string {
 func (*SetShardIsPrimaryServingResponse) ProtoMessage() {}
 
 func (x *SetShardIsPrimaryServingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[143]
+	mi := &file_vtctldata_proto_msgTypes[147]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9181,7 +9385,7 @@ func (x *SetShardIsPrimaryServingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardIsPrimaryServingResponse.ProtoReflect.Descriptor instead.
 func (*SetShardIsPrimaryServingResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{143}
+	return file_vtctldata_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *SetShardIsPrimaryServingResponse) GetShard() *topodata.Shard {
@@ -9222,7 +9426,7 @@ type SetShardTabletControlRequest struct {
 func (x *SetShardTabletControlRequest) Reset() {
 	*x = SetShardTabletControlRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[144]
+		mi := &file_vtctldata_proto_msgTypes[148]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9235,7 +9439,7 @@ func (x *SetShardTabletControlRequest) String() string {
 func (*SetShardTabletControlRequest) ProtoMessage() {}
 
 func (x *SetShardTabletControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[144]
+	mi := &file_vtctldata_proto_msgTypes[148]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9248,7 +9452,7 @@ func (x *SetShardTabletControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardTabletControlRequest.ProtoReflect.Descriptor instead.
 func (*SetShardTabletControlRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{144}
+	return file_vtctldata_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *SetShardTabletControlRequest) GetKeyspace() string {
@@ -9312,7 +9516,7 @@ type SetShardTabletControlResponse struct {
 func (x *SetShardTabletControlResponse) Reset() {
 	*x = SetShardTabletControlResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[145]
+		mi := &file_vtctldata_proto_msgTypes[149]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9325,7 +9529,7 @@ func (x *SetShardTabletControlResponse) String() string {
 func (*SetShardTabletControlResponse) ProtoMessage() {}
 
 func (x *SetShardTabletControlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[145]
+	mi := &file_vtctldata_proto_msgTypes[149]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9338,7 +9542,7 @@ func (x *SetShardTabletControlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardTabletControlResponse.ProtoReflect.Descriptor instead.
 func (*SetShardTabletControlResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{145}
+	return file_vtctldata_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *SetShardTabletControlResponse) GetShard() *topodata.Shard {
@@ -9360,7 +9564,7 @@ type SetWritableRequest struct {
 func (x *SetWritableRequest) Reset() {
 	*x = SetWritableRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[146]
+		mi := &file_vtctldata_proto_msgTypes[150]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9373,7 +9577,7 @@ func (x *SetWritableRequest) String() string {
 func (*SetWritableRequest) ProtoMessage() {}
 
 func (x *SetWritableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[146]
+	mi := &file_vtctldata_proto_msgTypes[150]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9386,7 +9590,7 @@ func (x *SetWritableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWritableRequest.ProtoReflect.Descriptor instead.
 func (*SetWritableRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{146}
+	return file_vtctldata_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *SetWritableRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -9412,7 +9616,7 @@ type SetWritableResponse struct {
 func (x *SetWritableResponse) Reset() {
 	*x = SetWritableResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[147]
+		mi := &file_vtctldata_proto_msgTypes[151]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9425,7 +9629,7 @@ func (x *SetWritableResponse) String() string {
 func (*SetWritableResponse) ProtoMessage() {}
 
 func (x *SetWritableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[147]
+	mi := &file_vtctldata_proto_msgTypes[151]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9438,7 +9642,7 @@ func (x *SetWritableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWritableResponse.ProtoReflect.Descriptor instead.
 func (*SetWritableResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{147}
+	return file_vtctldata_proto_rawDescGZIP(), []int{151}
 }
 
 type ShardReplicationAddRequest struct {
@@ -9454,7 +9658,7 @@ type ShardReplicationAddRequest struct {
 func (x *ShardReplicationAddRequest) Reset() {
 	*x = ShardReplicationAddRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[148]
+		mi := &file_vtctldata_proto_msgTypes[152]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9467,7 +9671,7 @@ func (x *ShardReplicationAddRequest) String() string {
 func (*ShardReplicationAddRequest) ProtoMessage() {}
 
 func (x *ShardReplicationAddRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[148]
+	mi := &file_vtctldata_proto_msgTypes[152]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9480,7 +9684,7 @@ func (x *ShardReplicationAddRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationAddRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationAddRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{148}
+	return file_vtctldata_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *ShardReplicationAddRequest) GetKeyspace() string {
@@ -9513,7 +9717,7 @@ type ShardReplicationAddResponse struct {
 func (x *ShardReplicationAddResponse) Reset() {
 	*x = ShardReplicationAddResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[149]
+		mi := &file_vtctldata_proto_msgTypes[153]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9526,7 +9730,7 @@ func (x *ShardReplicationAddResponse) String() string {
 func (*ShardReplicationAddResponse) ProtoMessage() {}
 
 func (x *ShardReplicationAddResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[149]
+	mi := &file_vtctldata_proto_msgTypes[153]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9539,7 +9743,7 @@ func (x *ShardReplicationAddResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationAddResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationAddResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{149}
+	return file_vtctldata_proto_rawDescGZIP(), []int{153}
 }
 
 type ShardReplicationFixRequest struct {
@@ -9555,7 +9759,7 @@ type ShardReplicationFixRequest struct {
 func (x *ShardReplicationFixRequest) Reset() {
 	*x = ShardReplicationFixRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[150]
+		mi := &file_vtctldata_proto_msgTypes[154]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9568,7 +9772,7 @@ func (x *ShardReplicationFixRequest) String() string {
 func (*ShardReplicationFixRequest) ProtoMessage() {}
 
 func (x *ShardReplicationFixRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[150]
+	mi := &file_vtctldata_proto_msgTypes[154]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9581,7 +9785,7 @@ func (x *ShardReplicationFixRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationFixRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationFixRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{150}
+	return file_vtctldata_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *ShardReplicationFixRequest) GetKeyspace() string {
@@ -9619,7 +9823,7 @@ type ShardReplicationFixResponse struct {
 func (x *ShardReplicationFixResponse) Reset() {
 	*x = ShardReplicationFixResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[151]
+		mi := &file_vtctldata_proto_msgTypes[155]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9632,7 +9836,7 @@ func (x *ShardReplicationFixResponse) String() string {
 func (*ShardReplicationFixResponse) ProtoMessage() {}
 
 func (x *ShardReplicationFixResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[151]
+	mi := &file_vtctldata_proto_msgTypes[155]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9645,7 +9849,7 @@ func (x *ShardReplicationFixResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationFixResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationFixResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{151}
+	return file_vtctldata_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *ShardReplicationFixResponse) GetError() *topodata.ShardReplicationError {
@@ -9667,7 +9871,7 @@ type ShardReplicationPositionsRequest struct {
 func (x *ShardReplicationPositionsRequest) Reset() {
 	*x = ShardReplicationPositionsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[152]
+		mi := &file_vtctldata_proto_msgTypes[156]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9680,7 +9884,7 @@ func (x *ShardReplicationPositionsRequest) String() string {
 func (*ShardReplicationPositionsRequest) ProtoMessage() {}
 
 func (x *ShardReplicationPositionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[152]
+	mi := &file_vtctldata_proto_msgTypes[156]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9693,7 +9897,7 @@ func (x *ShardReplicationPositionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationPositionsRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationPositionsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{152}
+	return file_vtctldata_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *ShardReplicationPositionsRequest) GetKeyspace() string {
@@ -9726,7 +9930,7 @@ type ShardReplicationPositionsResponse struct {
 func (x *ShardReplicationPositionsResponse) Reset() {
 	*x = ShardReplicationPositionsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[153]
+		mi := &file_vtctldata_proto_msgTypes[157]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9739,7 +9943,7 @@ func (x *ShardReplicationPositionsResponse) String() string {
 func (*ShardReplicationPositionsResponse) ProtoMessage() {}
 
 func (x *ShardReplicationPositionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[153]
+	mi := &file_vtctldata_proto_msgTypes[157]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9752,7 +9956,7 @@ func (x *ShardReplicationPositionsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ShardReplicationPositionsResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationPositionsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{153}
+	return file_vtctldata_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *ShardReplicationPositionsResponse) GetReplicationStatuses() map[string]*replicationdata.Status {
@@ -9782,7 +9986,7 @@ type ShardReplicationRemoveRequest struct {
 func (x *ShardReplicationRemoveRequest) Reset() {
 	*x = ShardReplicationRemoveRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[154]
+		mi := &file_vtctldata_proto_msgTypes[158]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9795,7 +9999,7 @@ func (x *ShardReplicationRemoveRequest) String() string {
 func (*ShardReplicationRemoveRequest) ProtoMessage() {}
 
 func (x *ShardReplicationRemoveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[154]
+	mi := &file_vtctldata_proto_msgTypes[158]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9808,7 +10012,7 @@ func (x *ShardReplicationRemoveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationRemoveRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationRemoveRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{154}
+	return file_vtctldata_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *ShardReplicationRemoveRequest) GetKeyspace() string {
@@ -9841,7 +10045,7 @@ type ShardReplicationRemoveResponse struct {
 func (x *ShardReplicationRemoveResponse) Reset() {
 	*x = ShardReplicationRemoveResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[155]
+		mi := &file_vtctldata_proto_msgTypes[159]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9854,7 +10058,7 @@ func (x *ShardReplicationRemoveResponse) String() string {
 func (*ShardReplicationRemoveResponse) ProtoMessage() {}
 
 func (x *ShardReplicationRemoveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[155]
+	mi := &file_vtctldata_proto_msgTypes[159]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9867,7 +10071,7 @@ func (x *ShardReplicationRemoveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationRemoveResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationRemoveResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{155}
+	return file_vtctldata_proto_rawDescGZIP(), []int{159}
 }
 
 type SleepTabletRequest struct {
@@ -9882,7 +10086,7 @@ type SleepTabletRequest struct {
 func (x *SleepTabletRequest) Reset() {
 	*x = SleepTabletRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[156]
+		mi := &file_vtctldata_proto_msgTypes[160]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9895,7 +10099,7 @@ func (x *SleepTabletRequest) String() string {
 func (*SleepTabletRequest) ProtoMessage() {}
 
 func (x *SleepTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[156]
+	mi := &file_vtctldata_proto_msgTypes[160]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9908,7 +10112,7 @@ func (x *SleepTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SleepTabletRequest.ProtoReflect.Descriptor instead.
 func (*SleepTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{156}
+	return file_vtctldata_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *SleepTabletRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -9934,7 +10138,7 @@ type SleepTabletResponse struct {
 func (x *SleepTabletResponse) Reset() {
 	*x = SleepTabletResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[157]
+		mi := &file_vtctldata_proto_msgTypes[161]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9947,7 +10151,7 @@ func (x *SleepTabletResponse) String() string {
 func (*SleepTabletResponse) ProtoMessage() {}
 
 func (x *SleepTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[157]
+	mi := &file_vtctldata_proto_msgTypes[161]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9960,7 +10164,7 @@ func (x *SleepTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SleepTabletResponse.ProtoReflect.Descriptor instead.
 func (*SleepTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{157}
+	return file_vtctldata_proto_rawDescGZIP(), []int{161}
 }
 
 type SourceShardAddRequest struct {
@@ -9984,7 +10188,7 @@ type SourceShardAddRequest struct {
 func (x *SourceShardAddRequest) Reset() {
 	*x = SourceShardAddRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[158]
+		mi := &file_vtctldata_proto_msgTypes[162]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -9997,7 +10201,7 @@ func (x *SourceShardAddRequest) String() string {
 func (*SourceShardAddRequest) ProtoMessage() {}
 
 func (x *SourceShardAddRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[158]
+	mi := &file_vtctldata_proto_msgTypes[162]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10010,7 +10214,7 @@ func (x *SourceShardAddRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardAddRequest.ProtoReflect.Descriptor instead.
 func (*SourceShardAddRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{158}
+	return file_vtctldata_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *SourceShardAddRequest) GetKeyspace() string {
@@ -10074,7 +10278,7 @@ type SourceShardAddResponse struct {
 func (x *SourceShardAddResponse) Reset() {
 	*x = SourceShardAddResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[159]
+		mi := &file_vtctldata_proto_msgTypes[163]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10087,7 +10291,7 @@ func (x *SourceShardAddResponse) String() string {
 func (*SourceShardAddResponse) ProtoMessage() {}
 
 func (x *SourceShardAddResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[159]
+	mi := &file_vtctldata_proto_msgTypes[163]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10100,7 +10304,7 @@ func (x *SourceShardAddResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardAddResponse.ProtoReflect.Descriptor instead.
 func (*SourceShardAddResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{159}
+	return file_vtctldata_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *SourceShardAddResponse) GetShard() *topodata.Shard {
@@ -10123,7 +10327,7 @@ type SourceShardDeleteRequest struct {
 func (x *SourceShardDeleteRequest) Reset() {
 	*x = SourceShardDeleteRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[160]
+		mi := &file_vtctldata_proto_msgTypes[164]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10136,7 +10340,7 @@ func (x *SourceShardDeleteRequest) String() string {
 func (*SourceShardDeleteRequest) ProtoMessage() {}
 
 func (x *SourceShardDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[160]
+	mi := &file_vtctldata_proto_msgTypes[164]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10149,7 +10353,7 @@ func (x *SourceShardDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardDeleteRequest.ProtoReflect.Descriptor instead.
 func (*SourceShardDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{160}
+	return file_vtctldata_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *SourceShardDeleteRequest) GetKeyspace() string {
@@ -10185,7 +10389,7 @@ type SourceShardDeleteResponse struct {
 func (x *SourceShardDeleteResponse) Reset() {
 	*x = SourceShardDeleteResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[161]
+		mi := &file_vtctldata_proto_msgTypes[165]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10198,7 +10402,7 @@ func (x *SourceShardDeleteResponse) String() string {
 func (*SourceShardDeleteResponse) ProtoMessage() {}
 
 func (x *SourceShardDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[161]
+	mi := &file_vtctldata_proto_msgTypes[165]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10211,7 +10415,7 @@ func (x *SourceShardDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardDeleteResponse.ProtoReflect.Descriptor instead.
 func (*SourceShardDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{161}
+	return file_vtctldata_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *SourceShardDeleteResponse) GetShard() *topodata.Shard {
@@ -10232,7 +10436,7 @@ type StartReplicationRequest struct {
 func (x *StartReplicationRequest) Reset() {
 	*x = StartReplicationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[162]
+		mi := &file_vtctldata_proto_msgTypes[166]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10245,7 +10449,7 @@ func (x *StartReplicationRequest) String() string {
 func (*StartReplicationRequest) ProtoMessage() {}
 
 func (x *StartReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[162]
+	mi := &file_vtctldata_proto_msgTypes[166]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10258,7 +10462,7 @@ func (x *StartReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartReplicationRequest.ProtoReflect.Descriptor instead.
 func (*StartReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{162}
+	return file_vtctldata_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *StartReplicationRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -10277,7 +10481,7 @@ type StartReplicationResponse struct {
 func (x *StartReplicationResponse) Reset() {
 	*x = StartReplicationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[163]
+		mi := &file_vtctldata_proto_msgTypes[167]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10290,7 +10494,7 @@ func (x *StartReplicationResponse) String() string {
 func (*StartReplicationResponse) ProtoMessage() {}
 
 func (x *StartReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[163]
+	mi := &file_vtctldata_proto_msgTypes[167]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10303,7 +10507,7 @@ func (x *StartReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartReplicationResponse.ProtoReflect.Descriptor instead.
 func (*StartReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{163}
+	return file_vtctldata_proto_rawDescGZIP(), []int{167}
 }
 
 type StopReplicationRequest struct {
@@ -10317,7 +10521,7 @@ type StopReplicationRequest struct {
 func (x *StopReplicationRequest) Reset() {
 	*x = StopReplicationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[164]
+		mi := &file_vtctldata_proto_msgTypes[168]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10330,7 +10534,7 @@ func (x *StopReplicationRequest) String() string {
 func (*StopReplicationRequest) ProtoMessage() {}
 
 func (x *StopReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[164]
+	mi := &file_vtctldata_proto_msgTypes[168]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10343,7 +10547,7 @@ func (x *StopReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationRequest.ProtoReflect.Descriptor instead.
 func (*StopReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{164}
+	return file_vtctldata_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *StopReplicationRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -10362,7 +10566,7 @@ type StopReplicationResponse struct {
 func (x *StopReplicationResponse) Reset() {
 	*x = StopReplicationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[165]
+		mi := &file_vtctldata_proto_msgTypes[169]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10375,7 +10579,7 @@ func (x *StopReplicationResponse) String() string {
 func (*StopReplicationResponse) ProtoMessage() {}
 
 func (x *StopReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[165]
+	mi := &file_vtctldata_proto_msgTypes[169]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10388,7 +10592,7 @@ func (x *StopReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationResponse.ProtoReflect.Descriptor instead.
 func (*StopReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{165}
+	return file_vtctldata_proto_rawDescGZIP(), []int{169}
 }
 
 type TabletExternallyReparentedRequest struct {
@@ -10404,7 +10608,7 @@ type TabletExternallyReparentedRequest struct {
 func (x *TabletExternallyReparentedRequest) Reset() {
 	*x = TabletExternallyReparentedRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[166]
+		mi := &file_vtctldata_proto_msgTypes[170]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10417,7 +10621,7 @@ func (x *TabletExternallyReparentedRequest) String() string {
 func (*TabletExternallyReparentedRequest) ProtoMessage() {}
 
 func (x *TabletExternallyReparentedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[166]
+	mi := &file_vtctldata_proto_msgTypes[170]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10430,7 +10634,7 @@ func (x *TabletExternallyReparentedRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use TabletExternallyReparentedRequest.ProtoReflect.Descriptor instead.
 func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{166}
+	return file_vtctldata_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *TabletExternallyReparentedRequest) GetTablet() *topodata.TabletAlias {
@@ -10454,7 +10658,7 @@ type TabletExternallyReparentedResponse struct {
 func (x *TabletExternallyReparentedResponse) Reset() {
 	*x = TabletExternallyReparentedResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[167]
+		mi := &file_vtctldata_proto_msgTypes[171]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10467,7 +10671,7 @@ func (x *TabletExternallyReparentedResponse) String() string {
 func (*TabletExternallyReparentedResponse) ProtoMessage() {}
 
 func (x *TabletExternallyReparentedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[167]
+	mi := &file_vtctldata_proto_msgTypes[171]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10480,7 +10684,7 @@ func (x *TabletExternallyReparentedResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use TabletExternallyReparentedResponse.ProtoReflect.Descriptor instead.
 func (*TabletExternallyReparentedResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{167}
+	return file_vtctldata_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *TabletExternallyReparentedResponse) GetKeyspace() string {
@@ -10523,7 +10727,7 @@ type UpdateCellInfoRequest struct {
 func (x *UpdateCellInfoRequest) Reset() {
 	*x = UpdateCellInfoRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[168]
+		mi := &file_vtctldata_proto_msgTypes[172]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10536,7 +10740,7 @@ func (x *UpdateCellInfoRequest) String() string {
 func (*UpdateCellInfoRequest) ProtoMessage() {}
 
 func (x *UpdateCellInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[168]
+	mi := &file_vtctldata_proto_msgTypes[172]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10549,7 +10753,7 @@ func (x *UpdateCellInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellInfoRequest.ProtoReflect.Descriptor instead.
 func (*UpdateCellInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{168}
+	return file_vtctldata_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *UpdateCellInfoRequest) GetName() string {
@@ -10578,7 +10782,7 @@ type UpdateCellInfoResponse struct {
 func (x *UpdateCellInfoResponse) Reset() {
 	*x = UpdateCellInfoResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[169]
+		mi := &file_vtctldata_proto_msgTypes[173]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10591,7 +10795,7 @@ func (x *UpdateCellInfoResponse) String() string {
 func (*UpdateCellInfoResponse) ProtoMessage() {}
 
 func (x *UpdateCellInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[169]
+	mi := &file_vtctldata_proto_msgTypes[173]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10604,7 +10808,7 @@ func (x *UpdateCellInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellInfoResponse.ProtoReflect.Descriptor instead.
 func (*UpdateCellInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{169}
+	return file_vtctldata_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *UpdateCellInfoResponse) GetName() string {
@@ -10633,7 +10837,7 @@ type UpdateCellsAliasRequest struct {
 func (x *UpdateCellsAliasRequest) Reset() {
 	*x = UpdateCellsAliasRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[170]
+		mi := &file_vtctldata_proto_msgTypes[174]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10646,7 +10850,7 @@ func (x *UpdateCellsAliasRequest) String() string {
 func (*UpdateCellsAliasRequest) ProtoMessage() {}
 
 func (x *UpdateCellsAliasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[170]
+	mi := &file_vtctldata_proto_msgTypes[174]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10659,7 +10863,7 @@ func (x *UpdateCellsAliasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellsAliasRequest.ProtoReflect.Descriptor instead.
 func (*UpdateCellsAliasRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{170}
+	return file_vtctldata_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *UpdateCellsAliasRequest) GetName() string {
@@ -10688,7 +10892,7 @@ type UpdateCellsAliasResponse struct {
 func (x *UpdateCellsAliasResponse) Reset() {
 	*x = UpdateCellsAliasResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[171]
+		mi := &file_vtctldata_proto_msgTypes[175]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10701,7 +10905,7 @@ func (x *UpdateCellsAliasResponse) String() string {
 func (*UpdateCellsAliasResponse) ProtoMessage() {}
 
 func (x *UpdateCellsAliasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[171]
+	mi := &file_vtctldata_proto_msgTypes[175]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10714,7 +10918,7 @@ func (x *UpdateCellsAliasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellsAliasResponse.ProtoReflect.Descriptor instead.
 func (*UpdateCellsAliasResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{171}
+	return file_vtctldata_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *UpdateCellsAliasResponse) GetName() string {
@@ -10742,7 +10946,7 @@ type ValidateRequest struct {
 func (x *ValidateRequest) Reset() {
 	*x = ValidateRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[172]
+		mi := &file_vtctldata_proto_msgTypes[176]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10755,7 +10959,7 @@ func (x *ValidateRequest) String() string {
 func (*ValidateRequest) ProtoMessage() {}
 
 func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[172]
+	mi := &file_vtctldata_proto_msgTypes[176]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10768,7 +10972,7 @@ func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{172}
+	return file_vtctldata_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *ValidateRequest) GetPingTablets() bool {
@@ -10790,7 +10994,7 @@ type ValidateResponse struct {
 func (x *ValidateResponse) Reset() {
 	*x = ValidateResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[173]
+		mi := &file_vtctldata_proto_msgTypes[177]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10803,7 +11007,7 @@ func (x *ValidateResponse) String() string {
 func (*ValidateResponse) ProtoMessage() {}
 
 func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[173]
+	mi := &file_vtctldata_proto_msgTypes[177]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10816,7 +11020,7 @@ func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateResponse.ProtoReflect.Descriptor instead.
 func (*ValidateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{173}
+	return file_vtctldata_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *ValidateResponse) GetResults() []string {
@@ -10845,7 +11049,7 @@ type ValidateKeyspaceRequest struct {
 func (x *ValidateKeyspaceRequest) Reset() {
 	*x = ValidateKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[174]
+		mi := &file_vtctldata_proto_msgTypes[178]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10858,7 +11062,7 @@ func (x *ValidateKeyspaceRequest) String() string {
 func (*ValidateKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[174]
+	mi := &file_vtctldata_proto_msgTypes[178]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10871,7 +11075,7 @@ func (x *ValidateKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{174}
+	return file_vtctldata_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *ValidateKeyspaceRequest) GetKeyspace() string {
@@ -10900,7 +11104,7 @@ type ValidateKeyspaceResponse struct {
 func (x *ValidateKeyspaceResponse) Reset() {
 	*x = ValidateKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[175]
+		mi := &file_vtctldata_proto_msgTypes[179]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10913,7 +11117,7 @@ func (x *ValidateKeyspaceResponse) String() string {
 func (*ValidateKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[175]
+	mi := &file_vtctldata_proto_msgTypes[179]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10926,7 +11130,7 @@ func (x *ValidateKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{175}
+	return file_vtctldata_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *ValidateKeyspaceResponse) GetResults() []string {
@@ -10958,7 +11162,7 @@ type ValidateSchemaKeyspaceRequest struct {
 func (x *ValidateSchemaKeyspaceRequest) Reset() {
 	*x = ValidateSchemaKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[176]
+		mi := &file_vtctldata_proto_msgTypes[180]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -10971,7 +11175,7 @@ func (x *ValidateSchemaKeyspaceRequest) String() string {
 func (*ValidateSchemaKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[176]
+	mi := &file_vtctldata_proto_msgTypes[180]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10984,7 +11188,7 @@ func (x *ValidateSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{176}
+	return file_vtctldata_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *ValidateSchemaKeyspaceRequest) GetKeyspace() string {
@@ -11034,7 +11238,7 @@ type ValidateSchemaKeyspaceResponse struct {
 func (x *ValidateSchemaKeyspaceResponse) Reset() {
 	*x = ValidateSchemaKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[177]
+		mi := &file_vtctldata_proto_msgTypes[181]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11047,7 +11251,7 @@ func (x *ValidateSchemaKeyspaceResponse) String() string {
 func (*ValidateSchemaKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[177]
+	mi := &file_vtctldata_proto_msgTypes[181]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11060,7 +11264,7 @@ func (x *ValidateSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{177}
+	return file_vtctldata_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *ValidateSchemaKeyspaceResponse) GetResults() []string {
@@ -11090,7 +11294,7 @@ type ValidateShardRequest struct {
 func (x *ValidateShardRequest) Reset() {
 	*x = ValidateShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[178]
+		mi := &file_vtctldata_proto_msgTypes[182]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11103,7 +11307,7 @@ func (x *ValidateShardRequest) String() string {
 func (*ValidateShardRequest) ProtoMessage() {}
 
 func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[178]
+	mi := &file_vtctldata_proto_msgTypes[182]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11116,7 +11320,7 @@ func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateShardRequest.ProtoReflect.Descriptor instead.
 func (*ValidateShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{178}
+	return file_vtctldata_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *ValidateShardRequest) GetKeyspace() string {
@@ -11151,7 +11355,7 @@ type ValidateShardResponse struct {
 func (x *ValidateShardResponse) Reset() {
 	*x = ValidateShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[179]
+		mi := &file_vtctldata_proto_msgTypes[183]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11164,7 +11368,7 @@ func (x *ValidateShardResponse) String() string {
 func (*ValidateShardResponse) ProtoMessage() {}
 
 func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[179]
+	mi := &file_vtctldata_proto_msgTypes[183]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11177,7 +11381,7 @@ func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateShardResponse.ProtoReflect.Descriptor instead.
 func (*ValidateShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{179}
+	return file_vtctldata_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *ValidateShardResponse) GetResults() []string {
@@ -11198,7 +11402,7 @@ type ValidateVersionKeyspaceRequest struct {
 func (x *ValidateVersionKeyspaceRequest) Reset() {
 	*x = ValidateVersionKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[180]
+		mi := &file_vtctldata_proto_msgTypes[184]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11211,7 +11415,7 @@ func (x *ValidateVersionKeyspaceRequest) String() string {
 func (*ValidateVersionKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateVersionKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[180]
+	mi := &file_vtctldata_proto_msgTypes[184]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11224,7 +11428,7 @@ func (x *ValidateVersionKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVersionKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{180}
+	return file_vtctldata_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *ValidateVersionKeyspaceRequest) GetKeyspace() string {
@@ -11246,7 +11450,7 @@ type ValidateVersionKeyspaceResponse struct {
 func (x *ValidateVersionKeyspaceResponse) Reset() {
 	*x = ValidateVersionKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[181]
+		mi := &file_vtctldata_proto_msgTypes[185]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11259,7 +11463,7 @@ func (x *ValidateVersionKeyspaceResponse) String() string {
 func (*ValidateVersionKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateVersionKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[181]
+	mi := &file_vtctldata_proto_msgTypes[185]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11272,7 +11476,7 @@ func (x *ValidateVersionKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVersionKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{181}
+	return file_vtctldata_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *ValidateVersionKeyspaceResponse) GetResults() []string {
@@ -11301,7 +11505,7 @@ type ValidateVersionShardRequest struct {
 func (x *ValidateVersionShardRequest) Reset() {
 	*x = ValidateVersionShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[182]
+		mi := &file_vtctldata_proto_msgTypes[186]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11314,7 +11518,7 @@ func (x *ValidateVersionShardRequest) String() string {
 func (*ValidateVersionShardRequest) ProtoMessage() {}
 
 func (x *ValidateVersionShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[182]
+	mi := &file_vtctldata_proto_msgTypes[186]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11327,7 +11531,7 @@ func (x *ValidateVersionShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionShardRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVersionShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{182}
+	return file_vtctldata_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *ValidateVersionShardRequest) GetKeyspace() string {
@@ -11355,7 +11559,7 @@ type ValidateVersionShardResponse struct {
 func (x *ValidateVersionShardResponse) Reset() {
 	*x = ValidateVersionShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[183]
+		mi := &file_vtctldata_proto_msgTypes[187]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11368,7 +11572,7 @@ func (x *ValidateVersionShardResponse) String() string {
 func (*ValidateVersionShardResponse) ProtoMessage() {}
 
 func (x *ValidateVersionShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[183]
+	mi := &file_vtctldata_proto_msgTypes[187]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11381,7 +11585,7 @@ func (x *ValidateVersionShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionShardResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVersionShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{183}
+	return file_vtctldata_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *ValidateVersionShardResponse) GetResults() []string {
@@ -11405,7 +11609,7 @@ type ValidateVSchemaRequest struct {
 func (x *ValidateVSchemaRequest) Reset() {
 	*x = ValidateVSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[184]
+		mi := &file_vtctldata_proto_msgTypes[188]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11418,7 +11622,7 @@ func (x *ValidateVSchemaRequest) String() string {
 func (*ValidateVSchemaRequest) ProtoMessage() {}
 
 func (x *ValidateVSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[184]
+	mi := &file_vtctldata_proto_msgTypes[188]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11431,7 +11635,7 @@ func (x *ValidateVSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVSchemaRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{184}
+	return file_vtctldata_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *ValidateVSchemaRequest) GetKeyspace() string {
@@ -11474,7 +11678,7 @@ type ValidateVSchemaResponse struct {
 func (x *ValidateVSchemaResponse) Reset() {
 	*x = ValidateVSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[185]
+		mi := &file_vtctldata_proto_msgTypes[189]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11487,7 +11691,7 @@ func (x *ValidateVSchemaResponse) String() string {
 func (*ValidateVSchemaResponse) ProtoMessage() {}
 
 func (x *ValidateVSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[185]
+	mi := &file_vtctldata_proto_msgTypes[189]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11500,7 +11704,7 @@ func (x *ValidateVSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVSchemaResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{185}
+	return file_vtctldata_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *ValidateVSchemaResponse) GetResults() []string {
@@ -11531,7 +11735,7 @@ type WorkflowDeleteRequest struct {
 func (x *WorkflowDeleteRequest) Reset() {
 	*x = WorkflowDeleteRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[186]
+		mi := &file_vtctldata_proto_msgTypes[190]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11544,7 +11748,7 @@ func (x *WorkflowDeleteRequest) String() string {
 func (*WorkflowDeleteRequest) ProtoMessage() {}
 
 func (x *WorkflowDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[186]
+	mi := &file_vtctldata_proto_msgTypes[190]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11557,7 +11761,7 @@ func (x *WorkflowDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDeleteRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{186}
+	return file_vtctldata_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *WorkflowDeleteRequest) GetKeyspace() string {
@@ -11600,7 +11804,7 @@ type WorkflowDeleteResponse struct {
 func (x *WorkflowDeleteResponse) Reset() {
 	*x = WorkflowDeleteResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[187]
+		mi := &file_vtctldata_proto_msgTypes[191]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11613,7 +11817,7 @@ func (x *WorkflowDeleteResponse) String() string {
 func (*WorkflowDeleteResponse) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[187]
+	mi := &file_vtctldata_proto_msgTypes[191]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11626,7 +11830,7 @@ func (x *WorkflowDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDeleteResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{187}
+	return file_vtctldata_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *WorkflowDeleteResponse) GetSummary() string {
@@ -11655,7 +11859,7 @@ type WorkflowStatusRequest struct {
 func (x *WorkflowStatusRequest) Reset() {
 	*x = WorkflowStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[188]
+		mi := &file_vtctldata_proto_msgTypes[192]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11668,7 +11872,7 @@ func (x *WorkflowStatusRequest) String() string {
 func (*WorkflowStatusRequest) ProtoMessage() {}
 
 func (x *WorkflowStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[188]
+	mi := &file_vtctldata_proto_msgTypes[192]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11681,7 +11885,7 @@ func (x *WorkflowStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowStatusRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{188}
+	return file_vtctldata_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *WorkflowStatusRequest) GetKeyspace() string {
@@ -11711,7 +11915,7 @@ type WorkflowStatusResponse struct {
 func (x *WorkflowStatusResponse) Reset() {
 	*x = WorkflowStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[189]
+		mi := &file_vtctldata_proto_msgTypes[193]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11724,7 +11928,7 @@ func (x *WorkflowStatusResponse) String() string {
 func (*WorkflowStatusResponse) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[189]
+	mi := &file_vtctldata_proto_msgTypes[193]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11737,7 +11941,7 @@ func (x *WorkflowStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowStatusResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{189}
+	return file_vtctldata_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *WorkflowStatusResponse) GetTableCopyState() map[string]*WorkflowStatusResponse_TableCopyState {
@@ -11774,7 +11978,7 @@ type WorkflowSwitchTrafficRequest struct {
 func (x *WorkflowSwitchTrafficRequest) Reset() {
 	*x = WorkflowSwitchTrafficRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[190]
+		mi := &file_vtctldata_proto_msgTypes[194]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11787,7 +11991,7 @@ func (x *WorkflowSwitchTrafficRequest) String() string {
 func (*WorkflowSwitchTrafficRequest) ProtoMessage() {}
 
 func (x *WorkflowSwitchTrafficRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[190]
+	mi := &file_vtctldata_proto_msgTypes[194]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11800,7 +12004,7 @@ func (x *WorkflowSwitchTrafficRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSwitchTrafficRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowSwitchTrafficRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{190}
+	return file_vtctldata_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *WorkflowSwitchTrafficRequest) GetKeyspace() string {
@@ -11887,7 +12091,7 @@ type WorkflowSwitchTrafficResponse struct {
 func (x *WorkflowSwitchTrafficResponse) Reset() {
 	*x = WorkflowSwitchTrafficResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[191]
+		mi := &file_vtctldata_proto_msgTypes[195]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11900,7 +12104,7 @@ func (x *WorkflowSwitchTrafficResponse) String() string {
 func (*WorkflowSwitchTrafficResponse) ProtoMessage() {}
 
 func (x *WorkflowSwitchTrafficResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[191]
+	mi := &file_vtctldata_proto_msgTypes[195]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11913,7 +12117,7 @@ func (x *WorkflowSwitchTrafficResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSwitchTrafficResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowSwitchTrafficResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{191}
+	return file_vtctldata_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *WorkflowSwitchTrafficResponse) GetSummary() string {
@@ -11958,7 +12162,7 @@ type WorkflowUpdateRequest struct {
 func (x *WorkflowUpdateRequest) Reset() {
 	*x = WorkflowUpdateRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[192]
+		mi := &file_vtctldata_proto_msgTypes[196]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -11971,7 +12175,7 @@ func (x *WorkflowUpdateRequest) String() string {
 func (*WorkflowUpdateRequest) ProtoMessage() {}
 
 func (x *WorkflowUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[192]
+	mi := &file_vtctldata_proto_msgTypes[196]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11984,7 +12188,7 @@ func (x *WorkflowUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowUpdateRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{192}
+	return file_vtctldata_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *WorkflowUpdateRequest) GetKeyspace() string {
@@ -12013,7 +12217,7 @@ type WorkflowUpdateResponse struct {
 func (x *WorkflowUpdateResponse) Reset() {
 	*x = WorkflowUpdateResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[193]
+		mi := &file_vtctldata_proto_msgTypes[197]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12026,7 +12230,7 @@ func (x *WorkflowUpdateResponse) String() string {
 func (*WorkflowUpdateResponse) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[193]
+	mi := &file_vtctldata_proto_msgTypes[197]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12039,7 +12243,7 @@ func (x *WorkflowUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowUpdateResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{193}
+	return file_vtctldata_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *WorkflowUpdateResponse) GetSummary() string {
@@ -12068,7 +12272,7 @@ type Workflow_ReplicationLocation struct {
 func (x *Workflow_ReplicationLocation) Reset() {
 	*x = Workflow_ReplicationLocation{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[195]
+		mi := &file_vtctldata_proto_msgTypes[199]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12081,7 +12285,7 @@ func (x *Workflow_ReplicationLocation) String() string {
 func (*Workflow_ReplicationLocation) ProtoMessage() {}
 
 func (x *Workflow_ReplicationLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[195]
+	mi := &file_vtctldata_proto_msgTypes[199]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12124,7 +12328,7 @@ type Workflow_ShardStream struct {
 func (x *Workflow_ShardStream) Reset() {
 	*x = Workflow_ShardStream{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[196]
+		mi := &file_vtctldata_proto_msgTypes[200]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12137,7 +12341,7 @@ func (x *Workflow_ShardStream) String() string {
 func (*Workflow_ShardStream) ProtoMessage() {}
 
 func (x *Workflow_ShardStream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[196]
+	mi := &file_vtctldata_proto_msgTypes[200]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12207,7 +12411,7 @@ type Workflow_Stream struct {
 func (x *Workflow_Stream) Reset() {
 	*x = Workflow_Stream{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[197]
+		mi := &file_vtctldata_proto_msgTypes[201]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12220,7 +12424,7 @@ func (x *Workflow_Stream) String() string {
 func (*Workflow_Stream) ProtoMessage() {}
 
 func (x *Workflow_Stream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[197]
+	mi := &file_vtctldata_proto_msgTypes[201]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12353,7 +12557,7 @@ type Workflow_Stream_CopyState struct {
 func (x *Workflow_Stream_CopyState) Reset() {
 	*x = Workflow_Stream_CopyState{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[198]
+		mi := &file_vtctldata_proto_msgTypes[202]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12366,7 +12570,7 @@ func (x *Workflow_Stream_CopyState) String() string {
 func (*Workflow_Stream_CopyState) ProtoMessage() {}
 
 func (x *Workflow_Stream_CopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[198]
+	mi := &file_vtctldata_proto_msgTypes[202]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12414,7 +12618,7 @@ type Workflow_Stream_Log struct {
 func (x *Workflow_Stream_Log) Reset() {
 	*x = Workflow_Stream_Log{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[199]
+		mi := &file_vtctldata_proto_msgTypes[203]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12427,7 +12631,7 @@ func (x *Workflow_Stream_Log) String() string {
 func (*Workflow_Stream_Log) ProtoMessage() {}
 
 func (x *Workflow_Stream_Log) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[199]
+	mi := &file_vtctldata_proto_msgTypes[203]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12510,7 +12714,7 @@ type GetSrvKeyspaceNamesResponse_NameList struct {
 func (x *GetSrvKeyspaceNamesResponse_NameList) Reset() {
 	*x = GetSrvKeyspaceNamesResponse_NameList{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[203]
+		mi := &file_vtctldata_proto_msgTypes[207]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12523,7 +12727,7 @@ func (x *GetSrvKeyspaceNamesResponse_NameList) String() string {
 func (*GetSrvKeyspaceNamesResponse_NameList) ProtoMessage() {}
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[203]
+	mi := &file_vtctldata_proto_msgTypes[207]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12536,7 +12740,7 @@ func (x *GetSrvKeyspaceNamesResponse_NameList) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use GetSrvKeyspaceNamesResponse_NameList.ProtoReflect.Descriptor instead.
 func (*GetSrvKeyspaceNamesResponse_NameList) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{78, 1}
+	return file_vtctldata_proto_rawDescGZIP(), []int{80, 1}
 }
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) GetNames() []string {
@@ -12559,7 +12763,7 @@ type MoveTablesCreateResponse_TabletInfo struct {
 func (x *MoveTablesCreateResponse_TabletInfo) Reset() {
 	*x = MoveTablesCreateResponse_TabletInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[206]
+		mi := &file_vtctldata_proto_msgTypes[210]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12572,7 +12776,7 @@ func (x *MoveTablesCreateResponse_TabletInfo) String() string {
 func (*MoveTablesCreateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *MoveTablesCreateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[206]
+	mi := &file_vtctldata_proto_msgTypes[210]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12585,7 +12789,7 @@ func (x *MoveTablesCreateResponse_TabletInfo) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use MoveTablesCreateResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*MoveTablesCreateResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{103, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{105, 0}
 }
 
 func (x *MoveTablesCreateResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -12615,7 +12819,7 @@ type WorkflowDeleteResponse_TabletInfo struct {
 func (x *WorkflowDeleteResponse_TabletInfo) Reset() {
 	*x = WorkflowDeleteResponse_TabletInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[214]
+		mi := &file_vtctldata_proto_msgTypes[218]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12628,7 +12832,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) String() string {
 func (*WorkflowDeleteResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[214]
+	mi := &file_vtctldata_proto_msgTypes[218]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12641,7 +12845,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use WorkflowDeleteResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{187, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{191, 0}
 }
 
 func (x *WorkflowDeleteResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -12674,7 +12878,7 @@ type WorkflowStatusResponse_TableCopyState struct {
 func (x *WorkflowStatusResponse_TableCopyState) Reset() {
 	*x = WorkflowStatusResponse_TableCopyState{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[215]
+		mi := &file_vtctldata_proto_msgTypes[219]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12687,7 +12891,7 @@ func (x *WorkflowStatusResponse_TableCopyState) String() string {
 func (*WorkflowStatusResponse_TableCopyState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[215]
+	mi := &file_vtctldata_proto_msgTypes[219]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12700,7 +12904,7 @@ func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use WorkflowStatusResponse_TableCopyState.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_TableCopyState) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{189, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{193, 0}
 }
 
 func (x *WorkflowStatusResponse_TableCopyState) GetRowsCopied() int64 {
@@ -12761,7 +12965,7 @@ type WorkflowStatusResponse_ShardStreamState struct {
 func (x *WorkflowStatusResponse_ShardStreamState) Reset() {
 	*x = WorkflowStatusResponse_ShardStreamState{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[216]
+		mi := &file_vtctldata_proto_msgTypes[220]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12774,7 +12978,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) String() string {
 func (*WorkflowStatusResponse_ShardStreamState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[216]
+	mi := &file_vtctldata_proto_msgTypes[220]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12787,7 +12991,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use WorkflowStatusResponse_ShardStreamState.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_ShardStreamState) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{189, 1}
+	return file_vtctldata_proto_rawDescGZIP(), []int{193, 1}
 }
 
 func (x *WorkflowStatusResponse_ShardStreamState) GetId() int32 {
@@ -12843,7 +13047,7 @@ type WorkflowStatusResponse_ShardStreams struct {
 func (x *WorkflowStatusResponse_ShardStreams) Reset() {
 	*x = WorkflowStatusResponse_ShardStreams{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[217]
+		mi := &file_vtctldata_proto_msgTypes[221]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12856,7 +13060,7 @@ func (x *WorkflowStatusResponse_ShardStreams) String() string {
 func (*WorkflowStatusResponse_ShardStreams) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[217]
+	mi := &file_vtctldata_proto_msgTypes[221]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12869,7 +13073,7 @@ func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use WorkflowStatusResponse_ShardStreams.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_ShardStreams) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{189, 2}
+	return file_vtctldata_proto_rawDescGZIP(), []int{193, 2}
 }
 
 func (x *WorkflowStatusResponse_ShardStreams) GetStreams() []*WorkflowStatusResponse_ShardStreamState {
@@ -12893,7 +13097,7 @@ type WorkflowUpdateResponse_TabletInfo struct {
 func (x *WorkflowUpdateResponse_TabletInfo) Reset() {
 	*x = WorkflowUpdateResponse_TabletInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[220]
+		mi := &file_vtctldata_proto_msgTypes[224]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12906,7 +13110,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) String() string {
 func (*WorkflowUpdateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[220]
+	mi := &file_vtctldata_proto_msgTypes[224]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12919,7 +13123,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use WorkflowUpdateResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{193, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{197, 0}
 }
 
 func (x *WorkflowUpdateResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -13421,7 +13625,16 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x10, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65,
 	0x74, 0x52, 0x0b, 0x61, 0x66, 0x74, 0x65, 0x72, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x1e,
 	0x0a, 0x0b, 0x77, 0x61, 0x73, 0x5f, 0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e, 0x18, 0x03, 0x20,
-	0x01, 0x28, 0x08, 0x52, 0x09, 0x77, 0x61, 0x73, 0x44, 0x72, 0x79, 0x52, 0x75, 0x6e, 0x22, 0x99,
+	0x01, 0x28, 0x08, 0x52, 0x09, 0x77, 0x61, 0x73, 0x44, 0x72, 0x79, 0x52, 0x75, 0x6e, 0x22, 0x4f,
+	0x0a, 0x1d, 0x43, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4d,
+	0x69, 0x67, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x75,
+	0x75, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22,
+	0x3d, 0x0a, 0x1e, 0x43, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61,
+	0x4d, 0x69, 0x67, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x1b, 0x0a, 0x09, 0x75, 0x75, 0x69, 0x64, 0x5f, 0x6c, 0x69, 0x73, 0x74, 0x18, 0x01,
+	0x20, 0x03, 0x28, 0x09, 0x52, 0x08, 0x75, 0x75, 0x69, 0x64, 0x4c, 0x69, 0x73, 0x74, 0x22, 0x99,
 	0x03, 0x0a, 0x15, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
 	0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05,
@@ -14199,289 +14412,393 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x68, 0x61, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72,
 	0x64, 0x12, 0x24, 0x0a, 0x05, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b,
 	0x32, 0x0e, 0x2e, 0x6c, 0x6f, 0x67, 0x75, 0x74, 0x69, 0x6c, 0x2e, 0x45, 0x76, 0x65, 0x6e, 0x74,
-	0x52, 0x05, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x22, 0x51, 0x0a, 0x15, 0x52, 0x75, 0x6e, 0x48, 0x65,
-	0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
-	0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74,
-	0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x18, 0x0a, 0x16, 0x52, 0x75,
-	0x6e, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x6d, 0x0a, 0x22, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70,
-	0x61, 0x63, 0x65, 0x44, 0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c,
-	0x69, 0x63, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x2b, 0x0a, 0x11, 0x64, 0x75, 0x72, 0x61, 0x62, 0x69,
-	0x6c, 0x69, 0x74, 0x79, 0x5f, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x10, 0x64, 0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c,
-	0x69, 0x63, 0x79, 0x22, 0x55, 0x0a, 0x23, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x44, 0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c, 0x69,
-	0x63, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74,
-	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0xc8, 0x01, 0x0a, 0x1c, 0x53,
-	0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x64,
-	0x46, 0x72, 0x6f, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65,
-	0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74,
-	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79,
-	0x70, 0x65, 0x52, 0x0a, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x14,
-	0x0a, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63,
-	0x65, 0x6c, 0x6c, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x18, 0x04,
-	0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x12, 0x27, 0x0a, 0x0f,
-	0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18,
-	0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x4b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x4f, 0x0a, 0x1d, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73,
-	0x70, 0x61, 0x63, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d, 0x52, 0x65,
+	0x52, 0x05, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x22, 0x4d, 0x0a, 0x1b, 0x52, 0x65, 0x74, 0x72, 0x79,
+	0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4d, 0x69, 0x67, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x3b, 0x0a, 0x1c, 0x52, 0x65, 0x74, 0x72, 0x79, 0x53,
+	0x63, 0x68, 0x65, 0x6d, 0x61, 0x4d, 0x69, 0x67, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x75, 0x75, 0x69, 0x64, 0x5f, 0x6c,
+	0x69, 0x73, 0x74, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x08, 0x75, 0x75, 0x69, 0x64, 0x4c,
+	0x69, 0x73, 0x74, 0x22, 0x51, 0x0a, 0x15, 0x52, 0x75, 0x6e, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68,
+	0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x38, 0x0a, 0x0c,
+	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x18, 0x0a, 0x16, 0x52, 0x75, 0x6e, 0x48, 0x65, 0x61,
+	0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x6d, 0x0a, 0x22, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x44,
+	0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x12, 0x2b, 0x0a, 0x11, 0x64, 0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79,
+	0x5f, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x64,
+	0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x22,
+	0x55, 0x0a, 0x23, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x44, 0x75,
+	0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x65,
 	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
 	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
 	0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x5e, 0x0a, 0x1e, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x49, 0x6e, 0x66,
-	0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0xc8, 0x01, 0x0a, 0x1c, 0x53, 0x65, 0x74, 0x4b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70,
+	0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70,
+	0x61, 0x63, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79,
+	0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0a,
+	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x65,
+	0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73,
+	0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x12, 0x27, 0x0a, 0x0f, 0x73, 0x6f, 0x75, 0x72,
+	0x63, 0x65, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x0e, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x22, 0x4f, 0x0a, 0x1d, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
+	0x53, 0x65, 0x72, 0x76, 0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x22, 0x5e, 0x0a, 0x1e, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
+	0x12, 0x14, 0x0a, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x4a, 0x04, 0x08, 0x02, 0x10, 0x03, 0x4a, 0x04, 0x08, 0x03,
+	0x10, 0x04, 0x22, 0x51, 0x0a, 0x1f, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61,
+	0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x08, 0x6b, 0x65, 0x79,
+	0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x72, 0x0a, 0x1f, 0x53, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x49, 0x73, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x6e,
+	0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
 	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73,
-	0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x18, 0x04, 0x20,
-	0x01, 0x28, 0x08, 0x52, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x4a, 0x04, 0x08, 0x02, 0x10, 0x03,
-	0x4a, 0x04, 0x08, 0x03, 0x10, 0x04, 0x22, 0x51, 0x0a, 0x1f, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x49, 0x6e, 0x66,
-	0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f,
-	0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52,
-	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x72, 0x0a, 0x1f, 0x53, 0x65, 0x74,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x69, 0x73,
+	0x5f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x6e, 0x67, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09,
+	0x69, 0x73, 0x53, 0x65, 0x72, 0x76, 0x69, 0x6e, 0x67, 0x22, 0x49, 0x0a, 0x20, 0x53, 0x65, 0x74,
 	0x53, 0x68, 0x61, 0x72, 0x64, 0x49, 0x73, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x53, 0x65,
-	0x72, 0x76, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x1d,
-	0x0a, 0x0a, 0x69, 0x73, 0x5f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x6e, 0x67, 0x18, 0x03, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x09, 0x69, 0x73, 0x53, 0x65, 0x72, 0x76, 0x69, 0x6e, 0x67, 0x22, 0x49, 0x0a,
-	0x20, 0x53, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72, 0x64, 0x49, 0x73, 0x50, 0x72, 0x69, 0x6d, 0x61,
-	0x72, 0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x12, 0x25, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b,
-	0x32, 0x0f, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72,
-	0x64, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0x8e, 0x02, 0x0a, 0x1c, 0x53, 0x65, 0x74,
-	0x53, 0x68, 0x61, 0x72, 0x64, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x74, 0x72,
-	0x6f, 0x6c, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x35, 0x0a, 0x0b, 0x74,
-	0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e,
-	0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0a, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79,
-	0x70, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28,
-	0x09, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x12, 0x23, 0x0a, 0x0d, 0x64, 0x65, 0x6e, 0x69,
-	0x65, 0x64, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52,
-	0x0c, 0x64, 0x65, 0x6e, 0x69, 0x65, 0x64, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x32, 0x0a,
-	0x15, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x71, 0x75, 0x65, 0x72, 0x79, 0x5f, 0x73,
-	0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x08, 0x52, 0x13, 0x64, 0x69,
-	0x73, 0x61, 0x62, 0x6c, 0x65, 0x51, 0x75, 0x65, 0x72, 0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63,
-	0x65, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x18, 0x07, 0x20, 0x01, 0x28,
-	0x08, 0x52, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x22, 0x46, 0x0a, 0x1d, 0x53, 0x65, 0x74,
-	0x53, 0x68, 0x61, 0x72, 0x64, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x74, 0x72,
-	0x6f, 0x6c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x05, 0x73, 0x68,
-	0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72,
-	0x64, 0x22, 0x6a, 0x0a, 0x12, 0x53, 0x65, 0x74, 0x57, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65,
-	0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41,
-	0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61,
-	0x73, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x08, 0x52, 0x08, 0x77, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x22, 0x15, 0x0a,
-	0x13, 0x53, 0x65, 0x74, 0x57, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x88, 0x01, 0x0a, 0x1a, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65,
-	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x41, 0x64, 0x64, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12,
-	0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
-	0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f,
-	0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f,
-	0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69,
-	0x61, 0x73, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22,
-	0x1d, 0x0a, 0x1b, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x41, 0x64, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x62,
-	0x0a, 0x1a, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x46, 0x69, 0x78, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x12,
-	0x0a, 0x04, 0x63, 0x65, 0x6c, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x63, 0x65,
-	0x6c, 0x6c, 0x22, 0x54, 0x0a, 0x1b, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x69, 0x78, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x12, 0x35, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b,
-	0x32, 0x1f, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72,
-	0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x72, 0x72, 0x6f,
-	0x72, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x54, 0x0a, 0x20, 0x53, 0x68, 0x61, 0x72,
-	0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69,
-	0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0xaa,
-	0x03, 0x0a, 0x21, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x78, 0x0a, 0x14, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03,
-	0x28, 0x0b, 0x32, 0x45, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53,
-	0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50,
-	0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x2e, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74,
-	0x75, 0x73, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x13, 0x72, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73, 0x12, 0x5a,
-	0x0a, 0x0a, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x6d, 0x61, 0x70, 0x18, 0x02, 0x20, 0x03,
-	0x28, 0x0b, 0x32, 0x3b, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53,
-	0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50,
-	0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x4d, 0x61, 0x70, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52,
-	0x09, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x4d, 0x61, 0x70, 0x1a, 0x5f, 0x0a, 0x18, 0x52, 0x65,
-	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65,
-	0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x2d, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
-	0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x4e, 0x0a, 0x0e, 0x54,
-	0x61, 0x62, 0x6c, 0x65, 0x74, 0x4d, 0x61, 0x70, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a,
-	0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12,
-	0x26, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10,
-	0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
-	0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x8b, 0x01, 0x0a, 0x1d,
-	0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e,
-	0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a,
-	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61,
-	0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12,
-	0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18,
-	0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
-	0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x20, 0x0a, 0x1e, 0x53, 0x68, 0x61,
-	0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x6d,
-	0x6f, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x7c, 0x0a, 0x12, 0x53,
-	0x6c, 0x65, 0x65, 0x70, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61,
-	0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61,
-	0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b,
-	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x2c, 0x0a, 0x08, 0x64,
-	0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e,
-	0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52,
-	0x08, 0x64, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x15, 0x0a, 0x13, 0x53, 0x6c, 0x65,
-	0x65, 0x70, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x22, 0xf0, 0x01, 0x0a, 0x15, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64,
-	0x41, 0x64, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x10, 0x0a, 0x03,
-	0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x05, 0x52, 0x03, 0x75, 0x69, 0x64, 0x12, 0x27,
-	0x0a, 0x0f, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x4b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x73, 0x6f, 0x75, 0x72, 0x63,
-	0x65, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x73,
-	0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x2f, 0x0a, 0x09, 0x6b, 0x65,
-	0x79, 0x5f, 0x72, 0x61, 0x6e, 0x67, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x52, 0x61, 0x6e, 0x67,
-	0x65, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x74,
-	0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x07, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x74, 0x61, 0x62,
-	0x6c, 0x65, 0x73, 0x22, 0x3f, 0x0a, 0x16, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61,
-	0x72, 0x64, 0x41, 0x64, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a,
+	0x72, 0x76, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a,
 	0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x74,
 	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x05, 0x73,
-	0x68, 0x61, 0x72, 0x64, 0x22, 0x5e, 0x0a, 0x18, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68,
-	0x61, 0x72, 0x64, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05,
-	0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61,
-	0x72, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x05, 0x52,
-	0x03, 0x75, 0x69, 0x64, 0x22, 0x42, 0x0a, 0x19, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68,
-	0x61, 0x72, 0x64, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x12, 0x25, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b,
-	0x32, 0x0f, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72,
-	0x64, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0x53, 0x0a, 0x17, 0x53, 0x74, 0x61, 0x72,
-	0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75,
+	0x68, 0x61, 0x72, 0x64, 0x22, 0x8e, 0x02, 0x0a, 0x1c, 0x53, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x35, 0x0a, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74,
+	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79,
+	0x70, 0x65, 0x52, 0x0a, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x14,
+	0x0a, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63,
+	0x65, 0x6c, 0x6c, 0x73, 0x12, 0x23, 0x0a, 0x0d, 0x64, 0x65, 0x6e, 0x69, 0x65, 0x64, 0x5f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0c, 0x64, 0x65, 0x6e,
+	0x69, 0x65, 0x64, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x32, 0x0a, 0x15, 0x64, 0x69, 0x73,
+	0x61, 0x62, 0x6c, 0x65, 0x5f, 0x71, 0x75, 0x65, 0x72, 0x79, 0x5f, 0x73, 0x65, 0x72, 0x76, 0x69,
+	0x63, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x08, 0x52, 0x13, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c,
+	0x65, 0x51, 0x75, 0x65, 0x72, 0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x16, 0x0a,
+	0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x18, 0x07, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x72,
+	0x65, 0x6d, 0x6f, 0x76, 0x65, 0x22, 0x46, 0x0a, 0x1d, 0x53, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0x6a, 0x0a,
+	0x12, 0x53, 0x65, 0x74, 0x57, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x71, 0x75,
 	0x65, 0x73, 0x74, 0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c,
 	0x69, 0x61, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
 	0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73,
-	0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x1a, 0x0a,
-	0x18, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f,
-	0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x52, 0x0a, 0x16, 0x53, 0x74, 0x6f,
-	0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c,
-	0x69, 0x61, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73,
-	0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x19, 0x0a,
-	0x17, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x52, 0x0a, 0x21, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x45, 0x78, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x6c, 0x79, 0x52, 0x65, 0x70, 0x61,
-	0x72, 0x65, 0x6e, 0x74, 0x65, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2d, 0x0a,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41,
-	0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x22, 0xc6, 0x01, 0x0a,
-	0x22, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x45, 0x78, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x6c,
-	0x79, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x65, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12,
-	0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
-	0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x36, 0x0a, 0x0b, 0x6e, 0x65, 0x77, 0x5f, 0x70, 0x72, 0x69,
-	0x6d, 0x61, 0x72, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70,
-	0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61,
-	0x73, 0x52, 0x0a, 0x6e, 0x65, 0x77, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x36, 0x0a,
-	0x0b, 0x6f, 0x6c, 0x64, 0x5f, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x04, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0a, 0x6f, 0x6c, 0x64, 0x50, 0x72,
-	0x69, 0x6d, 0x61, 0x72, 0x79, 0x22, 0x5c, 0x0a, 0x15, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43,
-	0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12,
-	0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61,
-	0x6d, 0x65, 0x12, 0x2f, 0x0a, 0x09, 0x63, 0x65, 0x6c, 0x6c, 0x5f, 0x69, 0x6e, 0x66, 0x6f, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
-	0x2e, 0x43, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x08, 0x63, 0x65, 0x6c, 0x6c, 0x49,
-	0x6e, 0x66, 0x6f, 0x22, 0x5d, 0x0a, 0x16, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43, 0x65, 0x6c,
-	0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a,
-	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d,
-	0x65, 0x12, 0x2f, 0x0a, 0x09, 0x63, 0x65, 0x6c, 0x6c, 0x5f, 0x69, 0x6e, 0x66, 0x6f, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x43, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x08, 0x63, 0x65, 0x6c, 0x6c, 0x49, 0x6e,
-	0x66, 0x6f, 0x22, 0x64, 0x0a, 0x17, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43, 0x65, 0x6c, 0x6c,
-	0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a,
-	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d,
-	0x65, 0x12, 0x35, 0x0a, 0x0b, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
-	0x61, 0x2e, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0a, 0x63, 0x65,
-	0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x65, 0x0a, 0x18, 0x55, 0x70, 0x64, 0x61,
-	0x74, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x63, 0x65, 0x6c, 0x6c,
-	0x73, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c,
-	0x69, 0x61, 0x73, 0x52, 0x0a, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22,
-	0x34, 0x0a, 0x0f, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65,
-	0x74, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x73, 0x22, 0xfb, 0x01, 0x0a, 0x10, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
-	0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65,
-	0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x73, 0x12, 0x62, 0x0a, 0x13, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f,
-	0x62, 0x79, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28,
-	0x0b, 0x32, 0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61,
-	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52,
-	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x11, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79,
-	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x1a, 0x69, 0x0a, 0x16, 0x52, 0x65, 0x73, 0x75,
-	0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x45, 0x6e, 0x74,
+	0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x1a, 0x0a,
+	0x08, 0x77, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x08, 0x77, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x22, 0x15, 0x0a, 0x13, 0x53, 0x65, 0x74,
+	0x57, 0x72, 0x69, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x88, 0x01, 0x0a, 0x1a, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x41, 0x64, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72,
+	0x64, 0x12, 0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61,
+	0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61,
+	0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b,
+	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x1d, 0x0a, 0x1b, 0x53,
+	0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x41,
+	0x64, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x62, 0x0a, 0x1a, 0x53, 0x68,
+	0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x69,
+	0x78, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x63, 0x65,
+	0x6c, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x63, 0x65, 0x6c, 0x6c, 0x22, 0x54,
+	0x0a, 0x1b, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x46, 0x69, 0x78, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x35, 0x0a,
+	0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1f, 0x2e, 0x74,
+	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x52, 0x05, 0x65,
+	0x72, 0x72, 0x6f, 0x72, 0x22, 0x54, 0x0a, 0x20, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e,
+	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0xaa, 0x03, 0x0a, 0x21, 0x53,
+	0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50,
+	0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x78, 0x0a, 0x14, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f,
+	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x45,
+	0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64,
+	0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69, 0x74,
+	0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x13, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73, 0x12, 0x5a, 0x0a, 0x0a, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x5f, 0x6d, 0x61, 0x70, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x3b,
+	0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64,
+	0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69, 0x74,
+	0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x4d, 0x61, 0x70, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x09, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x4d, 0x61, 0x70, 0x1a, 0x5f, 0x0a, 0x18, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73, 0x45, 0x6e, 0x74,
 	0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x03, 0x6b, 0x65, 0x79, 0x12, 0x39, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a,
-	0x02, 0x38, 0x01, 0x22, 0x58, 0x0a, 0x17, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a,
-	0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69,
-	0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08,
-	0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x22, 0xfc, 0x01,
-	0x0a, 0x18, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65,
+	0x03, 0x6b, 0x65, 0x79, 0x12, 0x2d, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x05, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x4e, 0x0a, 0x0e, 0x54, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x4d, 0x61, 0x70, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x26, 0x0a, 0x05, 0x76,
+	0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x74, 0x6f, 0x70,
+	0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x05, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x8b, 0x01, 0x0a, 0x1d, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x6d, 0x6f,
+	0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79,
+	0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79,
+	0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x38, 0x0a, 0x0c, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x20, 0x0a, 0x1e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65,
+	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x7c, 0x0a, 0x12, 0x53, 0x6c, 0x65, 0x65, 0x70,
+	0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x38, 0x0a,
+	0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x2c, 0x0a, 0x08, 0x64, 0x75, 0x72, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74, 0x69,
+	0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x08, 0x64, 0x75, 0x72,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x15, 0x0a, 0x13, 0x53, 0x6c, 0x65, 0x65, 0x70, 0x54, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xf0, 0x01, 0x0a,
+	0x15, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x41, 0x64, 0x64, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x69, 0x64, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x05, 0x52, 0x03, 0x75, 0x69, 0x64, 0x12, 0x27, 0x0a, 0x0f, 0x73, 0x6f,
+	0x75, 0x72, 0x63, 0x65, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x04, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x0e, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70,
+	0x61, 0x63, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f, 0x73, 0x68,
+	0x61, 0x72, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x2f, 0x0a, 0x09, 0x6b, 0x65, 0x79, 0x5f, 0x72, 0x61,
+	0x6e, 0x67, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
+	0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x08, 0x6b,
+	0x65, 0x79, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x73, 0x18, 0x07, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x22,
+	0x3f, 0x0a, 0x16, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x41, 0x64,
+	0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x05, 0x73, 0x68, 0x61,
+	0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64,
+	0x22, 0x5e, 0x0a, 0x18, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x44,
+	0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
+	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72,
+	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x10,
+	0x0a, 0x03, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x05, 0x52, 0x03, 0x75, 0x69, 0x64,
+	0x22, 0x42, 0x0a, 0x19, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x44,
+	0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a,
+	0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x74,
+	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x05, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x22, 0x53, 0x0a, 0x17, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x1a, 0x0a, 0x18, 0x53, 0x74, 0x61,
+	0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x52, 0x0a, 0x16, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x38, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0b, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x19, 0x0a, 0x17, 0x53, 0x74, 0x6f,
+	0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x52, 0x0a, 0x21, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x45, 0x78,
+	0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x6c, 0x79, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74,
+	0x65, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
+	0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73,
+	0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x22, 0xc6, 0x01, 0x0a, 0x22, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x45, 0x78, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x6c, 0x79, 0x52, 0x65, 0x70,
+	0x61, 0x72, 0x65, 0x6e, 0x74, 0x65, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72,
+	0x64, 0x12, 0x36, 0x0a, 0x0b, 0x6e, 0x65, 0x77, 0x5f, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0a, 0x6e,
+	0x65, 0x77, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x36, 0x0a, 0x0b, 0x6f, 0x6c, 0x64,
+	0x5f, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15,
+	0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0a, 0x6f, 0x6c, 0x64, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72,
+	0x79, 0x22, 0x5c, 0x0a, 0x15, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x49,
+	0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61,
+	0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x2f,
+	0x0a, 0x09, 0x63, 0x65, 0x6c, 0x6c, 0x5f, 0x69, 0x6e, 0x66, 0x6f, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x43, 0x65, 0x6c,
+	0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x08, 0x63, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x22,
+	0x5d, 0x0a, 0x16, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66,
+	0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x2f, 0x0a,
+	0x09, 0x63, 0x65, 0x6c, 0x6c, 0x5f, 0x69, 0x6e, 0x66, 0x6f, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b,
+	0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x43, 0x65, 0x6c, 0x6c,
+	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x08, 0x63, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x22, 0x64,
+	0x0a, 0x17, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69,
+	0x61, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x35, 0x0a,
+	0x0b, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x43, 0x65,
+	0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0a, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x41,
+	0x6c, 0x69, 0x61, 0x73, 0x22, 0x65, 0x0a, 0x18, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x43, 0x65,
+	0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
+	0x6e, 0x61, 0x6d, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x5f, 0x61, 0x6c,
+	0x69, 0x61, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
+	0x64, 0x61, 0x74, 0x61, 0x2e, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52,
+	0x0a, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x34, 0x0a, 0x0f, 0x56,
+	0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x21,
+	0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x73, 0x22, 0xfb, 0x01, 0x0a, 0x10, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73,
+	0x12, 0x62, 0x0a, 0x13, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x6b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x32, 0x2e,
+	0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
+	0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c,
+	0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x45, 0x6e, 0x74, 0x72,
+	0x79, 0x52, 0x11, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x1a, 0x69, 0x0a, 0x16, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42,
+	0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10,
+	0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79,
+	0x12, 0x39, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x23, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69,
+	0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22,
+	0x58, 0x0a, 0x17, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70,
+	0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69,
+	0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x22, 0xfc, 0x01, 0x0a, 0x18, 0x56, 0x61,
+	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73,
+	0x12, 0x61, 0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x37, 0x2e, 0x76, 0x74, 0x63,
+	0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e,
+	0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e,
+	0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68,
+	0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79,
+	0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65,
+	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x36, 0x0a, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74,
+	0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65,
+	0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76,
+	0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xd8, 0x01, 0x0a, 0x1d, 0x56, 0x61, 0x6c,
+	0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70,
+	0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x25, 0x0a, 0x0e, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64,
+	0x65, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d,
+	0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x23, 0x0a,
+	0x0d, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x76, 0x69, 0x65, 0x77, 0x73, 0x18, 0x03,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x0c, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x56, 0x69, 0x65,
+	0x77, 0x73, 0x12, 0x26, 0x0a, 0x0f, 0x73, 0x6b, 0x69, 0x70, 0x5f, 0x6e, 0x6f, 0x5f, 0x70, 0x72,
+	0x69, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0d, 0x73, 0x6b, 0x69,
+	0x70, 0x4e, 0x6f, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x27, 0x0a, 0x0f, 0x69, 0x6e,
+	0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x76, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x18, 0x05, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x0e, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x56, 0x73, 0x63, 0x68,
+	0x65, 0x6d, 0x61, 0x22, 0x88, 0x02, 0x0a, 0x1e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65,
+	0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73,
+	0x12, 0x67, 0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x3d, 0x2e, 0x76, 0x74, 0x63,
+	0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53,
+	0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53,
+	0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73, 0x75, 0x6c,
+	0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52, 0x65, 0x73,
+	0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79,
+	0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b,
+	0x65, 0x79, 0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61,
+	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x6b,
+	0x0a, 0x14, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67,
+	0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b,
+	0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x22, 0x31, 0x0a, 0x15, 0x56,
+	0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18,
+	0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x3c,
+	0x0a, 0x1e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f,
+	0x6e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x8a, 0x02, 0x0a,
+	0x1f, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e,
+	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
+	0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x68, 0x0a, 0x10, 0x72, 0x65,
+	0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x3e, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e,
+	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45,
+	0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53,
+	0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42,
+	0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b,
+	0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x36, 0x0a,
+	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76,
+	0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
+	0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x4f, 0x0a, 0x1b, 0x56, 0x61, 0x6c,
+	0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0x38, 0x0a, 0x1c, 0x56, 0x61,
+	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x68, 0x61,
+	0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65,
 	0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x73, 0x12, 0x61, 0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f,
-	0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x37,
-	0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64,
-	0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x75, 0x6c, 0x74, 0x73, 0x22, 0x98, 0x01, 0x0a, 0x16, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
+	0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x73, 0x68, 0x61,
+	0x72, 0x64, 0x73, 0x12, 0x25, 0x0a, 0x0e, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d, 0x65, 0x78, 0x63,
+	0x6c, 0x75, 0x64, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x23, 0x0a, 0x0d, 0x69, 0x6e,
+	0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x76, 0x69, 0x65, 0x77, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x0c, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x56, 0x69, 0x65, 0x77, 0x73, 0x22,
+	0xfa, 0x01, 0x0a, 0x17, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68,
+	0x65, 0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72,
+	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65,
+	0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x60, 0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73,
+	0x5f, 0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x36, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69,
+	0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f,
 	0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61,
 	0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73,
 	0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52, 0x65, 0x73, 0x75, 0x6c,
@@ -14490,265 +14807,170 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
 	0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69,
 	0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xd8, 0x01, 0x0a,
-	0x1d, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a,
-	0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x25, 0x0a, 0x0e, 0x65, 0x78,
-	0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03,
-	0x28, 0x09, 0x52, 0x0d, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65,
-	0x73, 0x12, 0x23, 0x0a, 0x0d, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x76, 0x69, 0x65,
-	0x77, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0c, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64,
-	0x65, 0x56, 0x69, 0x65, 0x77, 0x73, 0x12, 0x26, 0x0a, 0x0f, 0x73, 0x6b, 0x69, 0x70, 0x5f, 0x6e,
-	0x6f, 0x5f, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52,
-	0x0d, 0x73, 0x6b, 0x69, 0x70, 0x4e, 0x6f, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x27,
-	0x0a, 0x0f, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x76, 0x73, 0x63, 0x68, 0x65, 0x6d,
-	0x61, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0e, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65,
-	0x56, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x22, 0x88, 0x02, 0x0a, 0x1e, 0x56, 0x61, 0x6c, 0x69,
-	0x64, 0x61, 0x74, 0x65, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65,
-	0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x73, 0x12, 0x67, 0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f,
-	0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x3d,
-	0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64,
-	0x61, 0x74, 0x65, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74,
-	0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72,
-	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a,
-	0x13, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45,
-	0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74,
-	0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02,
-	0x38, 0x01, 0x22, 0x6b, 0x0a, 0x14, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68,
-	0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x21, 0x0a, 0x0c,
-	0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x03, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x22,
-	0x31, 0x0a, 0x15, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75,
-	0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c,
-	0x74, 0x73, 0x22, 0x3c, 0x0a, 0x1e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65,
-	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x22, 0x8a, 0x02, 0x0a, 0x1f, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72,
-	0x73, 0x69, 0x6f, 0x6e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18,
-	0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x68,
-	0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x68, 0x61,
-	0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x3e, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72,
-	0x73, 0x69, 0x6f, 0x6e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68,
-	0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74,
-	0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52, 0x65, 0x73, 0x75,
-	0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12,
-	0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65,
-	0x79, 0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b,
-	0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c,
-	0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x4f, 0x0a,
-	0x1b, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e,
-	0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x22, 0x38,
-	0x0a, 0x1c, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f,
-	0x6e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18,
-	0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52,
-	0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x98, 0x01, 0x0a, 0x16, 0x56, 0x61, 0x6c,
-	0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x9a, 0x01, 0x0a,
+	0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x1b,
+	0x0a, 0x09, 0x6b, 0x65, 0x65, 0x70, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x08, 0x6b, 0x65, 0x65, 0x70, 0x44, 0x61, 0x74, 0x61, 0x12, 0x2c, 0x0a, 0x12, 0x6b,
+	0x65, 0x65, 0x70, 0x5f, 0x72, 0x6f, 0x75, 0x74, 0x69, 0x6e, 0x67, 0x5f, 0x72, 0x75, 0x6c, 0x65,
+	0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x10, 0x6b, 0x65, 0x65, 0x70, 0x52, 0x6f, 0x75,
+	0x74, 0x69, 0x6e, 0x67, 0x52, 0x75, 0x6c, 0x65, 0x73, 0x22, 0xd1, 0x01, 0x0a, 0x16, 0x57, 0x6f,
+	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x46,
+	0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x07, 0x64,
+	0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a, 0x55, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x22, 0x4f, 0x0a,
+	0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x22, 0xc1,
+	0x07, 0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5f, 0x0a, 0x10, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x5f, 0x63, 0x6f, 0x70, 0x79, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x01, 0x20,
+	0x03, 0x28, 0x0b, 0x32, 0x35, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79,
+	0x53, 0x74, 0x61, 0x74, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x58, 0x0a, 0x0d, 0x73, 0x68,
+	0x61, 0x72, 0x64, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x33, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f,
+	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d,
+	0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0c, 0x73, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72,
+	0x65, 0x61, 0x6d, 0x73, 0x1a, 0xe8, 0x01, 0x0a, 0x0e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f,
+	0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x72, 0x6f, 0x77, 0x73, 0x5f,
+	0x63, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0a, 0x72, 0x6f,
+	0x77, 0x73, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x6f, 0x77, 0x73,
+	0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x72, 0x6f,
+	0x77, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x27, 0x0a, 0x0f, 0x72, 0x6f, 0x77, 0x73, 0x5f,
+	0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x02,
+	0x52, 0x0e, 0x72, 0x6f, 0x77, 0x73, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65,
+	0x12, 0x21, 0x0a, 0x0c, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x63, 0x6f, 0x70, 0x69, 0x65, 0x64,
+	0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0b, 0x62, 0x79, 0x74, 0x65, 0x73, 0x43, 0x6f, 0x70,
+	0x69, 0x65, 0x64, 0x12, 0x1f, 0x0a, 0x0b, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x74, 0x6f, 0x74,
+	0x61, 0x6c, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0a, 0x62, 0x79, 0x74, 0x65, 0x73, 0x54,
+	0x6f, 0x74, 0x61, 0x6c, 0x12, 0x29, 0x0a, 0x10, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x70, 0x65,
+	0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x02, 0x52, 0x0f,
+	0x62, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x1a,
+	0xbc, 0x01, 0x0a, 0x10, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05,
+	0x52, 0x02, 0x69, 0x64, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f, 0x73, 0x68,
+	0x61, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x05, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x12, 0x0a, 0x04, 0x69, 0x6e,
+	0x66, 0x6f, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x1a, 0x5c,
+	0x0a, 0x0c, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x12, 0x4c,
+	0x0a, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x74,
+	0x61, 0x74, 0x65, 0x52, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x1a, 0x73, 0x0a, 0x13,
+	0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x45, 0x6e,
+	0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x46, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x30, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70,
+	0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38,
+	0x01, 0x1a, 0x6f, 0x0a, 0x11, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d,
+	0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x44, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75,
+	0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2e, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74,
+	0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64,
+	0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02,
+	0x38, 0x01, 0x22, 0xd7, 0x03, 0x0a, 0x1c, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53,
+	0x77, 0x69, 0x74, 0x63, 0x68, 0x54, 0x72, 0x61, 0x66, 0x66, 0x69, 0x63, 0x52, 0x65, 0x71, 0x75,
 	0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18,
 	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12,
-	0x16, 0x0a, 0x06, 0x73, 0x68, 0x61, 0x72, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52,
-	0x06, 0x73, 0x68, 0x61, 0x72, 0x64, 0x73, 0x12, 0x25, 0x0a, 0x0e, 0x65, 0x78, 0x63, 0x6c, 0x75,
-	0x64, 0x65, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52,
-	0x0d, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x23,
-	0x0a, 0x0d, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x76, 0x69, 0x65, 0x77, 0x73, 0x18,
-	0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0c, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x56, 0x69,
-	0x65, 0x77, 0x73, 0x22, 0xfa, 0x01, 0x0a, 0x17, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65,
-	0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
-	0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09,
-	0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x60, 0x0a, 0x10, 0x72, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x36, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42,
-	0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52,
-	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74,
-	0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x03, 0x6b, 0x65, 0x79, 0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01,
-	0x22, 0x9a, 0x01, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c,
-	0x65, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x12, 0x1b, 0x0a, 0x09, 0x6b, 0x65, 0x65, 0x70, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x18,
-	0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x6b, 0x65, 0x65, 0x70, 0x44, 0x61, 0x74, 0x61, 0x12,
-	0x2c, 0x0a, 0x12, 0x6b, 0x65, 0x65, 0x70, 0x5f, 0x72, 0x6f, 0x75, 0x74, 0x69, 0x6e, 0x67, 0x5f,
-	0x72, 0x75, 0x6c, 0x65, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x10, 0x6b, 0x65, 0x65,
-	0x70, 0x52, 0x6f, 0x75, 0x74, 0x69, 0x6e, 0x67, 0x52, 0x75, 0x6c, 0x65, 0x73, 0x22, 0xd1, 0x01,
-	0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d,
-	0x61, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61,
-	0x72, 0x79, 0x12, 0x46, 0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x18, 0x02, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66,
-	0x6f, 0x52, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a, 0x55, 0x0a, 0x0a, 0x54, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
-	0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x65, 0x6c, 0x65, 0x74,
-	0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65,
-	0x64, 0x22, 0x4f, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x22, 0xc1, 0x07, 0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53,
-	0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5f, 0x0a,
-	0x10, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x63, 0x6f, 0x70, 0x79, 0x5f, 0x73, 0x74, 0x61, 0x74,
-	0x65, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x35, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64,
-	0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74,
-	0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65,
-	0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e,
-	0x74, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x58,
-	0x0a, 0x0d, 0x73, 0x68, 0x61, 0x72, 0x64, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x18,
-	0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x33, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74,
-	0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74,
-	0x72, 0x65, 0x61, 0x6d, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0c, 0x73, 0x68, 0x61, 0x72,
-	0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x1a, 0xe8, 0x01, 0x0a, 0x0e, 0x54, 0x61, 0x62,
-	0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x72,
-	0x6f, 0x77, 0x73, 0x5f, 0x63, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03,
-	0x52, 0x0a, 0x72, 0x6f, 0x77, 0x73, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x12, 0x1d, 0x0a, 0x0a,
-	0x72, 0x6f, 0x77, 0x73, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03,
-	0x52, 0x09, 0x72, 0x6f, 0x77, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x27, 0x0a, 0x0f, 0x72,
-	0x6f, 0x77, 0x73, 0x5f, 0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x18, 0x03,
-	0x20, 0x01, 0x28, 0x02, 0x52, 0x0e, 0x72, 0x6f, 0x77, 0x73, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e,
-	0x74, 0x61, 0x67, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x63, 0x6f,
-	0x70, 0x69, 0x65, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0b, 0x62, 0x79, 0x74, 0x65,
-	0x73, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x12, 0x1f, 0x0a, 0x0b, 0x62, 0x79, 0x74, 0x65, 0x73,
-	0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0a, 0x62, 0x79,
-	0x74, 0x65, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x29, 0x0a, 0x10, 0x62, 0x79, 0x74, 0x65,
-	0x73, 0x5f, 0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x18, 0x06, 0x20, 0x01,
-	0x28, 0x02, 0x52, 0x0f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74,
-	0x61, 0x67, 0x65, 0x1a, 0xbc, 0x01, 0x0a, 0x10, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72,
-	0x65, 0x61, 0x6d, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x05, 0x52, 0x02, 0x69, 0x64, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
-	0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x73, 0x6f, 0x75, 0x72, 0x63,
-	0x65, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x73,
-	0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f,
-	0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f,
-	0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73,
-	0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x12,
-	0x0a, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x69, 0x6e,
-	0x66, 0x6f, 0x1a, 0x5c, 0x0a, 0x0c, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61,
-	0x6d, 0x73, 0x12, 0x4c, 0x0a, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x18, 0x02, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65,
-	0x61, 0x6d, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73,
-	0x1a, 0x73, 0x0a, 0x13, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61,
-	0x74, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x46, 0x0a, 0x05, 0x76, 0x61, 0x6c,
-	0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x30, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x6f, 0x0a, 0x11, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74,
-	0x72, 0x65, 0x61, 0x6d, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65,
-	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x44, 0x0a, 0x05,
-	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2e, 0x2e, 0x76, 0x74,
-	0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77,
-	0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53,
-	0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x52, 0x05, 0x76, 0x61, 0x6c,
-	0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xd7, 0x03, 0x0a, 0x1c, 0x57, 0x6f, 0x72, 0x6b, 0x66,
-	0x6c, 0x6f, 0x77, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x54, 0x72, 0x61, 0x66, 0x66, 0x69, 0x63,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70,
-	0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70,
-	0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12,
-	0x14, 0x0a, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05,
-	0x63, 0x65, 0x6c, 0x6c, 0x73, 0x12, 0x37, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f,
-	0x74, 0x79, 0x70, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f,
-	0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70,
-	0x65, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x73, 0x12, 0x4f,
-	0x0a, 0x1b, 0x6d, 0x61, 0x78, 0x5f, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f,
-	0x6e, 0x5f, 0x6c, 0x61, 0x67, 0x5f, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x18, 0x05, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x18, 0x6d, 0x61, 0x78, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x4c, 0x61, 0x67, 0x41, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x12,
-	0x3c, 0x0a, 0x1a, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x72, 0x65, 0x76, 0x65, 0x72, 0x73,
-	0x65, 0x5f, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20,
-	0x01, 0x28, 0x08, 0x52, 0x18, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x76, 0x65, 0x72,
-	0x73, 0x65, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1c, 0x0a,
-	0x09, 0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x07, 0x20, 0x01, 0x28, 0x05,
-	0x52, 0x09, 0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x2a, 0x0a, 0x07, 0x74,
-	0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76,
-	0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x07,
-	0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x12, 0x17, 0x0a, 0x07, 0x64, 0x72, 0x79, 0x5f, 0x72,
-	0x75, 0x6e, 0x18, 0x09, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x64, 0x72, 0x79, 0x52, 0x75, 0x6e,
-	0x12, 0x3e, 0x0a, 0x1b, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x5f, 0x74,
-	0x61, 0x72, 0x67, 0x65, 0x74, 0x5f, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x18,
-	0x0a, 0x20, 0x01, 0x28, 0x08, 0x52, 0x19, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a,
-	0x65, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73,
-	0x22, 0xa7, 0x01, 0x0a, 0x1d, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x77, 0x69,
-	0x74, 0x63, 0x68, 0x54, 0x72, 0x61, 0x66, 0x66, 0x69, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x1f, 0x0a, 0x0b,
-	0x73, 0x74, 0x61, 0x72, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x23, 0x0a,
-	0x0d, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x03,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x0c, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61,
-	0x74, 0x65, 0x12, 0x26, 0x0a, 0x0f, 0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e, 0x5f, 0x72, 0x65,
-	0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d, 0x64, 0x72, 0x79,
-	0x52, 0x75, 0x6e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x90, 0x01, 0x0a, 0x15, 0x57,
-	0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x12, 0x5b, 0x0a, 0x0e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x34, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65,
-	0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x55, 0x70, 0x64,
-	0x61, 0x74, 0x65, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57,
-	0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x52, 0x0d,
-	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0xd1, 0x01,
-	0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d,
-	0x61, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61,
-	0x72, 0x79, 0x12, 0x46, 0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x18, 0x02, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66,
-	0x6f, 0x52, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a, 0x55, 0x0a, 0x0a, 0x54, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
-	0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67,
-	0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65,
-	0x64, 0x2a, 0x4a, 0x0a, 0x15, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x55,
-	0x53, 0x54, 0x4f, 0x4d, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x4f, 0x56, 0x45, 0x54, 0x41,
-	0x42, 0x4c, 0x45, 0x53, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43, 0x52, 0x45, 0x41, 0x54, 0x45,
-	0x4c, 0x4f, 0x4f, 0x4b, 0x55, 0x50, 0x49, 0x4e, 0x44, 0x45, 0x58, 0x10, 0x02, 0x2a, 0x38, 0x0a,
-	0x0d, 0x51, 0x75, 0x65, 0x72, 0x79, 0x4f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x08,
-	0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x41, 0x53, 0x43, 0x45,
-	0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x45, 0x53, 0x43, 0x45,
-	0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x42, 0x28, 0x5a, 0x26, 0x76, 0x69, 0x74, 0x65, 0x73,
-	0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76,
-	0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74,
-	0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x14, 0x0a, 0x05, 0x63,
+	0x65, 0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c,
+	0x73, 0x12, 0x37, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65,
+	0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61,
+	0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0b, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x73, 0x12, 0x4f, 0x0a, 0x1b, 0x6d, 0x61,
+	0x78, 0x5f, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6c, 0x61,
+	0x67, 0x5f, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x10, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x52, 0x18, 0x6d, 0x61, 0x78, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x4c, 0x61, 0x67, 0x41, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x12, 0x3c, 0x0a, 0x1a, 0x65,
+	0x6e, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x72, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x5f, 0x72, 0x65,
+	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x18, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x52, 0x65,
+	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1c, 0x0a, 0x09, 0x64, 0x69, 0x72,
+	0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x07, 0x20, 0x01, 0x28, 0x05, 0x52, 0x09, 0x64, 0x69,
+	0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x2a, 0x0a, 0x07, 0x74, 0x69, 0x6d, 0x65, 0x6f,
+	0x75, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d,
+	0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x07, 0x74, 0x69, 0x6d, 0x65,
+	0x6f, 0x75, 0x74, 0x12, 0x17, 0x0a, 0x07, 0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e, 0x18, 0x09,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x64, 0x72, 0x79, 0x52, 0x75, 0x6e, 0x12, 0x3e, 0x0a, 0x1b,
+	0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x5f, 0x74, 0x61, 0x72, 0x67, 0x65,
+	0x74, 0x5f, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x18, 0x0a, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x19, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x54, 0x61, 0x72,
+	0x67, 0x65, 0x74, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x22, 0xa7, 0x01, 0x0a,
+	0x1d, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x54,
+	0x72, 0x61, 0x66, 0x66, 0x69, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18,
+	0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x74, 0x61, 0x72,
+	0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x73,
+	0x74, 0x61, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x23, 0x0a, 0x0d, 0x63, 0x75, 0x72,
+	0x72, 0x65, 0x6e, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x0c, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x26,
+	0x0a, 0x0f, 0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e, 0x5f, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74,
+	0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d, 0x64, 0x72, 0x79, 0x52, 0x75, 0x6e, 0x52,
+	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x90, 0x01, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66,
+	0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x5b, 0x0a, 0x0e,
+	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x34, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e,
+	0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x56,
+	0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57, 0x6f, 0x72, 0x6b, 0x66,
+	0x6c, 0x6f, 0x77, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x52, 0x0d, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0xd1, 0x01, 0x0a, 0x16, 0x57, 0x6f,
+	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x46,
+	0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x07, 0x64,
+	0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a, 0x55, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x2a, 0x4a, 0x0a,
+	0x15, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x49, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x55, 0x53, 0x54, 0x4f, 0x4d,
+	0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x4f, 0x56, 0x45, 0x54, 0x41, 0x42, 0x4c, 0x45, 0x53,
+	0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43, 0x52, 0x45, 0x41, 0x54, 0x45, 0x4c, 0x4f, 0x4f, 0x4b,
+	0x55, 0x50, 0x49, 0x4e, 0x44, 0x45, 0x58, 0x10, 0x02, 0x2a, 0x38, 0x0a, 0x0d, 0x51, 0x75, 0x65,
+	0x72, 0x79, 0x4f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x4f,
+	0x4e, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x41, 0x53, 0x43, 0x45, 0x4e, 0x44, 0x49, 0x4e,
+	0x47, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x45, 0x53, 0x43, 0x45, 0x4e, 0x44, 0x49, 0x4e,
+	0x47, 0x10, 0x02, 0x42, 0x28, 0x5a, 0x26, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f,
+	0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -14764,7 +14986,7 @@ func file_vtctldata_proto_rawDescGZIP() []byte {
 }
 
 var file_vtctldata_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 221)
+var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 225)
 var file_vtctldata_proto_goTypes = []interface{}{
 	(MaterializationIntent)(0),                   // 0: vtctldata.MaterializationIntent
 	(QueryOrdering)(0),                           // 1: vtctldata.QueryOrdering
@@ -14795,422 +15017,426 @@ var file_vtctldata_proto_goTypes = []interface{}{
 	(*BackupShardRequest)(nil),                   // 26: vtctldata.BackupShardRequest
 	(*ChangeTabletTypeRequest)(nil),              // 27: vtctldata.ChangeTabletTypeRequest
 	(*ChangeTabletTypeResponse)(nil),             // 28: vtctldata.ChangeTabletTypeResponse
-	(*CreateKeyspaceRequest)(nil),                // 29: vtctldata.CreateKeyspaceRequest
-	(*CreateKeyspaceResponse)(nil),               // 30: vtctldata.CreateKeyspaceResponse
-	(*CreateShardRequest)(nil),                   // 31: vtctldata.CreateShardRequest
-	(*CreateShardResponse)(nil),                  // 32: vtctldata.CreateShardResponse
-	(*DeleteCellInfoRequest)(nil),                // 33: vtctldata.DeleteCellInfoRequest
-	(*DeleteCellInfoResponse)(nil),               // 34: vtctldata.DeleteCellInfoResponse
-	(*DeleteCellsAliasRequest)(nil),              // 35: vtctldata.DeleteCellsAliasRequest
-	(*DeleteCellsAliasResponse)(nil),             // 36: vtctldata.DeleteCellsAliasResponse
-	(*DeleteKeyspaceRequest)(nil),                // 37: vtctldata.DeleteKeyspaceRequest
-	(*DeleteKeyspaceResponse)(nil),               // 38: vtctldata.DeleteKeyspaceResponse
-	(*DeleteShardsRequest)(nil),                  // 39: vtctldata.DeleteShardsRequest
-	(*DeleteShardsResponse)(nil),                 // 40: vtctldata.DeleteShardsResponse
-	(*DeleteSrvVSchemaRequest)(nil),              // 41: vtctldata.DeleteSrvVSchemaRequest
-	(*DeleteSrvVSchemaResponse)(nil),             // 42: vtctldata.DeleteSrvVSchemaResponse
-	(*DeleteTabletsRequest)(nil),                 // 43: vtctldata.DeleteTabletsRequest
-	(*DeleteTabletsResponse)(nil),                // 44: vtctldata.DeleteTabletsResponse
-	(*EmergencyReparentShardRequest)(nil),        // 45: vtctldata.EmergencyReparentShardRequest
-	(*EmergencyReparentShardResponse)(nil),       // 46: vtctldata.EmergencyReparentShardResponse
-	(*ExecuteFetchAsAppRequest)(nil),             // 47: vtctldata.ExecuteFetchAsAppRequest
-	(*ExecuteFetchAsAppResponse)(nil),            // 48: vtctldata.ExecuteFetchAsAppResponse
-	(*ExecuteFetchAsDBARequest)(nil),             // 49: vtctldata.ExecuteFetchAsDBARequest
-	(*ExecuteFetchAsDBAResponse)(nil),            // 50: vtctldata.ExecuteFetchAsDBAResponse
-	(*ExecuteHookRequest)(nil),                   // 51: vtctldata.ExecuteHookRequest
-	(*ExecuteHookResponse)(nil),                  // 52: vtctldata.ExecuteHookResponse
-	(*FindAllShardsInKeyspaceRequest)(nil),       // 53: vtctldata.FindAllShardsInKeyspaceRequest
-	(*FindAllShardsInKeyspaceResponse)(nil),      // 54: vtctldata.FindAllShardsInKeyspaceResponse
-	(*GetBackupsRequest)(nil),                    // 55: vtctldata.GetBackupsRequest
-	(*GetBackupsResponse)(nil),                   // 56: vtctldata.GetBackupsResponse
-	(*GetCellInfoRequest)(nil),                   // 57: vtctldata.GetCellInfoRequest
-	(*GetCellInfoResponse)(nil),                  // 58: vtctldata.GetCellInfoResponse
-	(*GetCellInfoNamesRequest)(nil),              // 59: vtctldata.GetCellInfoNamesRequest
-	(*GetCellInfoNamesResponse)(nil),             // 60: vtctldata.GetCellInfoNamesResponse
-	(*GetCellsAliasesRequest)(nil),               // 61: vtctldata.GetCellsAliasesRequest
-	(*GetCellsAliasesResponse)(nil),              // 62: vtctldata.GetCellsAliasesResponse
-	(*GetFullStatusRequest)(nil),                 // 63: vtctldata.GetFullStatusRequest
-	(*GetFullStatusResponse)(nil),                // 64: vtctldata.GetFullStatusResponse
-	(*GetKeyspacesRequest)(nil),                  // 65: vtctldata.GetKeyspacesRequest
-	(*GetKeyspacesResponse)(nil),                 // 66: vtctldata.GetKeyspacesResponse
-	(*GetKeyspaceRequest)(nil),                   // 67: vtctldata.GetKeyspaceRequest
-	(*GetKeyspaceResponse)(nil),                  // 68: vtctldata.GetKeyspaceResponse
-	(*GetPermissionsRequest)(nil),                // 69: vtctldata.GetPermissionsRequest
-	(*GetPermissionsResponse)(nil),               // 70: vtctldata.GetPermissionsResponse
-	(*GetRoutingRulesRequest)(nil),               // 71: vtctldata.GetRoutingRulesRequest
-	(*GetRoutingRulesResponse)(nil),              // 72: vtctldata.GetRoutingRulesResponse
-	(*GetSchemaRequest)(nil),                     // 73: vtctldata.GetSchemaRequest
-	(*GetSchemaResponse)(nil),                    // 74: vtctldata.GetSchemaResponse
-	(*GetSchemaMigrationsRequest)(nil),           // 75: vtctldata.GetSchemaMigrationsRequest
-	(*GetSchemaMigrationsResponse)(nil),          // 76: vtctldata.GetSchemaMigrationsResponse
-	(*GetShardRequest)(nil),                      // 77: vtctldata.GetShardRequest
-	(*GetShardResponse)(nil),                     // 78: vtctldata.GetShardResponse
-	(*GetShardRoutingRulesRequest)(nil),          // 79: vtctldata.GetShardRoutingRulesRequest
-	(*GetShardRoutingRulesResponse)(nil),         // 80: vtctldata.GetShardRoutingRulesResponse
-	(*GetSrvKeyspaceNamesRequest)(nil),           // 81: vtctldata.GetSrvKeyspaceNamesRequest
-	(*GetSrvKeyspaceNamesResponse)(nil),          // 82: vtctldata.GetSrvKeyspaceNamesResponse
-	(*GetSrvKeyspacesRequest)(nil),               // 83: vtctldata.GetSrvKeyspacesRequest
-	(*GetSrvKeyspacesResponse)(nil),              // 84: vtctldata.GetSrvKeyspacesResponse
-	(*UpdateThrottlerConfigRequest)(nil),         // 85: vtctldata.UpdateThrottlerConfigRequest
-	(*UpdateThrottlerConfigResponse)(nil),        // 86: vtctldata.UpdateThrottlerConfigResponse
-	(*GetSrvVSchemaRequest)(nil),                 // 87: vtctldata.GetSrvVSchemaRequest
-	(*GetSrvVSchemaResponse)(nil),                // 88: vtctldata.GetSrvVSchemaResponse
-	(*GetSrvVSchemasRequest)(nil),                // 89: vtctldata.GetSrvVSchemasRequest
-	(*GetSrvVSchemasResponse)(nil),               // 90: vtctldata.GetSrvVSchemasResponse
-	(*GetTabletRequest)(nil),                     // 91: vtctldata.GetTabletRequest
-	(*GetTabletResponse)(nil),                    // 92: vtctldata.GetTabletResponse
-	(*GetTabletsRequest)(nil),                    // 93: vtctldata.GetTabletsRequest
-	(*GetTabletsResponse)(nil),                   // 94: vtctldata.GetTabletsResponse
-	(*GetTopologyPathRequest)(nil),               // 95: vtctldata.GetTopologyPathRequest
-	(*GetTopologyPathResponse)(nil),              // 96: vtctldata.GetTopologyPathResponse
-	(*TopologyCell)(nil),                         // 97: vtctldata.TopologyCell
-	(*GetVSchemaRequest)(nil),                    // 98: vtctldata.GetVSchemaRequest
-	(*GetVersionRequest)(nil),                    // 99: vtctldata.GetVersionRequest
-	(*GetVersionResponse)(nil),                   // 100: vtctldata.GetVersionResponse
-	(*GetVSchemaResponse)(nil),                   // 101: vtctldata.GetVSchemaResponse
-	(*GetWorkflowsRequest)(nil),                  // 102: vtctldata.GetWorkflowsRequest
-	(*GetWorkflowsResponse)(nil),                 // 103: vtctldata.GetWorkflowsResponse
-	(*InitShardPrimaryRequest)(nil),              // 104: vtctldata.InitShardPrimaryRequest
-	(*InitShardPrimaryResponse)(nil),             // 105: vtctldata.InitShardPrimaryResponse
-	(*MoveTablesCreateRequest)(nil),              // 106: vtctldata.MoveTablesCreateRequest
-	(*MoveTablesCreateResponse)(nil),             // 107: vtctldata.MoveTablesCreateResponse
-	(*MoveTablesCompleteRequest)(nil),            // 108: vtctldata.MoveTablesCompleteRequest
-	(*MoveTablesCompleteResponse)(nil),           // 109: vtctldata.MoveTablesCompleteResponse
-	(*PingTabletRequest)(nil),                    // 110: vtctldata.PingTabletRequest
-	(*PingTabletResponse)(nil),                   // 111: vtctldata.PingTabletResponse
-	(*PlannedReparentShardRequest)(nil),          // 112: vtctldata.PlannedReparentShardRequest
-	(*PlannedReparentShardResponse)(nil),         // 113: vtctldata.PlannedReparentShardResponse
-	(*RebuildKeyspaceGraphRequest)(nil),          // 114: vtctldata.RebuildKeyspaceGraphRequest
-	(*RebuildKeyspaceGraphResponse)(nil),         // 115: vtctldata.RebuildKeyspaceGraphResponse
-	(*RebuildVSchemaGraphRequest)(nil),           // 116: vtctldata.RebuildVSchemaGraphRequest
-	(*RebuildVSchemaGraphResponse)(nil),          // 117: vtctldata.RebuildVSchemaGraphResponse
-	(*RefreshStateRequest)(nil),                  // 118: vtctldata.RefreshStateRequest
-	(*RefreshStateResponse)(nil),                 // 119: vtctldata.RefreshStateResponse
-	(*RefreshStateByShardRequest)(nil),           // 120: vtctldata.RefreshStateByShardRequest
-	(*RefreshStateByShardResponse)(nil),          // 121: vtctldata.RefreshStateByShardResponse
-	(*ReloadSchemaRequest)(nil),                  // 122: vtctldata.ReloadSchemaRequest
-	(*ReloadSchemaResponse)(nil),                 // 123: vtctldata.ReloadSchemaResponse
-	(*ReloadSchemaKeyspaceRequest)(nil),          // 124: vtctldata.ReloadSchemaKeyspaceRequest
-	(*ReloadSchemaKeyspaceResponse)(nil),         // 125: vtctldata.ReloadSchemaKeyspaceResponse
-	(*ReloadSchemaShardRequest)(nil),             // 126: vtctldata.ReloadSchemaShardRequest
-	(*ReloadSchemaShardResponse)(nil),            // 127: vtctldata.ReloadSchemaShardResponse
-	(*RemoveBackupRequest)(nil),                  // 128: vtctldata.RemoveBackupRequest
-	(*RemoveBackupResponse)(nil),                 // 129: vtctldata.RemoveBackupResponse
-	(*RemoveKeyspaceCellRequest)(nil),            // 130: vtctldata.RemoveKeyspaceCellRequest
-	(*RemoveKeyspaceCellResponse)(nil),           // 131: vtctldata.RemoveKeyspaceCellResponse
-	(*RemoveShardCellRequest)(nil),               // 132: vtctldata.RemoveShardCellRequest
-	(*RemoveShardCellResponse)(nil),              // 133: vtctldata.RemoveShardCellResponse
-	(*ReparentTabletRequest)(nil),                // 134: vtctldata.ReparentTabletRequest
-	(*ReparentTabletResponse)(nil),               // 135: vtctldata.ReparentTabletResponse
-	(*RestoreFromBackupRequest)(nil),             // 136: vtctldata.RestoreFromBackupRequest
-	(*RestoreFromBackupResponse)(nil),            // 137: vtctldata.RestoreFromBackupResponse
-	(*RunHealthCheckRequest)(nil),                // 138: vtctldata.RunHealthCheckRequest
-	(*RunHealthCheckResponse)(nil),               // 139: vtctldata.RunHealthCheckResponse
-	(*SetKeyspaceDurabilityPolicyRequest)(nil),   // 140: vtctldata.SetKeyspaceDurabilityPolicyRequest
-	(*SetKeyspaceDurabilityPolicyResponse)(nil),  // 141: vtctldata.SetKeyspaceDurabilityPolicyResponse
-	(*SetKeyspaceServedFromRequest)(nil),         // 142: vtctldata.SetKeyspaceServedFromRequest
-	(*SetKeyspaceServedFromResponse)(nil),        // 143: vtctldata.SetKeyspaceServedFromResponse
-	(*SetKeyspaceShardingInfoRequest)(nil),       // 144: vtctldata.SetKeyspaceShardingInfoRequest
-	(*SetKeyspaceShardingInfoResponse)(nil),      // 145: vtctldata.SetKeyspaceShardingInfoResponse
-	(*SetShardIsPrimaryServingRequest)(nil),      // 146: vtctldata.SetShardIsPrimaryServingRequest
-	(*SetShardIsPrimaryServingResponse)(nil),     // 147: vtctldata.SetShardIsPrimaryServingResponse
-	(*SetShardTabletControlRequest)(nil),         // 148: vtctldata.SetShardTabletControlRequest
-	(*SetShardTabletControlResponse)(nil),        // 149: vtctldata.SetShardTabletControlResponse
-	(*SetWritableRequest)(nil),                   // 150: vtctldata.SetWritableRequest
-	(*SetWritableResponse)(nil),                  // 151: vtctldata.SetWritableResponse
-	(*ShardReplicationAddRequest)(nil),           // 152: vtctldata.ShardReplicationAddRequest
-	(*ShardReplicationAddResponse)(nil),          // 153: vtctldata.ShardReplicationAddResponse
-	(*ShardReplicationFixRequest)(nil),           // 154: vtctldata.ShardReplicationFixRequest
-	(*ShardReplicationFixResponse)(nil),          // 155: vtctldata.ShardReplicationFixResponse
-	(*ShardReplicationPositionsRequest)(nil),     // 156: vtctldata.ShardReplicationPositionsRequest
-	(*ShardReplicationPositionsResponse)(nil),    // 157: vtctldata.ShardReplicationPositionsResponse
-	(*ShardReplicationRemoveRequest)(nil),        // 158: vtctldata.ShardReplicationRemoveRequest
-	(*ShardReplicationRemoveResponse)(nil),       // 159: vtctldata.ShardReplicationRemoveResponse
-	(*SleepTabletRequest)(nil),                   // 160: vtctldata.SleepTabletRequest
-	(*SleepTabletResponse)(nil),                  // 161: vtctldata.SleepTabletResponse
-	(*SourceShardAddRequest)(nil),                // 162: vtctldata.SourceShardAddRequest
-	(*SourceShardAddResponse)(nil),               // 163: vtctldata.SourceShardAddResponse
-	(*SourceShardDeleteRequest)(nil),             // 164: vtctldata.SourceShardDeleteRequest
-	(*SourceShardDeleteResponse)(nil),            // 165: vtctldata.SourceShardDeleteResponse
-	(*StartReplicationRequest)(nil),              // 166: vtctldata.StartReplicationRequest
-	(*StartReplicationResponse)(nil),             // 167: vtctldata.StartReplicationResponse
-	(*StopReplicationRequest)(nil),               // 168: vtctldata.StopReplicationRequest
-	(*StopReplicationResponse)(nil),              // 169: vtctldata.StopReplicationResponse
-	(*TabletExternallyReparentedRequest)(nil),    // 170: vtctldata.TabletExternallyReparentedRequest
-	(*TabletExternallyReparentedResponse)(nil),   // 171: vtctldata.TabletExternallyReparentedResponse
-	(*UpdateCellInfoRequest)(nil),                // 172: vtctldata.UpdateCellInfoRequest
-	(*UpdateCellInfoResponse)(nil),               // 173: vtctldata.UpdateCellInfoResponse
-	(*UpdateCellsAliasRequest)(nil),              // 174: vtctldata.UpdateCellsAliasRequest
-	(*UpdateCellsAliasResponse)(nil),             // 175: vtctldata.UpdateCellsAliasResponse
-	(*ValidateRequest)(nil),                      // 176: vtctldata.ValidateRequest
-	(*ValidateResponse)(nil),                     // 177: vtctldata.ValidateResponse
-	(*ValidateKeyspaceRequest)(nil),              // 178: vtctldata.ValidateKeyspaceRequest
-	(*ValidateKeyspaceResponse)(nil),             // 179: vtctldata.ValidateKeyspaceResponse
-	(*ValidateSchemaKeyspaceRequest)(nil),        // 180: vtctldata.ValidateSchemaKeyspaceRequest
-	(*ValidateSchemaKeyspaceResponse)(nil),       // 181: vtctldata.ValidateSchemaKeyspaceResponse
-	(*ValidateShardRequest)(nil),                 // 182: vtctldata.ValidateShardRequest
-	(*ValidateShardResponse)(nil),                // 183: vtctldata.ValidateShardResponse
-	(*ValidateVersionKeyspaceRequest)(nil),       // 184: vtctldata.ValidateVersionKeyspaceRequest
-	(*ValidateVersionKeyspaceResponse)(nil),      // 185: vtctldata.ValidateVersionKeyspaceResponse
-	(*ValidateVersionShardRequest)(nil),          // 186: vtctldata.ValidateVersionShardRequest
-	(*ValidateVersionShardResponse)(nil),         // 187: vtctldata.ValidateVersionShardResponse
-	(*ValidateVSchemaRequest)(nil),               // 188: vtctldata.ValidateVSchemaRequest
-	(*ValidateVSchemaResponse)(nil),              // 189: vtctldata.ValidateVSchemaResponse
-	(*WorkflowDeleteRequest)(nil),                // 190: vtctldata.WorkflowDeleteRequest
-	(*WorkflowDeleteResponse)(nil),               // 191: vtctldata.WorkflowDeleteResponse
-	(*WorkflowStatusRequest)(nil),                // 192: vtctldata.WorkflowStatusRequest
-	(*WorkflowStatusResponse)(nil),               // 193: vtctldata.WorkflowStatusResponse
-	(*WorkflowSwitchTrafficRequest)(nil),         // 194: vtctldata.WorkflowSwitchTrafficRequest
-	(*WorkflowSwitchTrafficResponse)(nil),        // 195: vtctldata.WorkflowSwitchTrafficResponse
-	(*WorkflowUpdateRequest)(nil),                // 196: vtctldata.WorkflowUpdateRequest
-	(*WorkflowUpdateResponse)(nil),               // 197: vtctldata.WorkflowUpdateResponse
-	nil,                                          // 198: vtctldata.Workflow.ShardStreamsEntry
-	(*Workflow_ReplicationLocation)(nil),         // 199: vtctldata.Workflow.ReplicationLocation
-	(*Workflow_ShardStream)(nil),                 // 200: vtctldata.Workflow.ShardStream
-	(*Workflow_Stream)(nil),                      // 201: vtctldata.Workflow.Stream
-	(*Workflow_Stream_CopyState)(nil),            // 202: vtctldata.Workflow.Stream.CopyState
-	(*Workflow_Stream_Log)(nil),                  // 203: vtctldata.Workflow.Stream.Log
-	nil,                                          // 204: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	nil,                                          // 205: vtctldata.GetCellsAliasesResponse.AliasesEntry
-	nil,                                          // 206: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 207: vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	nil, // 208: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	nil, // 209: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	(*MoveTablesCreateResponse_TabletInfo)(nil), // 210: vtctldata.MoveTablesCreateResponse.TabletInfo
-	nil, // 211: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	nil, // 212: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	nil, // 213: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	nil, // 214: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	nil, // 215: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	nil, // 216: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	nil, // 217: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 218: vtctldata.WorkflowDeleteResponse.TabletInfo
-	(*WorkflowStatusResponse_TableCopyState)(nil),   // 219: vtctldata.WorkflowStatusResponse.TableCopyState
-	(*WorkflowStatusResponse_ShardStreamState)(nil), // 220: vtctldata.WorkflowStatusResponse.ShardStreamState
-	(*WorkflowStatusResponse_ShardStreams)(nil),     // 221: vtctldata.WorkflowStatusResponse.ShardStreams
-	nil, // 222: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	nil, // 223: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 224: vtctldata.WorkflowUpdateResponse.TabletInfo
-	(*logutil.Event)(nil),                                       // 225: logutil.Event
-	(tabletmanagerdata.TabletSelectionPreference)(0),            // 226: tabletmanagerdata.TabletSelectionPreference
-	(*topodata.Keyspace)(nil),                                   // 227: topodata.Keyspace
-	(*vttime.Time)(nil),                                         // 228: vttime.Time
-	(*topodata.TabletAlias)(nil),                                // 229: topodata.TabletAlias
-	(*vttime.Duration)(nil),                                     // 230: vttime.Duration
-	(*topodata.Shard)(nil),                                      // 231: topodata.Shard
-	(*topodata.CellInfo)(nil),                                   // 232: topodata.CellInfo
-	(*vschema.RoutingRules)(nil),                                // 233: vschema.RoutingRules
-	(*vschema.ShardRoutingRules)(nil),                           // 234: vschema.ShardRoutingRules
-	(*vtrpc.CallerID)(nil),                                      // 235: vtrpc.CallerID
-	(*vschema.Keyspace)(nil),                                    // 236: vschema.Keyspace
-	(topodata.TabletType)(0),                                    // 237: topodata.TabletType
-	(*topodata.Tablet)(nil),                                     // 238: topodata.Tablet
-	(*topodata.Keyspace_ServedFrom)(nil),                        // 239: topodata.Keyspace.ServedFrom
-	(topodata.KeyspaceType)(0),                                  // 240: topodata.KeyspaceType
-	(*query.QueryResult)(nil),                                   // 241: query.QueryResult
-	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 242: tabletmanagerdata.ExecuteHookRequest
-	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 243: tabletmanagerdata.ExecuteHookResponse
-	(*mysqlctl.BackupInfo)(nil),                                 // 244: mysqlctl.BackupInfo
-	(*replicationdata.FullStatus)(nil),                          // 245: replicationdata.FullStatus
-	(*tabletmanagerdata.Permissions)(nil),                       // 246: tabletmanagerdata.Permissions
-	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 247: tabletmanagerdata.SchemaDefinition
-	(*topodata.ThrottledAppRule)(nil),                           // 248: topodata.ThrottledAppRule
-	(*vschema.SrvVSchema)(nil),                                  // 249: vschema.SrvVSchema
-	(*topodata.ShardReplicationError)(nil),                      // 250: topodata.ShardReplicationError
-	(*topodata.KeyRange)(nil),                                   // 251: topodata.KeyRange
-	(*topodata.CellsAlias)(nil),                                 // 252: topodata.CellsAlias
-	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 253: tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	(*topodata.Shard_TabletControl)(nil),                        // 254: topodata.Shard.TabletControl
-	(*binlogdata.BinlogSource)(nil),                             // 255: binlogdata.BinlogSource
-	(*topodata.SrvKeyspace)(nil),                                // 256: topodata.SrvKeyspace
-	(*replicationdata.Status)(nil),                              // 257: replicationdata.Status
+	(*CleanupSchemaMigrationRequest)(nil),        // 29: vtctldata.CleanupSchemaMigrationRequest
+	(*CleanupSchemaMigrationResponse)(nil),       // 30: vtctldata.CleanupSchemaMigrationResponse
+	(*CreateKeyspaceRequest)(nil),                // 31: vtctldata.CreateKeyspaceRequest
+	(*CreateKeyspaceResponse)(nil),               // 32: vtctldata.CreateKeyspaceResponse
+	(*CreateShardRequest)(nil),                   // 33: vtctldata.CreateShardRequest
+	(*CreateShardResponse)(nil),                  // 34: vtctldata.CreateShardResponse
+	(*DeleteCellInfoRequest)(nil),                // 35: vtctldata.DeleteCellInfoRequest
+	(*DeleteCellInfoResponse)(nil),               // 36: vtctldata.DeleteCellInfoResponse
+	(*DeleteCellsAliasRequest)(nil),              // 37: vtctldata.DeleteCellsAliasRequest
+	(*DeleteCellsAliasResponse)(nil),             // 38: vtctldata.DeleteCellsAliasResponse
+	(*DeleteKeyspaceRequest)(nil),                // 39: vtctldata.DeleteKeyspaceRequest
+	(*DeleteKeyspaceResponse)(nil),               // 40: vtctldata.DeleteKeyspaceResponse
+	(*DeleteShardsRequest)(nil),                  // 41: vtctldata.DeleteShardsRequest
+	(*DeleteShardsResponse)(nil),                 // 42: vtctldata.DeleteShardsResponse
+	(*DeleteSrvVSchemaRequest)(nil),              // 43: vtctldata.DeleteSrvVSchemaRequest
+	(*DeleteSrvVSchemaResponse)(nil),             // 44: vtctldata.DeleteSrvVSchemaResponse
+	(*DeleteTabletsRequest)(nil),                 // 45: vtctldata.DeleteTabletsRequest
+	(*DeleteTabletsResponse)(nil),                // 46: vtctldata.DeleteTabletsResponse
+	(*EmergencyReparentShardRequest)(nil),        // 47: vtctldata.EmergencyReparentShardRequest
+	(*EmergencyReparentShardResponse)(nil),       // 48: vtctldata.EmergencyReparentShardResponse
+	(*ExecuteFetchAsAppRequest)(nil),             // 49: vtctldata.ExecuteFetchAsAppRequest
+	(*ExecuteFetchAsAppResponse)(nil),            // 50: vtctldata.ExecuteFetchAsAppResponse
+	(*ExecuteFetchAsDBARequest)(nil),             // 51: vtctldata.ExecuteFetchAsDBARequest
+	(*ExecuteFetchAsDBAResponse)(nil),            // 52: vtctldata.ExecuteFetchAsDBAResponse
+	(*ExecuteHookRequest)(nil),                   // 53: vtctldata.ExecuteHookRequest
+	(*ExecuteHookResponse)(nil),                  // 54: vtctldata.ExecuteHookResponse
+	(*FindAllShardsInKeyspaceRequest)(nil),       // 55: vtctldata.FindAllShardsInKeyspaceRequest
+	(*FindAllShardsInKeyspaceResponse)(nil),      // 56: vtctldata.FindAllShardsInKeyspaceResponse
+	(*GetBackupsRequest)(nil),                    // 57: vtctldata.GetBackupsRequest
+	(*GetBackupsResponse)(nil),                   // 58: vtctldata.GetBackupsResponse
+	(*GetCellInfoRequest)(nil),                   // 59: vtctldata.GetCellInfoRequest
+	(*GetCellInfoResponse)(nil),                  // 60: vtctldata.GetCellInfoResponse
+	(*GetCellInfoNamesRequest)(nil),              // 61: vtctldata.GetCellInfoNamesRequest
+	(*GetCellInfoNamesResponse)(nil),             // 62: vtctldata.GetCellInfoNamesResponse
+	(*GetCellsAliasesRequest)(nil),               // 63: vtctldata.GetCellsAliasesRequest
+	(*GetCellsAliasesResponse)(nil),              // 64: vtctldata.GetCellsAliasesResponse
+	(*GetFullStatusRequest)(nil),                 // 65: vtctldata.GetFullStatusRequest
+	(*GetFullStatusResponse)(nil),                // 66: vtctldata.GetFullStatusResponse
+	(*GetKeyspacesRequest)(nil),                  // 67: vtctldata.GetKeyspacesRequest
+	(*GetKeyspacesResponse)(nil),                 // 68: vtctldata.GetKeyspacesResponse
+	(*GetKeyspaceRequest)(nil),                   // 69: vtctldata.GetKeyspaceRequest
+	(*GetKeyspaceResponse)(nil),                  // 70: vtctldata.GetKeyspaceResponse
+	(*GetPermissionsRequest)(nil),                // 71: vtctldata.GetPermissionsRequest
+	(*GetPermissionsResponse)(nil),               // 72: vtctldata.GetPermissionsResponse
+	(*GetRoutingRulesRequest)(nil),               // 73: vtctldata.GetRoutingRulesRequest
+	(*GetRoutingRulesResponse)(nil),              // 74: vtctldata.GetRoutingRulesResponse
+	(*GetSchemaRequest)(nil),                     // 75: vtctldata.GetSchemaRequest
+	(*GetSchemaResponse)(nil),                    // 76: vtctldata.GetSchemaResponse
+	(*GetSchemaMigrationsRequest)(nil),           // 77: vtctldata.GetSchemaMigrationsRequest
+	(*GetSchemaMigrationsResponse)(nil),          // 78: vtctldata.GetSchemaMigrationsResponse
+	(*GetShardRequest)(nil),                      // 79: vtctldata.GetShardRequest
+	(*GetShardResponse)(nil),                     // 80: vtctldata.GetShardResponse
+	(*GetShardRoutingRulesRequest)(nil),          // 81: vtctldata.GetShardRoutingRulesRequest
+	(*GetShardRoutingRulesResponse)(nil),         // 82: vtctldata.GetShardRoutingRulesResponse
+	(*GetSrvKeyspaceNamesRequest)(nil),           // 83: vtctldata.GetSrvKeyspaceNamesRequest
+	(*GetSrvKeyspaceNamesResponse)(nil),          // 84: vtctldata.GetSrvKeyspaceNamesResponse
+	(*GetSrvKeyspacesRequest)(nil),               // 85: vtctldata.GetSrvKeyspacesRequest
+	(*GetSrvKeyspacesResponse)(nil),              // 86: vtctldata.GetSrvKeyspacesResponse
+	(*UpdateThrottlerConfigRequest)(nil),         // 87: vtctldata.UpdateThrottlerConfigRequest
+	(*UpdateThrottlerConfigResponse)(nil),        // 88: vtctldata.UpdateThrottlerConfigResponse
+	(*GetSrvVSchemaRequest)(nil),                 // 89: vtctldata.GetSrvVSchemaRequest
+	(*GetSrvVSchemaResponse)(nil),                // 90: vtctldata.GetSrvVSchemaResponse
+	(*GetSrvVSchemasRequest)(nil),                // 91: vtctldata.GetSrvVSchemasRequest
+	(*GetSrvVSchemasResponse)(nil),               // 92: vtctldata.GetSrvVSchemasResponse
+	(*GetTabletRequest)(nil),                     // 93: vtctldata.GetTabletRequest
+	(*GetTabletResponse)(nil),                    // 94: vtctldata.GetTabletResponse
+	(*GetTabletsRequest)(nil),                    // 95: vtctldata.GetTabletsRequest
+	(*GetTabletsResponse)(nil),                   // 96: vtctldata.GetTabletsResponse
+	(*GetTopologyPathRequest)(nil),               // 97: vtctldata.GetTopologyPathRequest
+	(*GetTopologyPathResponse)(nil),              // 98: vtctldata.GetTopologyPathResponse
+	(*TopologyCell)(nil),                         // 99: vtctldata.TopologyCell
+	(*GetVSchemaRequest)(nil),                    // 100: vtctldata.GetVSchemaRequest
+	(*GetVersionRequest)(nil),                    // 101: vtctldata.GetVersionRequest
+	(*GetVersionResponse)(nil),                   // 102: vtctldata.GetVersionResponse
+	(*GetVSchemaResponse)(nil),                   // 103: vtctldata.GetVSchemaResponse
+	(*GetWorkflowsRequest)(nil),                  // 104: vtctldata.GetWorkflowsRequest
+	(*GetWorkflowsResponse)(nil),                 // 105: vtctldata.GetWorkflowsResponse
+	(*InitShardPrimaryRequest)(nil),              // 106: vtctldata.InitShardPrimaryRequest
+	(*InitShardPrimaryResponse)(nil),             // 107: vtctldata.InitShardPrimaryResponse
+	(*MoveTablesCreateRequest)(nil),              // 108: vtctldata.MoveTablesCreateRequest
+	(*MoveTablesCreateResponse)(nil),             // 109: vtctldata.MoveTablesCreateResponse
+	(*MoveTablesCompleteRequest)(nil),            // 110: vtctldata.MoveTablesCompleteRequest
+	(*MoveTablesCompleteResponse)(nil),           // 111: vtctldata.MoveTablesCompleteResponse
+	(*PingTabletRequest)(nil),                    // 112: vtctldata.PingTabletRequest
+	(*PingTabletResponse)(nil),                   // 113: vtctldata.PingTabletResponse
+	(*PlannedReparentShardRequest)(nil),          // 114: vtctldata.PlannedReparentShardRequest
+	(*PlannedReparentShardResponse)(nil),         // 115: vtctldata.PlannedReparentShardResponse
+	(*RebuildKeyspaceGraphRequest)(nil),          // 116: vtctldata.RebuildKeyspaceGraphRequest
+	(*RebuildKeyspaceGraphResponse)(nil),         // 117: vtctldata.RebuildKeyspaceGraphResponse
+	(*RebuildVSchemaGraphRequest)(nil),           // 118: vtctldata.RebuildVSchemaGraphRequest
+	(*RebuildVSchemaGraphResponse)(nil),          // 119: vtctldata.RebuildVSchemaGraphResponse
+	(*RefreshStateRequest)(nil),                  // 120: vtctldata.RefreshStateRequest
+	(*RefreshStateResponse)(nil),                 // 121: vtctldata.RefreshStateResponse
+	(*RefreshStateByShardRequest)(nil),           // 122: vtctldata.RefreshStateByShardRequest
+	(*RefreshStateByShardResponse)(nil),          // 123: vtctldata.RefreshStateByShardResponse
+	(*ReloadSchemaRequest)(nil),                  // 124: vtctldata.ReloadSchemaRequest
+	(*ReloadSchemaResponse)(nil),                 // 125: vtctldata.ReloadSchemaResponse
+	(*ReloadSchemaKeyspaceRequest)(nil),          // 126: vtctldata.ReloadSchemaKeyspaceRequest
+	(*ReloadSchemaKeyspaceResponse)(nil),         // 127: vtctldata.ReloadSchemaKeyspaceResponse
+	(*ReloadSchemaShardRequest)(nil),             // 128: vtctldata.ReloadSchemaShardRequest
+	(*ReloadSchemaShardResponse)(nil),            // 129: vtctldata.ReloadSchemaShardResponse
+	(*RemoveBackupRequest)(nil),                  // 130: vtctldata.RemoveBackupRequest
+	(*RemoveBackupResponse)(nil),                 // 131: vtctldata.RemoveBackupResponse
+	(*RemoveKeyspaceCellRequest)(nil),            // 132: vtctldata.RemoveKeyspaceCellRequest
+	(*RemoveKeyspaceCellResponse)(nil),           // 133: vtctldata.RemoveKeyspaceCellResponse
+	(*RemoveShardCellRequest)(nil),               // 134: vtctldata.RemoveShardCellRequest
+	(*RemoveShardCellResponse)(nil),              // 135: vtctldata.RemoveShardCellResponse
+	(*ReparentTabletRequest)(nil),                // 136: vtctldata.ReparentTabletRequest
+	(*ReparentTabletResponse)(nil),               // 137: vtctldata.ReparentTabletResponse
+	(*RestoreFromBackupRequest)(nil),             // 138: vtctldata.RestoreFromBackupRequest
+	(*RestoreFromBackupResponse)(nil),            // 139: vtctldata.RestoreFromBackupResponse
+	(*RetrySchemaMigrationRequest)(nil),          // 140: vtctldata.RetrySchemaMigrationRequest
+	(*RetrySchemaMigrationResponse)(nil),         // 141: vtctldata.RetrySchemaMigrationResponse
+	(*RunHealthCheckRequest)(nil),                // 142: vtctldata.RunHealthCheckRequest
+	(*RunHealthCheckResponse)(nil),               // 143: vtctldata.RunHealthCheckResponse
+	(*SetKeyspaceDurabilityPolicyRequest)(nil),   // 144: vtctldata.SetKeyspaceDurabilityPolicyRequest
+	(*SetKeyspaceDurabilityPolicyResponse)(nil),  // 145: vtctldata.SetKeyspaceDurabilityPolicyResponse
+	(*SetKeyspaceServedFromRequest)(nil),         // 146: vtctldata.SetKeyspaceServedFromRequest
+	(*SetKeyspaceServedFromResponse)(nil),        // 147: vtctldata.SetKeyspaceServedFromResponse
+	(*SetKeyspaceShardingInfoRequest)(nil),       // 148: vtctldata.SetKeyspaceShardingInfoRequest
+	(*SetKeyspaceShardingInfoResponse)(nil),      // 149: vtctldata.SetKeyspaceShardingInfoResponse
+	(*SetShardIsPrimaryServingRequest)(nil),      // 150: vtctldata.SetShardIsPrimaryServingRequest
+	(*SetShardIsPrimaryServingResponse)(nil),     // 151: vtctldata.SetShardIsPrimaryServingResponse
+	(*SetShardTabletControlRequest)(nil),         // 152: vtctldata.SetShardTabletControlRequest
+	(*SetShardTabletControlResponse)(nil),        // 153: vtctldata.SetShardTabletControlResponse
+	(*SetWritableRequest)(nil),                   // 154: vtctldata.SetWritableRequest
+	(*SetWritableResponse)(nil),                  // 155: vtctldata.SetWritableResponse
+	(*ShardReplicationAddRequest)(nil),           // 156: vtctldata.ShardReplicationAddRequest
+	(*ShardReplicationAddResponse)(nil),          // 157: vtctldata.ShardReplicationAddResponse
+	(*ShardReplicationFixRequest)(nil),           // 158: vtctldata.ShardReplicationFixRequest
+	(*ShardReplicationFixResponse)(nil),          // 159: vtctldata.ShardReplicationFixResponse
+	(*ShardReplicationPositionsRequest)(nil),     // 160: vtctldata.ShardReplicationPositionsRequest
+	(*ShardReplicationPositionsResponse)(nil),    // 161: vtctldata.ShardReplicationPositionsResponse
+	(*ShardReplicationRemoveRequest)(nil),        // 162: vtctldata.ShardReplicationRemoveRequest
+	(*ShardReplicationRemoveResponse)(nil),       // 163: vtctldata.ShardReplicationRemoveResponse
+	(*SleepTabletRequest)(nil),                   // 164: vtctldata.SleepTabletRequest
+	(*SleepTabletResponse)(nil),                  // 165: vtctldata.SleepTabletResponse
+	(*SourceShardAddRequest)(nil),                // 166: vtctldata.SourceShardAddRequest
+	(*SourceShardAddResponse)(nil),               // 167: vtctldata.SourceShardAddResponse
+	(*SourceShardDeleteRequest)(nil),             // 168: vtctldata.SourceShardDeleteRequest
+	(*SourceShardDeleteResponse)(nil),            // 169: vtctldata.SourceShardDeleteResponse
+	(*StartReplicationRequest)(nil),              // 170: vtctldata.StartReplicationRequest
+	(*StartReplicationResponse)(nil),             // 171: vtctldata.StartReplicationResponse
+	(*StopReplicationRequest)(nil),               // 172: vtctldata.StopReplicationRequest
+	(*StopReplicationResponse)(nil),              // 173: vtctldata.StopReplicationResponse
+	(*TabletExternallyReparentedRequest)(nil),    // 174: vtctldata.TabletExternallyReparentedRequest
+	(*TabletExternallyReparentedResponse)(nil),   // 175: vtctldata.TabletExternallyReparentedResponse
+	(*UpdateCellInfoRequest)(nil),                // 176: vtctldata.UpdateCellInfoRequest
+	(*UpdateCellInfoResponse)(nil),               // 177: vtctldata.UpdateCellInfoResponse
+	(*UpdateCellsAliasRequest)(nil),              // 178: vtctldata.UpdateCellsAliasRequest
+	(*UpdateCellsAliasResponse)(nil),             // 179: vtctldata.UpdateCellsAliasResponse
+	(*ValidateRequest)(nil),                      // 180: vtctldata.ValidateRequest
+	(*ValidateResponse)(nil),                     // 181: vtctldata.ValidateResponse
+	(*ValidateKeyspaceRequest)(nil),              // 182: vtctldata.ValidateKeyspaceRequest
+	(*ValidateKeyspaceResponse)(nil),             // 183: vtctldata.ValidateKeyspaceResponse
+	(*ValidateSchemaKeyspaceRequest)(nil),        // 184: vtctldata.ValidateSchemaKeyspaceRequest
+	(*ValidateSchemaKeyspaceResponse)(nil),       // 185: vtctldata.ValidateSchemaKeyspaceResponse
+	(*ValidateShardRequest)(nil),                 // 186: vtctldata.ValidateShardRequest
+	(*ValidateShardResponse)(nil),                // 187: vtctldata.ValidateShardResponse
+	(*ValidateVersionKeyspaceRequest)(nil),       // 188: vtctldata.ValidateVersionKeyspaceRequest
+	(*ValidateVersionKeyspaceResponse)(nil),      // 189: vtctldata.ValidateVersionKeyspaceResponse
+	(*ValidateVersionShardRequest)(nil),          // 190: vtctldata.ValidateVersionShardRequest
+	(*ValidateVersionShardResponse)(nil),         // 191: vtctldata.ValidateVersionShardResponse
+	(*ValidateVSchemaRequest)(nil),               // 192: vtctldata.ValidateVSchemaRequest
+	(*ValidateVSchemaResponse)(nil),              // 193: vtctldata.ValidateVSchemaResponse
+	(*WorkflowDeleteRequest)(nil),                // 194: vtctldata.WorkflowDeleteRequest
+	(*WorkflowDeleteResponse)(nil),               // 195: vtctldata.WorkflowDeleteResponse
+	(*WorkflowStatusRequest)(nil),                // 196: vtctldata.WorkflowStatusRequest
+	(*WorkflowStatusResponse)(nil),               // 197: vtctldata.WorkflowStatusResponse
+	(*WorkflowSwitchTrafficRequest)(nil),         // 198: vtctldata.WorkflowSwitchTrafficRequest
+	(*WorkflowSwitchTrafficResponse)(nil),        // 199: vtctldata.WorkflowSwitchTrafficResponse
+	(*WorkflowUpdateRequest)(nil),                // 200: vtctldata.WorkflowUpdateRequest
+	(*WorkflowUpdateResponse)(nil),               // 201: vtctldata.WorkflowUpdateResponse
+	nil,                                          // 202: vtctldata.Workflow.ShardStreamsEntry
+	(*Workflow_ReplicationLocation)(nil),         // 203: vtctldata.Workflow.ReplicationLocation
+	(*Workflow_ShardStream)(nil),                 // 204: vtctldata.Workflow.ShardStream
+	(*Workflow_Stream)(nil),                      // 205: vtctldata.Workflow.Stream
+	(*Workflow_Stream_CopyState)(nil),            // 206: vtctldata.Workflow.Stream.CopyState
+	(*Workflow_Stream_Log)(nil),                  // 207: vtctldata.Workflow.Stream.Log
+	nil,                                          // 208: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	nil,                                          // 209: vtctldata.GetCellsAliasesResponse.AliasesEntry
+	nil,                                          // 210: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 211: vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	nil, // 212: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	nil, // 213: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	(*MoveTablesCreateResponse_TabletInfo)(nil), // 214: vtctldata.MoveTablesCreateResponse.TabletInfo
+	nil, // 215: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	nil, // 216: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	nil, // 217: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	nil, // 218: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	nil, // 219: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	nil, // 220: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	nil, // 221: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 222: vtctldata.WorkflowDeleteResponse.TabletInfo
+	(*WorkflowStatusResponse_TableCopyState)(nil),   // 223: vtctldata.WorkflowStatusResponse.TableCopyState
+	(*WorkflowStatusResponse_ShardStreamState)(nil), // 224: vtctldata.WorkflowStatusResponse.ShardStreamState
+	(*WorkflowStatusResponse_ShardStreams)(nil),     // 225: vtctldata.WorkflowStatusResponse.ShardStreams
+	nil, // 226: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	nil, // 227: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 228: vtctldata.WorkflowUpdateResponse.TabletInfo
+	(*logutil.Event)(nil),                                       // 229: logutil.Event
+	(tabletmanagerdata.TabletSelectionPreference)(0),            // 230: tabletmanagerdata.TabletSelectionPreference
+	(*topodata.Keyspace)(nil),                                   // 231: topodata.Keyspace
+	(*vttime.Time)(nil),                                         // 232: vttime.Time
+	(*topodata.TabletAlias)(nil),                                // 233: topodata.TabletAlias
+	(*vttime.Duration)(nil),                                     // 234: vttime.Duration
+	(*topodata.Shard)(nil),                                      // 235: topodata.Shard
+	(*topodata.CellInfo)(nil),                                   // 236: topodata.CellInfo
+	(*vschema.RoutingRules)(nil),                                // 237: vschema.RoutingRules
+	(*vschema.ShardRoutingRules)(nil),                           // 238: vschema.ShardRoutingRules
+	(*vtrpc.CallerID)(nil),                                      // 239: vtrpc.CallerID
+	(*vschema.Keyspace)(nil),                                    // 240: vschema.Keyspace
+	(topodata.TabletType)(0),                                    // 241: topodata.TabletType
+	(*topodata.Tablet)(nil),                                     // 242: topodata.Tablet
+	(*topodata.Keyspace_ServedFrom)(nil),                        // 243: topodata.Keyspace.ServedFrom
+	(topodata.KeyspaceType)(0),                                  // 244: topodata.KeyspaceType
+	(*query.QueryResult)(nil),                                   // 245: query.QueryResult
+	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 246: tabletmanagerdata.ExecuteHookRequest
+	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 247: tabletmanagerdata.ExecuteHookResponse
+	(*mysqlctl.BackupInfo)(nil),                                 // 248: mysqlctl.BackupInfo
+	(*replicationdata.FullStatus)(nil),                          // 249: replicationdata.FullStatus
+	(*tabletmanagerdata.Permissions)(nil),                       // 250: tabletmanagerdata.Permissions
+	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 251: tabletmanagerdata.SchemaDefinition
+	(*topodata.ThrottledAppRule)(nil),                           // 252: topodata.ThrottledAppRule
+	(*vschema.SrvVSchema)(nil),                                  // 253: vschema.SrvVSchema
+	(*topodata.ShardReplicationError)(nil),                      // 254: topodata.ShardReplicationError
+	(*topodata.KeyRange)(nil),                                   // 255: topodata.KeyRange
+	(*topodata.CellsAlias)(nil),                                 // 256: topodata.CellsAlias
+	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 257: tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	(*topodata.Shard_TabletControl)(nil),                        // 258: topodata.Shard.TabletControl
+	(*binlogdata.BinlogSource)(nil),                             // 259: binlogdata.BinlogSource
+	(*topodata.SrvKeyspace)(nil),                                // 260: topodata.SrvKeyspace
+	(*replicationdata.Status)(nil),                              // 261: replicationdata.Status
 }
 var file_vtctldata_proto_depIdxs = []int32{
-	225, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
+	229, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
 	6,   // 1: vtctldata.MaterializeSettings.table_settings:type_name -> vtctldata.TableMaterializeSettings
 	0,   // 2: vtctldata.MaterializeSettings.materialization_intent:type_name -> vtctldata.MaterializationIntent
-	226, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	227, // 4: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
+	230, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	231, // 4: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
 	2,   // 5: vtctldata.SchemaMigration.strategy:type_name -> vtctldata.SchemaMigration.Strategy
-	228, // 6: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
-	228, // 7: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
-	228, // 8: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
-	228, // 9: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
-	228, // 10: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
-	228, // 11: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
-	228, // 12: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
+	232, // 6: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
+	232, // 7: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
+	232, // 8: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
+	232, // 9: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
+	232, // 10: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
+	232, // 11: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
+	232, // 12: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
 	3,   // 13: vtctldata.SchemaMigration.status:type_name -> vtctldata.SchemaMigration.Status
-	229, // 14: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
-	230, // 15: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
-	228, // 16: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
-	228, // 17: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
-	228, // 18: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
-	228, // 19: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
-	231, // 20: vtctldata.Shard.shard:type_name -> topodata.Shard
-	199, // 21: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
-	199, // 22: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
-	198, // 23: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
-	232, // 24: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	233, // 25: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
-	234, // 26: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	230, // 27: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	235, // 28: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
-	236, // 29: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
-	236, // 30: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
-	229, // 31: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 32: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	225, // 33: vtctldata.BackupResponse.event:type_name -> logutil.Event
-	229, // 34: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
-	237, // 35: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
-	238, // 36: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
-	238, // 37: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
-	239, // 38: vtctldata.CreateKeyspaceRequest.served_froms:type_name -> topodata.Keyspace.ServedFrom
-	240, // 39: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
-	228, // 40: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
+	233, // 14: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
+	234, // 15: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
+	232, // 16: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
+	232, // 17: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
+	232, // 18: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
+	232, // 19: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
+	235, // 20: vtctldata.Shard.shard:type_name -> topodata.Shard
+	203, // 21: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
+	203, // 22: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
+	202, // 23: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
+	236, // 24: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	237, // 25: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
+	238, // 26: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	234, // 27: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	239, // 28: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
+	240, // 29: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
+	240, // 30: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	233, // 31: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 32: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	229, // 33: vtctldata.BackupResponse.event:type_name -> logutil.Event
+	233, // 34: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
+	241, // 35: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
+	242, // 36: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
+	242, // 37: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
+	243, // 38: vtctldata.CreateKeyspaceRequest.served_froms:type_name -> topodata.Keyspace.ServedFrom
+	244, // 39: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
+	232, // 40: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
 	8,   // 41: vtctldata.CreateKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
 	8,   // 42: vtctldata.CreateShardResponse.keyspace:type_name -> vtctldata.Keyspace
 	10,  // 43: vtctldata.CreateShardResponse.shard:type_name -> vtctldata.Shard
 	10,  // 44: vtctldata.DeleteShardsRequest.shards:type_name -> vtctldata.Shard
-	229, // 45: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	229, // 46: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	229, // 47: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
-	230, // 48: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	229, // 49: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	225, // 50: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
-	229, // 51: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
-	241, // 52: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	229, // 53: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
-	241, // 54: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
-	229, // 55: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
-	242, // 56: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
-	243, // 57: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
-	204, // 58: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	244, // 59: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
-	232, // 60: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	205, // 61: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
-	229, // 62: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
-	245, // 63: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
+	233, // 45: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	233, // 46: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	233, // 47: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
+	234, // 48: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	233, // 49: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	229, // 50: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
+	233, // 51: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
+	245, // 52: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	233, // 53: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
+	245, // 54: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
+	233, // 55: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
+	246, // 56: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
+	247, // 57: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
+	208, // 58: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	248, // 59: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
+	236, // 60: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	209, // 61: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
+	233, // 62: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
+	249, // 63: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
 	8,   // 64: vtctldata.GetKeyspacesResponse.keyspaces:type_name -> vtctldata.Keyspace
 	8,   // 65: vtctldata.GetKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
-	229, // 66: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 67: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	233, // 68: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
-	229, // 69: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	247, // 70: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
+	233, // 66: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
+	250, // 67: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
+	237, // 68: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
+	233, // 69: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	251, // 70: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 71: vtctldata.GetSchemaMigrationsRequest.status:type_name -> vtctldata.SchemaMigration.Status
-	230, // 72: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
+	234, // 72: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
 	1,   // 73: vtctldata.GetSchemaMigrationsRequest.order:type_name -> vtctldata.QueryOrdering
 	9,   // 74: vtctldata.GetSchemaMigrationsResponse.migrations:type_name -> vtctldata.SchemaMigration
 	10,  // 75: vtctldata.GetShardResponse.shard:type_name -> vtctldata.Shard
-	234, // 76: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	206, // 77: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	208, // 78: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	248, // 79: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
-	249, // 80: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
-	209, // 81: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	229, // 82: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	238, // 83: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
-	229, // 84: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	237, // 85: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
-	238, // 86: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
-	97,  // 87: vtctldata.GetTopologyPathResponse.cell:type_name -> vtctldata.TopologyCell
-	229, // 88: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
-	236, // 89: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	238, // 76: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	210, // 77: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	212, // 78: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	252, // 79: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
+	253, // 80: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
+	213, // 81: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	233, // 82: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	242, // 83: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
+	233, // 84: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	241, // 85: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
+	242, // 86: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
+	99,  // 87: vtctldata.GetTopologyPathResponse.cell:type_name -> vtctldata.TopologyCell
+	233, // 88: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
+	240, // 89: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
 	11,  // 90: vtctldata.GetWorkflowsResponse.workflows:type_name -> vtctldata.Workflow
-	229, // 91: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
-	230, // 92: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	225, // 93: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
-	237, // 94: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
-	226, // 95: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	210, // 96: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
-	229, // 97: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 98: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	229, // 99: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
-	230, // 100: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	229, // 101: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	225, // 102: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
-	229, // 103: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 104: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	225, // 105: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
-	225, // 106: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
-	229, // 107: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
-	229, // 108: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
-	229, // 109: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	228, // 110: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	228, // 111: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
-	229, // 112: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	225, // 113: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	229, // 114: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
-	227, // 115: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
-	237, // 116: vtctldata.SetKeyspaceServedFromRequest.tablet_type:type_name -> topodata.TabletType
-	227, // 117: vtctldata.SetKeyspaceServedFromResponse.keyspace:type_name -> topodata.Keyspace
-	227, // 118: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
-	231, // 119: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
-	237, // 120: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
-	231, // 121: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
-	229, // 122: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 123: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
-	250, // 124: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
-	211, // 125: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	212, // 126: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	229, // 127: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 128: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	230, // 129: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
-	251, // 130: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
-	231, // 131: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
-	231, // 132: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
-	229, // 133: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 134: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	229, // 135: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
-	229, // 136: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
-	229, // 137: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
-	232, // 138: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	232, // 139: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	252, // 140: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
-	252, // 141: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
-	213, // 142: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	214, // 143: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	215, // 144: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	216, // 145: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	217, // 146: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	218, // 147: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
-	222, // 148: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	223, // 149: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	237, // 150: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
-	230, // 151: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
-	230, // 152: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
-	253, // 153: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	224, // 154: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
-	200, // 155: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
-	201, // 156: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
-	254, // 157: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
-	229, // 158: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
-	255, // 159: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
-	228, // 160: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
-	228, // 161: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
-	202, // 162: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
-	203, // 163: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
-	228, // 164: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
-	228, // 165: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
+	233, // 91: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
+	234, // 92: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	229, // 93: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
+	241, // 94: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
+	230, // 95: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	214, // 96: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
+	233, // 97: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 98: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	233, // 99: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
+	234, // 100: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	233, // 101: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	229, // 102: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
+	233, // 103: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 104: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	229, // 105: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
+	229, // 106: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
+	233, // 107: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
+	233, // 108: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
+	233, // 109: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	232, // 110: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	232, // 111: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
+	233, // 112: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	229, // 113: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	233, // 114: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
+	231, // 115: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
+	241, // 116: vtctldata.SetKeyspaceServedFromRequest.tablet_type:type_name -> topodata.TabletType
+	231, // 117: vtctldata.SetKeyspaceServedFromResponse.keyspace:type_name -> topodata.Keyspace
+	231, // 118: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
+	235, // 119: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
+	241, // 120: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
+	235, // 121: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
+	233, // 122: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 123: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
+	254, // 124: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
+	215, // 125: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	216, // 126: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	233, // 127: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 128: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	234, // 129: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
+	255, // 130: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
+	235, // 131: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
+	235, // 132: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
+	233, // 133: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 134: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	233, // 135: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
+	233, // 136: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
+	233, // 137: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
+	236, // 138: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	236, // 139: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	256, // 140: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
+	256, // 141: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
+	217, // 142: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	218, // 143: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	219, // 144: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	220, // 145: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	221, // 146: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	222, // 147: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
+	226, // 148: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	227, // 149: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	241, // 150: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
+	234, // 151: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
+	234, // 152: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
+	257, // 153: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	228, // 154: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
+	204, // 155: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
+	205, // 156: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
+	258, // 157: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
+	233, // 158: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
+	259, // 159: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
+	232, // 160: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
+	232, // 161: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
+	206, // 162: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
+	207, // 163: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
+	232, // 164: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
+	232, // 165: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
 	10,  // 166: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
-	252, // 167: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
-	207, // 168: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	256, // 169: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
-	249, // 170: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
-	229, // 171: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	257, // 172: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
-	238, // 173: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
-	179, // 174: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
-	183, // 175: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	183, // 176: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	183, // 177: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	183, // 178: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	229, // 179: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	229, // 180: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
-	220, // 181: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
-	219, // 182: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
-	221, // 183: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
-	229, // 184: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	256, // 167: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
+	211, // 168: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	260, // 169: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
+	253, // 170: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
+	233, // 171: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	261, // 172: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
+	242, // 173: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
+	183, // 174: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
+	187, // 175: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	187, // 176: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	187, // 177: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	187, // 178: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	233, // 179: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	233, // 180: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
+	224, // 181: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
+	223, // 182: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
+	225, // 183: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
+	233, // 184: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
 	185, // [185:185] is the sub-list for method output_type
 	185, // [185:185] is the sub-list for method input_type
 	185, // [185:185] is the sub-list for extension type_name
@@ -15525,7 +15751,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CreateKeyspaceRequest); i {
+			switch v := v.(*CleanupSchemaMigrationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15537,7 +15763,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CreateKeyspaceResponse); i {
+			switch v := v.(*CleanupSchemaMigrationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15549,7 +15775,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CreateShardRequest); i {
+			switch v := v.(*CreateKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15561,7 +15787,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CreateShardResponse); i {
+			switch v := v.(*CreateKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15573,7 +15799,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteCellInfoRequest); i {
+			switch v := v.(*CreateShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15585,7 +15811,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[30].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteCellInfoResponse); i {
+			switch v := v.(*CreateShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15597,7 +15823,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[31].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteCellsAliasRequest); i {
+			switch v := v.(*DeleteCellInfoRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15609,7 +15835,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[32].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteCellsAliasResponse); i {
+			switch v := v.(*DeleteCellInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15621,7 +15847,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteKeyspaceRequest); i {
+			switch v := v.(*DeleteCellsAliasRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15633,7 +15859,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteKeyspaceResponse); i {
+			switch v := v.(*DeleteCellsAliasResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15645,7 +15871,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteShardsRequest); i {
+			switch v := v.(*DeleteKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15657,7 +15883,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteShardsResponse); i {
+			switch v := v.(*DeleteKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15669,7 +15895,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteSrvVSchemaRequest); i {
+			switch v := v.(*DeleteShardsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15681,7 +15907,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteSrvVSchemaResponse); i {
+			switch v := v.(*DeleteShardsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15693,7 +15919,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteTabletsRequest); i {
+			switch v := v.(*DeleteSrvVSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15705,7 +15931,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[40].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteTabletsResponse); i {
+			switch v := v.(*DeleteSrvVSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15717,7 +15943,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[41].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*EmergencyReparentShardRequest); i {
+			switch v := v.(*DeleteTabletsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15729,7 +15955,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[42].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*EmergencyReparentShardResponse); i {
+			switch v := v.(*DeleteTabletsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15741,7 +15967,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ExecuteFetchAsAppRequest); i {
+			switch v := v.(*EmergencyReparentShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15753,7 +15979,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ExecuteFetchAsAppResponse); i {
+			switch v := v.(*EmergencyReparentShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15765,7 +15991,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[45].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ExecuteFetchAsDBARequest); i {
+			switch v := v.(*ExecuteFetchAsAppRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15777,7 +16003,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[46].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ExecuteFetchAsDBAResponse); i {
+			switch v := v.(*ExecuteFetchAsAppResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15789,7 +16015,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[47].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ExecuteHookRequest); i {
+			switch v := v.(*ExecuteFetchAsDBARequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15801,7 +16027,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[48].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ExecuteHookResponse); i {
+			switch v := v.(*ExecuteFetchAsDBAResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15813,7 +16039,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[49].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*FindAllShardsInKeyspaceRequest); i {
+			switch v := v.(*ExecuteHookRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15825,7 +16051,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[50].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*FindAllShardsInKeyspaceResponse); i {
+			switch v := v.(*ExecuteHookResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15837,7 +16063,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[51].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetBackupsRequest); i {
+			switch v := v.(*FindAllShardsInKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15849,7 +16075,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetBackupsResponse); i {
+			switch v := v.(*FindAllShardsInKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15861,7 +16087,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetCellInfoRequest); i {
+			switch v := v.(*GetBackupsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15873,7 +16099,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetCellInfoResponse); i {
+			switch v := v.(*GetBackupsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15885,7 +16111,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetCellInfoNamesRequest); i {
+			switch v := v.(*GetCellInfoRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15897,7 +16123,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetCellInfoNamesResponse); i {
+			switch v := v.(*GetCellInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15909,7 +16135,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetCellsAliasesRequest); i {
+			switch v := v.(*GetCellInfoNamesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15921,7 +16147,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetCellsAliasesResponse); i {
+			switch v := v.(*GetCellInfoNamesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15933,7 +16159,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetFullStatusRequest); i {
+			switch v := v.(*GetCellsAliasesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15945,7 +16171,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetFullStatusResponse); i {
+			switch v := v.(*GetCellsAliasesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15957,7 +16183,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetKeyspacesRequest); i {
+			switch v := v.(*GetFullStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15969,7 +16195,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[62].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetKeyspacesResponse); i {
+			switch v := v.(*GetFullStatusResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15981,7 +16207,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetKeyspaceRequest); i {
+			switch v := v.(*GetKeyspacesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -15993,7 +16219,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[64].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetKeyspaceResponse); i {
+			switch v := v.(*GetKeyspacesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16005,7 +16231,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[65].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetPermissionsRequest); i {
+			switch v := v.(*GetKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16017,7 +16243,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[66].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetPermissionsResponse); i {
+			switch v := v.(*GetKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16029,7 +16255,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[67].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetRoutingRulesRequest); i {
+			switch v := v.(*GetPermissionsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16041,7 +16267,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[68].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetRoutingRulesResponse); i {
+			switch v := v.(*GetPermissionsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16053,7 +16279,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[69].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSchemaRequest); i {
+			switch v := v.(*GetRoutingRulesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16065,7 +16291,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[70].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSchemaResponse); i {
+			switch v := v.(*GetRoutingRulesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16077,7 +16303,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[71].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSchemaMigrationsRequest); i {
+			switch v := v.(*GetSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16089,7 +16315,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[72].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSchemaMigrationsResponse); i {
+			switch v := v.(*GetSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16101,7 +16327,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[73].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetShardRequest); i {
+			switch v := v.(*GetSchemaMigrationsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16113,7 +16339,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[74].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetShardResponse); i {
+			switch v := v.(*GetSchemaMigrationsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16125,7 +16351,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[75].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetShardRoutingRulesRequest); i {
+			switch v := v.(*GetShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16137,7 +16363,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[76].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetShardRoutingRulesResponse); i {
+			switch v := v.(*GetShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16149,7 +16375,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[77].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvKeyspaceNamesRequest); i {
+			switch v := v.(*GetShardRoutingRulesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16161,7 +16387,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[78].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvKeyspaceNamesResponse); i {
+			switch v := v.(*GetShardRoutingRulesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16173,7 +16399,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[79].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvKeyspacesRequest); i {
+			switch v := v.(*GetSrvKeyspaceNamesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16185,7 +16411,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[80].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvKeyspacesResponse); i {
+			switch v := v.(*GetSrvKeyspaceNamesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16197,7 +16423,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[81].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateThrottlerConfigRequest); i {
+			switch v := v.(*GetSrvKeyspacesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16209,7 +16435,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[82].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateThrottlerConfigResponse); i {
+			switch v := v.(*GetSrvKeyspacesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16221,7 +16447,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[83].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvVSchemaRequest); i {
+			switch v := v.(*UpdateThrottlerConfigRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16233,7 +16459,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[84].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvVSchemaResponse); i {
+			switch v := v.(*UpdateThrottlerConfigResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16245,7 +16471,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[85].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvVSchemasRequest); i {
+			switch v := v.(*GetSrvVSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16257,7 +16483,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[86].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetSrvVSchemasResponse); i {
+			switch v := v.(*GetSrvVSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16269,7 +16495,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[87].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetTabletRequest); i {
+			switch v := v.(*GetSrvVSchemasRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16281,7 +16507,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[88].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetTabletResponse); i {
+			switch v := v.(*GetSrvVSchemasResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16293,7 +16519,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[89].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetTabletsRequest); i {
+			switch v := v.(*GetTabletRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16305,7 +16531,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[90].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetTabletsResponse); i {
+			switch v := v.(*GetTabletResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16317,7 +16543,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[91].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetTopologyPathRequest); i {
+			switch v := v.(*GetTabletsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16329,7 +16555,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[92].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetTopologyPathResponse); i {
+			switch v := v.(*GetTabletsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16341,7 +16567,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[93].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TopologyCell); i {
+			switch v := v.(*GetTopologyPathRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16353,7 +16579,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[94].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetVSchemaRequest); i {
+			switch v := v.(*GetTopologyPathResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16365,7 +16591,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[95].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetVersionRequest); i {
+			switch v := v.(*TopologyCell); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16377,7 +16603,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[96].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetVersionResponse); i {
+			switch v := v.(*GetVSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16389,7 +16615,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[97].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetVSchemaResponse); i {
+			switch v := v.(*GetVersionRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16401,7 +16627,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[98].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetWorkflowsRequest); i {
+			switch v := v.(*GetVersionResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16413,7 +16639,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[99].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetWorkflowsResponse); i {
+			switch v := v.(*GetVSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16425,7 +16651,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[100].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*InitShardPrimaryRequest); i {
+			switch v := v.(*GetWorkflowsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16437,7 +16663,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[101].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*InitShardPrimaryResponse); i {
+			switch v := v.(*GetWorkflowsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16449,7 +16675,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[102].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MoveTablesCreateRequest); i {
+			switch v := v.(*InitShardPrimaryRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16461,7 +16687,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[103].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MoveTablesCreateResponse); i {
+			switch v := v.(*InitShardPrimaryResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16473,7 +16699,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[104].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MoveTablesCompleteRequest); i {
+			switch v := v.(*MoveTablesCreateRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16485,7 +16711,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[105].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MoveTablesCompleteResponse); i {
+			switch v := v.(*MoveTablesCreateResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16497,7 +16723,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[106].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PingTabletRequest); i {
+			switch v := v.(*MoveTablesCompleteRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16509,7 +16735,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[107].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PingTabletResponse); i {
+			switch v := v.(*MoveTablesCompleteResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16521,7 +16747,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[108].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PlannedReparentShardRequest); i {
+			switch v := v.(*PingTabletRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16533,7 +16759,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[109].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PlannedReparentShardResponse); i {
+			switch v := v.(*PingTabletResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16545,7 +16771,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[110].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RebuildKeyspaceGraphRequest); i {
+			switch v := v.(*PlannedReparentShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16557,7 +16783,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[111].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RebuildKeyspaceGraphResponse); i {
+			switch v := v.(*PlannedReparentShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16569,7 +16795,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[112].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RebuildVSchemaGraphRequest); i {
+			switch v := v.(*RebuildKeyspaceGraphRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16581,7 +16807,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[113].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RebuildVSchemaGraphResponse); i {
+			switch v := v.(*RebuildKeyspaceGraphResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16593,7 +16819,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[114].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RefreshStateRequest); i {
+			switch v := v.(*RebuildVSchemaGraphRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16605,7 +16831,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[115].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RefreshStateResponse); i {
+			switch v := v.(*RebuildVSchemaGraphResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16617,7 +16843,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[116].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RefreshStateByShardRequest); i {
+			switch v := v.(*RefreshStateRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16629,7 +16855,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[117].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RefreshStateByShardResponse); i {
+			switch v := v.(*RefreshStateResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16641,7 +16867,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[118].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReloadSchemaRequest); i {
+			switch v := v.(*RefreshStateByShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16653,7 +16879,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[119].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReloadSchemaResponse); i {
+			switch v := v.(*RefreshStateByShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16665,7 +16891,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[120].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReloadSchemaKeyspaceRequest); i {
+			switch v := v.(*ReloadSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16677,7 +16903,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[121].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReloadSchemaKeyspaceResponse); i {
+			switch v := v.(*ReloadSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16689,7 +16915,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[122].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReloadSchemaShardRequest); i {
+			switch v := v.(*ReloadSchemaKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16701,7 +16927,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[123].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReloadSchemaShardResponse); i {
+			switch v := v.(*ReloadSchemaKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16713,7 +16939,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[124].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveBackupRequest); i {
+			switch v := v.(*ReloadSchemaShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16725,7 +16951,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[125].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveBackupResponse); i {
+			switch v := v.(*ReloadSchemaShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16737,7 +16963,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[126].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveKeyspaceCellRequest); i {
+			switch v := v.(*RemoveBackupRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16749,7 +16975,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[127].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveKeyspaceCellResponse); i {
+			switch v := v.(*RemoveBackupResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16761,7 +16987,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[128].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveShardCellRequest); i {
+			switch v := v.(*RemoveKeyspaceCellRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16773,7 +16999,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[129].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveShardCellResponse); i {
+			switch v := v.(*RemoveKeyspaceCellResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16785,7 +17011,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[130].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReparentTabletRequest); i {
+			switch v := v.(*RemoveShardCellRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16797,7 +17023,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[131].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReparentTabletResponse); i {
+			switch v := v.(*RemoveShardCellResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16809,7 +17035,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[132].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RestoreFromBackupRequest); i {
+			switch v := v.(*ReparentTabletRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16821,7 +17047,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[133].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RestoreFromBackupResponse); i {
+			switch v := v.(*ReparentTabletResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16833,7 +17059,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[134].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RunHealthCheckRequest); i {
+			switch v := v.(*RestoreFromBackupRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16845,7 +17071,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[135].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RunHealthCheckResponse); i {
+			switch v := v.(*RestoreFromBackupResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16857,7 +17083,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[136].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceDurabilityPolicyRequest); i {
+			switch v := v.(*RetrySchemaMigrationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16869,7 +17095,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[137].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceDurabilityPolicyResponse); i {
+			switch v := v.(*RetrySchemaMigrationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16881,7 +17107,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[138].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceServedFromRequest); i {
+			switch v := v.(*RunHealthCheckRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16893,7 +17119,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[139].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceServedFromResponse); i {
+			switch v := v.(*RunHealthCheckResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16905,7 +17131,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[140].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceShardingInfoRequest); i {
+			switch v := v.(*SetKeyspaceDurabilityPolicyRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16917,7 +17143,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[141].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceShardingInfoResponse); i {
+			switch v := v.(*SetKeyspaceDurabilityPolicyResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16929,7 +17155,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[142].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetShardIsPrimaryServingRequest); i {
+			switch v := v.(*SetKeyspaceServedFromRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16941,7 +17167,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[143].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetShardIsPrimaryServingResponse); i {
+			switch v := v.(*SetKeyspaceServedFromResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16953,7 +17179,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[144].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetShardTabletControlRequest); i {
+			switch v := v.(*SetKeyspaceShardingInfoRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16965,7 +17191,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[145].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetShardTabletControlResponse); i {
+			switch v := v.(*SetKeyspaceShardingInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16977,7 +17203,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[146].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetWritableRequest); i {
+			switch v := v.(*SetShardIsPrimaryServingRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -16989,7 +17215,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[147].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetWritableResponse); i {
+			switch v := v.(*SetShardIsPrimaryServingResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17001,7 +17227,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[148].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationAddRequest); i {
+			switch v := v.(*SetShardTabletControlRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17013,7 +17239,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[149].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationAddResponse); i {
+			switch v := v.(*SetShardTabletControlResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17025,7 +17251,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[150].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationFixRequest); i {
+			switch v := v.(*SetWritableRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17037,7 +17263,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[151].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationFixResponse); i {
+			switch v := v.(*SetWritableResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17049,7 +17275,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[152].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationPositionsRequest); i {
+			switch v := v.(*ShardReplicationAddRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17061,7 +17287,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[153].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationPositionsResponse); i {
+			switch v := v.(*ShardReplicationAddResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17073,7 +17299,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[154].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationRemoveRequest); i {
+			switch v := v.(*ShardReplicationFixRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17085,7 +17311,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[155].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplicationRemoveResponse); i {
+			switch v := v.(*ShardReplicationFixResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17097,7 +17323,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[156].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SleepTabletRequest); i {
+			switch v := v.(*ShardReplicationPositionsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17109,7 +17335,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[157].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SleepTabletResponse); i {
+			switch v := v.(*ShardReplicationPositionsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17121,7 +17347,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[158].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SourceShardAddRequest); i {
+			switch v := v.(*ShardReplicationRemoveRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17133,7 +17359,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[159].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SourceShardAddResponse); i {
+			switch v := v.(*ShardReplicationRemoveResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17145,7 +17371,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[160].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SourceShardDeleteRequest); i {
+			switch v := v.(*SleepTabletRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17157,7 +17383,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[161].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SourceShardDeleteResponse); i {
+			switch v := v.(*SleepTabletResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17169,7 +17395,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[162].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StartReplicationRequest); i {
+			switch v := v.(*SourceShardAddRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17181,7 +17407,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[163].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StartReplicationResponse); i {
+			switch v := v.(*SourceShardAddResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17193,7 +17419,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[164].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StopReplicationRequest); i {
+			switch v := v.(*SourceShardDeleteRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17205,7 +17431,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[165].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StopReplicationResponse); i {
+			switch v := v.(*SourceShardDeleteResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17217,7 +17443,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[166].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TabletExternallyReparentedRequest); i {
+			switch v := v.(*StartReplicationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17229,7 +17455,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[167].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TabletExternallyReparentedResponse); i {
+			switch v := v.(*StartReplicationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17241,7 +17467,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[168].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateCellInfoRequest); i {
+			switch v := v.(*StopReplicationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17253,7 +17479,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[169].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateCellInfoResponse); i {
+			switch v := v.(*StopReplicationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17265,7 +17491,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[170].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateCellsAliasRequest); i {
+			switch v := v.(*TabletExternallyReparentedRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17277,7 +17503,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[171].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateCellsAliasResponse); i {
+			switch v := v.(*TabletExternallyReparentedResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17289,7 +17515,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[172].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateRequest); i {
+			switch v := v.(*UpdateCellInfoRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17301,7 +17527,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[173].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateResponse); i {
+			switch v := v.(*UpdateCellInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17313,7 +17539,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[174].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateKeyspaceRequest); i {
+			switch v := v.(*UpdateCellsAliasRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17325,7 +17551,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[175].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateKeyspaceResponse); i {
+			switch v := v.(*UpdateCellsAliasResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17337,7 +17563,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[176].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateSchemaKeyspaceRequest); i {
+			switch v := v.(*ValidateRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17349,7 +17575,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[177].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateSchemaKeyspaceResponse); i {
+			switch v := v.(*ValidateResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17361,7 +17587,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[178].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateShardRequest); i {
+			switch v := v.(*ValidateKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17373,7 +17599,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[179].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateShardResponse); i {
+			switch v := v.(*ValidateKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17385,7 +17611,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[180].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateVersionKeyspaceRequest); i {
+			switch v := v.(*ValidateSchemaKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17397,7 +17623,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[181].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateVersionKeyspaceResponse); i {
+			switch v := v.(*ValidateSchemaKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17409,7 +17635,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[182].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateVersionShardRequest); i {
+			switch v := v.(*ValidateShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17421,7 +17647,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[183].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateVersionShardResponse); i {
+			switch v := v.(*ValidateShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17433,7 +17659,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[184].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateVSchemaRequest); i {
+			switch v := v.(*ValidateVersionKeyspaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17445,7 +17671,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[185].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateVSchemaResponse); i {
+			switch v := v.(*ValidateVersionKeyspaceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17457,7 +17683,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[186].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowDeleteRequest); i {
+			switch v := v.(*ValidateVersionShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17469,7 +17695,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[187].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowDeleteResponse); i {
+			switch v := v.(*ValidateVersionShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17481,7 +17707,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[188].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowStatusRequest); i {
+			switch v := v.(*ValidateVSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17493,7 +17719,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[189].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowStatusResponse); i {
+			switch v := v.(*ValidateVSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17505,7 +17731,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[190].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowSwitchTrafficRequest); i {
+			switch v := v.(*WorkflowDeleteRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17517,7 +17743,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[191].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowSwitchTrafficResponse); i {
+			switch v := v.(*WorkflowDeleteResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17529,7 +17755,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[192].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowUpdateRequest); i {
+			switch v := v.(*WorkflowStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17541,7 +17767,19 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[193].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowUpdateResponse); i {
+			switch v := v.(*WorkflowStatusResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[194].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*WorkflowSwitchTrafficRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17553,7 +17791,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[195].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_ReplicationLocation); i {
+			switch v := v.(*WorkflowSwitchTrafficResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17565,7 +17803,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[196].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_ShardStream); i {
+			switch v := v.(*WorkflowUpdateRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17577,19 +17815,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[197].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_Stream); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[198].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_Stream_CopyState); i {
+			switch v := v.(*WorkflowUpdateResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17601,7 +17827,43 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[199].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_Stream_Log); i {
+			switch v := v.(*Workflow_ReplicationLocation); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[200].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_ShardStream); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[201].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_Stream); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[202].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_Stream_CopyState); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -17613,6 +17875,18 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[203].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_Stream_Log); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[207].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetSrvKeyspaceNamesResponse_NameList); i {
 			case 0:
 				return &v.state
@@ -17624,7 +17898,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[206].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[210].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MoveTablesCreateResponse_TabletInfo); i {
 			case 0:
 				return &v.state
@@ -17636,7 +17910,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[214].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[218].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowDeleteResponse_TabletInfo); i {
 			case 0:
 				return &v.state
@@ -17648,7 +17922,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[215].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[219].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowStatusResponse_TableCopyState); i {
 			case 0:
 				return &v.state
@@ -17660,7 +17934,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[216].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[220].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowStatusResponse_ShardStreamState); i {
 			case 0:
 				return &v.state
@@ -17672,7 +17946,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[217].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[221].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowStatusResponse_ShardStreams); i {
 			case 0:
 				return &v.state
@@ -17684,7 +17958,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[220].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[224].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowUpdateResponse_TabletInfo); i {
 			case 0:
 				return &v.state
@@ -17703,7 +17977,7 @@ func file_vtctldata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtctldata_proto_rawDesc,
 			NumEnums:      4,
-			NumMessages:   221,
+			NumMessages:   225,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

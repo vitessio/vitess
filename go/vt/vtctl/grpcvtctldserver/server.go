@@ -601,6 +601,11 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}, nil
 }
 
+// CleanupSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldatapb.CleanupSchemaMigrationRequest) (resp *vtctldatapb.CleanupSchemaMigrationResponse, err error) {
+	panic("unimplemented!")
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (resp *vtctldatapb.CreateKeyspaceResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.CreateKeyspace")
@@ -2944,6 +2949,11 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			return err
 		}
 	}
+}
+
+// RetrySchemaMigration is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatapb.RetrySchemaMigrationRequest) (resp *vtctldatapb.RetrySchemaMigrationResponse, err error) {
+	panic("unimplemented!")
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldServer interface.
