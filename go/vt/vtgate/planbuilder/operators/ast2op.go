@@ -171,16 +171,6 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 			cols = append(cols, len(selectExprs))
 			selectExprs = append(selectExprs, aeWrap(sqlparser.NewColName(column.String())))
 		}
-		var childUpdateExprs sqlparser.UpdateExprs
-		for _, updateExpr := range updClone.Exprs {
-			colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
-			if colIdx >= 0 {
-				childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName(fk.ParentColumns[colIdx].String()),
-					Expr: updateExpr.Expr,
-				})
-			}
-		}
 
 		switch fk.OnUpdate {
 		case sqlparser.Cascade:
@@ -196,6 +186,16 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 				Left:     valTuple,
 				Right:    sqlparser.NewListArg(bvName),
 			}
+			var childUpdateExprs sqlparser.UpdateExprs
+			for _, updateExpr := range updClone.Exprs {
+				colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
+				if colIdx >= 0 {
+					childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
+						Name: sqlparser.NewColName(fk.ChildColumns[colIdx].String()),
+						Expr: updateExpr.Expr,
+					})
+				}
+			}
 			childUpd := &sqlparser.Update{
 				Exprs:      childUpdateExprs,
 				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
@@ -210,9 +210,40 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 				Cols:   cols,
 				Op:     childDelOp,
 			})
-
 		case sqlparser.SetNull:
-			return nil, vterrors.VT12003()
+			// We now construct the update query for the child table.
+			// The query looks something like this - `UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
+			var valTuple sqlparser.ValTuple
+			for _, column := range fk.ChildColumns {
+				valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+			}
+			compExpr := &sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left:     valTuple,
+				Right:    sqlparser.NewListArg(bvName),
+			}
+			var childUpdateExprs sqlparser.UpdateExprs
+			for _, column := range fk.ChildColumns {
+				childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
+					Name: sqlparser.NewColName(column.String()),
+					Expr: &sqlparser.NullVal{},
+				})
+			}
+			childUpd := &sqlparser.Update{
+				Exprs:      childUpdateExprs,
+				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
+				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
+			}
+			childDelOp, err := createOpFromStmt(ctx, childUpd)
+			if err != nil {
+				return nil, err
+			}
+			fkChildren = append(fkChildren, &FkChild{
+				BVName: bvName,
+				Cols:   cols,
+				Op:     childDelOp,
+			})
 		case sqlparser.SetDefault:
 			return nil, vterrors.VT09016()
 		}
@@ -290,46 +321,44 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 }
 
 func fkNeedsHandling(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-	pFksRequiredMap := map[*vindexes.ParentFKInfo]bool{}
-	cFksRequiredMap := map[*vindexes.ChildFKInfo]bool{}
+	pFksRequiredMap := map[string]*vindexes.ParentFKInfo{}
+	cFksRequiredMap := map[string]*vindexes.ChildFKInfo{}
 	for _, updateExpr := range updateExprs {
-		for _, childFk := range childFks {
+		for idx, childFk := range childFks {
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				cFksRequiredMap[&childFk] = true
+				cFksRequiredMap[childFk.String()] = &childFks[idx]
 			}
 		}
-		for _, parentFk := range parentFks {
+		for idx, parentFk := range parentFks {
 			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
 			if isNull {
 				continue
 			}
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				pFksRequiredMap[&parentFk] = true
+				pFksRequiredMap[parentFk.String()] = &parentFks[idx]
 			}
 		}
 	}
-	for _, parentFk := range parentFks {
+	for _, parentFk := range pFksRequiredMap {
 		for _, updateExpr := range updateExprs {
 			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
-			if isNull {
+			if !isNull {
 				continue
 			}
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				pFksRequiredMap[&parentFk] = false
+				pFksRequiredMap[parentFk.String()] = nil
 			}
 		}
 	}
 	var pFksNeedsHandling []vindexes.ParentFKInfo
 	var cFksNeedsHandling []vindexes.ChildFKInfo
-	for parentFk, required := range pFksRequiredMap {
-		if required {
+	for _, parentFk := range pFksRequiredMap {
+		if parentFk != nil {
 			pFksNeedsHandling = append(pFksNeedsHandling, *parentFk)
 		}
 	}
-	for childFk, required := range cFksRequiredMap {
-		if required {
-			cFksNeedsHandling = append(cFksNeedsHandling, *childFk)
-		}
+	for _, childFk := range cFksRequiredMap {
+		cFksNeedsHandling = append(cFksNeedsHandling, *childFk)
 	}
 	return pFksNeedsHandling, cFksNeedsHandling
 }
