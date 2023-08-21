@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
@@ -25,6 +26,14 @@
 ## <a id="major-changes"/>Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="local-examples-etcd-v3"/>Local examples now use etcd v3 storage and API
+In previous releases the [local examples](https://github.com/vitessio/vitess/tree/main/examples/local) were
+explicitly using etcd v2 storage (`etcd --enable-v2=true`) and API (`ETCDCTL_API=2`) mode. We have now
+removed this legacy etcd usage and instead use the new (default) etcd v3 storage and API. Please see
+[PR #13791](https://github.com/vitessio/vitess/pull/13791) for additional info. If you are using the local
+examples in any sort of long-term non-testing capacity, then you will need to explicitly use the v2 storage
+and API mode or [migrate your existing data from v2 to v3](https://etcd.io/docs/v3.5/tutorials/how-to-migrate/).
 
 ### <a id="new-flag"/>New command line flags and behavior
 
