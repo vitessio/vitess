@@ -695,6 +695,14 @@
             }
           ]
         },
+        "tbl8": {
+          "column_vindexes": [
+            {
+              "column": "col8",
+              "name": "hash_vin"
+            }
+          ]
+        },
         "tbl10": {
           "column_vindexes": [
             {

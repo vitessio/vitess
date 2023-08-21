@@ -258,31 +258,36 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 			selectExprs = append(selectExprs, aeWrap(sqlparser.NewColName(column.String())))
 		}
 
-		// We now construct the delete query for the child table.
-		// The query looks something like this - `DELETE FROM <child_table> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-		bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
-		var valTuple sqlparser.ValTuple
-		for _, column := range fk.ChildColumns {
-			valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+		switch fk.OnDelete {
+		case sqlparser.Cascade:
+			// We now construct the delete query for the child table.
+			// The query looks something like this - `DELETE FROM <child_table> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
+			var valTuple sqlparser.ValTuple
+			for _, column := range fk.ChildColumns {
+				valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+			}
+			compExpr := &sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left:     valTuple,
+				Right:    sqlparser.NewListArg(bvName),
+			}
+			childDel := &sqlparser.Delete{
+				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
+				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
+			}
+			childDelOp, err := createOpFromStmt(ctx, childDel)
+			if err != nil {
+				return nil, err
+			}
+			fkChildren = append(fkChildren, &FkChild{
+				BVName: bvName,
+				Cols:   cols,
+				Op:     childDelOp,
+			})
+		default:
+			return nil, vterrors.VT12003()
 		}
-		compExpr := &sqlparser.ComparisonExpr{
-			Operator: sqlparser.InOp,
-			Left:     valTuple,
-			Right:    sqlparser.NewListArg(bvName),
-		}
-		childDel := &sqlparser.Delete{
-			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
-			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
-		}
-		childDelOp, err := createOpFromStmt(ctx, childDel)
-		if err != nil {
-			return nil, err
-		}
-		fkChildren = append(fkChildren, &FkChild{
-			BVName: bvName,
-			Cols:   cols,
-			Op:     childDelOp,
-		})
 	}
 	// We now create the selection operator to select the parent columns for the foreign key constraints.
 	// The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_delete>`

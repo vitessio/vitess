@@ -219,6 +219,11 @@
     }
   },
   {
+    "comment": "Delete in a table with shard-scoped foreign keys with SET NULL",
+    "query": "delete from tbl8 where col8 = 1",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
     "comment": "update in unsharded table with restrict",
     "query": "update u_tbl5 set col5 = 'foo' where id = 1",
     "plan": {
