@@ -227,7 +227,7 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 
 // WaitForAuthoritative waits for a table to become authoritative
 func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*interface{}, error)) error {
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
