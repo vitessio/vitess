@@ -318,7 +318,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 				Op:     childUpdOp,
 			})
 		case sqlparser.SetDefault:
-			return nil, vterrors.VT12003()
+			return nil, vterrors.VT09016()
 		}
 	}
 	// We now create the selection operator to select the parent columns for the foreign key constraints.
