@@ -78,6 +78,9 @@ import (
 
 const (
 	initShardPrimaryOperation = "InitShardPrimary"
+
+	// DefaultWaitReplicasTimeout is the default value for waitReplicasTimeout, which is used when calling method ApplySchema.
+	DefaultWaitReplicasTimeout = 10 * time.Second
 )
 
 // VtctldServer implements the Vtctld RPC service protocol.
