@@ -76,11 +76,14 @@ func TestDeleteWithFK(t *testing.T) {
 
 	// table's child foreign key has cross shard fk, so query will fail at vtgate.
 	_, err = utils.ExecAllowError(t, conn, `delete from t1 where id = 42`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: foreign keys management at vitess (errno 1235) (sqlstate 42000)")
+	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys (errno 1235) (sqlstate 42000)")
 
-	// child foreign key is cascade, so query will fail at vtgate.
-	_, err = utils.ExecAllowError(t, conn, `delete from multicol_tbl1 where cola = 100`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: foreign keys management at vitess (errno 1235) (sqlstate 42000)")
+	// child foreign key is cascade, so this should work as expected.
+	qr = utils.Exec(t, conn, `delete from multicol_tbl1 where cola = 100`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// we also verify that the rows in the child table were deleted.
+	qr = utils.Exec(t, conn, `select * from multicol_tbl2 where cola = 100`)
+	assert.Zero(t, qr.Rows)
 }
 
 // TestUpdations tests that update work as expected when foreign key management is enabled in Vitess.
