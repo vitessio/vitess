@@ -225,6 +225,12 @@ type VtctldClient interface {
 	// GetSchema returns the schema for a tablet, or just the schema for the
 	// specified tables in that tablet.
 	GetSchema(ctx context.Context, in *vtctldata.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaResponse, error)
+	// GetSchemaMigrations returns one or more online schema migrations for the
+	// specified keyspace, analagous to `SHOW VITESS_MIGRATIONS`.
+	//
+	// Different fields in the request message result in different filtering
+	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
+	GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -749,6 +755,15 @@ func (c *vtctldClient) GetRoutingRules(ctx context.Context, in *vtctldata.GetRou
 func (c *vtctldClient) GetSchema(ctx context.Context, in *vtctldata.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaResponse, error) {
 	out := new(vtctldata.GetSchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error) {
+	out := new(vtctldata.GetSchemaMigrationsResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSchemaMigrations", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1393,6 +1408,12 @@ type VtctldServer interface {
 	// GetSchema returns the schema for a tablet, or just the schema for the
 	// specified tables in that tablet.
 	GetSchema(context.Context, *vtctldata.GetSchemaRequest) (*vtctldata.GetSchemaResponse, error)
+	// GetSchemaMigrations returns one or more online schema migrations for the
+	// specified keyspace, analagous to `SHOW VITESS_MIGRATIONS`.
+	//
+	// Different fields in the request message result in different filtering
+	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
+	GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -1681,6 +1702,9 @@ func (UnimplementedVtctldServer) GetRoutingRules(context.Context, *vtctldata.Get
 }
 func (UnimplementedVtctldServer) GetSchema(context.Context, *vtctldata.GetSchemaRequest) (*vtctldata.GetSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
+}
+func (UnimplementedVtctldServer) GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSchemaMigrations not implemented")
 }
 func (UnimplementedVtctldServer) GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
@@ -2447,6 +2471,24 @@ func _Vtctld_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetSchema(ctx, req.(*vtctldata.GetSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetSchemaMigrations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetSchemaMigrationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetSchemaMigrations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetSchemaMigrations",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetSchemaMigrations(ctx, req.(*vtctldata.GetSchemaMigrationsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3624,6 +3666,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSchema",
 			Handler:    _Vtctld_GetSchema_Handler,
+		},
+		{
+			MethodName: "GetSchemaMigrations",
+			Handler:    _Vtctld_GetSchemaMigrations_Handler,
 		},
 		{
 			MethodName: "GetShard",
