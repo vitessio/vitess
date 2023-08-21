@@ -1,9 +1,7 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
-    "plan": {
-
-    }
+    "comment": "Delete in a table with shard-scoped foreign keys with cascade disallowed",
+    "query": "delete from tbl5",
+    "plan": "VT12002: unsupported: foreign keys management at vitess"
   }
 ]

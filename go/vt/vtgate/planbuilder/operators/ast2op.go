@@ -245,15 +245,21 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	var fkChildren []ops.Operator
 	var selectExprs []sqlparser.SelectExpr
 	for _, fk := range childFks {
+		// Any RESTRICT type foreign keys that arrive here,
+		// are cross-shard/cross-keyspace RESTRICT cases, which we don't currently support.
 		if isRestrict(fk.OnDelete) {
 			return nil, vterrors.VT12002()
 		}
+
+		// We need to select all the parent columns for the foreign key constraint, to use in the deletion in the child.
 		var cols []int
 		for _, column := range fk.ParentColumns {
 			cols = append(cols, len(selectExprs))
 			selectExprs = append(selectExprs, aeWrap(sqlparser.NewColName(column.String())))
 		}
 
+		// We now construct the delete query for the child table.
+		// The query looks something like this - `DELETE FROM <child_table> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
 		bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
 		var valTuple sqlparser.ValTuple
 		for _, column := range fk.ChildColumns {
@@ -265,7 +271,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 			Right:    sqlparser.NewListArg(bvName),
 		}
 		childDel := &sqlparser.Delete{
-			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName(fk.Table.String()), "")},
+			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
 		childDelOp, err := createOpFromStmt(ctx, childDel)
@@ -278,6 +284,9 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 			Op:     childDelOp,
 		})
 	}
+	// We now create the selection operator to select the parent columns for the foreign key constraints.
+	// The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_delete>`
+	// TODO (@Harshit, @GuptaManan100): Compress the columns in the SELECT statement, if there are multiple foreign key constraints using the same columns.
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        delClone.TableExprs,
