@@ -125,17 +125,21 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tbl10 referencing tbl3 that is not shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl10", createFkDefinition([]string{"col"}, "tbl3", []string{"col"}, sqlparser.Restrict, sqlparser.Restrict))
 
-		// FK from tbl5 referencing tbl8 that is shard scoped of SET-NULL types.
-		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl5", createFkDefinition([]string{"col5"}, "tbl8", []string{"col8"}, sqlparser.SetNull, sqlparser.SetNull))
-
 		// FK from tbl4 referencing tbl5 that is shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"t4col4"}, "tbl5", []string{"t5col5"}, sqlparser.SetNull, sqlparser.Cascade))
+
+		// FK from tbl5 referencing tbl8 that is shard scoped of SET-NULL types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl5", createFkDefinition([]string{"col5"}, "tbl8", []string{"col8"}, sqlparser.SetNull, sqlparser.SetNull))
 
 		// FK from tbl6 referencing tbl7 that is shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col6"}, "tbl7", []string{"t7col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col62"}, "tbl7", []string{"t7col72"}, sqlparser.NoAction, sqlparser.NoAction))
+
+		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col"}, sqlparser.SetDefault, sqlparser.SetDefault))
+
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.

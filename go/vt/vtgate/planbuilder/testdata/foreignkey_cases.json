@@ -399,5 +399,10 @@
     "comment": "update table with column's parent foreign key cross shard - disallowed",
     "query": "update tbl10 set col = 'foo'",
     "plan": "VT12002: unsupported: foreign keys management at vitess"
+  },
+  {
+    "comment": "delete table with shard scoped foreign key set default - disallowed",
+    "query": "delete from tbl20 where col = 'bar'",
+    "plan": "VT09016: Cannot delete or update a parent row: a foreign key constraint fails"
   }
 ]

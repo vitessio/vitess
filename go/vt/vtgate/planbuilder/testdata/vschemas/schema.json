@@ -718,6 +718,22 @@
               "name": "hash_vin"
             }
           ]
+        },
+        "tblrefDef": {
+          "column_vindexes": [
+            {
+              "column": "ref",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl20": {
+          "column_vindexes": [
+            {
+              "column": "col",
+              "name": "hash_vin"
+            }
+          ]
         }
       }
     },
