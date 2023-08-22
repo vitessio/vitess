@@ -190,7 +190,7 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 
 	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
 	if !ok {
-		panic("can't use unexpanded projections here")
+		return nil, vterrors.VT13001("can't use unexpanded projections here")
 	}
 	predicate.Right = ae.Expr
 	jpc.calcJoinColumns(ctx, predicate)
@@ -226,7 +226,7 @@ func createExistsSubquery(
 ) (SubQuery, error) {
 	innerSel, ok := sq.Select.(*sqlparser.Select)
 	if !ok {
-		panic("yucki unions")
+		return nil, vterrors.VT13001("yucki unions")
 	}
 
 	var expr sqlparser.Expr

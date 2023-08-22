@@ -543,51 +543,36 @@ func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Proj
 	return proj, nil
 }
 
-func (r *Route) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	offsets := make([]int, len(exprs))
-	var notFoundExprs []*sqlparser.AliasedExpr
-	var pendingOffsetIdx []int
-	for idx, expr := range exprs {
-		removeKeyspaceFromSelectExpr(expr)
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+	removeKeyspaceFromSelectExpr(expr)
 
-		if reuse {
-			offset, err := r.FindCol(ctx, expr.Expr, true)
-			if err != nil {
-				return nil, err
-			}
-			if offset != -1 {
-				offsets[idx] = offset
-				continue
-			}
+	if reuse {
+		offset, err := r.FindCol(ctx, expr.Expr, true)
+		if err != nil {
+			return 0, err
 		}
-		notFoundExprs = append(notFoundExprs, expr)
-		pendingOffsetIdx = append(pendingOffsetIdx, idx)
-	}
-
-	if len(notFoundExprs) == 0 {
-		// we were able to find all columns, so we don't need to fetch anything else
-		return offsets, nil
+		if offset != -1 {
+			return offset, nil
+		}
 	}
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	op, ok, remainingOffsets := addMultipleColumnsToInput(ctx, r.Source, reuse, addToGroupBy, notFoundExprs)
+	op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
 	r.Source = op
 	if ok {
-		for i, offsetIdx := range pendingOffsetIdx {
-			offsets[offsetIdx] = remainingOffsets[i]
-		}
-		return offsets, nil
+		return offsets[0], nil
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
 	src, err := createProjection(ctx, r.Source)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	r.Source = src
 
-	return src.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs), nil
+	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	return offsets[0], nil
 }
 
 type selectExpressions interface {
@@ -730,11 +715,11 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			wrap := aeWrap(weightStringFor(order.SimplifiedExpr))
-			offsets, err := r.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{wrap})
+			offset, err := r.AddColumn(ctx, true, false, wrap)
 			if err != nil {
 				return err
 			}
-			o.WOffset = offsets[0]
+			o.WOffset = offset
 		}
 		r.Ordering = append(r.Ordering, o)
 	}
@@ -753,11 +738,11 @@ func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy
 		}
 	}
 
-	offsets, err := r.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(order.Inner.Expr)})
+	offset, err := r.AddColumn(ctx, true, false, aeWrap(order.Inner.Expr))
 	if err != nil {
 		return 0, err
 	}
-	return offsets[0], nil
+	return offset, nil
 }
 
 func (r *Route) ShortDescription() string {

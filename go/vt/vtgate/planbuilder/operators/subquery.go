@@ -88,8 +88,8 @@ func (sq *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr
 	return sq, err
 }
 
-func (sq *SubQueryContainer) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return sq.Outer.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
+func (sq *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
 func (sq *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {

@@ -62,33 +62,21 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	return &clone
 }
 
-func (v *Vindex) AddColumns(ctx *plancontext.PlanningContext, reuse bool, groupBys []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	offsets := make([]int, len(exprs))
-	for idx, ae := range exprs {
-		if groupBys[idx] {
-			return nil, vterrors.VT13001("tried to add group by to a table")
-		}
-
-		if reuse {
-			offset, err := v.FindCol(ctx, ae.Expr, true)
-			if err != nil {
-				return nil, err
-			}
-			if offset > -1 {
-				offsets[idx] = offset
-				continue
-			}
-		}
-
-		offset, err := addColumn(ctx, v, ae.Expr)
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, ae *sqlparser.AliasedExpr) (int, error) {
+	if gb {
+		return 0, vterrors.VT13001("tried to add group by to a table")
+	}
+	if reuse {
+		offset, err := v.FindCol(ctx, ae.Expr, true)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-
-		offsets[idx] = offset
+		if offset > -1 {
+			return offset, nil
+		}
 	}
 
-	return offsets, nil
+	return addColumn(ctx, v, ae.Expr)
 }
 
 func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {

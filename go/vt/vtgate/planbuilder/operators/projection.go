@@ -21,7 +21,6 @@ import (
 	"slices"
 	"strings"
 
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -86,21 +85,16 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 		Source: src,
 	}
 
-	var groupby []bool
-	exprs, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
-		groupby = append(groupby, false)
-		return from.GetAliasedExpr()
-	})
-	if err != nil {
-		return nil, err
-	}
+	for _, e := range qp.SelectExprs {
+		ae, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		offset, err := p.Source.AddColumn(ctx, true, false, ae)
+		if err != nil {
+			return nil, err
+		}
 
-	offsets, err := p.Source.AddColumns(ctx, true, groupby, exprs)
-	if err != nil {
-		return nil, err
-	}
-	for i := range exprs {
-		offset, ae := offsets[i], exprs[i]
 		p.Projections = append(p.Projections, Offset{Expr: ae.Expr, Offset: offset})
 		p.Columns = append(p.Columns, ae)
 	}
@@ -154,76 +148,40 @@ type fetchExpr struct {
 	groupBy bool
 }
 
-func (p *Projection) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	offsets := make([]int, len(exprs))
-	var fetch []fetchExpr
-	startOffset := len(p.Columns)
-	for i, ae := range exprs {
-		colIdx := i + startOffset
-		expr := ae.Expr
-
-		if p.TableID != nil {
-			vt, err := ctx.SemTable.TableInfoFor(*p.TableID)
-			if err != nil {
-				return nil, err
-			}
-			expr = semantics.RewriteDerivedTableExpression(expr, vt)
+func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) (int, error) {
+	expr := ae.Expr
+	if p.isDerived() {
+		tableInfo, err := ctx.SemTable.TableInfoFor(*p.TableID)
+		if err != nil {
+			return 0, err
 		}
-
-		if reuse {
-			offset, err := p.FindCol(ctx, expr, false)
-			if err != nil {
-				return nil, err
-			}
-			if offset >= 0 {
-				offsets[i] = offset
-				continue
-			}
-		}
-
-		// we add the column here, so we can find the expression in the next iteration of this loop,
-		// but we wait with the actual projection until we have fetched it from the input
-		offsets[i] = len(p.Columns)
-		p.Columns = append(p.Columns, aeWrap(expr))
-		p.Projections = append(p.Projections, nil)
-
-		// even if the receiver of the Projection output does not want to reuse column,
-		// we can reuse columns from this input
-		fIdx := slices.IndexFunc(fetch, func(f fetchExpr) bool {
-			return ctx.SemTable.EqualsExprWithDeps(expr, f.expr)
-		})
-
-		if fIdx == -1 {
-			// if we are not already asking for this expression, we add it to the list of expressions we'll ask for
-			fIdx = len(fetch)
-			fetch = append(fetch, fetchExpr{
-				expr: expr,
-			})
-		}
-
-		fetch[fIdx].colIdx = append(fetch[fIdx].colIdx, colIdx)
-		fetch[fIdx].groupBy = fetch[fIdx].groupBy || addToGroupBy[i]
+		expr = semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	}
 
-	askForExprs := make([]*sqlparser.AliasedExpr, len(fetch))
-	askForGB := make([]bool, len(fetch))
-	for i, f := range fetch {
-		askForExprs[i] = aeWrap(f.expr)
-		askForGB[i] = f.groupBy
+	if reuse {
+		offset, err := p.FindCol(ctx, expr, false)
+		if err != nil {
+			return 0, err
+		}
+		if offset >= 0 {
+			return offset, nil
+		}
 	}
 
-	inputOffsets, err := p.Source.AddColumns(ctx, true, askForGB, askForExprs)
+	// we need to plan this column
+	outputOffset := len(p.Columns)
+	inputOffset, err := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	for fIdx, fetched := range fetch {
-		for _, colIdx := range fetched.colIdx {
-			p.Projections[colIdx] = Offset{Offset: inputOffsets[fIdx], Expr: fetched.expr}
-		}
-	}
-
-	return offsets, nil
+	// now we have gathered all the information we need to plan this column
+	p.Columns = append(p.Columns, aeWrap(expr))
+	p.Projections = append(p.Projections, Offset{
+		Expr:   ae.Expr,
+		Offset: inputOffset,
+	})
+	return outputOffset, nil
 }
 
 func (po Offset) GetExpr() sqlparser.Expr               { return po.Expr }

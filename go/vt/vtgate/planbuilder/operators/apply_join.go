@@ -161,19 +161,19 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 }
 
 func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offsets, err := a.LHS.AddColumns(ctx, true, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{e})
+	offset, err := a.LHS.AddColumn(ctx, true, addToGroupBy, e)
 	if err != nil {
 		return 0, err
 	}
-	return offsets[0], nil
+	return offset, nil
 }
 
 func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offsets, err := a.RHS.AddColumns(ctx, true, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{e})
+	offset, err := a.RHS.AddColumn(ctx, true, addToGroupBy, e)
 	if err != nil {
 		return 0, err
 	}
-	return offsets[0], nil
+	return offset, nil
 }
 
 func (a *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
@@ -232,50 +232,28 @@ func (a *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 	return offset, nil
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if offset, err := a.FindCol(ctx, expr.Expr, false); err != nil || offset != -1 {
-		return a, offset, err
-	}
-
-	if offset, found := canReuseColumn(ctx, a.JoinColumns, expr.Expr, joinColumnToExpr); found {
-		return a, offset, nil
-	}
-	col, err := a.getJoinColumnFor(ctx, expr, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	a.JoinColumns = append(a.JoinColumns, col)
-	return a, len(a.JoinColumns) - 1, nil
-}
-
-func (a *ApplyJoin) AddColumns(
+func (a *ApplyJoin) AddColumn(
 	ctx *plancontext.PlanningContext,
 	reuse bool,
-	addToGroupBy []bool,
-	exprs []*sqlparser.AliasedExpr,
-) (offsets []int, err error) {
-	offsets = make([]int, len(exprs))
-	for i, expr := range exprs {
-		if reuse {
-			offset, err := a.FindCol(ctx, expr.Expr, false)
-			if err != nil {
-				return nil, err
-			}
-			if offset != -1 {
-				offsets[i] = offset
-				continue
-			}
-		}
-
-		col, err := a.getJoinColumnFor(ctx, expr, addToGroupBy[i])
+	groupBy bool,
+	expr *sqlparser.AliasedExpr,
+) (int, error) {
+	if reuse {
+		offset, err := a.FindCol(ctx, expr.Expr, false)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-
-		offsets[i] = len(a.JoinColumns)
-		a.JoinColumns = append(a.JoinColumns, col)
+		if offset != -1 {
+			return offset, nil
+		}
 	}
-	return
+	col, err := a.getJoinColumnFor(ctx, expr, groupBy)
+	if err != nil {
+		return 0, err
+	}
+	offset := len(a.JoinColumns)
+	a.JoinColumns = append(a.JoinColumns, col)
+	return offset, nil
 }
 
 func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {

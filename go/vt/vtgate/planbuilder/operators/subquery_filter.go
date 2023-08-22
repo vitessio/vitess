@@ -17,10 +17,10 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/maps"
+	"maps"
 
+	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -63,11 +63,11 @@ type SubQueryFilter struct {
 func (sj *SubQueryFilter) planOffsets(ctx *plancontext.PlanningContext) error {
 	sj.JoinVarOffsets = make(map[string]int, len(sj.JoinVars))
 	for bindvarName, col := range sj.JoinVars {
-		offsets, err := sj.Outer.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(col)})
+		offset, err := sj.Outer.AddColumn(ctx, true, false, aeWrap(col))
 		if err != nil {
 			return err
 		}
-		sj.JoinVarOffsets[bindvarName] = offsets[0]
+		sj.JoinVarOffsets[bindvarName] = offset
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (sj *SubQueryFilter) SetOuter(operator ops.Operator) {
 }
 
 func (sj *SubQueryFilter) OuterExpressionsNeeded() []*sqlparser.ColName {
-	return maps.Values(sj.JoinVars)
+	return maps2.Values(sj.JoinVars)
 }
 
 var _ SubQuery = (*SubQueryFilter)(nil)
@@ -112,7 +112,7 @@ func (sj *SubQueryFilter) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 func (sj *SubQueryFilter) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+	return sj.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
@@ -138,15 +138,20 @@ func (sj *SubQueryFilter) SetInputs(inputs []ops.Operator) {
 }
 
 func (sj *SubQueryFilter) ShortDescription() string {
-	return ""
+	return sj.FilterType.String()
 }
 
 func (sj *SubQueryFilter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return nil, vterrors.VT13001("cannot add predicate to SubQueryFilter")
+	newOuter, err := sj.Outer.AddPredicate(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	sj.Outer = newOuter
+	return sj, nil
 }
 
-func (sj *SubQueryFilter) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return sj.Outer.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
+func (sj *SubQueryFilter) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+	return sj.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
 func (sj *SubQueryFilter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {

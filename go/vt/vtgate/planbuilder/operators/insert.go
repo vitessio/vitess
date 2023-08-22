@@ -91,7 +91,7 @@ func (i *Insert) ShortDescription() string {
 }
 
 func (i *Insert) GetOrdering() ([]ops.OrderBy, error) {
-	panic("does not expect insert operator to receive get ordering call")
+	return nil, nil
 }
 
 var _ ops.Operator = (*Insert)(nil)

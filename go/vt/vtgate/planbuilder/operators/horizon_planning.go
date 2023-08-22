@@ -328,7 +328,7 @@ func pushDownProjectionInVindex(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	for _, column := range p.Projections {
 		expr := column.GetExpr()
-		_, err := src.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(expr)})
+		_, err := src.AddColumn(ctx, true, false, aeWrap(expr))
 		if err != nil {
 			return nil, nil, err
 		}
