@@ -201,14 +201,14 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 			}
-			childDelOp, err := createOpFromStmt(ctx, childUpd)
+			childUpdOp, err := createOpFromStmt(ctx, childUpd)
 			if err != nil {
 				return nil, err
 			}
 			fkChildren = append(fkChildren, &FkChild{
 				BVName: bvName,
 				Cols:   cols,
-				Op:     childDelOp,
+				Op:     childUpdOp,
 			})
 		case sqlparser.SetNull:
 			// We now construct the update query for the child table.
@@ -235,14 +235,14 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 			}
-			childDelOp, err := createOpFromStmt(ctx, childUpd)
+			childUpdOp, err := createOpFromStmt(ctx, childUpd)
 			if err != nil {
 				return nil, err
 			}
 			fkChildren = append(fkChildren, &FkChild{
 				BVName: bvName,
 				Cols:   cols,
-				Op:     childDelOp,
+				Op:     childUpdOp,
 			})
 		case sqlparser.SetDefault:
 			return nil, vterrors.VT09016()
@@ -329,11 +329,11 @@ func fkNeedsHandling(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.Par
 				cFksRequiredMap[childFk.String()] = &childFks[idx]
 			}
 		}
+		_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+		if isNull {
+			continue
+		}
 		for idx, parentFk := range parentFks {
-			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
-			if isNull {
-				continue
-			}
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				pFksRequiredMap[parentFk.String()] = &parentFks[idx]
 			}
@@ -372,11 +372,11 @@ func ColumnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.Upd
 				return true
 			}
 		}
+		_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+		if isNull {
+			continue
+		}
 		for _, parentFk := range parentFKs {
-			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
-			if isNull {
-				continue
-			}
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				return true
 			}
