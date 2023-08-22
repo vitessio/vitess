@@ -121,9 +121,9 @@ func TestUpdateWithFK(t *testing.T) {
 	qr := utils.Exec(t, conn, `update t4 set col = 20 where id = 1`)
 	assert.EqualValues(t, 1, qr.RowsAffected)
 
-	// child table have cascade which is cross shard. Query will fail at vtgate.
-	_, err = utils.ExecAllowError(t, conn, `update t2 set col = 125 where id = 100`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: foreign keys management at vitess (errno 1235) (sqlstate 42000)")
+	// child table have cascade which is cross shard.
+	qr = utils.Exec(t, conn, `update t2 set col = 126 where id = 100`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
 
 	// updating column which does not have foreign key constraint, so query will succeed.
 	_ = utils.Exec(t, conn, `update t2 set mycol = 'baz' where id = 100`)
