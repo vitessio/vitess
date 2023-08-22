@@ -48,8 +48,9 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
@@ -131,8 +132,9 @@ func TestReparentTablet(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
@@ -187,8 +189,9 @@ func TestReparentTablet(t *testing.T) {
 
 // TestSetReplicationSource tests that SetReplicationSource works as intended under various circumstances.
 func TestSetReplicationSource(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets

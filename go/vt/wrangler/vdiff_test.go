@@ -493,7 +493,9 @@ func TestVDiffPlanFailure(t *testing.T) {
 }
 
 func TestVDiffUnsharded(t *testing.T) {
-	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -771,7 +773,9 @@ func TestVDiffUnsharded(t *testing.T) {
 func TestVDiffSharded(t *testing.T) {
 	// Also test that highest position ""MariaDB/5-456-892" will be used
 	// if lower positions are found.
-	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-40-80": "MariaDB/5-456-890",
 		"40-80-": "MariaDB/5-456-891",
 	})
@@ -844,7 +848,9 @@ func TestVDiffSharded(t *testing.T) {
 }
 
 func TestVDiffAggregates(t *testing.T) {
-	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -912,7 +918,9 @@ func TestVDiffAggregates(t *testing.T) {
 }
 
 func TestVDiffDefaults(t *testing.T) {
-	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -966,7 +974,9 @@ func TestVDiffDefaults(t *testing.T) {
 }
 
 func TestVDiffReplicationWait(t *testing.T) {
-	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{

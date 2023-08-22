@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/faketopo"
 
@@ -33,15 +34,18 @@ import (
 )
 
 func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cell := "cell"
 	keyspace := "testks"
 	factory := faketopo.NewFakeTopoFactory()
 	factory.AddCell(cell)
-	ts := faketopo.NewFakeTopoServer(factory)
+	ts := faketopo.NewFakeTopoServer(ctx, factory)
 	ts2 := &fakeTopoServer{}
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "")
 	defer hc.Close()
-	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
+	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
 	kss := &keyspaceState{
 		kew:      kew,
 		keyspace: keyspace,
@@ -76,15 +80,18 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 // We should never consider both as a possible cause given the same
 // keyspace state.
 func TestKeyspaceEventTypes(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cell := "cell"
 	keyspace := "testks"
 	factory := faketopo.NewFakeTopoFactory()
 	factory.AddCell(cell)
-	ts := faketopo.NewFakeTopoServer(factory)
+	ts := faketopo.NewFakeTopoServer(ctx, factory)
 	ts2 := &fakeTopoServer{}
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "")
 	defer hc.Close()
-	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
+	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
 
 	type testCase struct {
 		name                    string
@@ -263,10 +270,10 @@ func TestKeyspaceEventTypes(t *testing.T) {
 
 			require.NotNil(t, tc.kss.shards[tc.shardToCheck], "the specified shardToCheck of %q does not exist in the shardState", tc.shardToCheck)
 
-			resharding := kew.TargetIsBeingResharded(tc.kss.shards[tc.shardToCheck].target)
+			resharding := kew.TargetIsBeingResharded(ctx, tc.kss.shards[tc.shardToCheck].target)
 			require.Equal(t, resharding, tc.expectResharding, "TargetIsBeingResharded should return %t", tc.expectResharding)
 
-			_, primaryDown := kew.PrimaryIsNotServing(tc.kss.shards[tc.shardToCheck].target)
+			_, primaryDown := kew.PrimaryIsNotServing(ctx, tc.kss.shards[tc.shardToCheck].target)
 			require.Equal(t, primaryDown, tc.expectPrimaryNotServing, "PrimaryIsNotServing should return %t", tc.expectPrimaryNotServing)
 		})
 	}

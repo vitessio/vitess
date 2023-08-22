@@ -50,9 +50,11 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tests := []struct {
 		name      string
 		cfg       testutil.TestClusterConfig
@@ -158,11 +160,9 @@ func TestCreateKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			cluster := testutil.BuildCluster(t, tt.cfg)
+			defer cluster.Close()
 
 			resp, err := cluster.CreateKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -177,6 +177,7 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	t.Parallel()
 
 	type test struct {
@@ -186,11 +187,12 @@ func TestCreateShard(t *testing.T) {
 		shouldErr bool
 		assertion func(t *testing.T, tt *test)
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tests := []*test{
 		{
 			name: "ok",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -211,7 +213,7 @@ func TestCreateShard(t *testing.T) {
 		},
 		{
 			name: "nil request",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -220,7 +222,7 @@ func TestCreateShard(t *testing.T) {
 		},
 		{
 			name: "no keyspace in request",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -232,7 +234,7 @@ func TestCreateShard(t *testing.T) {
 		},
 		{
 			name: "no shard name in request",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -244,7 +246,7 @@ func TestCreateShard(t *testing.T) {
 		},
 		{
 			name: "vtctld.CreateShard fails",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -277,9 +279,10 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
-	t.Parallel()
+	utils.EnsureNoLeaks(t)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tests := []struct {
 		name      string
 		cfg       testutil.TestClusterConfig
@@ -344,11 +347,9 @@ func TestDeleteKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			cluster := testutil.BuildCluster(t, tt.cfg)
+			defer cluster.Close()
 
 			resp, err := cluster.DeleteKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -363,6 +364,7 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	t.Parallel()
 
 	type test struct {
@@ -373,16 +375,16 @@ func TestDeleteShards(t *testing.T) {
 		shouldErr bool
 		assertion func(t *testing.T, tt *test)
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tests := []*test{
 		{
 			name: "ok",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
 			setup: func(t *testing.T, tt *test) {
-				ctx := context.Background()
 				shards := []string{"-80", "80-"}
 				for _, shard := range shards {
 					_, err := tt.tc.Cluster.CreateShard(ctx, &vtctldatapb.CreateShardRequest{
@@ -419,7 +421,7 @@ func TestDeleteShards(t *testing.T) {
 		},
 		{
 			name: "nil request",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -428,7 +430,7 @@ func TestDeleteShards(t *testing.T) {
 		},
 		{
 			name: "vtctld.DeleteShards fails",
-			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+			tc: testutil.BuildIntegrationTestCluster(t, ctx, &vtadminpb.Cluster{
 				Id:   "local",
 				Name: "local",
 			}, "zone1"),
@@ -476,7 +478,6 @@ func TestDeleteShards(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setup != nil {
 				func() {
@@ -611,6 +612,7 @@ func TestFindTablet(t *testing.T) {
 				},
 				Tablets: tt.tablets,
 			})
+			defer cluster.Close()
 			tablet, err := cluster.FindTablet(ctx, tt.filter)
 
 			if tt.expectedError != nil {
@@ -822,6 +824,7 @@ func TestFindTablets(t *testing.T) {
 				},
 				Tablets: tt.tablets,
 			})
+			defer cluster.Close()
 			tablets, err := cluster.FindTablets(ctx, tt.filter, tt.n)
 
 			assert.NoError(t, err)
@@ -1203,6 +1206,7 @@ func TestFindWorkflows(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
+			defer c.Close()
 			workflows, err := c.FindWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1483,6 +1487,7 @@ func TestGetCellInfos(t *testing.T) {
 				Cluster:      cpb,
 				VtctldClient: tt.vtctld,
 			})
+			defer c.Close()
 			cellInfos, err := c.GetCellInfos(context.Background(), tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1565,6 +1570,7 @@ func TestGetCellsAliases(t *testing.T) {
 				Cluster:      cpb,
 				VtctldClient: tt.vtctld,
 			})
+			defer c.Close()
 			cellsAliases, err := c.GetCellsAliases(context.Background())
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1717,6 +1723,7 @@ func TestGetSchema(t *testing.T) {
 				Tablets:      []*vtadminpb.Tablet{tt.tablet},
 				DBConfig:     testutil.Dbcfg{},
 			})
+			defer c.Close()
 
 			schema, err := c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 				BaseRequest: tt.req,
@@ -1768,6 +1775,7 @@ func TestGetSchema(t *testing.T) {
 			},
 			VtctldClient: vtctld,
 		})
+		defer c.Close()
 
 		_, _ = c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
@@ -2690,6 +2698,7 @@ func TestGetSchema(t *testing.T) {
 				}
 
 				c := testutil.BuildCluster(t, tt.cfg)
+				defer c.Close()
 				schema, err := c.GetSchema(ctx, tt.keyspace, tt.opts)
 				if tt.shouldErr {
 					assert.Error(t, err)
@@ -2945,6 +2954,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
+			defer c.Close()
 
 			resp, err := c.GetShardReplicationPositions(ctx, tt.req)
 			if tt.shouldErr {
@@ -3034,6 +3044,7 @@ func TestGetVSchema(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
+			defer cluster.Close()
 
 			vschema, err := cluster.GetVSchema(ctx, tt.keyspace)
 			if tt.shouldErr {
@@ -3192,6 +3203,7 @@ func TestGetWorkflow(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
+			defer c.Close()
 			workflow, err := c.GetWorkflow(ctx, tt.keyspace, tt.workflow, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3358,6 +3370,7 @@ func TestGetWorkflows(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
+			defer c.Close()
 			workflows, err := c.GetWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3435,6 +3448,7 @@ func TestSetWritable(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
+			defer c.Close()
 			err := c.SetWritable(ctx, tt.req)
 			tt.assertion(t, err, tt.assertionMsgExtra...)
 		})
@@ -3581,6 +3595,7 @@ func TestToggleTabletReplication(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
+			defer c.Close()
 			err := c.ToggleTabletReplication(ctx, tt.tablet, bool(tt.state))
 			tt.assertion(t, err, tt.assertionMsgExtra...)
 		})

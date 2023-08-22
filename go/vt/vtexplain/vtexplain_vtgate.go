@@ -57,7 +57,7 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShar
 
 	resolver := vte.newFakeResolver(opts, vte.explainTopo, vtexplainCell)
 
-	err := vte.buildTopology(opts, vSchemaStr, ksShardMapStr, opts.NumShards)
+	err := vte.buildTopology(ctx, opts, vSchemaStr, ksShardMapStr, opts.NumShards)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (vte *VTExplain) newFakeResolver(opts *Options, serv srvtopo.Server, cell s
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }
 
-func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
+func (vte *VTExplain) buildTopology(ctx context.Context, opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
 	vte.explainTopo.Lock.Lock()
 	defer vte.explainTopo.Lock.Unlock()
 
@@ -142,7 +142,7 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 
 			tablet := vte.healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return vte.newTablet(opts, t)
+				return vte.newTablet(ctx, opts, t)
 			})
 			vte.explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 			vte.explainTopo.KeyspaceShards[ks][shard.Name] = shard

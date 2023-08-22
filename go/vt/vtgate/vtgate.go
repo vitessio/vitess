@@ -368,6 +368,7 @@ func Init(
 		if st != nil && enableSchemaChangeSignal {
 			st.Start()
 		}
+		initMySQLProtocol(rpcVTGate)
 	})
 	servenv.OnTerm(func() {
 		if st != nil && enableSchemaChangeSignal {

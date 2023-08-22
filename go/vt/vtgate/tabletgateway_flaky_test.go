@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/collations"

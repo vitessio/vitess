@@ -40,7 +40,9 @@ import (
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 	txid := newTransaction(tsv, nil)
@@ -51,10 +53,12 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 }
 
 func TestTxExecutorPrepare(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	err = txe.RollbackPrepared("aa", 1)
@@ -68,7 +72,9 @@ func TestTxExecutorPrepare(t *testing.T) {
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
@@ -76,11 +82,13 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 }
 
 func TestTxExecutorPreparePoolFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid1 := newTxForPrep(tsv)
-	txid2 := newTxForPrep(tsv)
+	txid1 := newTxForPrep(ctx, tsv)
+	txid2 := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid1, "aa")
 	require.NoError(t, err)
 	defer txe.RollbackPrepared("aa", 0)
@@ -90,10 +98,12 @@ func TestTxExecutorPreparePoolFail(t *testing.T) {
 }
 
 func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
@@ -102,10 +112,12 @@ func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
 }
 
 func TestTxExecutorPrepareRedoFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "bb")
 	defer txe.RollbackPrepared("bb", 0)
 	require.Error(t, err)
@@ -113,10 +125,12 @@ func TestTxExecutorPrepareRedoFail(t *testing.T) {
 }
 
 func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
@@ -125,10 +139,12 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 }
 
 func TestTxExecutorCommit(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	err = txe.CommitPrepared("aa")
@@ -139,10 +155,12 @@ func TestTxExecutorCommit(t *testing.T) {
 }
 
 func TestTxExecutorCommitRedoFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
@@ -159,10 +177,12 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	defer txe.RollbackPrepared("aa", 0)
@@ -173,10 +193,12 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 }
 
 func TestTxExecutorRollbackBeginFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
@@ -186,10 +208,12 @@ func TestTxExecutorRollbackBeginFail(t *testing.T) {
 }
 
 func TestTxExecutorRollbackRedoFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
@@ -200,7 +224,9 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 }
 
 func TestExecutorCreateTransaction(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -214,43 +240,49 @@ func TestExecutorCreateTransaction(t *testing.T) {
 }
 
 func TestExecutorStartCommit(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
 	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.StartCommit(txid, "aa")
 	require.NoError(t, err)
 
 	db.AddQuery(commitTransition, &sqltypes.Result{})
-	txid = newTxForPrep(tsv)
+	txid = newTxForPrep(ctx, tsv)
 	err = txe.StartCommit(txid, "aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
 }
 
 func TestExecutorSetRollback(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
 	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
-	txid := newTxForPrep(tsv)
+	txid := newTxForPrep(ctx, tsv)
 	err := txe.SetRollback("aa", txid)
 	require.NoError(t, err)
 
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
-	txid = newTxForPrep(tsv)
+	txid = newTxForPrep(ctx, tsv)
 	err = txe.SetRollback("aa", txid)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "could not transition to ROLLBACK: aa")
 }
 
 func TestExecutorConcludeTransaction(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -261,7 +293,9 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 }
 
 func TestExecutorReadTransaction(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -361,7 +395,9 @@ func TestExecutorReadTransaction(t *testing.T) {
 }
 
 func TestExecutorReadAllTransactions(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -410,6 +446,8 @@ func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string)
 }
 
 func TestExecutorResolveTransaction(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	protocol := "resolveTest"
 	oldValue := vtgateconn.GetVTGateProtocol()
 	vtgateconn.SetVTGateProtocol(protocol)
@@ -421,7 +459,7 @@ func TestExecutorResolveTransaction(t *testing.T) {
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
 		}, nil
 	})
-	_, tsv, db := newShortAgeExecutor(t)
+	_, tsv, db := newShortAgeExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 	want := "aa"
@@ -444,7 +482,9 @@ func TestExecutorResolveTransaction(t *testing.T) {
 }
 
 func TestNoTwopc(t *testing.T) {
-	txe, tsv, db := newNoTwopcExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newNoTwopcExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -493,7 +533,7 @@ func TestNoTwopc(t *testing.T) {
 	}
 }
 
-func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
@@ -510,7 +550,7 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 }
 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
-func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
@@ -527,7 +567,7 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 }
 
 // newNoTwopcExecutor is same as newTestTxExecutor, but 2pc disabled.
-func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)
@@ -539,7 +579,7 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 }
 
 // newTxForPrep creates a non-empty transaction.
-func newTxForPrep(tsv *TabletServer) int64 {
+func newTxForPrep(ctx context.Context, tsv *TabletServer) int64 {
 	txid := newTransaction(tsv, nil)
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, 0, nil)

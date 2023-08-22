@@ -128,18 +128,16 @@ type Conn struct {
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
-// UnreachableServerAddr, in which case it will block until the context expires
-// and return the context's error.
+// UnreachableServerAddr, in which case it will block until the context expires.
 func (c *Conn) dial(ctx context.Context) error {
 	if c.closed {
 		return ErrConnectionClosed
 	}
 	if c.serverAddr == UnreachableServerAddr {
 		<-ctx.Done()
-		return ctx.Err()
 	}
 
-	return nil
+	return ctx.Err()
 }
 
 // Close is part of the topo.Conn interface.

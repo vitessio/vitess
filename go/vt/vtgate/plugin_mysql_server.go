@@ -474,14 +474,14 @@ func initTLSConfig(ctx context.Context, mysqlListener *mysql.Listener, mysqlSslC
 
 // initiMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
-func initMySQLProtocol() {
+func initMySQLProtocol(vtgate *VTGate) {
 	// Flag is not set, just return.
 	if mysqlServerPort < 0 && mysqlServerSocketPath == "" {
 		return
 	}
 
 	// If no VTGate was created, just return.
-	if rpcVTGate == nil {
+	if vtgate == nil {
 		return
 	}
 
@@ -506,7 +506,7 @@ func initMySQLProtocol() {
 
 	// Create a Listener.
 	var err error
-	vtgateHandle = newVtgateHandler(rpcVTGate)
+	vtgateHandle = newVtgateHandler(vtgate)
 	if mysqlServerPort >= 0 {
 		mysqlListener, err = mysql.NewListener(
 			mysqlTCPVersion,
@@ -680,8 +680,6 @@ func mysqlSocketPath() string {
 func init() {
 	servenv.OnParseFor("vtgate", registerPluginFlags)
 	servenv.OnParseFor("vtcombo", registerPluginFlags)
-
-	servenv.OnRun(initMySQLProtocol)
 	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)
 	servenv.OnClose(rollbackAtShutdown)
 }

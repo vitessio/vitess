@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -78,6 +80,9 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 }
 
 func TestExecuteBackup(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
@@ -90,8 +95,6 @@ func TestExecuteBackup(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	ctx := context.Background()
-
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -103,7 +106,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
@@ -220,6 +223,10 @@ func TestExecuteBackup(t *testing.T) {
 }
 
 func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
@@ -232,8 +239,6 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	ctx := context.Background()
-
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -245,7 +250,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
@@ -307,6 +312,10 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
 // occur due to various reasons, such as context time cancel. The process should not panic in these situations.
 func TestExecuteBackupWithCanceledContext(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
@@ -322,8 +331,8 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	defer os.RemoveAll(backupRoot)
 
 	// Cancel the context deliberately
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
+	cancelCtx()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -335,19 +344,19 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
-	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
-	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	require.NoError(t, ts.CreateKeyspace(cancelledCtx, keyspace, &topodata.Keyspace{}))
+	require.NoError(t, ts.CreateShard(cancelledCtx, keyspace, shard))
 
 	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
 	tablet.Keyspace = keyspace
 	tablet.Shard = shard
 
-	require.NoError(t, ts.CreateTablet(ctx, tablet))
+	require.NoError(t, ts.CreateTablet(cancelledCtx, tablet))
 
-	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(cancelledCtx, keyspace, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
 
 		now := time.Now()
@@ -364,7 +373,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	ok, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -389,6 +398,10 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
 // occur due to various reasons, such as context timed-out. The process should not panic in these situations.
 func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
@@ -403,7 +416,6 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	ctx := context.Background()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -415,7 +427,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))

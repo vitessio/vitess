@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
