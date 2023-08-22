@@ -160,7 +160,6 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 		if !pushed {
 			remaining = append(remaining, inner)
 		}
-
 	}
 
 	if len(remaining) == 0 {
@@ -174,6 +173,10 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 
 func getSubqueryPusher(in ops.Operator) func(ctx *plancontext.PlanningContext, inner SubQuery) (bool, *rewrite.ApplyResult, error) {
 	switch outer := in.(type) {
+	case *Route:
+		return func(ctx *plancontext.PlanningContext, inner SubQuery) (bool, *rewrite.ApplyResult, error) {
+			return tryPushDownSubQueryInRoute(ctx, inner, outer)
+		}
 	case *ApplyJoin:
 		return func(ctx *plancontext.PlanningContext, inner SubQuery) (bool, *rewrite.ApplyResult, error) {
 			return tryPushDownSubQueryInJoin(ctx, inner, outer)
@@ -182,6 +185,43 @@ func getSubqueryPusher(in ops.Operator) func(ctx *plancontext.PlanningContext, i
 		return nil
 	}
 }
+
+func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery SubQuery, outer *Route) (bool, *rewrite.ApplyResult, error) {
+	exprs := subQuery.GetJoinPredicates()
+	merger := &subqueryRouteMerger{
+		outer:    outer,
+		original: subQuery.OriginalExpression(),
+	}
+	op, err := mergeJoinInputs(ctx, subQuery.Inner(), outer, exprs, merger)
+	if err != nil {
+		return false, nil, err
+	}
+	if op == nil {
+		return false, rewrite.SameTree, nil
+	}
+	return true, rewrite.NewTree("push subquery into route", subQuery), nil
+}
+
+type subqueryRouteMerger struct {
+	outer    *Route
+	original sqlparser.Expr
+}
+
+func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *subqueryRouteMerger) merge(_, _ *Route, r Routing) (*Route, error) {
+	s.outer.Source = &Filter{
+		Source:     s.outer.Source,
+		Predicates: []sqlparser.Expr{s.original},
+	}
+	s.outer.Routing = r
+	return s.outer, nil
+}
+
+var _ merger = (*subqueryRouteMerger)(nil)
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery, join *ApplyJoin) (bool, *rewrite.ApplyResult, error) {

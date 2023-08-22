@@ -157,7 +157,6 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 	}
 
 	resultArg, hasValuesArg := ctx.ReservedVars.ReserveSubQueryWithHasValues()
-	sj.SubqueryValueName, sj.HasValuesName = resultArg, hasValuesArg
 	dontEnterSubqueries := func(node, _ sqlparser.SQLNode) bool {
 		if _, ok := node.(*sqlparser.Subquery); ok {
 			return false
@@ -180,12 +179,18 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 	}
 	rhsPred := sqlparser.CopyOnRewrite(sj.Original, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 
+	var predicates []sqlparser.Expr
+	switch sj.FilterType {
+	case opcode.PulloutExists:
+		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg))
+	case opcode.PulloutIn, opcode.PulloutNotIn:
+		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg), rhsPred)
+	case opcode.PulloutValue:
+		predicates = append(predicates, rhsPred)
+	}
 	return &Filter{
-		Source: outer,
-		Predicates: []sqlparser.Expr{
-			sqlparser.NewArgument(hasValuesArg),
-			rhsPred,
-		},
+		Source:     outer,
+		Predicates: predicates,
 	}, nil
 }
 

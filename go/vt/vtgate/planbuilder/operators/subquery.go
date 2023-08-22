@@ -39,6 +39,7 @@ type (
 		OriginalExpression() sqlparser.Expr // tbl.id = (SELECT foo from user LIMIT 1)
 		OuterExpressionsNeeded() []*sqlparser.ColName
 		SetOuter(operator ops.Operator)
+		GetJoinPredicates() []sqlparser.Expr
 	}
 )
 

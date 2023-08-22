@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
+// select 1 from user where id in (select id from music)
+
 // SubQueryFilter represents a subquery used for filtering rows in an outer query through a join.
 // The positioning of the outer query and subquery (left or right) depends on their correlation.
 type SubQueryFilter struct {
@@ -158,4 +160,18 @@ func (sj *SubQueryFilter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlpa
 
 func (sj *SubQueryFilter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return sj.Outer.GetSelectExprs(ctx)
+}
+
+func (sj *SubQueryFilter) GetJoinPredicates() []sqlparser.Expr {
+	var exprs []sqlparser.Expr
+	for _, columns := range sj.comparisonColumns {
+		if columns[0] != nil && columns[1] != nil {
+			exprs = append(exprs, &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     columns[0],
+				Right:    columns[1],
+			})
+		}
+	}
+	return exprs
 }

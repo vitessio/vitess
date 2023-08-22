@@ -662,11 +662,6 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		return
 	}
 
-	if sel.Limit == nil {
-		sel.Limit = &Limit{}
-	}
-	sel.Limit.Rowcount = NewIntLiteral("1")
-
 	if sel.Having != nil {
 		// If the query has HAVING, we can't take any shortcuts
 		return

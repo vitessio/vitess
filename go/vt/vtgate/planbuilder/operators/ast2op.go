@@ -166,17 +166,6 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 	subqID := ctx.SemTable.StatementIDs[innerSel]
 	totalID := subqID.Merge(outerID)
 
-	predicate := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     outside,
-	}
-
-	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		panic("can't use unexpanded projections here")
-	}
-	predicate.Right = ae.Expr
-
 	jpc := &joinPredicateCollector{
 		joinVars: make(map[string]*sqlparser.ColName),
 		totalID:  totalID,
@@ -194,6 +183,18 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 	if len(jpc.remainingPredicates) > 0 {
 		innerSel.Where = sqlparser.NewWhere(sqlparser.WhereClause, sqlparser.AndExpressions(jpc.remainingPredicates...))
 	}
+
+	predicate := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     outside,
+	}
+
+	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		panic("can't use unexpanded projections here")
+	}
+	predicate.Right = ae.Expr
+	jpc.calcJoinColumns(ctx, predicate)
 
 	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
