@@ -141,7 +141,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return updOp, nil
 	}
 
-	parentFKs, childFks = fkNeedsHandling(updStmt.Exprs, parentFKs, childFks)
+	parentFKs, childFks = fkNeedsHandlingForUpdates(updStmt.Exprs, parentFKs, childFks)
 	if len(parentFKs) > 0 {
 		return nil, vterrors.VT12003()
 	}
@@ -320,25 +320,36 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	return subq, nil
 }
 
-func fkNeedsHandling(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+// fkNeedsHandlingForUpdates returns what all foreign keys need handling in Vitess for the given set of update expressions.
+// Here we return all the parent and child foreign key constraints that could require any handling.
+func fkNeedsHandlingForUpdates(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
 	pFksRequiredMap := map[string]*vindexes.ParentFKInfo{}
 	cFksRequiredMap := map[string]*vindexes.ChildFKInfo{}
+	// Go over all the update expressions
 	for _, updateExpr := range updateExprs {
+		// Any foreign key to a child table for a column that has been updated
+		// will require the cascade operations to happen, so we include all such foreign keys.
 		for idx, childFk := range childFks {
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				cFksRequiredMap[childFk.String()] = &childFks[idx]
 			}
 		}
+		// If we are setting a column to NULL, then we don't need to verify the existance of an
+		// equivalent row in the parent table, even if this column was part of a foreign key to a parent table.
 		_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
 		if isNull {
 			continue
 		}
+		// We add all the possible parent foreign key constraints that need verification that an equivalent row
+		// exists, given that this column has changed.
 		for idx, parentFk := range parentFks {
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				pFksRequiredMap[parentFk.String()] = &parentFks[idx]
 			}
 		}
 	}
+	// For the parent foreign keys, if any of the columns part of the fk is set to NULL,
+	// then, we don't care for the existance of an equivalent row in the parent table.
 	for _, parentFk := range pFksRequiredMap {
 		for _, updateExpr := range updateExprs {
 			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
@@ -350,6 +361,7 @@ func fkNeedsHandling(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.Par
 			}
 		}
 	}
+	// Convert the maps to lists and return them.
 	var pFksNeedsHandling []vindexes.ParentFKInfo
 	var cFksNeedsHandling []vindexes.ChildFKInfo
 	for _, parentFk := range pFksRequiredMap {

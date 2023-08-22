@@ -20,6 +20,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
+// FkCascade is used to represent a foreign key cascade operation
+// as an operator. This operator is created for DML queries that require
+// cascades (for example, ON DELETE CASCADE).
 type FkCascade struct {
 	Selection ops.Operator
 	Children  []*FkChild
@@ -31,6 +34,7 @@ type FkCascade struct {
 
 var _ ops.Operator = (*FkCascade)(nil)
 
+// Inputs implements the Operator interface
 func (fkc *FkCascade) Inputs() []ops.Operator {
 	var inputs []ops.Operator
 	inputs = append(inputs, fkc.Parent)
@@ -41,6 +45,7 @@ func (fkc *FkCascade) Inputs() []ops.Operator {
 	return inputs
 }
 
+// SetInputs implements the Operator interface
 func (fkc *FkCascade) SetInputs(operators []ops.Operator) {
 	if len(operators) < 2 {
 		panic("incorrect count of inputs for FkCascade")
@@ -73,10 +78,12 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 	return newFkc
 }
 
+// GetOrdering implements the Operator interface
 func (fkc *FkCascade) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
 }
 
+// ShortDescription implements the Operator interface
 func (fkc *FkCascade) ShortDescription() string {
 	return "FkCascade"
 }
