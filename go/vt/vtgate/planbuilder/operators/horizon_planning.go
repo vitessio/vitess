@@ -634,6 +634,13 @@ func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Ope
 	case *Projection:
 		return pushFilterUnderProjection(ctx, in, src)
 	case *Route:
+		for _, pred := range in.Predicates {
+			var err error
+			src.Routing, err = src.Routing.updateRoutingLogic(ctx, pred)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 		return rewrite.Swap(in, src, "push filter into Route")
 	}
 

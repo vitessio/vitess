@@ -19,45 +19,47 @@ package operators
 import (
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// SemiJoin is a correlated subquery that is used for filtering rows from the outer query.
-// It is a join between the outer query and the subquery, where the subquery is the RHS.
-// We are only interested in the existence of rows in the RHS, so we only need to know if
-type SemiJoin struct {
-	Outer    ops.Operator
-	Subquery ops.Operator
+// SubQueryFilter represents a subquery used for filtering rows in an outer query through a join.
+// The positioning of the outer query and subquery (left or right) depends on their correlation.
+type SubQueryFilter struct {
+	Outer      ops.Operator         // Operator of the outer query.
+	Subquery   ops.Operator         // Operator of the subquery.
+	FilterType opcode.PulloutOpcode // Type of the subquery filter.
+	Original   sqlparser.Expr       // Original expression (comparison or EXISTS).
 
-	// JoinCols are the columns from the LHS used for the join.
-	// These are the same columns pushed on the LHS that are now used in the Vars field
-	JoinVars map[string]*sqlparser.ColName
-
-	// arguments that need to be copied from the outer to inner
-	// this field is filled in at offset planning time
-	JoinVarOffsets map[string]int
-
-	// Original is the original expression, including comparison operator or EXISTS expression
-	Original sqlparser.Expr
-
-	// inside and outside are the columns from the LHS and RHS respectively that are used in the semi join
-	// only if the expressions are pure/bare/simple ColName:s, otherwise they are not added to these lists
-	// for the predicate: tbl.id IN (SELECT bar(foo) from user WHERE tbl.id = user.id)
-	// for the predicate: EXISTS (select 1 from user where tbl.ud = bar(foo) AND tbl.id = user.id limit)
-	// We would store `tbl.id` in JoinVars, but nothing on the inside, since the expression
-	// `foo(tbl.id)` is not a bare column
-	// the first offset is the outer column, and the second is the inner
+	// comparisonColumns are columns from the LHS and RHS used in the semi join.
+	// Columns are included only if they are simple ColNames.
+	// E.g., for the predicate `tbl.id IN (SELECT bar(foo) from user WHERE tbl.id = user.id)`,
+	// `tbl.id` would be stored in JoinVars but not expressions like `foo(tbl.id)`.
 	comparisonColumns [][2]*sqlparser.ColName
 
-	_sq *sqlparser.Subquery // (SELECT foo from user LIMIT 1)
+	_sq *sqlparser.Subquery // Represents a subquery like (SELECT foo from user LIMIT 1).
 
-	// if we are unable to
-	rhsPredicate sqlparser.Expr
+	// Join-related fields:
+	// - JoinVars: Columns from the LHS used for the join (also found in Vars field).
+	// - JoinVarOffsets: Arguments copied from outer to inner, set during offset planning.
+	// For correlated subqueries, correlations might be in JoinVars, JoinVarOffsets, and comparisonColumns.
+	JoinVars       map[string]*sqlparser.ColName
+	JoinVarOffsets map[string]int
+
+	// For uncorrelated queries:
+	// - SubqueryValueName: Name of the value returned by the subquery.
+	// - HasValuesName: Name of the argument passed to the subquery.
+	SubqueryValueName string
+	HasValuesName     string
+
+	corrSubPredicate sqlparser.Expr // Expression pushed to RHS if subquery merge fails.
 }
 
-func (sj *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
+func (sj *SubQueryFilter) planOffsets(ctx *plancontext.PlanningContext) error {
 	sj.JoinVarOffsets = make(map[string]int, len(sj.JoinVars))
 	for bindvarName, col := range sj.JoinVars {
 		offsets, err := sj.Outer.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(col)})
@@ -69,30 +71,30 @@ func (sj *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (sj *SemiJoin) SetOuter(operator ops.Operator) {
+func (sj *SubQueryFilter) SetOuter(operator ops.Operator) {
 	sj.Outer = operator
 }
 
-func (sj *SemiJoin) OuterExpressionsNeeded() []*sqlparser.ColName {
+func (sj *SubQueryFilter) OuterExpressionsNeeded() []*sqlparser.ColName {
 	return maps.Values(sj.JoinVars)
 }
 
-var _ SubQuery = (*SemiJoin)(nil)
+var _ SubQuery = (*SubQueryFilter)(nil)
 
-func (sj *SemiJoin) Inner() ops.Operator {
+func (sj *SubQueryFilter) Inner() ops.Operator {
 	return sj.Subquery
 }
 
-func (sj *SemiJoin) OriginalExpression() sqlparser.Expr {
+func (sj *SubQueryFilter) OriginalExpression() sqlparser.Expr {
 	return sj.Original
 }
 
-func (sj *SemiJoin) sq() *sqlparser.Subquery {
+func (sj *SubQueryFilter) sq() *sqlparser.Subquery {
 	return sj._sq
 }
 
 // Clone implements the Operator interface
-func (sj *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
+func (sj *SubQueryFilter) Clone(inputs []ops.Operator) ops.Operator {
 	klone := *sj
 	switch len(inputs) {
 	case 1:
@@ -108,12 +110,12 @@ func (sj *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-func (sj *SemiJoin) GetOrdering() ([]ops.OrderBy, error) {
+func (sj *SubQueryFilter) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
 }
 
 // Inputs implements the Operator interface
-func (sj *SemiJoin) Inputs() []ops.Operator {
+func (sj *SubQueryFilter) Inputs() []ops.Operator {
 	if sj.Outer == nil {
 		return []ops.Operator{sj.Subquery}
 	}
@@ -122,7 +124,7 @@ func (sj *SemiJoin) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (sj *SemiJoin) SetInputs(inputs []ops.Operator) {
+func (sj *SubQueryFilter) SetInputs(inputs []ops.Operator) {
 	switch len(inputs) {
 	case 1:
 		sj.Subquery = inputs[0]
@@ -134,29 +136,26 @@ func (sj *SemiJoin) SetInputs(inputs []ops.Operator) {
 	}
 }
 
-func (sj *SemiJoin) ShortDescription() string {
+func (sj *SubQueryFilter) ShortDescription() string {
 	return ""
 }
 
-func (sj *SemiJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	//TODO implement me
-	panic("implement me")
+func (sj *SubQueryFilter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	return nil, vterrors.VT13001("cannot add predicate to SubQueryFilter")
 }
 
-func (sj *SemiJoin) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+func (sj *SubQueryFilter) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
 	return sj.Outer.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sj *SemiJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (sj *SubQueryFilter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	return sj.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sj *SemiJoin) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	//TODO implement me
-	panic("implement me")
+func (sj *SubQueryFilter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return sj.Outer.GetColumns(ctx)
 }
 
-func (sj *SemiJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	//TODO implement me
-	panic("implement me")
+func (sj *SubQueryFilter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return sj.Outer.GetSelectExprs(ctx)
 }

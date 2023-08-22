@@ -123,16 +123,18 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 // At this point, we know that the subqueries will not be pushed under a Route, so we need to
 // plan for how to run them on the vtgate
 func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq SubQuery) (ops.Operator, error) {
+	var err error
 	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
 	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
 	// this query is equivalent to
 	// select * from user where id = 5 and exists(select 1 from music where baz = 13 and user.id = bar)
 	// Long term, we should have a cost based optimizer that can make this decision for us.
 	switch subq := subq.(type) {
-	case *SemiJoin:
-		settleSemiJoin(subq)
-	case *UncorrelatedSubQuery:
-		outer = settleUncorrelatedSubquery(ctx, outer, subq)
+	case *SubQueryFilter:
+		outer, err = settleSubqueryFilter(ctx, subq, outer)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, vterrors.VT13001("unexpected subquery type")
 	}
@@ -142,44 +144,49 @@ func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq S
 	return subq, nil
 }
 
-func settleSemiJoin(sj *SemiJoin) {
-	sj.Subquery = &Filter{
-		Source:     sj.Subquery,
-		Predicates: []sqlparser.Expr{sj.rhsPredicate},
+func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
+	if len(sj.JoinVars) > 0 {
+		if sj.FilterType != opcode.PulloutExists {
+			return nil, vterrors.VT12001("correlated subquery in WHERE clause")
+		}
+		sj.Subquery = &Filter{
+			Source:     sj.Subquery,
+			Predicates: []sqlparser.Expr{sj.corrSubPredicate},
+		}
+		return outer, nil
 	}
-}
 
-func settleUncorrelatedSubquery(
-	ctx *plancontext.PlanningContext,
-	outer ops.Operator,
-	subq *UncorrelatedSubQuery,
-) ops.Operator {
-	subRes, hasValues := ctx.ReservedVars.ReserveSubQueryWithHasValues()
-	subq.SubqueryResult = subRes
-	subq.HasValues = hasValues
-	noSubQueries := func(node, parent sqlparser.SQLNode) bool {
-		_, ok := node.(*sqlparser.Subquery)
-		return !ok
+	resultArg, hasValuesArg := ctx.ReservedVars.ReserveSubQueryWithHasValues()
+	sj.SubqueryValueName, sj.HasValuesName = resultArg, hasValuesArg
+	dontEnterSubqueries := func(node, _ sqlparser.SQLNode) bool {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			return false
+		}
+		return true
 	}
-	removeSubquery := func(cursor *sqlparser.CopyOnWriteCursor) {
-		_, ok := cursor.Node().(*sqlparser.Subquery)
-		if !ok {
+	post := func(cursor *sqlparser.CopyOnWriteCursor) {
+		node := cursor.Node()
+		if _, ok := node.(*sqlparser.Subquery); !ok {
 			return
 		}
-		cursor.Replace(sqlparser.NewArgument(subRes))
-	}
 
-	newPred := sqlparser.CopyOnRewrite(subq.Original, noSubQueries, removeSubquery, ctx.SemTable.CopyDependenciesOnSQLNodes)
-	predicates := []sqlparser.Expr{newPred.(sqlparser.Expr)}
-	switch subq.Opcode {
-	case opcode.PulloutIn, opcode.PulloutNotIn:
-		predicates = append(predicates, sqlparser.NewArgument(subq.HasValues))
+		var arg sqlparser.Expr
+		if sj.FilterType == opcode.PulloutIn || sj.FilterType == opcode.PulloutNotIn {
+			arg = sqlparser.NewListArg(resultArg)
+		} else {
+			arg = sqlparser.NewArgument(resultArg)
+		}
+		cursor.Replace(arg)
 	}
-	outer = &Filter{
-		Source:     outer,
-		Predicates: predicates,
-	}
-	return outer
+	rhsPred := sqlparser.CopyOnRewrite(sj.Original, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
+
+	return &Filter{
+		Source: outer,
+		Predicates: []sqlparser.Expr{
+			sqlparser.NewArgument(hasValuesArg),
+			rhsPred,
+		},
+	}, nil
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

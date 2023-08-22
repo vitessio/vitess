@@ -191,47 +191,31 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 		}
 	}
 
-	if len(jpc.joinVars) == 0 {
-		// this is an uncorrelated subquery
-		opInner, err := translateQueryToOp(ctx, innerSel)
-		if err != nil {
-			return nil, err
-		}
-
-		u := &UncorrelatedSubQuery{
-			Original: original,
-			Subquery: opInner,
-			Opcode:   opcode.PulloutValue,
-		}
-
-		switch original.Operator {
-		case sqlparser.InOp:
-			u.Opcode = opcode.PulloutIn
-		case sqlparser.NotInOp:
-			u.Opcode = opcode.PulloutNotIn
-		}
-
-		return u, nil
-	}
-
 	if len(jpc.remainingPredicates) > 0 {
 		innerSel.Where = sqlparser.NewWhere(sqlparser.WhereClause, sqlparser.AndExpressions(jpc.remainingPredicates...))
 	}
 
-	innerSel.SelectExprs = []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")}}
 	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SemiJoin{
+	filterType := opcode.PulloutValue
+	switch original.Operator {
+	case sqlparser.InOp:
+		filterType = opcode.PulloutIn
+	case sqlparser.NotInOp:
+		filterType = opcode.PulloutNotIn
+	}
+
+	return &SubQueryFilter{
+		FilterType:        filterType,
 		Subquery:          opInner,
 		JoinVars:          jpc.joinVars,
 		Original:          original,
 		comparisonColumns: jpc.comparisonColumns,
-		rhsPredicate:      jpc.rhsPredicate,
+		corrSubPredicate:  jpc.rhsPredicate,
 	}, nil
-
 }
 
 func createExistsSubquery(
@@ -276,20 +260,13 @@ func createExistsSubquery(
 		return nil, err
 	}
 
-	if len(jpc.joinVars) == 0 {
-		return &UncorrelatedSubQuery{
-			Original: org,
-			Opcode:   opcode.PulloutExists,
-			Subquery: opInner,
-		}, nil
-	}
-
-	return &SemiJoin{
+	return &SubQueryFilter{
 		Subquery:          opInner,
+		FilterType:        opcode.PulloutExists,
 		JoinVars:          jpc.joinVars,
 		Original:          org,
 		comparisonColumns: jpc.comparisonColumns,
-		rhsPredicate:      jpc.rhsPredicate,
+		corrSubPredicate:  jpc.rhsPredicate,
 	}, nil
 }
 

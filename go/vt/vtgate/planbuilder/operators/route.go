@@ -601,7 +601,7 @@ type selectExpressions interface {
 // It will return a bool indicating whether the addition was succesful or not, and an offset to where the column can be found
 func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
 	switch op := operator.(type) {
-	//case *SemiJoin:
+	//case *SubQueryFilter:
 	//	src, added, offset := addMultipleColumnsToInput(ctx, op.LHS, reuse, addToGroupBy, exprs)
 	//	if added {
 	//		op.LHS = src

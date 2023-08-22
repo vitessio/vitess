@@ -47,10 +47,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformUnionPlan(ctx, op)
 	case *operators.Vindex:
 		return transformVindexPlan(ctx, op)
-	case *operators.UncorrelatedSubQuery:
-		return transformSubQueryPlan(ctx, op)
-	case *operators.SemiJoin:
-		return transformSemiJoin(ctx, op, isRoot)
+	case *operators.SubQueryFilter:
+		return transformSubQueryFilter(ctx, op, isRoot)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
@@ -237,7 +235,7 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 		return nil, err
 	}
 
-	predicate := op.FinalPredicate
+	predicate := op.PredicateWithOffsets
 	ast := ctx.SemTable.AndExpressions(op.Predicates...)
 
 	// this might already have been done on the operators

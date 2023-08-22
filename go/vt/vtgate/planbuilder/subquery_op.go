@@ -21,21 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.UncorrelatedSubQuery) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, op.Subquery, false)
-	if err != nil {
-		return nil, err
-	}
-	outerPlan, err := transformToLogicalPlan(ctx, op.Outer, false)
-	if err != nil {
-		return nil, err
-	}
-
-	plan := newUncorrelatedSubquery(op.Opcode, op.SubqueryResult, op.HasValues, innerPlan, outerPlan)
-	return plan, nil
-}
-
-func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin, isRoot bool) (logicalPlan, error) {
+func transformSubQueryFilter(ctx *plancontext.PlanningContext, op *operators.SubQueryFilter, isRoot bool) (logicalPlan, error) {
 	outer, err := transformToLogicalPlan(ctx, op.Outer, isRoot)
 	if err != nil {
 		return nil, err
@@ -45,5 +31,11 @@ func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin,
 	if err != nil {
 		return nil, err
 	}
+
+	if len(op.JoinVars) == 0 {
+		// no correlation, so uncorrelated it is
+		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
+	}
+
 	return newSemiJoin(outer, inner, op.JoinVarOffsets, op.OuterExpressionsNeeded()), nil
 }
