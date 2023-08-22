@@ -91,19 +91,35 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/spf13/pflag"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// logErrStacks controls whether or not printing errors includes the
+// logErrStacks controls whether printing errors includes the
 // embedded stack trace in the output.
 var logErrStacks bool
+var muLogErrStacks sync.Mutex
+
+func getLogErrStacks() bool {
+	muLogErrStacks.Lock()
+	defer muLogErrStacks.Unlock()
+	return logErrStacks
+}
+
+func setLogErrStacks(val bool) {
+	muLogErrStacks.Lock()
+	defer muLogErrStacks.Unlock()
+	logErrStacks = val
+}
 
 // RegisterFlags registers the command-line options that control vterror
 // behavior on the provided FlagSet.
 func RegisterFlags(fs *pflag.FlagSet) {
+	muLogErrStacks.Lock()
+	defer muLogErrStacks.Unlock()
 	fs.BoolVar(&logErrStacks, "log_err_stacks", false, "log stack traces for errors")
 }
 
@@ -161,7 +177,7 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	case 'v':
 		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
 		panicIfError(io.WriteString(s, f.msg+"\n"))
-		if logErrStacks {
+		if getLogErrStacks() {
 			f.stack.Format(s, verb)
 		}
 		return
@@ -278,7 +294,7 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
 		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
 		panicIfError(io.WriteString(s, w.msg))
-		if logErrStacks {
+		if getLogErrStacks() {
 			w.stack.Format(s, verb)
 		}
 		return
