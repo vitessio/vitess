@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -87,10 +88,9 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 
 	sel := qb.sel.(*sqlparser.Select)
-	_, isSubQuery := expr.(*sqlparser.ExtractedSubquery)
 	var addPred func(sqlparser.Expr)
 
-	if sqlparser.ContainsAggregation(expr) && !isSubQuery {
+	if containsAggregation(expr) {
 		addPred = sel.AddHaving
 	} else {
 		addPred = sel.AddWhere
@@ -98,6 +98,26 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
 		addPred(exp)
 	}
+}
+
+func containsAggregation(e sqlparser.SQLNode) bool {
+	hasAggregates := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Offset:
+			// offsets here indicate that a possible aggregation has already been handled by an input
+			// so we don't need to worry about aggregation in the original
+			return false, nil
+		case sqlparser.AggrFunc:
+			hasAggregates = true
+			return false, io.EOF
+		case *sqlparser.Subquery:
+			return false, nil
+		}
+
+		return true, nil
+	}, e)
+	return hasAggregates
 }
 
 func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {

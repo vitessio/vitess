@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -318,8 +317,8 @@ func (jpc *joinPredicateCollector) calcJoinColumns(ctx *plancontext.PlanningCont
 		return
 	}
 
-	outerCol, _ := outerE.(*sqlparser.ColName)
-	innerCol, _ := innerE.(*sqlparser.ColName)
+	outerCol := getColName(outerE)
+	innerCol := getColName(innerE)
 	if outerCol != nil || innerCol != nil {
 		jpc.comparisonColumns = append(jpc.comparisonColumns, [2]*sqlparser.ColName{outerCol, innerCol})
 	}

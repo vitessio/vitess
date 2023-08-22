@@ -193,6 +193,14 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 }
 
 func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+	return &Route{
+		Source:     jm.getApplyJoin(op1, op2),
+		MergedWith: []*Route{op2},
+		Routing:    mergeShardedRouting(r1, r2),
+	}, nil
+}
+
+func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting {
 	tr := &ShardedRouting{
 		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:       r1.keyspace,
@@ -204,12 +212,7 @@ func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Rout
 	} else {
 		tr.PickBestAvailableVindex()
 	}
-
-	return &Route{
-		Source:     jm.getApplyJoin(op1, op2),
-		MergedWith: []*Route{op2},
-		Routing:    tr,
-	}, nil
+	return tr
 }
 
 func (jm *joinMerger) getApplyJoin(op1, op2 *Route) *ApplyJoin {

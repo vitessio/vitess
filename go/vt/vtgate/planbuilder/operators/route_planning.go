@@ -566,10 +566,7 @@ func getColName(exp sqlparser.Expr) *sqlparser.ColName {
 		return exp
 	case *sqlparser.Max, *sqlparser.Min:
 		aggr := exp.(sqlparser.AggrFunc).GetArg()
-		colName, ok := aggr.(*sqlparser.ColName)
-		if ok {
-			return colName
-		}
+		return getColName(aggr)
 	}
 	// for any other expression than a column, or the extremum of a column, we return nil
 	return nil

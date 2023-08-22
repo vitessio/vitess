@@ -207,18 +207,21 @@ type subqueryRouteMerger struct {
 	original sqlparser.Expr
 }
 
-func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	// TODO implement me
-	panic("implement me")
+func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
+	return s.merge(old1, old2, mergeShardedRouting(r1, r2))
 }
 
-func (s *subqueryRouteMerger) merge(_, _ *Route, r Routing) (*Route, error) {
-	s.outer.Source = &Filter{
-		Source:     s.outer.Source,
-		Predicates: []sqlparser.Expr{s.original},
-	}
-	s.outer.Routing = r
-	return s.outer, nil
+func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error) {
+	return &Route{
+		Source: &Filter{
+			Source:     s.outer.Source,
+			Predicates: []sqlparser.Expr{s.original},
+		},
+		MergedWith:    []*Route{old1, old2},
+		Routing:       r,
+		Ordering:      s.outer.Ordering,
+		ResultColumns: s.outer.ResultColumns,
+	}, nil
 }
 
 var _ merger = (*subqueryRouteMerger)(nil)
