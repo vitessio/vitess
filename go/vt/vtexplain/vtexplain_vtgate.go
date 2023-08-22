@@ -74,7 +74,8 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShar
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	queryLogBufferSize := 10
-	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, cache.DefaultConfig, schemaTracker, false, opts.PlannerVersion, streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil
 }

@@ -1709,7 +1709,8 @@ func TestStreamSelectIN(t *testing.T) {
 
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	return NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	return NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 }
 
 func TestSelectScatter(t *testing.T) {
@@ -1720,9 +1721,10 @@ func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -1763,9 +1765,10 @@ func TestSelectScatterPartial(t *testing.T) {
 	}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -1828,9 +1831,10 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -1884,9 +1888,10 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -1945,9 +1950,10 @@ func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -1985,9 +1991,10 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2059,9 +2066,10 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2130,9 +2138,10 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2193,9 +2202,10 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2255,9 +2265,10 @@ func TestSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2322,9 +2333,10 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2387,9 +2399,10 @@ func TestSelectScatterLimit(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -2463,9 +2476,10 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -3434,9 +3448,10 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -3451,7 +3466,8 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
 	time.Sleep(100 * time.Millisecond)
@@ -3476,9 +3492,10 @@ func TestSelectScatterFails(t *testing.T) {
 	sess := &vtgatepb.Session{}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 
@@ -4117,8 +4134,10 @@ func TestSelectAggregationNoData(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	createSandbox(KsTestSharded).VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -4209,8 +4228,10 @@ func TestSelectAggregationData(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	createSandbox(KsTestSharded).VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -4356,8 +4377,10 @@ func TestSelectAggregationRandom(t *testing.T) {
 
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	createSandbox(KsTestSharded).VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}

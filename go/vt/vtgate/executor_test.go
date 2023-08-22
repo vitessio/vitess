@@ -1048,7 +1048,7 @@ func TestExecutorShow(t *testing.T) {
 	utils.MustMatch(t, wantqr, qr, query)
 
 	// Make sure it still works when one of the keyspaces is in a bad state
-	getSandbox("TestExecutor").SrvKeyspaceMustFail++
+	getSandbox(KsTestSharded).SrvKeyspaceMustFail++
 	query = "show vitess_shards"
 	qr, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 	require.NoError(t, err)

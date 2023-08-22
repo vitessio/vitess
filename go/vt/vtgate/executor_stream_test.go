@@ -62,9 +62,10 @@ func TestStreamSQLSharded(t *testing.T) {
 	defer cancel()
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	u.VSchema = unshardedVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
 	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -72,7 +73,8 @@ func TestStreamSQLSharded(t *testing.T) {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 	defer executor.Close()
 
 	sql := "stream * from sharded_user_msgs"

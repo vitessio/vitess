@@ -131,7 +131,7 @@ func createExecutorEnv(ctx context.Context) (executor *Executor, sbc1, sbc2, sbc
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells(ctx, []string{cell})
-	serv.topoServer.CreateKeyspace(ctx, "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecar.DefaultName})
+	serv.topoServer.CreateKeyspace(ctx, KsTestSharded, &topodatapb.Keyspace{SidecarDbName: sidecar.DefaultName})
 	// Force a new cache to use for lookups of the sidecar database identifier
 	// in use by each keyspace -- as we want to use a different load function
 	// than the one already created by the vtgate as it uses a different topo.
@@ -160,7 +160,7 @@ func createExecutorEnv(ctx context.Context) (executor *Executor, sbc1, sbc2, sbc
 	_ = hc.AddTestTablet(cell, "e0-", 1, "TestExecutor", "e0-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	// Below is needed so that SendAnyWherePlan doesn't fail
 
-	createSandbox(KsTestUnsharded)
+	sb := createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "2", 3, KsTestUnsharded, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -169,9 +169,10 @@ func createExecutorEnv(ctx context.Context) (executor *Executor, sbc1, sbc2, sbc
 	bad := createSandbox("TestXBadSharding")
 	bad.VSchema = badVSchema
 
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	sb.VSchema = unshardedVSchema
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -187,12 +188,13 @@ func createCustomExecutor(ctx context.Context, vschema string) (executor *Execut
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
-	createSandbox(KsTestUnsharded)
+	sb := createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	sb.VSchema = unshardedVSchema
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -213,12 +215,13 @@ func createCustomExecutorSetValues(ctx context.Context, vschema string, values [
 		sbcs = append(sbcs, sbc)
 	}
 
-	createSandbox(KsTestUnsharded)
+	sb := createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	sb.VSchema = unshardedVSchema
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 	return executor, sbcs[0], sbcs[1], sbclookup
 }
 

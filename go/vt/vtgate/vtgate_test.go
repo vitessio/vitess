@@ -22,11 +22,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -41,24 +40,24 @@ import (
 
 // This file uses the sandbox_test framework.
 
-var hcVTGateTest *discovery.FakeHealthCheck
-
 var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
 func TestVTGateExecute(t *testing.T) {
-	counts := rpcVTGate.timings.Timings.Counts()
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, sbc := createVtgateEnv(ctx)
+	defer vtg.Close()
+	counts := vtg.timings.Timings.Counts()
 
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	_, qr, err := rpcVTGate.Execute(
-		context.Background(),
+	_, qr, err := vtg.Execute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
 			Autocommit:   true,
-			TargetString: "@primary",
+			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -75,11 +74,11 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	newCounts := rpcVTGate.timings.Timings.Counts()
+	newCounts := vtg.timings.Timings.Counts()
 	require.Contains(t, newCounts, "All")
 	require.Equal(t, counts["All"]+1, newCounts["All"])
-	require.Contains(t, newCounts, "Execute..primary")
-	require.Equal(t, counts["Execute..primary"]+1, newCounts["Execute..primary"])
+	require.Contains(t, newCounts, "Execute.TestUnsharded.primary")
+	require.Equal(t, counts["Execute.TestUnsharded.primary"]+1, newCounts["Execute.TestUnsharded.primary"])
 
 	for k, v := range newCounts {
 		if strings.HasPrefix(k, "Prepare") {
@@ -89,17 +88,19 @@ func TestVTGateExecute(t *testing.T) {
 }
 
 func TestVTGateExecuteError(t *testing.T) {
-	counts := errorCounts.Counts()
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, _ := createVtgateEnv(ctx)
+	defer vtg.Close()
+	counts := vtg.timings.Timings.Counts()
 
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	_, qr, err := rpcVTGate.Execute(
-		context.Background(),
+	_, qr, err := vtg.Execute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
 			Autocommit:   true,
-			TargetString: "@primary",
+			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
 		"bad select id from t1",
@@ -109,8 +110,8 @@ func TestVTGateExecuteError(t *testing.T) {
 	require.Nil(t, qr)
 
 	newCounts := errorCounts.Counts()
-	require.Contains(t, newCounts, "Execute..primary.INVALID_ARGUMENT")
-	require.Equal(t, counts["Execute..primary.INVALID_ARGUMENT"]+1, newCounts["Execute..primary.INVALID_ARGUMENT"])
+	require.Contains(t, newCounts, "Execute.TestUnsharded.primary.INVALID_ARGUMENT")
+	require.Equal(t, counts["Execute.TestUnsharded.primary.INVALID_ARGUMENT"]+1, newCounts["Execute.TestUnsharded.primary.INVALID_ARGUMENT"])
 
 	for k, v := range newCounts {
 		if strings.HasPrefix(k, "Prepare") {
@@ -120,16 +121,17 @@ func TestVTGateExecuteError(t *testing.T) {
 }
 
 func TestVTGatePrepare(t *testing.T) {
-	counts := rpcVTGate.timings.Timings.Counts()
-
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	_, qr, err := rpcVTGate.Prepare(
-		context.Background(),
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, sbc := createVtgateEnv(ctx)
+	defer vtg.Close()
+	counts := vtg.timings.Timings.Counts()
+	_, qr, err := vtg.Prepare(
+		ctx,
 		&vtgatepb.Session{
 			Autocommit:   true,
-			TargetString: "@primary",
+			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -145,11 +147,11 @@ func TestVTGatePrepare(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	newCounts := rpcVTGate.timings.Timings.Counts()
+	newCounts := vtg.timings.Timings.Counts()
 	require.Contains(t, newCounts, "All")
 	require.Equal(t, counts["All"]+1, newCounts["All"])
-	require.Contains(t, newCounts, "Prepare..primary")
-	require.Equal(t, counts["Prepare..primary"]+1, newCounts["Prepare..primary"])
+	require.Contains(t, newCounts, "Prepare.TestUnsharded.primary")
+	require.Equal(t, counts["Prepare.TestUnsharded.primary"]+1, newCounts["Prepare.TestUnsharded.primary"])
 
 	for k, v := range newCounts {
 		if strings.HasPrefix(k, "Execute") {
@@ -159,16 +161,18 @@ func TestVTGatePrepare(t *testing.T) {
 }
 
 func TestVTGatePrepareError(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, _ := createVtgateEnv(ctx)
+	defer vtg.Close()
 	counts := errorCounts.Counts()
 
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	_, qr, err := rpcVTGate.Prepare(
-		context.Background(),
+	_, qr, err := vtg.Prepare(
+		ctx,
 		&vtgatepb.Session{
 			Autocommit:   true,
-			TargetString: "@primary",
+			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
 		"bad select id from t1",
@@ -178,8 +182,8 @@ func TestVTGatePrepareError(t *testing.T) {
 	require.Nil(t, qr)
 
 	newCounts := errorCounts.Counts()
-	require.Contains(t, newCounts, "Prepare..primary.INTERNAL")
-	require.Equal(t, counts["Prepare..primary.INTERNAL"]+1, newCounts["Prepare..primary.INTERNAL"])
+	require.Contains(t, newCounts, "Prepare.TestUnsharded.primary.INTERNAL")
+	require.Equal(t, counts["Prepare.TestUnsharded.primary.INTERNAL"]+1, newCounts["Prepare.TestUnsharded.primary.INTERNAL"])
 
 	for k, v := range newCounts {
 		if strings.HasPrefix(k, "Execute") {
@@ -189,16 +193,18 @@ func TestVTGatePrepareError(t *testing.T) {
 }
 
 func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, _ := createVtgateEnv(ctx)
+	defer vtg.Close()
 
 	// Valid keyspace.
-	_, qr, err := rpcVTGate.Execute(
-		context.Background(),
+	_, qr, err := vtg.Execute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded,
+			TargetString: KsTestSharded + ":-20@primary",
 		},
 		"select id from none",
 		nil,
@@ -211,8 +217,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace.
-	_, _, err = rpcVTGate.Execute(
-		context.Background(),
+	_, _, err = vtg.Execute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
 			TargetString: "invalid_keyspace",
@@ -224,11 +230,11 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
-	_, qr, err = rpcVTGate.Execute(
-		context.Background(),
+	_, qr, err = vtg.Execute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded + ":0@primary",
+			TargetString: KsTestSharded + ":-20@primary",
 		},
 		"select id from none",
 		nil,
@@ -239,31 +245,32 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
-	_, _, err = rpcVTGate.Execute(
-		context.Background(),
+	_, _, err = vtg.Execute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded + ":noshard@primary",
+			TargetString: KsTestSharded + ":noshard@primary",
 		},
 		"select id from none",
 		nil,
 	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:PRIMARY`)
+	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestExecutor" shard:"noshard" tablet_type:PRIMARY`)
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
-	ks := KsTestUnsharded
-	shard := "0"
-	createSandbox(ks)
-	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, sbc := createVtgateEnv(ctx)
+	defer vtg.Close()
+
 	var qrs []*sqltypes.Result
-	_, err := rpcVTGate.StreamExecute(
-		context.Background(),
+	_, err := vtg.StreamExecute(
+		ctx,
 		nil,
 		&vtgatepb.Session{
-			TargetString: "@primary",
+			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -286,10 +293,12 @@ func TestVTGateStreamExecute(t *testing.T) {
 }
 
 func TestVTGateBindVarError(t *testing.T) {
-	ks := KsTestUnsharded
-	createSandbox(ks)
-	hcVTGateTest.Reset()
-	ctx := context.Background()
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, _ := createVtgateEnv(ctx)
+	defer vtg.Close()
+
 	session := &vtgatepb.Session{}
 	bindVars := map[string]*querypb.BindVariable{
 		"v": {
@@ -305,19 +314,19 @@ func TestVTGateBindVarError(t *testing.T) {
 	}{{
 		name: "Execute",
 		f: func() error {
-			_, _, err := rpcVTGate.Execute(ctx, nil, session, "", bindVars)
+			_, _, err := vtg.Execute(ctx, nil, session, "", bindVars)
 			return err
 		},
 	}, {
 		name: "ExecuteBatch",
 		f: func() error {
-			_, _, err := rpcVTGate.ExecuteBatch(ctx, session, []string{""}, []map[string]*querypb.BindVariable{bindVars})
+			_, _, err := vtg.ExecuteBatch(ctx, session, []string{""}, []map[string]*querypb.BindVariable{bindVars})
 			return err
 		},
 	}, {
 		name: "StreamExecute",
 		f: func() error {
-			_, err := rpcVTGate.StreamExecute(ctx, nil, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+			_, err := vtg.StreamExecute(ctx, nil, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
 			return err
 		},
 	}}
@@ -328,18 +337,18 @@ func TestVTGateBindVarError(t *testing.T) {
 	}
 }
 
-func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.Code) {
+func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.Code) {
 
 	// Execute
 	for _, sbc := range sbcs {
 		before(sbc)
 	}
 	session := &vtgatepb.Session{
-		TargetString: "@primary",
+		TargetString: KsTestUnsharded + "@primary",
 	}
 
-	_, _, err := rpcVTGate.Execute(
-		context.Background(),
+	_, _, err := vtg.Execute(
+		ctx,
 		nil,
 		session,
 		"select id from t1",
@@ -361,8 +370,8 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	for _, sbc := range sbcs {
 		before(sbc)
 	}
-	_, err = rpcVTGate.StreamExecute(
-		context.Background(),
+	_, err = vtg.StreamExecute(
+		ctx,
 		nil,
 		session,
 		"select id from t1",
@@ -389,83 +398,83 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 // tablet and a rdonly tablet because we don't control the routing of
 // Commit.
 func TestErrorPropagation(t *testing.T) {
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, sbc := createVtgateEnv(ctx)
+	defer vtg.Close()
 
-	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	sbcrdonly := hcVTGateTest.AddTestTablet("aa", "1.1.1.2", 1001, KsTestUnsharded, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
 	sbcs := []*sandboxconn.SandboxConn{
-		sbcm,
-		sbcrdonly,
+		sbc,
 	}
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_CANCELED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_CANCELED] = 0
 	}, vtrpcpb.Code_CANCELED)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_UNKNOWN] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_UNKNOWN] = 0
 	}, vtrpcpb.Code_UNKNOWN)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 0
 	}, vtrpcpb.Code_INVALID_ARGUMENT)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 0
 	}, vtrpcpb.Code_DEADLINE_EXCEEDED)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 	}, vtrpcpb.Code_ALREADY_EXISTS)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_PERMISSION_DENIED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_PERMISSION_DENIED] = 0
 	}, vtrpcpb.Code_PERMISSION_DENIED)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 	}, vtrpcpb.Code_RESOURCE_EXHAUSTED)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 0
 	}, vtrpcpb.Code_FAILED_PRECONDITION)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 	}, vtrpcpb.Code_ABORTED)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 0
 	}, vtrpcpb.Code_INTERNAL)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 0
 	}, vtrpcpb.Code_UNAVAILABLE)
 
-	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+	testErrorPropagation(t, ctx, vtg, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_UNAUTHENTICATED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCodes[vtrpcpb.Code_UNAUTHENTICATED] = 0
@@ -475,18 +484,20 @@ func TestErrorPropagation(t *testing.T) {
 // This test makes sure that if we start a transaction and hit a critical
 // error, a rollback is issued.
 func TestErrorIssuesRollback(t *testing.T) {
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, sbc := createVtgateEnv(ctx)
+	defer vtg.Close()
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.Code_ABORTED case.
-	session, _, err := rpcVTGate.Execute(context.Background(), nil, &vtgatepb.Session{}, "begin", nil)
+	session, _, err := vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -494,7 +505,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
-	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -507,11 +518,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, &vtgatepb.Session{}, "begin", nil)
+	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -519,7 +530,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
-	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -532,11 +543,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
 	// vtrpcpb.Code_ALREADY_EXISTS case.
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, &vtgatepb.Session{}, "begin", nil)
+	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -544,7 +555,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
-	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "select id from t1", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -607,32 +618,40 @@ var shardedVSchemaUnknownParams = `
 `
 
 func TestMultiInternalSavepointVtGate(t *testing.T) {
-	s := createSandbox(KsTestSharded)
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, _ := createVtgateEnv(ctx)
+	defer vtg.Close()
+
+	const customKeyspace = "CustomSharding"
+	s := createSandbox(customKeyspace)
 	s.ShardSpec = "-40-80-"
 	s.VSchema = shardedVSchema
 	srvSchema := getSandboxSrvVSchema()
-	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
-	hcVTGateTest.Reset()
+	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
 
-	sbc1 := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1, KsTestSharded, "-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	sbc2 := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 2, KsTestSharded, "40-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	sbc3 := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 3, KsTestSharded, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	hc := vtg.resolver.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
 
-	logChan := rpcVTGate.executor.queryLogger.Subscribe("Test")
-	defer rpcVTGate.executor.queryLogger.Unsubscribe(logChan)
+	sbc1 := hc.AddTestTablet("aa", "-40", 1, customKeyspace, "-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc2 := hc.AddTestTablet("aa", "40-80", 1, customKeyspace, "40-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc3 := hc.AddTestTablet("aa", "80-", 1, customKeyspace, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
-	session := &vtgatepb.Session{Autocommit: true}
+	logChan := vtg.executor.queryLogger.Subscribe("Test")
+	defer vtg.executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{Autocommit: true, TargetString: customKeyspace + "@primary"}
 	require.True(t, session.GetAutocommit())
 	require.False(t, session.InTransaction)
 
 	var err error
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "begin", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "begin", nil)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
 
 	// this query goes to multiple shards so internal savepoint will be created.
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "insert into sp_tbl(user_id) values (1), (3)", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (1), (3)", nil)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
@@ -649,6 +668,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 			"vtg2":       sqltypes.Int64BindVariable(3),
 		},
 	}}
+
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
 	wantQ[1].Sql = "insert into sp_tbl(user_id) values (:_user_id_1)"
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
@@ -659,7 +679,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc2.Queries = nil
 
 	// multi shard so new savepoint will be created.
-	session, _, err = rpcVTGate.Execute(context.Background(), nil, session, "insert into sp_tbl(user_id) values (2), (4)", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (2), (4)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql:           "savepoint x",
@@ -680,7 +700,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	_, _, err = rpcVTGate.Execute(context.Background(), nil, session, "insert into sp_tbl(user_id) values (5)", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (5)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
@@ -691,37 +711,58 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	}}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "BEGIN", "begin", 0)
-	testQueryLog(t, rpcVTGate.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
-	testQueryLog(t, rpcVTGate.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
-	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
-	testQueryLog(t, rpcVTGate.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "BEGIN", "begin", 0)
+	testQueryLog(t, vtg.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, vtg.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
 }
 
 func TestVSchemaVindexUnknownParams(t *testing.T) {
-	s := createSandbox(KsTestSharded)
-	s.ShardSpec = "-40-80-"
+	utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vtg, _ := createVtgateEnv(ctx)
+	defer vtg.Close()
 
+	const customKeyspace = "CustomSharding"
+	s := createSandbox(customKeyspace)
+	s.ShardSpec = "-40-80-"
 	s.VSchema = shardedVSchema
 	srvSchema := getSandboxSrvVSchema()
-	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
-	hcVTGateTest.Reset()
+	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
+
+	hc := vtg.resolver.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+	_ = hc.AddTestTablet("aa", "-40", 1, customKeyspace, "-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_ = hc.AddTestTablet("aa", "40-80", 1, customKeyspace, "40-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_ = hc.AddTestTablet("aa", "80-", 1, customKeyspace, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	unknownParams := vindexUnknownParams.Get()
 	require.Equal(t, int64(0), unknownParams)
 
 	s.VSchema = shardedVSchemaUnknownParams
 	srvSchema = getSandboxSrvVSchema()
-	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
+	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
 
 	unknownParams = vindexUnknownParams.Get()
 	require.Equal(t, int64(3), unknownParams)
 
 	s.VSchema = shardedVSchema
 	srvSchema = getSandboxSrvVSchema()
-	rpcVTGate.executor.vm.VSchemaUpdate(srvSchema, nil)
+	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
 
 	unknownParams = vindexUnknownParams.Get()
 	require.Equal(t, int64(0), unknownParams)
+}
+
+func createVtgateEnv(ctx context.Context) (*VTGate, *sandboxconn.SandboxConn) {
+	cell := "aa"
+	sb := createSandbox(KsTestSharded)
+	sb.ShardSpec = "-"
+	executor, _, _, sbc := createExecutorEnv(ctx)
+	executor.normalize = normalizeQueries
+
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, cell)
+	return newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway), sbc
 }

@@ -19,6 +19,7 @@ package vtgate
 import (
 	"net/http"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -35,7 +36,7 @@ var (
 	QueryzHandler = "/debug/queryz"
 )
 
-func initQueryLogger(vtg *VTGate) (*streamlog.StreamLogger[*logstats.LogStats], error) {
+func initQueryLogger(plans cache.Cache) (*streamlog.StreamLogger[*logstats.LogStats], error) {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	queryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(queryLogger))
 
@@ -46,7 +47,7 @@ func initQueryLogger(vtg *VTGate) (*streamlog.StreamLogger[*logstats.LogStats], 
 	})
 
 	servenv.HTTPHandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
-		queryzHandler(vtg.executor, w, r)
+		queryzHandler(plans, w, r)
 	})
 
 	if queryLogToFile != "" {

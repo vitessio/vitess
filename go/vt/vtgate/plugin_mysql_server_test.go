@@ -248,6 +248,7 @@ func newTestAuthServerStatic() *mysql.AuthServerStatic {
 
 func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLTP)
 	sess := vh.session(&mysql.Conn{})
 	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
 		t.Fatalf("Expected default workload OLTP")
@@ -287,20 +288,20 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 		serverCACert = path.Join(root, "ca-cert.pem")
 	}
 
-	listener := &mysql.Listener{}
-	if err := initTLSConfig(ctx, listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
+	if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 
-	serverConfig := listener.TLSConfig.Load()
+	serverConfig := srv.tcpListener.TLSConfig.Load()
 	if serverConfig == nil {
 		t.Fatalf("init tls config shouldn't create nil server config")
 	}
 
-	sigChan <- syscall.SIGHUP
+	srv.sigChan <- syscall.SIGHUP
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 
-	if listener.TLSConfig.Load() == serverConfig {
+	if srv.tcpListener.TLSConfig.Load() == serverConfig {
 		t.Fatalf("init tls config should have been recreated after SIGHUP")
 	}
 }

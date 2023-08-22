@@ -27,6 +27,7 @@ func ensureNoGoroutines(t testing.TB) {
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vtgate.resetAggregators"),
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vtgate.processQueryInfo"),
 		goleak.IgnoreTopFunction("github.com/patrickmn/go-cache.(*janitor).Run"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/logutil.(*ThrottledLogger).log.func1"),
 	}
 
 	var err error

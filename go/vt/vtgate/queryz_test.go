@@ -89,7 +89,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan3.ExecTime = uint64(100 * time.Millisecond)
 	plan4.ExecTime = uint64(200 * time.Millisecond)
 
-	queryzHandler(executor, resp, req)
+	queryzHandler(executor.plans, resp, req)
 	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="low">`,

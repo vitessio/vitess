@@ -324,6 +324,10 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 			case <-ctx.Done():
 				return
 			case update := <-updateChan:
+				// If the channel was closed, we're done.
+				if update == nil {
+					return
+				}
 				newHash := GetSrvVSchemaHash(update.Value)
 				if newHash == currentHash {
 					// sometimes we get the same update multiple times. This results in the plan cache to be cleared

@@ -27,7 +27,7 @@ import (
 )
 
 func TestTeeTopo(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
