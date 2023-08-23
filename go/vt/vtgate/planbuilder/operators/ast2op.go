@@ -185,21 +185,42 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 			}
 		}
 
+		// We now construct the update query for the child table -
+		// For CASCADE type constraint, the query looks like this -
+		// 		`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+		// For SET NULL type constraint, the query looks like this -
+		//		`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
+		//		WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
+		//		[AND <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>)]`
+		// 	If all the columns of the foreign key in the parent don't actually end up getting updated, then we shouldn't be setting the child columns to NULL.
+
+		// Some operations are common for both the cases.
+		// 1. building the bind variable name for the output from the SELECT query.
+		bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
+		// 2. ValTuple having the column names of the foreign key constraint in the child table.
+		var valTuple sqlparser.ValTuple
+		for _, column := range fk.ChildColumns {
+			valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+		}
+		// 3. Use the above 2 to create the comparison expression we use in the where condition of the UPDATE.
+		compExpr := &sqlparser.ComparisonExpr{
+			Operator: sqlparser.InOp,
+			Left:     valTuple,
+			Right:    sqlparser.NewListArg(bvName),
+		}
+
+		// For both the cases, 2 things are different. The where condition and the update expressions.
+		// For CASCADE type constraint, the where condition is the same as the comparison expression above.
+		// For SET NULL type constraint, the where condition is the same as the comparison expression above, with an additional condition (that condition is optional).
+
+		// We create the variables for these 2 things, and populate them in the switch case below.
+		var childWhereExpr sqlparser.Expr = compExpr
+		var childUpdateExprs sqlparser.UpdateExprs
+
 		switch fk.OnUpdate {
 		case sqlparser.Cascade:
-			// We now construct the update query for the child table.
-			// The query looks something like this - `UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
-			var valTuple sqlparser.ValTuple
-			for _, column := range fk.ChildColumns {
-				valTuple = append(valTuple, sqlparser.NewColName(column.String()))
-			}
-			compExpr := &sqlparser.ComparisonExpr{
-				Operator: sqlparser.InOp,
-				Left:     valTuple,
-				Right:    sqlparser.NewListArg(bvName),
-			}
-			var childUpdateExprs sqlparser.UpdateExprs
+			// For the CASCADE type constraint, the update expressions are the same as the update expressions in the parent update query.
+			// We need to replace the column names in the update expressions with the corresponding child column names.
 			for _, updateExpr := range updClone.Exprs {
 				colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
 				if colIdx >= 0 {
@@ -209,38 +230,8 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 					})
 				}
 			}
-			childUpd := &sqlparser.Update{
-				Exprs:      childUpdateExprs,
-				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
-				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
-			}
-			childUpdOp, err := createOpFromStmt(ctx, childUpd)
-			if err != nil {
-				return nil, err
-			}
-			fkChildren = append(fkChildren, &FkChild{
-				BVName: bvName,
-				Cols:   cols,
-				Op:     childUpdOp,
-			})
 		case sqlparser.SetNull:
-			// We now construct the update query for the child table.
-			// The query looks something like this -
-			//	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
-			//	WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
-			//  [AND <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>)]`
-			// If all the columns of the foreign key in the parent don't actually end up getting updated, then we shouldn't be setting the child columns to NULL.
-			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
-			var valTuple sqlparser.ValTuple
-			for _, column := range fk.ChildColumns {
-				valTuple = append(valTuple, sqlparser.NewColName(column.String()))
-			}
-			compExpr := &sqlparser.ComparisonExpr{
-				Operator: sqlparser.InOp,
-				Left:     valTuple,
-				Right:    sqlparser.NewListArg(bvName),
-			}
-			var childUpdateExprs sqlparser.UpdateExprs
+			// For the SET NULL type constraint, we need to set all the child columns to NULL.
 			for _, column := range fk.ChildColumns {
 				childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
 					Name: sqlparser.NewColName(column.String()),
@@ -248,48 +239,53 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 				})
 			}
 
-			var secondValTuple sqlparser.ValTuple
-			var somethingIsNull bool
+			// There is a special case in this constraint though.
+			// If a user updates the parent columns with values that are exactly what it already has, such that none of the parent columns actually get updated,
+			// then we shouldn't be setting the children columns to NULL.
+			// We need to add an additional condition to the where clause to handle this case.
+			// The additional condition looks like [AND <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>)].
+			// If any of the parent columns is being set to NULL, then we don't need this condition.
+			var updateValues sqlparser.ValTuple
+			var somethingIsSetNull bool
 			for _, updateExpr := range updClone.Exprs {
 				colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
 				if colIdx >= 0 {
 					_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
 					if isNull {
-						somethingIsNull = true
+						somethingIsSetNull = true
 						break
 					} else {
-						secondValTuple = append(secondValTuple, updateExpr.Expr)
+						updateValues = append(updateValues, updateExpr.Expr)
 					}
 				}
 			}
-			var whereExpr sqlparser.Expr = compExpr
-			if !somethingIsNull {
-				whereExpr = &sqlparser.AndExpr{
+			if !somethingIsSetNull {
+				childWhereExpr = &sqlparser.AndExpr{
 					Left: compExpr,
 					Right: &sqlparser.ComparisonExpr{
 						Operator: sqlparser.NotInOp,
 						Left:     valTuple,
-						Right:    secondValTuple,
+						Right:    updateValues,
 					},
 				}
 			}
-			childUpd := &sqlparser.Update{
-				Exprs:      childUpdateExprs,
-				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
-				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: whereExpr},
-			}
-			childUpdOp, err := createOpFromStmt(ctx, childUpd)
-			if err != nil {
-				return nil, err
-			}
-			fkChildren = append(fkChildren, &FkChild{
-				BVName: bvName,
-				Cols:   cols,
-				Op:     childUpdOp,
-			})
 		case sqlparser.SetDefault:
 			return nil, vterrors.VT09016()
 		}
+		childUpd := &sqlparser.Update{
+			Exprs:      childUpdateExprs,
+			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
+			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: childWhereExpr},
+		}
+		childUpdOp, err := createOpFromStmt(ctx, childUpd)
+		if err != nil {
+			return nil, err
+		}
+		fkChildren = append(fkChildren, &FkChild{
+			BVName: bvName,
+			Cols:   cols,
+			Op:     childUpdOp,
+		})
 	}
 
 	// We now create the selection operator to select the parent columns for the foreign key constraints.
