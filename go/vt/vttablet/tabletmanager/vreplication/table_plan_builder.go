@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -671,9 +672,9 @@ func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
 
 func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *sqlparser.ParsedQuery {
 	if tpb.onInsert == insertIgnore {
-		buf.Myprintf("insert ignore into %v(", tpb.name)
+		buf.Myprintf("insert %signore into %v(", vstreamer.GetVReplicationMaxExecutionTimeQueryHintIfSet(), tpb.name)
 	} else {
-		buf.Myprintf("insert into %v(", tpb.name)
+		buf.Myprintf("insert %sinto %v(", vstreamer.GetVReplicationMaxExecutionTimeQueryHintIfSet(), tpb.name)
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
@@ -726,6 +727,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) *sqlparser.ParsedQuery {
 	bvf.mode = bvAfter
 	buf.WriteString(" select ")
+	buf.WriteString(vstreamer.GetVReplicationMaxExecutionTimeQueryHintIfSet())
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
 		if tpb.isColumnGenerated(cexpr.colName) {
@@ -788,7 +790,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	}
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
-	buf.Myprintf("update %v set ", tpb.name)
+	buf.Myprintf("update %s%v set ", vstreamer.GetVReplicationMaxExecutionTimeQueryHintIfSet(), tpb.name)
 	separator := ""
 	tpb.pkIndices = make([]bool, len(tpb.colExprs))
 	for i, cexpr := range tpb.colExprs {
@@ -839,11 +841,11 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	switch tpb.onInsert {
 	case insertNormal:
-		buf.Myprintf("delete from %v", tpb.name)
+		buf.Myprintf("delete %sfrom %v", vstreamer.GetVReplicationMaxExecutionTimeQueryHintIfSet(), tpb.name)
 		tpb.generateWhere(buf, bvf)
 	case insertOnDup:
 		bvf.mode = bvBefore
-		buf.Myprintf("update %v set ", tpb.name)
+		buf.Myprintf("update %s%v set ", vstreamer.GetVReplicationMaxExecutionTimeQueryHintIfSet(), tpb.name)
 		separator := ""
 		for _, cexpr := range tpb.colExprs {
 			if cexpr.isGrouped || cexpr.isPK {
