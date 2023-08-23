@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
@@ -66,6 +65,25 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformSubQueryFilter(ctx *plancontext.PlanningContext, op *operators.SubQueryFilter, isRoot bool) (logicalPlan, error) {
+	outer, err := transformToLogicalPlan(ctx, op.Outer, isRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	inner, err := transformToLogicalPlan(ctx, op.Inner(), false)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(op.JoinVars) == 0 {
+		// no correlation, so uncorrelated it is
+		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
+	}
+
+	return newSemiJoin(outer, inner, op.JoinVarOffsets, op.OuterExpressionsNeeded()), nil
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
@@ -732,109 +750,4 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 		}
 	}
 	return true
-}
-
-func canSelectDBAMerge(a, b *route) bool {
-	if a.eroute.Opcode != engine.DBA {
-		return false
-	}
-	if b.eroute.Opcode != engine.DBA {
-		return false
-	}
-
-	// safe to merge when any 1 table name or schema matches, since either the routing will match or either side would be throwing an error
-	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
-	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
-	for _, aExpr := range a.eroute.SysTableTableSchema {
-		for _, bExpr := range b.eroute.SysTableTableSchema {
-			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
-				return true
-			}
-		}
-	}
-	for _, aExpr := range a.eroute.SysTableTableName {
-		for _, bExpr := range b.eroute.SysTableTableName {
-			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
-				return true
-			}
-		}
-	}
-
-	// if either/both of the side does not have any routing information, then they can be merged.
-	return (len(a.eroute.SysTableTableSchema) == 0 && len(a.eroute.SysTableTableName) == 0) ||
-		(len(b.eroute.SysTableTableSchema) == 0 && len(b.eroute.SysTableTableName) == 0)
-}
-
-func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	// TODO: check SemTable's columnEqualities for better plan
-
-	for i, aExpr := range a {
-		bExpr := b[i]
-		if !gen4ValEqual(ctx, aExpr, bExpr) {
-			return false
-		}
-	}
-	return true
-}
-
-func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
-	switch a := a.(type) {
-	case *sqlparser.ColName:
-		if b, ok := b.(*sqlparser.ColName); ok {
-			if !a.Name.Equal(b.Name) {
-				return false
-			}
-
-			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
-		}
-	case *sqlparser.Argument:
-		b, ok := b.(*sqlparser.Argument)
-		if !ok {
-			return false
-		}
-		return a.Name == b.Name
-	case *sqlparser.Literal:
-		b, ok := b.(*sqlparser.Literal)
-		if !ok {
-			return false
-		}
-		switch a.Type {
-		case sqlparser.StrVal:
-			switch b.Type {
-			case sqlparser.StrVal:
-				return a.Val == b.Val
-			case sqlparser.HexVal:
-				return hexEqual(b, a)
-			}
-		case sqlparser.HexVal:
-			return hexEqual(a, b)
-		case sqlparser.IntVal:
-			if b.Type == (sqlparser.IntVal) {
-				return a.Val == b.Val
-			}
-		}
-	}
-	return false
-}
-
-func hexEqual(a, b *sqlparser.Literal) bool {
-	v, err := a.HexDecode()
-	if err != nil {
-		return false
-	}
-	switch b.Type {
-	case sqlparser.StrVal:
-		return bytes.Equal(v, b.Bytes())
-	case sqlparser.HexVal:
-		v2, err := b.HexDecode()
-		if err != nil {
-			return false
-		}
-		return bytes.Equal(v, v2)
-	}
-	return false
 }

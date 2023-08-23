@@ -180,10 +180,18 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 	switch sj.FilterType {
 	case opcode.PulloutExists:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg))
-	case opcode.PulloutIn, opcode.PulloutNotIn:
+		sj.HasValuesName = hasValuesArg
+	case opcode.PulloutIn:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg), rhsPred)
+		sj.HasValuesName = hasValuesArg
+		sj.SubqueryValueName = resultArg
+	case opcode.PulloutNotIn:
+		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg)), rhsPred)
+		sj.HasValuesName = hasValuesArg
+		sj.SubqueryValueName = resultArg
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)
+		sj.SubqueryValueName = resultArg
 	}
 	return &Filter{
 		Source:     outer,
