@@ -52,11 +52,8 @@ import (
 )
 
 func TestSelectNext(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	query := "select next :n values from user_seq"
 	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
@@ -110,11 +107,8 @@ func TestSelectNext(t *testing.T) {
 }
 
 func TestSelectDBA(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(context.Background(), nil, "TestSelectDBA",
@@ -168,11 +162,8 @@ func TestSelectDBA(t *testing.T) {
 }
 
 func TestSystemVariablesMySQLBelow80(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	sqlparser.SetParserVersion("57000")
@@ -208,11 +199,8 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 }
 
 func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	sqlparser.SetParserVersion("80000")
@@ -250,11 +238,8 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 }
 
 func TestSetSystemVariablesTx(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	sqlparser.SetParserVersion("80001")
@@ -302,11 +287,8 @@ func TestSetSystemVariablesTx(t *testing.T) {
 }
 
 func TestSetSystemVariables(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, lookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, lookup, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	sqlparser.SetParserVersion("80001")
@@ -419,11 +401,8 @@ func TestSetSystemVariables(t *testing.T) {
 }
 
 func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
@@ -466,11 +445,8 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 }
 
 func TestCreateTableValidTimestamp(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "ALLOW_INVALID_DATES"}})
@@ -489,11 +465,8 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 }
 
 func TestGen4SelectDBA(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
@@ -568,11 +541,8 @@ func TestGen4SelectDBA(t *testing.T) {
 }
 
 func TestUnsharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -587,11 +557,8 @@ func TestUnsharded(t *testing.T) {
 }
 
 func TestUnshardedComments(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -635,11 +602,8 @@ func TestUnshardedComments(t *testing.T) {
 }
 
 func TestStreamUnsharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -655,11 +619,8 @@ func TestStreamUnsharded(t *testing.T) {
 }
 
 func TestStreamBuffering(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
 	// such that the splitting of the Result into multiple Result responses gets tested.
@@ -715,11 +676,8 @@ func TestStreamBuffering(t *testing.T) {
 }
 
 func TestStreamLimitOffset(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
 	// such that the splitting of the Result into multiple Result responses gets tested.
@@ -797,11 +755,8 @@ func TestStreamLimitOffset(t *testing.T) {
 }
 
 func TestSelectLastInsertId(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 		LastInsertId: 52,
@@ -825,11 +780,8 @@ func TestSelectLastInsertId(t *testing.T) {
 }
 
 func TestSelectSystemVariables(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -889,11 +841,8 @@ func TestSelectSystemVariables(t *testing.T) {
 }
 
 func TestSelectInitializedVitessAwareVariable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -925,11 +874,8 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 }
 
 func TestSelectUserDefinedVariable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -965,11 +911,8 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 }
 
 func TestFoundRows(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -996,11 +939,8 @@ func TestFoundRows(t *testing.T) {
 }
 
 func TestRowCount(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -1033,11 +973,8 @@ func testRowCount(t *testing.T, ctx context.Context, executor *Executor, session
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{
@@ -1071,11 +1008,8 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, lookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, lookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -1095,11 +1029,8 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 }
 
 func TestLastInsertIDInVirtualTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -1127,11 +1058,8 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 }
 
 func TestLastInsertIDInSubQueryExpression(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1155,11 +1083,8 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 }
 
 func TestSelectDatabase(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	sql := "select database()"
 	newSession := &vtgatepb.Session{
@@ -1188,11 +1113,8 @@ func TestSelectDatabase(t *testing.T) {
 }
 
 func TestSelectBindvars(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, lookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, lookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -1299,11 +1221,8 @@ func TestSelectBindvars(t *testing.T) {
 }
 
 func TestSelectEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1373,11 +1292,8 @@ func TestSelectEqual(t *testing.T) {
 }
 
 func TestSelectINFromOR(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := &vtgatepb.Session{
@@ -1395,11 +1311,8 @@ func TestSelectINFromOR(t *testing.T) {
 }
 
 func TestSelectDual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, lookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, lookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1418,11 +1331,8 @@ func TestSelectDual(t *testing.T) {
 }
 
 func TestSelectComments(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1441,11 +1351,8 @@ func TestSelectComments(t *testing.T) {
 }
 
 func TestSelectNormalize(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{
@@ -1481,11 +1388,8 @@ func TestSelectNormalize(t *testing.T) {
 }
 
 func TestSelectCaseSensitivity(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1504,11 +1408,8 @@ func TestSelectCaseSensitivity(t *testing.T) {
 }
 
 func TestStreamSelectEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sql := "select id from user where id = 1"
 	result, err := executorStream(ctx, executor, sql)
@@ -1520,11 +1421,8 @@ func TestStreamSelectEqual(t *testing.T) {
 }
 
 func TestSelectKeyRange(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1543,11 +1441,8 @@ func TestSelectKeyRange(t *testing.T) {
 }
 
 func TestSelectKeyRangeUnique(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1566,11 +1461,8 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 }
 
 func TestSelectIN(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	// Constant in IN clause is just a number, not a bind variable.
 	session := &vtgatepb.Session{
@@ -1659,11 +1551,8 @@ func TestSelectIN(t *testing.T) {
 }
 
 func TestStreamSelectIN(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sql := "select id from user where id in (1)"
 	result, err := executorStream(ctx, executor, sql)
@@ -2542,12 +2431,8 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 // TODO(sougou): stream and non-stream testing are very similar.
 // Could reuse code,
 func TestSimpleJoin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2587,12 +2472,8 @@ func TestSimpleJoin(t *testing.T) {
 }
 
 func TestJoinComments(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2617,12 +2498,8 @@ func TestJoinComments(t *testing.T) {
 }
 
 func TestSimpleJoinStream(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2660,12 +2537,8 @@ func TestSimpleJoinStream(t *testing.T) {
 }
 
 func TestVarJoin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2703,12 +2576,8 @@ func TestVarJoin(t *testing.T) {
 }
 
 func TestVarJoinStream(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2743,12 +2612,8 @@ func TestVarJoinStream(t *testing.T) {
 }
 
 func TestLeftJoin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 	result1 := []*sqltypes.Result{{
@@ -2794,12 +2659,8 @@ func TestLeftJoin(t *testing.T) {
 }
 
 func TestLeftJoinStream(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -2839,12 +2700,8 @@ func TestLeftJoinStream(t *testing.T) {
 }
 
 func TestEmptyJoin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
 	sbc1.SetResults([]*sqltypes.Result{{
@@ -2885,12 +2742,8 @@ func TestEmptyJoin(t *testing.T) {
 }
 
 func TestEmptyJoinStream(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
 	sbc1.SetResults([]*sqltypes.Result{{
@@ -2926,12 +2779,8 @@ func TestEmptyJoinStream(t *testing.T) {
 }
 
 func TestEmptyJoinRecursive(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -2978,12 +2827,8 @@ func TestEmptyJoinRecursive(t *testing.T) {
 }
 
 func TestEmptyJoinRecursiveStream(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -3027,12 +2872,8 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 }
 
 func TestCrossShardSubquery(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -3069,12 +2910,8 @@ func TestCrossShardSubquery(t *testing.T) {
 }
 
 func TestSubQueryAndQueryWithLimit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -3116,12 +2953,8 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 }
 
 func TestCrossShardSubqueryStream(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -3161,12 +2994,8 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 }
 
 func TestCrossShardSubqueryGetFields(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -3207,12 +3036,8 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 }
 
 func TestSelectBindvarswithPrepare(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -3236,12 +3061,8 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3255,12 +3076,8 @@ func TestSelectDatabasePrepare(t *testing.T) {
 }
 
 func TestSelectWithUnionAll(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	sql := "select id from user where id in (1, 2, 3) union all select id from user where id in (1, 2, 3)"
 	bv, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3})
@@ -3315,12 +3132,8 @@ func TestSelectWithUnionAll(t *testing.T) {
 }
 
 func TestSelectLock(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	session := NewSafeSession(nil)
 	session.Session.InTransaction = true
 	session.ShardSessions = []*vtgatepb.Session_ShardSession{{
@@ -3379,9 +3192,8 @@ func TestSelectLock(t *testing.T) {
 }
 
 func TestLockReserve(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	// no connection should be reserved for these queries.
 	tcases := []string{
@@ -3391,8 +3203,6 @@ func TestLockReserve(t *testing.T) {
 		"select release_lock('lock name') from dual",
 	}
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	for _, sql := range tcases {
@@ -3411,12 +3221,8 @@ func TestLockReserve(t *testing.T) {
 }
 
 func TestSelectFromInformationSchema(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	session := NewSafeSession(nil)
 
 	// check failure when trying to query two keyspaces
@@ -3546,12 +3352,8 @@ func TestSelectScatterFails(t *testing.T) {
 }
 
 func TestGen4SelectStraightJoin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
@@ -3579,12 +3381,8 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 }
 
 func TestGen4MultiColumnVindexEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
@@ -3623,12 +3421,8 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 }
 
 func TestGen4MultiColumnVindexIn(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
@@ -3667,12 +3461,8 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 }
 
 func TestGen4MultiColMixedColComparision(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
@@ -3709,12 +3499,8 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 }
 
 func TestGen4MultiColBestVindexSel(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
@@ -3760,12 +3546,8 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 }
 
 func TestGen4MultiColMultiEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
@@ -3788,12 +3570,8 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 }
 
 func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from zip_detail"
@@ -3814,12 +3592,8 @@ func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 }
 
 func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := fmt.Sprintf("select * from %s.zip_detail", KsTestSharded)
@@ -3840,12 +3614,8 @@ func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 }
 
 func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from user join zip_detail on user.zip_detail_id = zip_detail.id"
@@ -3882,12 +3652,8 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 }
 
 func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select user.id from user join TestUnsharded.zip_detail on user.zip_detail_id = TestUnsharded.zip_detail.id"
@@ -4411,12 +4177,8 @@ func TestSelectAggregationRandom(t *testing.T) {
 }
 
 func TestSelectHexAndBit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
@@ -4432,12 +4194,8 @@ func TestSelectHexAndBit(t *testing.T) {
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.
 // This also validates that cache_size is able to calculate the cfc vindex plan size.
 func TestSelectCFC(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
@@ -4462,12 +4220,8 @@ func TestSelectCFC(t *testing.T) {
 }
 
 func TestSelectView(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	// add the view to local vschema
 	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id")
 	require.NoError(t, err)

@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"testing"
 
@@ -59,10 +58,8 @@ func init() {
 }
 
 func BenchmarkWithNormalizer(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vtgateInst, _ := createVtgateEnv(ctx)
-	defer vtgateInst.Close()
+	vtgateInst, _, ctx, closer := createVtgateEnv(b)
+	defer closer()
 
 	for i := 0; i < b.N; i++ {
 		_, _, err := vtgateInst.Execute(
@@ -82,11 +79,10 @@ func BenchmarkWithNormalizer(b *testing.B) {
 }
 
 func BenchmarkWithoutNormalizer(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vtgateInst, _ := createVtgateEnv(ctx)
+	vtgateInst, _, ctx, closer := createVtgateEnv(b)
+	defer closer()
+
 	vtgateInst.executor.normalize = false
-	defer vtgateInst.Close()
 
 	for i := 0; i < b.N; i++ {
 		_, _, err := vtgateInst.Execute(

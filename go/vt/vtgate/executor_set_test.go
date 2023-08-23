@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -41,11 +40,8 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executorEnv, _, _, _ := createExecutorEnv(ctx)
-	defer executorEnv.Close()
+	executorEnv, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	testcases := []struct {
 		in  string
@@ -286,11 +282,8 @@ func TestExecutorSet(t *testing.T) {
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	sysVarSetEnabled = true
 
 	returnResult := func(columnName, typ, value string) *sqltypes.Result {
@@ -389,11 +382,7 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -405,8 +394,9 @@ func TestExecutorSetMetadata(t *testing.T) {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ = createExecutorEnv(ctx)
-	defer executor.Close()
+	closer()
+	executor, _, _, _, ctx, closer = createExecutorEnv(t)
+	defer closer()
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -451,11 +441,8 @@ func TestExecutorSetMetadata(t *testing.T) {
 }
 
 func TestPlanExecutorSetUDV(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	testcases := []struct {
 		in  string
@@ -485,11 +472,8 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 }
 
 func TestSetUDVFromTabletInput(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	fields := sqltypes.MakeTestFields("some", "VARCHAR")
 	sbc1.SetResults([]*sqltypes.Result{
@@ -520,11 +504,8 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 }
 
 func TestSetVar(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbc := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	oldVersion := sqlparser.GetParserVersion()
@@ -568,11 +549,8 @@ func TestSetVar(t *testing.T) {
 }
 
 func TestSetVarShowVariables(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbc := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	executor.normalize = true
 
 	oldVersion := sqlparser.GetParserVersion()
@@ -601,11 +579,8 @@ func TestSetVarShowVariables(t *testing.T) {
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	e, _, _, sbc := createExecutorEnv(ctx)
-	defer e.Close()
+	e, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	e.normalize = true
 
 	testcases := []struct {

@@ -308,11 +308,8 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 
 // TestKillMethods test the mysql plugin for kill method calls.
 func TestKillMethods(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 	vh := newVtgateHandler(&VTGate{executor: executor})
 
 	// connection does not exist

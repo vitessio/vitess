@@ -38,11 +38,8 @@ import (
 )
 
 func TestUpdateEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -137,11 +134,9 @@ func TestUpdateEqual(t *testing.T) {
 }
 
 func TestUpdateFromSubQuery(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	executor.pv = querypb.ExecuteOptions_Gen4
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -178,9 +173,6 @@ func TestUpdateFromSubQuery(t *testing.T) {
 }
 
 func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
@@ -188,8 +180,8 @@ func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 		),
 		"1|2|2|2|2|2|1|0",
 	)}
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, res)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -236,9 +228,6 @@ func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 }
 
 func TestUpdateInTransactionLookupDefaultReadLock(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
@@ -246,8 +235,8 @@ func TestUpdateInTransactionLookupDefaultReadLock(t *testing.T) {
 		),
 		"1|2|2|2|2|2|1|0",
 	)}
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, res)
+	defer closer()
 
 	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
@@ -302,9 +291,6 @@ func TestUpdateInTransactionLookupDefaultReadLock(t *testing.T) {
 }
 
 func TestUpdateInTransactionLookupExclusiveReadLock(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
@@ -312,8 +298,8 @@ func TestUpdateInTransactionLookupExclusiveReadLock(t *testing.T) {
 		),
 		"1|2|2|2|2|2|1|0",
 	)}
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, res)
+	defer closer()
 
 	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
@@ -368,9 +354,6 @@ func TestUpdateInTransactionLookupExclusiveReadLock(t *testing.T) {
 }
 
 func TestUpdateInTransactionLookupSharedReadLock(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
@@ -378,8 +361,8 @@ func TestUpdateInTransactionLookupSharedReadLock(t *testing.T) {
 		),
 		"1|2|2|2|2|2|1|0",
 	)}
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, res)
+	defer closer()
 
 	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
@@ -434,9 +417,6 @@ func TestUpdateInTransactionLookupSharedReadLock(t *testing.T) {
 }
 
 func TestUpdateInTransactionLookupNoReadLock(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
@@ -444,8 +424,8 @@ func TestUpdateInTransactionLookupNoReadLock(t *testing.T) {
 		),
 		"1|2|2|2|2|2|1|0",
 	)}
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, res)
+	defer closer()
 
 	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
@@ -559,11 +539,8 @@ func TestUpdateMultiOwned(t *testing.T) {
 	}
 }
 `
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createCustomExecutor(ctx, vschema)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createCustomExecutor(t, vschema)
+	defer closer()
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
@@ -622,11 +599,8 @@ func TestUpdateMultiOwned(t *testing.T) {
 }
 
 func TestUpdateComments(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -642,11 +616,8 @@ func TestUpdateComments(t *testing.T) {
 }
 
 func TestUpdateNormalize(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	executor.normalize = true
 	session := &vtgatepb.Session{
@@ -682,11 +653,8 @@ func TestUpdateNormalize(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -802,11 +770,9 @@ func TestDeleteEqual(t *testing.T) {
 }
 
 func TestUpdateScatter(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -822,11 +788,9 @@ func TestUpdateScatter(t *testing.T) {
 }
 
 func TestDeleteScatter(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -842,11 +806,8 @@ func TestDeleteScatter(t *testing.T) {
 }
 
 func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, nil)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbcLookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("lu_col|keyspace_id", "int64|varbinary"),
@@ -902,11 +863,8 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 }
 
 func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, nil)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbcLookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("lu_col|keyspace_id", "int64|varbinary"),
@@ -984,11 +942,8 @@ func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 		),
 		"1|1|1|1|1|1|1",
 	)}
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, res)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, res)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1062,11 +1017,8 @@ func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 }
 
 func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, nil)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, nil)
+	defer closer()
 
 	sbcLookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("lu_col|keyspace_id", "int64|varbinary"),
@@ -1147,11 +1099,8 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 }
 
 func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(ctx, executorVSchema, nil)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcLookup, ctx, closer := createCustomExecutorSetValues(t, executorVSchema, nil)
+	defer closer()
 
 	sbcLookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("lu_col|keyspace_id", "int64|varbinary"),
@@ -1271,11 +1220,9 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 }
 
 func TestDeleteByDestination(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -1291,11 +1238,8 @@ func TestDeleteByDestination(t *testing.T) {
 }
 
 func TestDeleteComments(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -1334,11 +1278,8 @@ func TestDeleteComments(t *testing.T) {
 }
 
 func TestInsertSharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -1448,11 +1389,8 @@ func TestInsertSharded(t *testing.T) {
 }
 
 func TestInsertShardedKeyrange(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	session := &vtgatepb.Session{
@@ -1522,11 +1460,8 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	}
 }
 `
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createCustomExecutor(ctx, vschema)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createCustomExecutor(t, vschema)
+	defer closer()
 
 	_, err := executorExecSession(ctx, executor, "insert into user(id, v, name, music) values (1, 2, 'myname', 'star')", nil, &vtgatepb.Session{})
 	require.NoError(t, err)
@@ -1559,11 +1494,8 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 }
 
 func TestInsertShardedIgnore(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	// Build the sequence of responses for sbclookup. This should
 	// match the sequence of queries we validate below.
@@ -1718,11 +1650,8 @@ func TestInsertShardedIgnore(t *testing.T) {
 func TestInsertOnDupKey(t *testing.T) {
 	// This test just sanity checks that the statement is getting passed through
 	// correctly. The full set of use cases are covered by TestInsertShardedIgnore.
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"1|1",
@@ -1767,11 +1696,8 @@ func TestInsertOnDupKey(t *testing.T) {
 }
 
 func TestAutocommitFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	query := "insert into user (id) values (1)"
 	sbc1.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 1
@@ -1788,11 +1714,8 @@ func TestAutocommitFail(t *testing.T) {
 }
 
 func TestInsertComments(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1820,11 +1743,8 @@ func TestInsertComments(t *testing.T) {
 }
 
 func TestInsertGeneratorSharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -1866,11 +1786,8 @@ func TestInsertGeneratorSharded(t *testing.T) {
 }
 
 func TestInsertAutoincSharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	router, sbc, _, _ := createExecutorEnv(ctx)
-	defer router.Close()
+	router, sbc, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	// Fake a mysql auto-inc response.
 	wantResult := &sqltypes.Result{
@@ -1900,11 +1817,8 @@ func TestInsertAutoincSharded(t *testing.T) {
 }
 
 func TestInsertGeneratorUnsharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -1928,11 +1842,8 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 }
 
 func TestInsertAutoincUnsharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	router, _, _, sbclookup := createExecutorEnv(ctx)
-	defer router.Close()
+	router, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := router.queryLogger.Subscribe("Test")
 	defer router.queryLogger.Unsubscribe(logChan)
@@ -1964,11 +1875,8 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 }
 
 func TestInsertLookupOwned(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1995,11 +1903,8 @@ func TestInsertLookupOwned(t *testing.T) {
 }
 
 func TestInsertLookupOwnedGenerator(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -2041,11 +1946,8 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 }
 
 func TestInsertLookupUnowned(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -2071,11 +1973,8 @@ func TestInsertLookupUnowned(t *testing.T) {
 }
 
 func TestInsertLookupUnownedUnsupplied(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"3|1",
@@ -2107,11 +2006,8 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 // If a statement gets broken up into two, and the first one fails,
 // then an error should be returned normally.
 func TestInsertPartialFail1(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	// Make the first DML fail, there should be no rollback.
 	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -2131,11 +2027,8 @@ func TestInsertPartialFail1(t *testing.T) {
 // after successful execution of the first, then the transaction must
 // be rolled back due to partial execution.
 func TestInsertPartialFail2(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	// Make the second DML fail, it should result in a rollback.
 	sbc1.MustFailExecute[sqlparser.StmtInsert] = 1
@@ -2175,11 +2068,8 @@ func TestInsertPartialFail2(t *testing.T) {
 }
 
 func TestMultiInsertSharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -2286,11 +2176,8 @@ func TestMultiInsertSharded(t *testing.T) {
 }
 
 func TestMultiInsertGenerator(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -2338,11 +2225,8 @@ func TestMultiInsertGenerator(t *testing.T) {
 }
 
 func TestMultiInsertGeneratorSparse(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -2419,11 +2303,8 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 }
 `
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createCustomExecutor(ctx, vschema)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createCustomExecutor(t, vschema)
+	defer closer()
 
 	// If auto inc table cannot be found, the table should not be added to vschema.
 	session := &vtgatepb.Session{
@@ -2496,11 +2377,8 @@ func TestKeyDestRangeQuery(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.targetString+" - "+tc.inputQuery, func(t *testing.T) {
-			defer utils.EnsureNoLeaks(t)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-			defer executor.Close()
+			executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+			defer closer()
 
 			session := &vtgatepb.Session{
 				TargetString: tc.targetString,
@@ -2523,11 +2401,8 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	}
 
 	// it does not work for inserts
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := &vtgatepb.Session{
 		TargetString: "TestExecutor[-]",
 	}
@@ -2547,11 +2422,8 @@ func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.Sa
 
 // Prepared statement tests
 func TestUpdateEqualWithPrepare(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2572,11 +2444,8 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	assertQueries(t, sbc1, nil)
 }
 func TestInsertShardedWithPrepare(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2600,11 +2469,9 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 }
 
 func TestDeleteEqualWithPrepare(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -2621,11 +2488,9 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 }
 
 func TestUpdateLastInsertID(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	executor.normalize = true
 
 	sql := "update user set a = last_insert_id() where id = 1"
@@ -2646,11 +2511,8 @@ func TestUpdateLastInsertID(t *testing.T) {
 }
 
 func TestUpdateReference(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2692,11 +2554,8 @@ func TestUpdateReference(t *testing.T) {
 }
 
 func TestDeleteLookupOwnedEqual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("uniq_col|keyspace_id", "int64|varbinary"), "1|N±\u0090ɢú\u0016\u009C"),
@@ -2726,11 +2585,8 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 }
 
 func TestDeleteReference(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2771,11 +2627,8 @@ func TestDeleteReference(t *testing.T) {
 }
 
 func TestReservedConnDML(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbc := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("TestReservedConnDML")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2827,11 +2680,8 @@ func TestReservedConnDML(t *testing.T) {
 func TestStreamingDML(t *testing.T) {
 	method := "TestStreamingDML"
 
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbc := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe(method)
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2915,11 +2765,8 @@ func TestStreamingDML(t *testing.T) {
 }
 
 func TestPartialVindexInsertQueryFailure(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2972,11 +2819,8 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 }
 
 func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3020,11 +2864,8 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 // The change for it cannot be done as the executor level and will be made at the VTGate entry point.
 // Test TestMultiInternalSavepointVtGate shows that it fixes the behaviour.
 func TestMultiInternalSavepoint(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := NewAutocommitSession(&vtgatepb.Session{})
 	_, err := executorExecSession(ctx, executor, "begin", nil, session.Session)
@@ -3072,11 +2913,8 @@ func TestMultiInternalSavepoint(t *testing.T) {
 }
 
 func TestInsertSelectFromDual(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("TestInsertSelect")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3131,11 +2969,8 @@ func TestInsertSelectFromDual(t *testing.T) {
 }
 
 func TestInsertSelectFromTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("TestInsertSelect")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3196,11 +3031,8 @@ func TestInsertSelectFromTable(t *testing.T) {
 }
 
 func TestInsertReference(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)

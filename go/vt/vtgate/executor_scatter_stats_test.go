@@ -17,23 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/utils"
-
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 func TestScatterStatsWithNoScatterQuery(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
@@ -46,11 +40,8 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)
@@ -62,11 +53,8 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)

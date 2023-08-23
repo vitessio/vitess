@@ -666,11 +666,6 @@ func (vtg *VTGate) HandlePanic(err *error) {
 	}
 }
 
-func (vtg *VTGate) Close() {
-	vtg.executor.Close()
-	vtg.gw.Close(context.Background())
-}
-
 func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *TxConn, gw *TabletGateway) *VTGate {
 	return &VTGate{
 		executor:     executor,

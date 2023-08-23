@@ -17,11 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,10 +37,8 @@ import (
 // TestVStreamSQLUnsharded tests the experimental 'vstream * from' vtgate olap query
 func TestVStreamSQLUnsharded(t *testing.T) {
 	t.Skip("this test is failing due to races") // FIXME
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	executor, _, _, sbcLookup := createExecutorEnv(ctx)
+	executor, _, _, sbcLookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 	send1 := []*binlogdatapb.VEvent{

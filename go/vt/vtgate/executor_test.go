@@ -58,16 +58,13 @@ import (
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	save := warnMemoryRows
 	warnMemoryRows = 3
 	defer func() { warnMemoryRows = save }()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	initial := warnings.Counts()["ResultsExceeded"]
@@ -86,16 +83,13 @@ func TestExecutorResultsExceeded(t *testing.T) {
 }
 
 func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	save := maxMemoryRows
 	maxMemoryRows = 3
 	defer func() { maxMemoryRows = save }()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
 	fn := func(r *sqltypes.Result) error {
@@ -128,12 +122,9 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 }
 
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"})
 
 	logChan := executor.queryLogger.Subscribe("Test")
@@ -206,12 +197,9 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{
@@ -230,12 +218,9 @@ func TestDirectTargetRewrites(t *testing.T) {
 }
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"})
 
 	logChan := executor.queryLogger.Subscribe("Test")
@@ -287,12 +272,9 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 }
 
 func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	oltpOptions := &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}
 	session := NewSafeSession(&vtgatepb.Session{
 		TargetString: "@primary",
@@ -357,17 +339,13 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 }
 
 func TestExecutorDeleteMetadata(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_v1= '1'"
@@ -394,12 +372,9 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 }
 
 func TestExecutorAutocommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	logChan := executor.queryLogger.Subscribe("Test")
@@ -499,12 +474,9 @@ func TestExecutorAutocommit(t *testing.T) {
 }
 
 func TestExecutorShowColumns(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ""})
 
 	queries := []string{
@@ -555,12 +527,9 @@ func assertMatchesNoOrder(t *testing.T, expected, got string) {
 }
 
 func TestExecutorShow(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
@@ -1118,12 +1087,9 @@ func TestExecutorShow(t *testing.T) {
 }
 
 func TestExecutorShowTargeted(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
 
 	queries := []string{
@@ -1149,12 +1115,9 @@ func TestExecutorShowTargeted(t *testing.T) {
 }
 
 func TestExecutorUse(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
 
 	stmts := []string{
@@ -1185,12 +1148,8 @@ func TestExecutorUse(t *testing.T) {
 }
 
 func TestExecutorComment(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	stmts := []string{
 		"/*! SET autocommit=1*/",
@@ -1210,12 +1169,8 @@ func TestExecutorComment(t *testing.T) {
 }
 
 func TestExecutorOther(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1307,12 +1262,9 @@ func TestExecutorOther(t *testing.T) {
 }
 
 func TestExecutorDDL(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -1435,12 +1387,8 @@ func TestExecutorDDL(t *testing.T) {
 }
 
 func TestExecutorDDLFk(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, sbc := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	mName := "TestExecutorDDLFk"
 	stmts := []string{
@@ -1467,16 +1415,13 @@ func TestExecutorDDLFk(t *testing.T) {
 }
 
 func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
@@ -1500,16 +1445,12 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -1575,16 +1516,12 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -1632,12 +1569,9 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 }
 
 func TestExecutorVindexDDLACL(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
@@ -1682,12 +1616,9 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
@@ -1695,12 +1626,8 @@ func TestExecutorUnrecognized(t *testing.T) {
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
+	r, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	stats := r.VSchemaStats()
 
@@ -1723,12 +1650,9 @@ func TestVSchemaStats(t *testing.T) {
 var pv = querypb.ExecuteOptions_Gen4
 
 func TestGetPlanUnnormalized(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	r, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
@@ -1817,12 +1741,8 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcur
 }
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	r, _, _, _, ctx, closer := createExecutorEnv(t)
 
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	query1 := "select * from music_user_map where id = 1"
 
@@ -1842,9 +1762,11 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
 
+	closer()
 	// Skip cache using directive
-	r, _, _, _ = createExecutorEnv(ctx)
-	defer r.Close()
+	r, _, _, _, ctx, closer = createExecutorEnv(t)
+	defer closer()
+
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
@@ -1867,12 +1789,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
+	r, _, _, _, ctx, closer := createExecutorEnv(t)
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
@@ -1886,9 +1803,10 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	assertCacheSize(t, r.plans, 1)
 	assert.Equal(t, wantSQL, logStats2.SQL)
 
+	closer()
 	// Skip cache using directive
-	r, _, _, _ = createExecutorEnv(ctx)
-	defer r.Close()
+	r, _, _, _, ctx, closer = createExecutorEnv(t)
+	defer closer()
 	r.normalize = true
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
@@ -1912,12 +1830,9 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 }
 
 func TestGetPlanNormalized(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	r, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
@@ -1973,12 +1888,9 @@ func TestGetPlanPriority(t *testing.T) {
 		testCase := aTestCase
 
 		t.Run(testCase.name, func(t *testing.T) {
-			defer utils.EnsureNoLeaks(t)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			r, _, _, _, ctx, closer := createExecutorEnv(t)
+			defer closer()
 
-			r, _, _, _ := createExecutorEnv(ctx)
-			defer r.Close()
 			r.normalize = true
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
@@ -2002,12 +1914,8 @@ func TestGetPlanPriority(t *testing.T) {
 }
 
 func TestPassthroughDDL(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 	session := &vtgatepb.Session{
 		TargetString: "TestExecutor",
 	}
@@ -2056,12 +1964,9 @@ func TestPassthroughDDL(t *testing.T) {
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	r, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -2083,12 +1988,9 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	r, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -2111,12 +2013,9 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 }
 
 func TestParseTargetSingleKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	r, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	r, _, _, _ := createExecutorEnv(ctx)
-	defer r.Close()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -2138,15 +2037,12 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestDebugVSchema(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	executor.ServeHTTP(resp, req)
 	v := make(map[string]any)
 	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
@@ -2161,10 +2057,6 @@ func TestDebugVSchema(t *testing.T) {
 }
 
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	saveMax := maxPayloadSize
 	saveWarn := warnPayloadSize
 	maxPayloadSize = 10
@@ -2174,8 +2066,9 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 		warnPayloadSize = saveWarn
 	}()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
+
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
 	testMaxPayloadSizeExceeded := []string{
@@ -2212,12 +2105,9 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 }
 
 func TestOlapSelectDatabase(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{Autocommit: true}
@@ -2234,12 +2124,9 @@ func TestOlapSelectDatabase(t *testing.T) {
 }
 
 func TestExecutorClearsWarnings(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
 	})
@@ -2250,17 +2137,14 @@ func TestExecutorClearsWarnings(t *testing.T) {
 
 // TestServingKeyspaces tests that the dual queries are routed to the correct keyspaces from the list of serving keyspaces.
 func TestServingKeyspaces(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
 	}()
 
-	executor, sbc1, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
+
 	executor.pv = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
 	require.True(t, ok)
@@ -2302,12 +2186,8 @@ func TestServingKeyspaces(t *testing.T) {
 }
 
 func TestExecutorOtherRead(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2382,12 +2262,9 @@ func TestExecutorOtherRead(t *testing.T) {
 }
 
 func TestExecutorVExplain(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -2410,12 +2287,8 @@ func TestExecutorVExplain(t *testing.T) {
 }
 
 func TestExecutorOtherAdmin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbclookup, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2489,12 +2362,9 @@ func TestExecutorOtherAdmin(t *testing.T) {
 }
 
 func TestExecutorSavepointInTx(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2576,12 +2446,9 @@ func TestExecutorSavepointInTx(t *testing.T) {
 }
 
 func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2647,12 +2514,9 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 }
 
 func TestExecutorSavepointWithoutTx(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2695,12 +2559,8 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 }
 
 func TestExecutorCallProc(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, sbc1, sbc2, sbcUnsharded := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, sbc1, sbc2, sbcUnsharded, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2765,12 +2625,9 @@ func TestExecutorCallProc(t *testing.T) {
 }
 
 func TestExecutorTempTable(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbcUnsharded, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbcUnsharded := createExecutorEnv(ctx)
-	defer executor.Close()
 	executor.warnShardedOnly = true
 	creatQuery := "create temporary table temp_t(id bigint primary key)"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
@@ -2788,12 +2645,9 @@ func TestExecutorTempTable(t *testing.T) {
 }
 
 func TestExecutorShowVitessMigrations(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, sbc1, sbc2, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, sbc1, sbc2, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	showQuery := "show vitess_migrations"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
@@ -2803,12 +2657,9 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 }
 
 func TestExecutorDescHash(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	showQuery := "desc hash_index"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
@@ -2816,12 +2667,9 @@ func TestExecutorDescHash(t *testing.T) {
 }
 
 func TestExecutorVExplainQueries(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, sbclookup := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	sbclookup.SetResults([]*sqltypes.Result{
@@ -2846,12 +2694,9 @@ func TestExecutorVExplainQueries(t *testing.T) {
 }
 
 func TestExecutorStartTxnStmt(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	tcases := []struct {
@@ -2896,12 +2741,9 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 }
 
 func TestExecutorPrepareExecute(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
@@ -2940,16 +2782,13 @@ func TestExecutorPrepareExecute(t *testing.T) {
 }
 
 func TestExecutorTruncateErrors(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	save := truncateErrorLen
 	truncateErrorLen = 32
 	defer func() { truncateErrorLen = save }()
 
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 	session := NewSafeSession(&vtgatepb.Session{})
 	fn := func(r *sqltypes.Result) error {
 		return nil
@@ -2966,12 +2805,8 @@ func TestExecutorTruncateErrors(t *testing.T) {
 }
 
 func TestExecutorFlushStmt(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	tcs := []struct {
 		targetStr string
@@ -3028,12 +2863,8 @@ func TestExecutorFlushStmt(t *testing.T) {
 
 // TestExecutorKillStmt tests the kill statements on executor.
 func TestExecutorKillStmt(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
+	executor, _, _, _, _, closer := createExecutorEnv(t)
+	defer closer()
 
 	tcs := []struct {
 		errStr   string

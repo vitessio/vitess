@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/utils"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -38,15 +36,11 @@ import (
 )
 
 func TestQueryzHandler(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	executor, _, _, _, ctx, closer := createExecutorEnv(t)
+	defer closer()
 
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
-
-	executor, _, _, _ := createExecutorEnv(ctx)
-	defer executor.Close()
 
 	session := &vtgatepb.Session{TargetString: "@primary"}
 	// single shard query
