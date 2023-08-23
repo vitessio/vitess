@@ -289,12 +289,19 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	)
 
 	if err != nil {
-		return &vtctldatapb.ApplySchemaResponse{}, err
+		return nil, err
 	}
 
-	return &vtctldatapb.ApplySchemaResponse{
-		UuidList: execResult.UUIDs,
-	}, err
+	resp = &vtctldatapb.ApplySchemaResponse{
+		UuidList:            execResult.UUIDs,
+		RowsAffectedByShard: make(map[string]uint64, len(execResult.SuccessShards)),
+	}
+
+	for _, shard := range execResult.SuccessShards {
+		resp.RowsAffectedByShard[shard.Shard] = shard.Result.RowsAffected
+	}
+
+	return resp, err
 }
 
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
@@ -631,7 +638,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 	}
 
 	resp = &vtctldatapb.CleanupSchemaMigrationResponse{
-		UuidList: qr.UuidList,
+		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
 }
@@ -3008,7 +3015,7 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 	}
 
 	resp = &vtctldatapb.RetrySchemaMigrationResponse{
-		UuidList: qr.UuidList,
+		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
 }

@@ -1951,6 +1951,23 @@ func (m *ApplySchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.RowsAffectedByShard) > 0 {
+		for k := range m.RowsAffectedByShard {
+			v := m.RowsAffectedByShard[k]
+			baseI := i
+			i = encodeVarint(dAtA, i, uint64(v))
+			i--
+			dAtA[i] = 0x10
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarint(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarint(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
 	if len(m.UuidList) > 0 {
 		for iNdEx := len(m.UuidList) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.UuidList[iNdEx])
@@ -2511,11 +2528,19 @@ func (m *CleanupSchemaMigrationResponse) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.UuidList) > 0 {
-		for iNdEx := len(m.UuidList) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.UuidList[iNdEx])
-			copy(dAtA[i:], m.UuidList[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.UuidList[iNdEx])))
+	if len(m.RowsAffectedByShard) > 0 {
+		for k := range m.RowsAffectedByShard {
+			v := m.RowsAffectedByShard[k]
+			baseI := i
+			i = encodeVarint(dAtA, i, uint64(v))
+			i--
+			dAtA[i] = 0x10
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarint(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarint(dAtA, i, uint64(baseI-i))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -8360,11 +8385,19 @@ func (m *RetrySchemaMigrationResponse) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.UuidList) > 0 {
-		for iNdEx := len(m.UuidList) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.UuidList[iNdEx])
-			copy(dAtA[i:], m.UuidList[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.UuidList[iNdEx])))
+	if len(m.RowsAffectedByShard) > 0 {
+		for k := range m.RowsAffectedByShard {
+			v := m.RowsAffectedByShard[k]
+			baseI := i
+			i = encodeVarint(dAtA, i, uint64(v))
+			i--
+			dAtA[i] = 0x10
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarint(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarint(dAtA, i, uint64(baseI-i))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -12642,6 +12675,14 @@ func (m *ApplySchemaResponse) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if len(m.RowsAffectedByShard) > 0 {
+		for k, v := range m.RowsAffectedByShard {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + sov(uint64(v))
+			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
+		}
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -12843,10 +12884,12 @@ func (m *CleanupSchemaMigrationResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.UuidList) > 0 {
-		for _, s := range m.UuidList {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
+	if len(m.RowsAffectedByShard) > 0 {
+		for k, v := range m.RowsAffectedByShard {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + sov(uint64(v))
+			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
 	n += len(m.unknownFields)
@@ -14961,10 +15004,12 @@ func (m *RetrySchemaMigrationResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.UuidList) > 0 {
-		for _, s := range m.UuidList {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
+	if len(m.RowsAffectedByShard) > 0 {
+		for k, v := range m.RowsAffectedByShard {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + sov(uint64(v))
+			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
 	n += len(m.unknownFields)
@@ -21578,6 +21623,119 @@ func (m *ApplySchemaResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.UuidList = append(m.UuidList, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowsAffectedByShard", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.RowsAffectedByShard == nil {
+				m.RowsAffectedByShard = make(map[string]uint64)
+			}
+			var mapkey string
+			var mapvalue uint64
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLength
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLength
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skip(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLength
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.RowsAffectedByShard[mapkey] = mapvalue
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -22896,9 +23054,9 @@ func (m *CleanupSchemaMigrationResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UuidList", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RowsAffectedByShard", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -22908,23 +23066,104 @@ func (m *CleanupSchemaMigrationResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.UuidList = append(m.UuidList, string(dAtA[iNdEx:postIndex]))
+			if m.RowsAffectedByShard == nil {
+				m.RowsAffectedByShard = make(map[string]uint64)
+			}
+			var mapkey string
+			var mapvalue uint64
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLength
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLength
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skip(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLength
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.RowsAffectedByShard[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -36111,9 +36350,9 @@ func (m *RetrySchemaMigrationResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UuidList", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RowsAffectedByShard", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -36123,23 +36362,104 @@ func (m *RetrySchemaMigrationResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.UuidList = append(m.UuidList, string(dAtA[iNdEx:postIndex]))
+			if m.RowsAffectedByShard == nil {
+				m.RowsAffectedByShard = make(map[string]uint64)
+			}
+			var mapkey string
+			var mapvalue uint64
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLength
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLength
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skip(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLength
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.RowsAffectedByShard[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

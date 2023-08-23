@@ -44622,6 +44622,9 @@ export namespace vtctldata {
 
         /** ApplySchemaResponse uuid_list */
         uuid_list?: (string[]|null);
+
+        /** ApplySchemaResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
     }
 
     /** Represents an ApplySchemaResponse. */
@@ -44635,6 +44638,9 @@ export namespace vtctldata {
 
         /** ApplySchemaResponse uuid_list. */
         public uuid_list: string[];
+
+        /** ApplySchemaResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
 
         /**
          * Creates a new ApplySchemaResponse instance using the specified properties.
@@ -45625,8 +45631,8 @@ export namespace vtctldata {
     /** Properties of a CleanupSchemaMigrationResponse. */
     interface ICleanupSchemaMigrationResponse {
 
-        /** CleanupSchemaMigrationResponse uuid_list */
-        uuid_list?: (string[]|null);
+        /** CleanupSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
     }
 
     /** Represents a CleanupSchemaMigrationResponse. */
@@ -45638,8 +45644,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ICleanupSchemaMigrationResponse);
 
-        /** CleanupSchemaMigrationResponse uuid_list. */
-        public uuid_list: string[];
+        /** CleanupSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
 
         /**
          * Creates a new CleanupSchemaMigrationResponse instance using the specified properties.
@@ -57318,8 +57324,8 @@ export namespace vtctldata {
     /** Properties of a RetrySchemaMigrationResponse. */
     interface IRetrySchemaMigrationResponse {
 
-        /** RetrySchemaMigrationResponse uuid_list */
-        uuid_list?: (string[]|null);
+        /** RetrySchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
     }
 
     /** Represents a RetrySchemaMigrationResponse. */
@@ -57331,8 +57337,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IRetrySchemaMigrationResponse);
 
-        /** RetrySchemaMigrationResponse uuid_list. */
-        public uuid_list: string[];
+        /** RetrySchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
 
         /**
          * Creates a new RetrySchemaMigrationResponse instance using the specified properties.

@@ -343,6 +343,7 @@ message ApplySchemaRequest {
 
 message ApplySchemaResponse {
   repeated string uuid_list = 1;
+  map<string, uint64> rows_affected_by_shard = 2;
 }
 
 message ApplyVSchemaRequest {
@@ -419,7 +420,7 @@ message CleanupSchemaMigrationRequest {
 }
 
 message CleanupSchemaMigrationResponse {
-  repeated string uuid_list = 1;
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message CreateKeyspaceRequest {
@@ -1225,7 +1226,7 @@ message RetrySchemaMigrationRequest {
 }
 
 message RetrySchemaMigrationResponse {
-  repeated string uuid_list = 1;
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message RunHealthCheckRequest {

@@ -1415,7 +1415,9 @@ func TestCleanupSchemaMigration(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Response: &querypb.QueryResult{},
+						Response: &querypb.QueryResult{
+							RowsAffected: 1,
+						},
 					},
 					"zone1-0000000200": {
 						Response: &querypb.QueryResult{},
@@ -1437,7 +1439,12 @@ func TestCleanupSchemaMigration(t *testing.T) {
 				Keyspace: "ks",
 				Uuid:     "abc",
 			},
-			expected: &vtctldatapb.CleanupSchemaMigrationResponse{},
+			expected: &vtctldatapb.CleanupSchemaMigrationResponse{
+				RowsAffectedByShard: map[string]uint64{
+					"-80": 1,
+					"80-": 0,
+				},
+			},
 		},
 		{
 			name: "no shard primary",
@@ -8915,7 +8922,9 @@ func TestRetrySchemaMigration(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Response: &querypb.QueryResult{},
+						Response: &querypb.QueryResult{
+							RowsAffected: 1,
+						},
 					},
 					"zone1-0000000200": {
 						Response: &querypb.QueryResult{},
@@ -8937,7 +8946,12 @@ func TestRetrySchemaMigration(t *testing.T) {
 				Keyspace: "ks",
 				Uuid:     "abc",
 			},
-			expected: &vtctldatapb.RetrySchemaMigrationResponse{},
+			expected: &vtctldatapb.RetrySchemaMigrationResponse{
+				RowsAffectedByShard: map[string]uint64{
+					"-80": 1,
+					"80-": 0,
+				},
+			},
 		},
 		{
 			name: "no shard primary",
