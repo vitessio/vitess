@@ -37,50 +37,47 @@ type (
 	}
 )
 
-// getPhases returns the phases the planner will go through.
-// It's used to control so rewriters collaborate correctly
+// getPhases returns the ordered phases that the planner will undergo.
+// These phases ensure the appropriate collaboration between rewriters.
 func getPhases(ctx *plancontext.PlanningContext) []Phase {
-	phases := []Phase{{
-		// Initial optimization
-		Name: "initial horizon planning optimization phase",
-	}, {
-		Name: "pull distinct from UNION",
-		// to make it easier to compact UNIONs together, we keep the `distinct` flag in the UNION op until this
-		// phase. Here we will place a DISTINCT op on top of the UNION, and turn the UNION into a UNION ALL
-		action: pullDistinctFromUNION,
-		apply:  func(s semantics.QuerySignature) bool { return s.Union },
-	}, {
-		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
-		// need it their inputs, and then we start splitting the aggregation
-		// so parts run on MySQL and parts run on VTGate
-		Name:   "add filter columns to projection or aggregation",
-		action: enableDelegateAggregatiion,
-	}, {
-		// addOrderBysForAggregations runs after we have pushed aggregations as far down as they'll go
-		// addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
-		// add the necessary Ordering operators for them
-		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
-		action: addOrderBysForAggregations,
-		apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
-	}, {
-		Name:   "remove Distinct operator that are not required and still above a route",
-		action: removePerformanceDistinctAboveRoute,
-		apply:  func(s semantics.QuerySignature) bool { return s.Distinct },
-	}, {
-		// This phase runs late, so subqueries have by this point been pushed down as far as they'll go.
-		// Next step is to extract the subqueries from the slices in the SubQueryContainer
-		// and plan for how to run them on the vtgate
-		Name:   "settle subqueries above the route",
-		action: settleSubqueries,
-		apply:  func(s semantics.QuerySignature) bool { return s.SubQueries },
-	}}
+	phases := []Phase{
+		{
+			// Initial optimization phase.
+			Name: "initial horizon planning optimization",
+		},
+		{
+			// Convert UNION with `distinct` to UNION ALL with DISTINCT op on top.
+			Name:   "pull distinct from UNION",
+			action: pullDistinctFromUNION,
+			apply:  func(s semantics.QuerySignature) bool { return s.Union },
+		},
+		{
+			// Enhance filter columns for projections and aggregations.
+			Name:   "split aggregation between vtgate and mysql",
+			action: enableDelegateAggregatiion,
+		},
+		{
+			// Add ORDER BY for aggregations above the route.
+			Name:   "optimize aggregations with ORDER BY",
+			action: addOrderBysForAggregations,
+			apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
+		},
+		{
+			// Remove unnecessary Distinct operators above routes.
+			Name:   "optimize Distinct operations",
+			action: removePerformanceDistinctAboveRoute,
+			apply:  func(s semantics.QuerySignature) bool { return s.Distinct },
+		},
+		{
+			// Finalize subqueries after they've been pushed as far as possible.
+			Name:   "finalize subqueries",
+			action: settleSubqueries,
+			apply:  func(s semantics.QuerySignature) bool { return s.SubQueries },
+		},
+	}
 
 	return slice.Filter(phases, func(phase Phase) bool {
-		if phase.apply == nil {
-			// if no apply function is defined, we always apply the phase
-			return true
-		}
-		return phase.apply(ctx.SemTable.QuerySignature)
+		return phase.apply == nil || phase.apply(ctx.SemTable.QuerySignature)
 	})
 }
 

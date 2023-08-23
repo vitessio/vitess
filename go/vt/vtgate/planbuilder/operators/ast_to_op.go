@@ -159,7 +159,7 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 
 	innerSel, ok := subq.Select.(*sqlparser.Select)
 	if !ok {
-		panic("should return uncorrelated subquery here")
+		return nil, vterrors.VT13001("should return uncorrelated subquery here")
 	}
 
 	subqID := ctx.SemTable.StatementIDs[innerSel]
@@ -224,6 +224,7 @@ func createExistsSubquery(
 	sq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 ) (SubQuery, error) {
+	org = sqlparser.CloneExpr(org)
 	innerSel, ok := sq.Select.(*sqlparser.Select)
 	if !ok {
 		return nil, vterrors.VT13001("yucki unions")
