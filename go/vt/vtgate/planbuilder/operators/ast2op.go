@@ -175,11 +175,11 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		// We only support literals in update queries, which trigger foreign key updates.
 		for _, expr := range updStmt.Exprs {
 			colIdx := fk.ParentColumns.FindColumn(expr.Name.Name)
-			if colIdx == 0 {
+			if colIdx < 0 {
 				continue
 			}
 			switch expr.Expr.(type) {
-			case *sqlparser.Argument, *sqlparser.NullVal, sqlparser.BoolVal:
+			case *sqlparser.Argument, *sqlparser.NullVal, sqlparser.BoolVal, *sqlparser.Literal:
 			default:
 				return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
 			}

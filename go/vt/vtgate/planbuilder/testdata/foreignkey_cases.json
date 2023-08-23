@@ -733,5 +733,25 @@
         "unsharded_fk_allow.u_tbl9"
       ]
     }
+  },
+  {
+    "comment": "update in a table with limit - disallowed",
+    "query": "update u_tbl2 set col2 = 'bar' limit 2",
+    "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
+  },
+  {
+    "comment": "update in a table with non-literal value - disallowed",
+    "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
+    "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
+  },
+  {
+    "comment": "update in a table with a child table having SET DEFAULT constraint - disallowed",
+    "query": "update tbl20 set col2 = 'bar'",
+    "plan": "VT09016: Cannot delete or update a parent row: a foreign key constraint fails"
+  },
+  {
+    "comment": "delete in a table with limit - disallowed",
+    "query": "delete from u_tbl2 limit 2",
+    "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
   }
 ]

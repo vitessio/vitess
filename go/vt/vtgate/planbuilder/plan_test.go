@@ -141,7 +141,7 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col62"}, "tbl7", []string{"t7col72"}, sqlparser.NoAction, sqlparser.NoAction))
 
 		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
-		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col"}, sqlparser.SetDefault, sqlparser.SetDefault))
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col2"}, sqlparser.SetDefault, sqlparser.SetDefault))
 
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
