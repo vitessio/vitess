@@ -9,7 +9,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 )
-
+// test
 func main() {
 	rootCmd := cmd.Main()
 	vtlog.RegisterFlags(rootCmd.PersistentFlags())
