@@ -366,15 +366,15 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 // fkNeedsHandlingForUpdates returns what all foreign keys need handling in Vitess for the given set of update expressions.
 // Here we return all the parent and child foreign key constraints that could require any handling.
 func fkNeedsHandlingForUpdates(updateExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-	pFksRequiredMap := map[string]*vindexes.ParentFKInfo{}
-	cFksRequiredMap := map[string]*vindexes.ChildFKInfo{}
+	pFksRequired := make([]bool, len(parentFks))
+	cFksRequired := make([]bool, len(childFks))
 	// Go over all the update expressions
 	for _, updateExpr := range updateExprs {
 		// Any foreign key to a child table for a column that has been updated
 		// will require the cascade operations to happen, so we include all such foreign keys.
 		for idx, childFk := range childFks {
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				cFksRequiredMap[childFk.String()] = &childFks[idx]
+				cFksRequired[idx] = true
 			}
 		}
 		// If we are setting a column to NULL, then we don't need to verify the existance of an
@@ -387,33 +387,35 @@ func fkNeedsHandlingForUpdates(updateExprs sqlparser.UpdateExprs, parentFks []vi
 		// exists, given that this column has changed.
 		for idx, parentFk := range parentFks {
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				pFksRequiredMap[parentFk.String()] = &parentFks[idx]
+				pFksRequired[idx] = true
 			}
 		}
 	}
 	// For the parent foreign keys, if any of the columns part of the fk is set to NULL,
 	// then, we don't care for the existance of an equivalent row in the parent table.
-	for _, parentFk := range pFksRequiredMap {
+	for idx, parentFk := range parentFks {
 		for _, updateExpr := range updateExprs {
 			_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
 			if !isNull {
 				continue
 			}
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				pFksRequiredMap[parentFk.String()] = nil
+				pFksRequired[idx] = false
 			}
 		}
 	}
-	// Convert the maps to lists and return them.
+	// Get the filtered lists and return them.
 	var pFksNeedsHandling []vindexes.ParentFKInfo
 	var cFksNeedsHandling []vindexes.ChildFKInfo
-	for _, parentFk := range pFksRequiredMap {
-		if parentFk != nil {
-			pFksNeedsHandling = append(pFksNeedsHandling, *parentFk)
+	for idx, parentFk := range parentFks {
+		if pFksRequired[idx] {
+			pFksNeedsHandling = append(pFksNeedsHandling, parentFk)
 		}
 	}
-	for _, childFk := range cFksRequiredMap {
-		cFksNeedsHandling = append(cFksNeedsHandling, *childFk)
+	for idx, childFk := range childFks {
+		if cFksRequired[idx] {
+			cFksNeedsHandling = append(cFksNeedsHandling, childFk)
+		}
 	}
 	return pFksNeedsHandling, cFksNeedsHandling
 }
