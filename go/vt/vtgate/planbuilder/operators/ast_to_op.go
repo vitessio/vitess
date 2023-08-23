@@ -300,7 +300,7 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 
 func (jpc *joinPredicateCollector) calcJoinColumns(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
 	cmp, ok := predicate.(*sqlparser.ComparisonExpr)
-	if !ok {
+	if !ok || cmp.Operator != sqlparser.EqualOp {
 		return
 	}
 

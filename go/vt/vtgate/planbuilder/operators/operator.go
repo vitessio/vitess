@@ -137,19 +137,19 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 		return true
 	}
 
-	inputs := op.Inputs()
-	if len(inputs) != 1 {
-		return false
-	}
-
-	switch op.(type) {
+	switch op := op.(type) {
 	case *Limit:
-		// empty by design
+		return tryTruncateColumnsAt(op.Source, truncateAt)
+	case *SubQueryFilter:
+		for _, offset := range op.JoinVarOffsets {
+			if offset >= truncateAt {
+				return false
+			}
+		}
+		return tryTruncateColumnsAt(op.Outer, truncateAt)
 	default:
 		return false
 	}
-
-	return tryTruncateColumnsAt(inputs[0], truncateAt)
 }
 
 func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {

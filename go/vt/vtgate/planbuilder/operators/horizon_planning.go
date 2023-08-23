@@ -589,7 +589,16 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		}
 
 		return pushOrderingUnderAggr(ctx, in, src)
-
+	case *SubQueryContainer:
+		outerTableID := TableID(src.Outer)
+		for _, order := range in.Order {
+			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
+			if !deps.IsSolvedBy(outerTableID) {
+				return in, rewrite.SameTree, nil
+			}
+		}
+		src.Outer, in.Source = in, src.Outer
+		return src, rewrite.NewTree("push ordering to outer query in subquery container", in), nil
 	}
 	return in, rewrite.SameTree, nil
 }
