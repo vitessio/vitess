@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult *rewrite.ApplyResult, err error) {
+func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult *rewrite.ApplyResult, err error) {
 	if aggregator.Pushed {
 		return aggregator, rewrite.SameTree, nil
 	}

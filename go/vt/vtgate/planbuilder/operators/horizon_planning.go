@@ -119,19 +119,19 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Projection:
-			return tryPushingDownProjection(ctx, in)
+			return tryPushProjection(ctx, in)
 		case *Limit:
-			return tryPushingDownLimit(in)
+			return tryPushLimit(in)
 		case *Ordering:
-			return tryPushingDownOrdering(ctx, in)
+			return tryPushOrdering(ctx, in)
 		case *Aggregator:
-			return tryPushingDownAggregator(ctx, in)
+			return tryPushAggregator(ctx, in)
 		case *Filter:
-			return tryPushingDownFilter(ctx, in)
+			return tryPushFilter(ctx, in)
 		case *Distinct:
-			return tryPushingDownDistinct(in)
+			return tryPushDistinct(in)
 		case *Union:
-			return tryPushDownUnion(ctx, in)
+			return tryPushUnion(ctx, in)
 		case *SubQueryContainer:
 			return pushOrMergeSubQueryContainer(ctx, in)
 		default:
@@ -300,7 +300,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 	return expandHorizon(ctx, in)
 }
 
-func tryPushingDownProjection(
+func tryPushProjection(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -506,7 +506,7 @@ func createProjectionWithTheseColumns(
 	return proj, nil
 }
 
-func tryPushingDownLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
@@ -560,7 +560,7 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	return in, rewrite.SameTree, nil
 }
 
-func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
 		return rewrite.Swap(in, src, "push ordering under route")
@@ -679,7 +679,7 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.Or
 	return true
 }
 
-func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Projection:
 		return pushFilterUnderProjection(ctx, in, src)
@@ -692,6 +692,16 @@ func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Ope
 			}
 		}
 		return rewrite.Swap(in, src, "push filter into Route")
+	case *SubQueryFilter:
+		outerTableID := TableID(src.Outer)
+		for _, pred := range in.Predicates {
+			deps := ctx.SemTable.RecursiveDeps(pred)
+			if !deps.IsSolvedBy(outerTableID) {
+				return in, rewrite.SameTree, nil
+			}
+		}
+		src.Outer, in.Source = in, src.Outer
+		return src, rewrite.NewTree("push filter to outer query in subquery container", in), nil
 	}
 
 	return in, rewrite.SameTree, nil
@@ -721,7 +731,7 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 
 }
 
-func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 	if in.Required && in.PushedPerformance {
 		return in, rewrite.SameTree, nil
 	}
@@ -786,7 +796,7 @@ func isDistinct(op ops.Operator) bool {
 	}
 }
 
-func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
 	if res := compactUnion(op); res != rewrite.SameTree {
 		return op, res, nil
 	}
