@@ -16,7 +16,7 @@ jobs:
   get_next_release:
     if: always()
     name: Get Latest Release - Query Serving (Schema) Next Release
-    runs-on: gh-runner-upgrade-downgrade-32cores-1
+    runs-on: gh-runner-upgrade-downgrade-64cores-1
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
@@ -36,7 +36,7 @@ jobs:
   upgrade_downgrade_test:
     if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test - Query Serving (Schema) Next Release
-    runs-on: gh-runner-upgrade-downgrade-32cores-1
+    runs-on: gh-runner-upgrade-downgrade-64cores-1
     needs:
       - get_next_release
 
