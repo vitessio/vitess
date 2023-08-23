@@ -172,6 +172,19 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 			selectExprs = append(selectExprs, aeWrap(sqlparser.NewColName(column.String())))
 		}
 
+		// We only support literals in update queries, which trigger foreign key updates.
+		for _, expr := range updStmt.Exprs {
+			colIdx := fk.ParentColumns.FindColumn(expr.Name.Name)
+			if colIdx == 0 {
+				continue
+			}
+			switch expr.Expr.(type) {
+			case *sqlparser.Argument, *sqlparser.NullVal, sqlparser.BoolVal:
+			default:
+				return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
+			}
+		}
+
 		switch fk.OnUpdate {
 		case sqlparser.Cascade:
 			// We now construct the update query for the child table.
@@ -212,7 +225,11 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 			})
 		case sqlparser.SetNull:
 			// We now construct the update query for the child table.
-			// The query looks something like this - `UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
+			// The query looks something like this -
+			//	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
+			//	WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
+			//  [AND <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>)]`
+			// If all the columns of the foreign key in the parent don't actually end up getting updated, then we shouldn't be setting the child columns to NULL.
 			bvName := ctx.ReservedVars.ReserveVariable("fkc_vals")
 			var valTuple sqlparser.ValTuple
 			for _, column := range fk.ChildColumns {
@@ -230,10 +247,36 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 					Expr: &sqlparser.NullVal{},
 				})
 			}
+
+			var secondValTuple sqlparser.ValTuple
+			var somethingIsNull bool
+			for _, updateExpr := range updClone.Exprs {
+				colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
+				if colIdx >= 0 {
+					_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+					if isNull {
+						somethingIsNull = true
+						break
+					} else {
+						secondValTuple = append(secondValTuple, updateExpr.Expr)
+					}
+				}
+			}
+			var whereExpr sqlparser.Expr = compExpr
+			if !somethingIsNull {
+				whereExpr = &sqlparser.AndExpr{
+					Left: compExpr,
+					Right: &sqlparser.ComparisonExpr{
+						Operator: sqlparser.NotInOp,
+						Left:     valTuple,
+						Right:    secondValTuple,
+					},
+				}
+			}
 			childUpd := &sqlparser.Update{
 				Exprs:      childUpdateExprs,
 				TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
-				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
+				Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: whereExpr},
 			}
 			childUpdOp, err := createOpFromStmt(ctx, childUpd)
 			if err != nil {
