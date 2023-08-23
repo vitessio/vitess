@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -312,6 +313,10 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name: keyspaceName,
+			VSchema: `{
+				"sharded": false,
+				"foreignKeyMode": "FK_MANAGED"
+			}`,
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
@@ -606,6 +611,11 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 		waitForTable(t, child2TableName, conn)
 		waitForTable(t, grandchildTableName, conn)
 	})
+	for _, tableName := range []string{childTableName, child2TableName, grandchildTableName} {
+		err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, tableName, "id")
+		require.NoError(t, err)
+	}
+
 	t.Run("dropping foreign keys on replica", func(t *testing.T) {
 		for _, statement := range dropConstraintsStatements {
 			_ = queryTablet(t, replica, "set global super_read_only=0", "")
