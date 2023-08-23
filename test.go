@@ -202,7 +202,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			// If there is no cache, we have to call 'make build' before each test.
 			args = []string{t.flavor, t.bootstrapVersion, "make build && " + testArgs}
 			if !*buildVTAdmin {
-				args[2] = "NOVTADMINBUILD=1 " + args[2]
+				args[len(args)-1] = "NOVTADMINBUILD=1 " + args[len(args)-1]
 			}
 		}
 
