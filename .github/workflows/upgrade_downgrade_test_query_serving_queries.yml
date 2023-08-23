@@ -16,7 +16,7 @@ jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Query Serving (Queries)
-    runs-on: gh-runner-upgrade-downgrade-64cores-1
+    runs-on: gh-runner-upgrade-downgrade-16cores-1
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -36,7 +36,7 @@ jobs:
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Query Serving (Queries)
-    runs-on: gh-runner-upgrade-downgrade-64cores-1
+    runs-on: gh-runner-upgrade-downgrade-16cores-1
     needs:
       - get_previous_release
 
