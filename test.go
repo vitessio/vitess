@@ -201,6 +201,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		} else {
 			// If there is no cache, we have to call 'make build' before each test.
 			args = []string{t.flavor, t.bootstrapVersion, "make build && " + testArgs}
+			if !*buildVTAdmin {
+				args[len(args)-1] = "NOVTADMINBUILD=1 " + args[len(args)-1]
+			}
 		}
 
 		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), args...)
