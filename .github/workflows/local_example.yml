@@ -4,11 +4,10 @@ permissions: read-all
 jobs:
 
   build:
-    name: Local example using ${{ matrix.topo }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Local example using ${{ matrix.topo }} on ubuntu-22.04
+    runs-on: gh-runner-examples-32cores-1
     strategy:
       matrix:
-        os: [ubuntu-22.04]
         topo: [consul,etcd,k8s]
 
     steps:
