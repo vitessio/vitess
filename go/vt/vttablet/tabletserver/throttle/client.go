@@ -68,7 +68,7 @@ func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkT
 	}
 }
 
-// NewBackgroundClient creates a client suitable for background jobs, which have low priority over productio ntraffic,
+// NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
 // e.g. migration, table pruning, vreplication
 func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
 	initThrottleTicker()

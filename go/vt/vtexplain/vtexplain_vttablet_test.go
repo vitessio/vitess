@@ -126,6 +126,7 @@ create table test_partitioned (
 	defer cancel()
 
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
 	vte.setGlobalTabletEnv(tabletEnv)

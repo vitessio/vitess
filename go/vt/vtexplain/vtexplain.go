@@ -211,10 +211,15 @@ func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts
 
 // Stop and cleans up fake execution environment
 func (vte *VTExplain) Stop() {
+	if vte.vtgateExecutor != nil {
+		vte.vtgateExecutor.Close()
+	}
+
 	// Cleanup all created fake dbs.
 	if vte.explainTopo != nil {
 		for _, conn := range vte.explainTopo.TabletConns {
 			conn.tsv.StopService()
+			conn.tsv.Close(context.Background())
 		}
 		for _, conn := range vte.explainTopo.TabletConns {
 			conn.db.Close()

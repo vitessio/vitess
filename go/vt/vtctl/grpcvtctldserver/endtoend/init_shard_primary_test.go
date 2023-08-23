@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,7 @@ import (
 )
 
 func TestInitShardPrimary(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
@@ -48,6 +50,7 @@ func TestInitShardPrimary(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)
+	defer primaryDb.Close()
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, primaryDb)
@@ -110,6 +113,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)
+	defer primaryDb.Close()
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, primaryDb)

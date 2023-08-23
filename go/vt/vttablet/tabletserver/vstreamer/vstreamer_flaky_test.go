@@ -89,9 +89,13 @@ func TestNoBlob(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
 	newEngine(t, ctx, "noblob")
 	defer func() {
 		engine = oldEngine
+		env = oldEnv
 	}()
 	execStatements(t, []string{
 		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
@@ -1936,9 +1940,13 @@ func TestMinimalMode(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
 	newEngine(t, ctx, "minimal")
 	defer func() {
 		engine = oldEngine
+		env = oldEnv
 	}()
 	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")

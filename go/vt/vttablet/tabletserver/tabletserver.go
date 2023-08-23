@@ -1721,8 +1721,11 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	}
 }
 
-// Close is a no-op.
+// Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
+	tsv.sm.closeAll()
+	tsv.qe.Close()
+	tsv.stats.Stop()
 	return nil
 }
 

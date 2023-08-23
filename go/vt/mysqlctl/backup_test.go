@@ -31,6 +31,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql"
@@ -43,6 +45,7 @@ import (
 // TestBackupExecutesBackupWithScopedParams tests that Backup passes
 // a Scope()-ed stats to backupengine ExecuteBackup.
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -65,6 +68,7 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 // TestBackupNoStats tests that if BackupParams.Stats is nil, then Backup will
 // pass non-nil Stats to sub-components.
 func TestBackupNoStats(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -80,6 +84,7 @@ func TestBackupNoStats(t *testing.T) {
 // TestBackupParameterizesBackupStorageWithScopedStats tests that Backup passes
 // a Scope()-ed stats to BackupStorage.WithParams.
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -100,6 +105,7 @@ func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 
 // TestBackupEmitsStats tests that Backup emits stats.
 func TestBackupEmitsStats(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -117,6 +123,7 @@ func TestBackupEmitsStats(t *testing.T) {
 // backupstorage.Params to backupstorage, but only if it responds to
 // backupstorage.WithParams.
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -322,6 +329,7 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 
 // TestRestoreEmitsStats tests that Restore emits stats.
 func TestRestoreEmitsStats(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -339,6 +347,7 @@ func TestRestoreEmitsStats(t *testing.T) {
 // TestRestoreExecutesRestoreWithScopedParams tests that Restore passes
 // a Scope()-ed stats to backupengine ExecuteRestore.
 func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -362,6 +371,7 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 // TestRestoreNoStats tests that if RestoreParams.Stats is nil, then Restore will
 // pass non-nil Stats to sub-components.
 func TestRestoreNoStats(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -378,6 +388,7 @@ func TestRestoreNoStats(t *testing.T) {
 // TestRestoreParameterizesBackupStorageWithScopedStats tests that Restore passes
 // a Scope()-ed stats to BackupStorage.WithParams.
 func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -401,6 +412,7 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 // backupstorage.Params to backupstorage, but only if it responds to
 // backupstorage.WithParams.
 func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
+	utils.EnsureNoLeaks(t)
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
@@ -512,6 +524,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%s->%s upgradeSafe=%t", tc.fromVersion, tc.toVersion, tc.upgradeSafe), func(t *testing.T) {
+			utils.EnsureNoLeaks(t)
 			env, closer := createFakeBackupRestoreEnv(t)
 			defer closer()
 			env.mysqld.Version = tc.toVersion
@@ -575,7 +588,6 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 	sqldb.SetNeverFail(true)
 	mysqld := NewFakeMysqlDaemon(sqldb)
 	require.Nil(t, mysqld.Shutdown(ctx, nil, false))
-	defer mysqld.Close()
 
 	dirName, err := os.MkdirTemp("", "vt_backup_test")
 	require.Nil(t, err)
@@ -660,6 +672,8 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 
 		delete(backupstorage.BackupStorageMap, "fake")
 		backupstorage.BackupStorageImplementation = previousBackupStorageImplementation
+		mysqld.Close()
+		sqldb.Close()
 	}
 
 	return &fakeBackupRestoreEnv{

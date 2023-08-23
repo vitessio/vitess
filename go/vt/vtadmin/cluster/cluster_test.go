@@ -50,7 +50,7 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())

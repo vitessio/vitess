@@ -138,7 +138,10 @@ func TestExecuteBackup(t *testing.T) {
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	// mysqld.ShutdownTime = time.Minute
 
@@ -283,7 +286,10 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
 	// It also needs to be allowed to receive the query to disable the innodb_fast_shutdown flag.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SET GLOBAL innodb_fast_shutdown=0": {},
@@ -330,9 +336,6 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	// Cancel the context deliberately
-	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
-	cancelCtx()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -347,16 +350,16 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
-	require.NoError(t, ts.CreateKeyspace(cancelledCtx, keyspace, &topodata.Keyspace{}))
-	require.NoError(t, ts.CreateShard(cancelledCtx, keyspace, shard))
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
 
 	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
 	tablet.Keyspace = keyspace
 	tablet.Shard = shard
 
-	require.NoError(t, ts.CreateTablet(cancelledCtx, tablet))
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
 
-	_, err = ts.UpdateShardFields(cancelledCtx, keyspace, shard, func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
 
 		now := time.Now()
@@ -370,8 +373,15 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	// "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+
+	// Cancel the context deliberately
+	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
+	cancelCtx()
 
 	ok, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
@@ -453,7 +463,10 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	// "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
 	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
@@ -477,7 +490,10 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 
 	// Now try to restore the above backup.
 	bh = filebackupstorage.NewBackupHandle(nil, "", "", true)
-	mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
 	fakeStats := backupstats.NewFakeStats()
@@ -551,7 +567,10 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	require.Equal(t, 4, sourceReadStats)
 
 	// Restore using timed-out context
-	mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	restoreParams.Mysqld = mysqld
 	timedOutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)

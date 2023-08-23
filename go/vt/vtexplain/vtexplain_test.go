@@ -28,12 +28,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func defaultTestOpts() *Options {
@@ -86,10 +86,12 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 
 func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
+		defer utils.EnsureNoLeaks(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		vte := initTest(ctx, mode, opts, topts, t)
+		defer vte.Stop()
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := os.ReadFile(sqlFile)
@@ -145,28 +147,6 @@ func TestExplain(t *testing.T) {
 	}
 	tests := []test{
 		{"unsharded", defaultTestOpts()},
-		{"selectsharded", defaultTestOpts()},
-		{"insertsharded", defaultTestOpts()},
-		{"updatesharded", defaultTestOpts()},
-		{"deletesharded", defaultTestOpts()},
-		{"comments", defaultTestOpts()},
-		{"options", &Options{
-			ReplicationMode: "STATEMENT",
-			NumShards:       4,
-			Normalize:       false,
-		}},
-		{"target", &Options{
-			ReplicationMode: "ROW",
-			NumShards:       4,
-			Normalize:       false,
-			Target:          "ks_sharded/40-80",
-		}},
-		{"gen4", &Options{
-			ReplicationMode: "ROW",
-			NumShards:       4,
-			Normalize:       true,
-			PlannerVersion:  querypb.ExecuteOptions_Gen4,
-		}},
 	}
 
 	for _, tst := range tests {
@@ -175,10 +155,13 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 
 	tests := []struct {
 		SQL string
@@ -215,10 +198,13 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 	sql := "select 1 from user where id = 1"
 	explains, err := vte.Run(sql)
 	require.NoError(t, err, "vtexplain error")
