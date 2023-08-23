@@ -85,16 +85,16 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.0
 	go.etcd.io/etcd/client/pkg/v3 v3.5.0
 	go.etcd.io/etcd/client/v3 v3.5.0
-	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122 // indirect
+	golang.org/x/crypto v0.12.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/net v0.7.0
+	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/net v0.14.0
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0
-	golang.org/x/text v0.7.0
+	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/term v0.11.0
+	golang.org/x/text v0.12.0
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
-	golang.org/x/tools v0.1.12
+	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846
 	google.golang.org/api v0.45.0
 	google.golang.org/genproto v0.0.0-20210701191553-46259e63a0a9 // indirect
 	google.golang.org/grpc v1.45.0
@@ -118,6 +118,8 @@ require (
 require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/hashicorp/go-version v1.6.0
+	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
+	golang.org/x/tools/cmd/cover v0.1.0-deprecated
 	modernc.org/sqlite v1.20.3
 )
 
