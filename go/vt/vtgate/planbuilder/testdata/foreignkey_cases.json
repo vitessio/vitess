@@ -328,7 +328,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals",
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ('bar')",
                 "Table": "u_tbl3"
               }
             ]
@@ -441,7 +441,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals",
+                "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in ('foo')",
                 "Table": "tbl4"
               }
             ]
@@ -614,7 +614,7 @@
                           "Sharded": false
                         },
                         "TargetTabletType": "PRIMARY",
-                        "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                        "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ('foo')",
                         "Table": "u_tbl3"
                       }
                     ]
@@ -684,7 +684,7 @@
                     "Sharded": false
                   },
                   "TargetTabletType": "PRIMARY",
-                  "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2",
+                  "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
                   "Table": "u_tbl9"
                 },
                 "Selection": {
@@ -695,7 +695,7 @@
                     "Sharded": false
                   },
                   "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                  "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2",
+                  "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
                   "Table": "u_tbl9"
                 }
               }
