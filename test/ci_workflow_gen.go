@@ -140,6 +140,12 @@ var (
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
+	clusterRequiring16CoresMachines = []string{
+		"onlineddl_vrepl",
+		"onlineddl_vrepl_stress",
+		"onlineddl_vrepl_stress_suite",
+		"onlineddl_vrepl_suite",
+	}
 )
 
 type unitTest struct {
@@ -154,6 +160,7 @@ type clusterTest struct {
 	LimitResourceUsage                 bool
 	EnableBinlogTransactionCompression bool
 	PartialKeyspace                    bool
+	Cores16                            bool
 }
 
 type selfHostedTest struct {
@@ -330,6 +337,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 			test := &clusterTest{
 				Name:  fmt.Sprintf("Cluster (%s)", cluster),
 				Shard: cluster,
+			}
+			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
+			for _, cores16Cluster := range cores16Clusters {
+				if cores16Cluster == cluster {
+					test.Cores16 = true
+					break
+				}
 			}
 			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
 			for _, makeToolCluster := range makeToolClusters {
