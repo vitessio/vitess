@@ -611,10 +611,12 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 		waitForTable(t, child2TableName, conn)
 		waitForTable(t, grandchildTableName, conn)
 	})
-	for _, tableName := range []string{childTableName, child2TableName, grandchildTableName} {
-		err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, tableName, "id")
-		require.NoError(t, err)
-	}
+	t.Run("waiting for vschema definition to apply", func(t *testing.T) {
+		for _, tableName := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
+			err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, tableName, "id")
+			require.NoError(t, err)
+		}
+	})
 
 	t.Run("dropping foreign keys on replica", func(t *testing.T) {
 		for _, statement := range dropConstraintsStatements {
