@@ -5,7 +5,7 @@ jobs:
 
   build:
     name: Region Sharding example using ${{ matrix.topo }} on ubuntu-22.04
-    runs-on: gh-runner-examples-32cores-1
+    runs-on: gh-runner-examples-4cores-1
     strategy:
       matrix:
         topo: [etcd]
