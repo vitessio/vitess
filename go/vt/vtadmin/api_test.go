@@ -5202,6 +5202,7 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 	}.Cluster(context.Background())
+	defer testCluster.Close()
 
 	tests := []struct {
 		name                  string

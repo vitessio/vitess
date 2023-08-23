@@ -47,6 +47,7 @@ func TestInitShardPrimary(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
+	defer tmc.Close()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)

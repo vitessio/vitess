@@ -211,10 +211,12 @@ func TestHighNumberOfParams(t *testing.T) {
 	// connect to the vitess cluster
 	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
 	require.NoError(t, err)
+	defer db.Close()
 
 	// run the query
 	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
 	require.NoError(t, err)
+	defer r.Close()
 
 	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4
 	// count is the row number we are currently visiting, also correspond to the

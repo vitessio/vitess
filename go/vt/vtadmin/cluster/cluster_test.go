@@ -50,11 +50,8 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	t.Parallel()
+	utils.EnsureNoLeaks(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	tests := []struct {
 		name      string
 		cfg       testutil.TestClusterConfig
@@ -161,6 +158,9 @@ func TestCreateKeyspace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			cluster := testutil.BuildCluster(t, tt.cfg)
 			defer cluster.Close()
 
@@ -178,7 +178,6 @@ func TestCreateKeyspace(t *testing.T) {
 
 func TestCreateShard(t *testing.T) {
 	utils.EnsureNoLeaks(t)
-	t.Parallel()
 
 	type test struct {
 		name      string
@@ -261,6 +260,7 @@ func TestCreateShard(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.CreateShard(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -486,6 +486,7 @@ func TestDeleteShards(t *testing.T) {
 				}()
 			}
 
+			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.DeleteShards(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
