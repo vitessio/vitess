@@ -9,17 +9,37 @@ import (
 	"time"
 
 	"go.uber.org/goleak"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
+// EnsureNoLeaks checks for goroutine and socket leaks and fails the test if any are found.
 func EnsureNoLeaks(t testing.TB) {
 	if t.Failed() {
 		return
 	}
-	ensureNoGoroutines(t)
-	ensureNoOpenSockets(t)
+	if err := ensureNoLeaks(); err != nil {
+		t.Fatal(err)
+	}
 }
 
-func ensureNoGoroutines(t testing.TB) {
+// GetLeaks checks for goroutine and socket leaks and returns an error if any are found.
+// One use case is in TestMain()s to ensure that all tests are cleaned up.
+func GetLeaks() error {
+	return ensureNoLeaks()
+}
+
+func ensureNoLeaks() error {
+	if err := ensureNoGoroutines(); err != nil {
+		return err
+	}
+	if err := ensureNoOpenSockets(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureNoGoroutines() error {
 	var ignored = []goleak.Option{
 		goleak.IgnoreTopFunction("github.com/golang/glog.(*fileSink).flushDaemon"),
 		goleak.IgnoreTopFunction("github.com/golang/glog.(*loggingT).flushDaemon"),
@@ -35,23 +55,24 @@ func ensureNoGoroutines(t testing.TB) {
 	for i := 0; i < 5; i++ {
 		err = goleak.Find(ignored...)
 		if err == nil {
-			return
+			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatal(err)
+	return err
 }
 
-func ensureNoOpenSockets(t testing.TB) {
+func ensureNoOpenSockets() error {
 	cmd := exec.Command("lsof", "-a", "-p", strconv.Itoa(os.Getpid()), "-i", "-P", "-V")
 	cmd.Stderr = nil
 	lsof, err := cmd.Output()
 	if err == nil {
-		t.Errorf("found open sockets:\n%s", lsof)
+		log.Errorf("found open sockets:\n%s", lsof)
 	} else {
 		if strings.Contains(string(lsof), "no Internet files located") {
-			return
+			return nil
 		}
-		t.Errorf("failed to run `lsof`: %v (%q)", err, lsof)
+		log.Errorf("failed to run `lsof`: %v (%q)", err, lsof)
 	}
+	return err
 }
