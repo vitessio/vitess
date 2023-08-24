@@ -4,11 +4,10 @@ permissions: read-all
 jobs:
 
   build:
-    name: Region Sharding example using ${{ matrix.topo }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Region Sharding example using ${{ matrix.topo }} on ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     strategy:
       matrix:
-        os: [ubuntu-22.04]
         topo: [etcd]
 
     steps:

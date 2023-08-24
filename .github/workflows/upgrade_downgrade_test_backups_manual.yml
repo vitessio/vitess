@@ -13,7 +13,7 @@ jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Backups - Manual
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     needs:
       - get_previous_release
 
