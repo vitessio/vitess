@@ -151,8 +151,10 @@ var (
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	st.Recursive[to] = st.RecursiveDeps(from)
-	st.Direct[to] = st.DirectDeps(from)
+	if ValidAsMapKey(to) {
+		st.Recursive[to] = st.RecursiveDeps(from)
+		st.Direct[to] = st.DirectDeps(from)
+	}
 }
 
 func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectExprs {

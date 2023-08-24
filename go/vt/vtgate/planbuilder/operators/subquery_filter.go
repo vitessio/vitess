@@ -36,12 +36,6 @@ type SubQueryFilter struct {
 	FilterType opcode.PulloutOpcode // Type of the subquery filter.
 	Original   sqlparser.Expr       // Original expression (comparison or EXISTS).
 
-	// comparisonColumns are columns from the LHS and RHS used in the semi join.
-	// Columns are included only if they are simple ColNames.
-	// E.g., for the predicate `tbl.id IN (SELECT bar(foo) from user WHERE tbl.id = user.id)`,
-	// `tbl.id` would be stored in JoinVars but not expressions like `foo(tbl.id)`.
-	comparisonColumns [][2]*sqlparser.ColName
-
 	_sq *sqlparser.Subquery // Represents a subquery like (SELECT foo from user LIMIT 1).
 
 	// Join-related fields:
@@ -50,6 +44,7 @@ type SubQueryFilter struct {
 	// For correlated subqueries, correlations might be in JoinVars, JoinVarOffsets, and comparisonColumns.
 	JoinVars       map[string]*sqlparser.ColName
 	JoinVarOffsets map[string]int
+	JoinPredicates sqlparser.Exprs
 
 	// For uncorrelated queries:
 	// - SubqueryValueName: Name of the value returned by the subquery.
@@ -88,6 +83,10 @@ func (sj *SubQueryFilter) Inner() ops.Operator {
 
 func (sj *SubQueryFilter) OriginalExpression() sqlparser.Expr {
 	return sj.Original
+}
+
+func (sj *SubQueryFilter) SetOriginal(expr sqlparser.Expr) {
+	sj.Original = expr
 }
 
 func (sj *SubQueryFilter) sq() *sqlparser.Subquery {
@@ -167,15 +166,9 @@ func (sj *SubQueryFilter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlp
 }
 
 func (sj *SubQueryFilter) GetJoinPredicates() []sqlparser.Expr {
-	var exprs []sqlparser.Expr
-	for _, columns := range sj.comparisonColumns {
-		if columns[0] != nil && columns[1] != nil {
-			exprs = append(exprs, &sqlparser.ComparisonExpr{
-				Operator: sqlparser.EqualOp,
-				Left:     columns[0],
-				Right:    columns[1],
-			})
-		}
-	}
-	return exprs
+	return sj.JoinPredicates
+}
+
+func (sj *SubQueryFilter) ReplaceJoinPredicates(predicates sqlparser.Exprs) {
+	sj.JoinPredicates = predicates
 }

@@ -226,14 +226,17 @@ var _ merger = (*subqueryRouteMerger)(nil)
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-
 	lhs := TableID(join.LHS)
 	rhs := TableID(join.RHS)
+	joinID := TableID(join)
+	innerID := TableID(inner.Inner())
 
+	// inner.col = lhs.col
 	deps := semantics.EmptyTableSet()
-	for _, colNeeded := range inner.OuterExpressionsNeeded() {
-		deps = deps.Merge(ctx.SemTable.RecursiveDeps(colNeeded))
+	for _, predicate := range inner.GetJoinPredicates() {
+		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
 	}
+	deps = deps.Remove(innerID)
 
 	if deps.IsSolvedBy(lhs) {
 		// we can safely push down the subquery on the LHS
@@ -241,13 +244,51 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 		return join, rewrite.NewTree("push subquery into LHS of join", inner), nil
 	}
 
-	if deps.IsSolvedBy(rhs) && !join.LeftJoin {
-		// we can't push down filter on outer joins
+	if join.LeftJoin {
+		return nil, rewrite.SameTree, nil
+	}
+
+	if deps.IsSolvedBy(rhs) {
+		// we can push down the subquery filter on RHS of the join
 		join.RHS = addSubQuery(join.RHS, inner)
 		return join, rewrite.NewTree("push subquery into RHS of join", inner), nil
 	}
 
+	if deps.IsSolvedBy(joinID) {
+		var updatedPred sqlparser.Exprs
+		for _, predicate := range inner.GetJoinPredicates() {
+			col, err := BreakExpressionInLHSandRHS(ctx, predicate, lhs)
+			if err != nil {
+				return nil, rewrite.SameTree, nil
+			}
+			join.Predicate = ctx.SemTable.AndExpressions(predicate, join.Predicate)
+			join.JoinPredicates = append(join.JoinPredicates, col)
+			updatedPred = append(updatedPred, col.RHSExpr)
+			for idx, expr := range col.LHSExprs {
+				argName := col.BvNames[idx]
+				newOrg := replaceSingleExpr(ctx, inner.OriginalExpression(), expr, sqlparser.NewArgument(argName))
+				inner.SetOriginal(newOrg)
+			}
+		}
+		inner.ReplaceJoinPredicates(updatedPred)
+		// we can't push down filter on outer joins
+		join.RHS = addSubQuery(join.RHS, inner)
+		return join, rewrite.NewTree("push subquery into RHS of join removing LHS expr", inner), nil
+	}
+
 	return nil, rewrite.SameTree, nil
+}
+
+func replaceSingleExpr(ctx *plancontext.PlanningContext, expr, from, to sqlparser.Expr) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		expr, ok := cursor.Node().(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		if ctx.SemTable.EqualsExpr(expr, from) {
+			cursor.Replace(to)
+		}
+	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 }
 
 // addSubQuery adds a SubQuery to the given operator. If the operator is a SubQueryContainer,
