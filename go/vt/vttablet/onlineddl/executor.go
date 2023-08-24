@@ -2140,7 +2140,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		if !readyToComplete {
 			// see if we need to update ready_to_complete
 			if isImmediateOperation {
-				// Whether postponsed or not, CREATE and DROP operations, as well as VIEW operations,
+				// Whether postponed or not, CREATE and DROP operations, as well as VIEW operations,
 				// are inherently "ready to complete" because their operation is immediate.
 				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
 					return err
