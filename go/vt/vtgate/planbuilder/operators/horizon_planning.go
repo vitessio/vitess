@@ -355,9 +355,27 @@ func tryPushProjection(
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
 		return pushDownProjectionInVindex(ctx, p, src)
+	case *SubQueryContainer:
+		return pushProjectionToOuter(ctx, p, src)
 	default:
 		return p, rewrite.SameTree, nil
 	}
+}
+
+func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
+	outer := TableID(src.Outer)
+	for _, proj := range p.Projections {
+		if _, isOffset := proj.(*Offset); isOffset {
+			continue
+		}
+		expr := proj.GetExpr()
+		if !ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(outer) {
+			return p, rewrite.SameTree, nil
+		}
+	}
+	// all projections can be pushed to the outer
+	src.Outer, p.Source = p, src.Outer
+	return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 }
 
 func pushDownProjectionInVindex(
