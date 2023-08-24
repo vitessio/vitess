@@ -32,7 +32,7 @@ import (
 )
 
 func TestPickPrimary(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -58,7 +58,7 @@ func TestPickPrimary(t *testing.T) {
 }
 
 func TestPickLocalPreferences(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	type tablet struct {
 		id   uint32
 		typ  topodatapb.TabletType
@@ -305,7 +305,7 @@ func TestPickLocalPreferences(t *testing.T) {
 }
 
 func TestPickCellPreferenceLocalCell(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -346,7 +346,7 @@ func TestPickCellPreferenceLocalCell(t *testing.T) {
 }
 
 func TestPickCellPreferenceLocalAlias(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -364,7 +364,7 @@ func TestPickCellPreferenceLocalAlias(t *testing.T) {
 }
 
 func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -413,7 +413,7 @@ func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 }
 
 func TestTabletAppearsDuringSleep(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -445,7 +445,7 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 }
 
 func TestPickErrorLocalPreferenceDefault(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -477,7 +477,7 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 }
 
 func TestPickErrorOnlySpecified(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -511,7 +511,7 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 // type has no available healthy serving tablets that we select a healthy
 // serving tablet from the secondary/second type.
 func TestPickFallbackType(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

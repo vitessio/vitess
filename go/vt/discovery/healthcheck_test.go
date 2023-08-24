@@ -64,7 +64,7 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// reset error counters
@@ -210,7 +210,7 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -276,7 +276,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
 func TestHealthCheckErrorOnPrimary(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -341,7 +341,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 }
 
 func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -424,7 +424,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 }
 
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -472,7 +472,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 // TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
 func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -538,7 +538,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -615,7 +615,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 }
 
 func TestWaitForAllServingTablets(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -712,7 +712,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
 func TestRemoveTablet(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -824,7 +824,7 @@ func TestRemoveTablet(t *testing.T) {
 
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1015,7 +1015,7 @@ func TestGetHealthyTablets(t *testing.T) {
 }
 
 func TestPrimaryInOtherCell(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1077,7 +1077,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 }
 
 func TestReplicaInOtherCell(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1184,7 +1184,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 }
 
 func TestCellAliases(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1249,7 +1249,7 @@ func TestCellAliases(t *testing.T) {
 }
 
 func TestHealthCheckChecksGrpcPort(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1274,7 +1274,7 @@ func TestHealthCheckChecksGrpcPort(t *testing.T) {
 }
 
 func TestTemplate(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
 	ParseTabletURLTemplateFromFlag()
 
@@ -1302,7 +1302,7 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestDebugURLFormatting(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	TabletURLTemplateString = "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"
 	ParseTabletURLTemplateFromFlag()
 

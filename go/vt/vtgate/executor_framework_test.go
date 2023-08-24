@@ -182,7 +182,7 @@ func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup 
 	return executor, sbc1, sbc2, sbclookup, ctx, func() {
 		executor.Close()
 		cancel()
-		utils.EnsureNoLeaks(t)
+		defer utils.EnsureNoLeaks(t)
 	}
 }
 
@@ -241,7 +241,7 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	return executor, sbcs[0], sbcs[1], sbclookup, ctx, func() {
 		executor.Close()
 		cancel()
-		utils.EnsureNoLeaks(t)
+		defer utils.EnsureNoLeaks(t)
 	}
 }
 

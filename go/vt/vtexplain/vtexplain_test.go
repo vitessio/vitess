@@ -155,7 +155,7 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -198,7 +198,7 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

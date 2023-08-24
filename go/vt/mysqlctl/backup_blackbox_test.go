@@ -80,7 +80,7 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 }
 
 func TestExecuteBackup(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Set up local backup directory
@@ -226,7 +226,7 @@ func TestExecuteBackup(t *testing.T) {
 }
 
 func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -318,7 +318,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
 // occur due to various reasons, such as context time cancel. The process should not panic in these situations.
 func TestExecuteBackupWithCanceledContext(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -408,7 +408,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
 // occur due to various reasons, such as context timed-out. The process should not panic in these situations.
 func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

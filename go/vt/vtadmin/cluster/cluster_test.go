@@ -50,7 +50,7 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 
 	tests := []struct {
 		name      string
@@ -177,7 +177,7 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 
 	type test struct {
 		name      string
@@ -279,7 +279,7 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -364,7 +364,7 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	t.Parallel()
 
 	type test struct {

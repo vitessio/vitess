@@ -58,7 +58,7 @@ func checkChecksum(t *testing.T, tw *TopologyWatcher, want uint32) {
 }
 
 func TestStartAndCloseTopoWatcher(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -118,7 +118,7 @@ func TestCellTabletsWatcherNoRefreshKnown(t *testing.T) {
 }
 
 func checkWatcher(t *testing.T, refreshKnownTablets bool) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -443,7 +443,7 @@ var (
 )
 
 func TestFilterByKeyspace(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -528,7 +528,7 @@ func TestFilterByKeyspace(t *testing.T) {
 //   - does not continuosly call GetTablets for tablets that do not satisfy the filter
 //   - does not add or remove these filtered out tablets from the its healtcheck
 func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
-	utils.EnsureNoLeaks(t)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
