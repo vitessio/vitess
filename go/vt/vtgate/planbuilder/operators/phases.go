@@ -148,16 +148,10 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 			return nil, vterrors.VT12001("correlated subquery in WHERE clause")
 		}
 
-		f := &Filter{Source: sj.Subquery}
-		for _, pred := range sj.Predicates {
-			col, err := BreakExpressionInLHSandRHS(ctx, pred, TableID(outer))
-			if err != nil {
-				return nil, err
-			}
-			f.Predicates = append(f.Predicates, col.RHSExpr)
-			sj.JoinPredicates = append(sj.JoinPredicates, col)
+		sj.Subquery = &Filter{
+			Source:     sj.Subquery,
+			Predicates: slice.Map(sj.JoinPredicates, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),
 		}
-		sj.Subquery = f
 		return outer, nil
 	}
 

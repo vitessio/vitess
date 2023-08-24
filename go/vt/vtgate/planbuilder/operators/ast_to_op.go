@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/slice"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -272,11 +273,30 @@ func createExistsSubquery(
 		return nil, err
 	}
 
+	mapper := func(in sqlparser.Expr) (JoinColumn, error) { return BreakExpressionInLHSandRHS(ctx, in, outerID) }
+	joinPredicates, err := slice.MapWithError(jpc.predicates, mapper)
+	if err != nil {
+		return nil, err
+	}
+
+	lhsCols := []*sqlparser.ColName{}
+	for _, jc := range joinPredicates {
+		for _, lhsExpr := range jc.LHSExprs {
+			col, ok := lhsExpr.(*sqlparser.ColName)
+			if !ok {
+				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr))
+			}
+			lhsCols = append(lhsCols, col)
+		}
+	}
+
 	return &SubQueryFilter{
-		Subquery:   opInner,
-		Predicates: jpc.predicates,
-		FilterType: opcode.PulloutExists,
-		Original:   org,
+		Subquery:       opInner,
+		Predicates:     jpc.predicates,
+		FilterType:     opcode.PulloutExists,
+		Original:       org,
+		JoinPredicates: joinPredicates,
+		LHSColumns:     lhsCols,
 	}, nil
 }
 

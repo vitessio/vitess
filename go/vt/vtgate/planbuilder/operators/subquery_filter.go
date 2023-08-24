@@ -21,7 +21,6 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -57,11 +56,6 @@ func (sj *SubQueryFilter) planOffsets(ctx *plancontext.PlanningContext) error {
 				return err
 			}
 			sj.Vars[jc.BvNames[i]] = offset
-			col, ok := lhsExpr.(*sqlparser.ColName)
-			if !ok {
-				return vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr))
-			}
-			sj.LHSColumns = append(sj.LHSColumns, col)
 		}
 	}
 	return nil

@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -44,6 +46,10 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
 		}
+	case *SubQueryContainer:
+		if ctx.DelegateAggregation {
+			output, applyResult, err = pushDownAggregationThroughSubquery(ctx, aggregator, src)
+		}
 	default:
 		return aggregator, rewrite.SameTree, nil
 	}
@@ -59,6 +65,38 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 	aggregator.Pushed = true
 
 	return
+}
+
+func pushDownAggregationThroughSubquery(
+	ctx *plancontext.PlanningContext,
+	rootAggr *Aggregator,
+	src *SubQueryContainer,
+) (ops.Operator, *rewrite.ApplyResult, error) {
+	pushedAggr := rootAggr.Clone([]ops.Operator{src.Outer}).(*Aggregator)
+	pushedAggr.Original = false
+	pushedAggr.Pushed = false
+
+	for _, subQuery := range src.Inner {
+		for _, colName := range subQuery.OuterExpressionsNeeded() {
+			idx := slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
+				return ctx.SemTable.EqualsExpr(ae.Expr, colName)
+			})
+			if idx >= 0 {
+				continue
+			}
+			pushedAggr.addColumnWithoutPushing(aeWrap(colName), true)
+		}
+	}
+
+	src.Outer = pushedAggr
+
+	if !rootAggr.Original {
+		return src, rewrite.NewTree("push Aggregation under subquery - keep original", rootAggr), nil
+	}
+
+	rootAggr.aggregateTheAggregates()
+
+	return rootAggr, rewrite.NewTree("push Aggregation under subquery", rootAggr), nil
 }
 
 func (a *Aggregator) aggregateTheAggregates() {

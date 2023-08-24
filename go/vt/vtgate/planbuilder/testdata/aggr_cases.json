@@ -2541,43 +2541,36 @@
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
         "Aggregates": "sum_count_star(0) AS count(*)",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "[COLUMN 1] as count(*)"
-            ],
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "user_apa": 1
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "SemiJoin",
-                "JoinVars": {
-                  "user_apa": 0
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.apa, count(*), weight_string(`user`.apa) from `user` where 1 != 1 group by `user`.apa, weight_string(`user`.apa)",
-                    "Query": "select `user`.apa, count(*), weight_string(`user`.apa) from `user` group by `user`.apa, weight_string(`user`.apa)",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra where user_extra.bar = :user_apa",
-                    "Table": "user_extra"
-                  }
-                ]
+                "FieldQuery": "select count(*), `user`.apa from `user` where 1 != 1 group by `user`.apa",
+                "Query": "select count(*), `user`.apa from `user` group by `user`.apa",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.bar = :user_apa",
+                "Table": "user_extra"
               }
             ]
           }
@@ -2587,8 +2580,7 @@
         "user.user",
         "user.user_extra"
       ]
-    }
-  },
+    }  },
   {
     "comment": "we have to track the order of distinct aggregation expressions",
     "query": "select val2, count(distinct val1), count(*) from user group by val2",
