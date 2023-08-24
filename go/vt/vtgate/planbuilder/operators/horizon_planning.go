@@ -90,14 +90,14 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
 	op = root
 	for _, phase := range getPhases(ctx) {
+		if rewrite.DebugOperatorTree {
+			fmt.Printf("PHASE: %s\n", phase.Name)
+		}
 		if phase.action != nil {
 			op, err = phase.action(ctx, op)
 			if err != nil {
 				return nil, err
 			}
-		}
-		if rewrite.DebugOperatorTree {
-			fmt.Printf("PHASE: %s\n", phase.Name)
 		}
 		op, err = optimizeHorizonPlanning(ctx, op)
 		if err != nil {
@@ -347,7 +347,7 @@ func tryPushProjection(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		return rewrite.Swap(p, src, "pushed projection under route")
+		return rewrite.Swap(p, src, "push projection under route")
 	case *ApplyJoin:
 		if p.FromAggr {
 			return p, rewrite.SameTree, nil
@@ -399,7 +399,7 @@ func (p *projector) add(e ProjExpr, alias *sqlparser.AliasedExpr) {
 }
 
 // pushDownProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
-// It processes each input column and creates new JoinColumns for the ApplyJoin operation based on
+// It processes each input column and creates new JoinPredicates for the ApplyJoin operation based on
 // the input column's expression. It also creates new Projection operators for the left and right
 // children of the ApplyJoin operation, if needed.
 func pushDownProjectionInApplyJoin(
@@ -444,7 +444,7 @@ func pushDownProjectionInApplyJoin(
 	return src, rewrite.NewTree("split projection to either side of join", src), nil
 }
 
-// splitProjectionAcrossJoin creates JoinColumns for all projections,
+// splitProjectionAcrossJoin creates JoinPredicates for all projections,
 // and pushes down columns as needed between the LHS and RHS of a join
 func splitProjectionAcrossJoin(
 	ctx *plancontext.PlanningContext,
@@ -479,7 +479,7 @@ func splitProjectionAcrossJoin(
 		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
 	}
 
-	// Add the new JoinColumn to the ApplyJoin's JoinColumns.
+	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
 	join.JoinColumns = append(join.JoinColumns, col)
 	return nil
 }
@@ -580,7 +580,7 @@ func tryPushLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 
 func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, *rewrite.ApplyResult, error) {
 	if src.IsSingleShard() {
-		return rewrite.Swap(in, src, "limit pushed into single sharded route")
+		return rewrite.Swap(in, src, "push limit under route")
 	}
 
 	return setUpperLimit(in)
@@ -657,7 +657,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push ordering to outer query in subquery container", in), nil
+		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
 	}
 	return in, rewrite.SameTree, nil
 }
@@ -814,27 +814,27 @@ func tryPushDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 	case *Distinct:
 		src.Required = false
 		src.PushedPerformance = false
-		return src, rewrite.NewTree("removed double distinct", src), nil
+		return src, rewrite.NewTree("remove double distinct", src), nil
 	case *Union:
 		for i := range src.Sources {
 			src.Sources[i] = &Distinct{Source: src.Sources[i]}
 		}
 		in.PushedPerformance = true
 
-		return in, rewrite.NewTree("pushed down DISTINCT under UNION", src), nil
+		return in, rewrite.NewTree("push down distinct under union", src), nil
 	case *ApplyJoin:
 		src.LHS = &Distinct{Source: src.LHS}
 		src.RHS = &Distinct{Source: src.RHS}
 		in.PushedPerformance = true
 
 		if in.Required {
-			return in, rewrite.NewTree("pushed distinct under join - kept original", in.Source), nil
+			return in, rewrite.NewTree("push distinct under join - kept original", in.Source), nil
 		}
 
-		return in.Source, rewrite.NewTree("pushed distinct under join", in.Source), nil
+		return in.Source, rewrite.NewTree("push distinct under join", in.Source), nil
 	case *Ordering:
 		in.Source = src.Source
-		return in, rewrite.NewTree("removed ordering under distinct", in), nil
+		return in, rewrite.NewTree("remove ordering under distinct", in), nil
 	}
 
 	return in, rewrite.SameTree, nil
@@ -876,19 +876,19 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *r
 	if len(sources) == 1 {
 		result := sources[0].(*Route)
 		if result.IsSingleShard() || !op.distinct {
-			return result, rewrite.NewTree("pushed union under route", op), nil
+			return result, rewrite.NewTree("push union under route", op), nil
 		}
 
 		return &Distinct{
 			Source:   result,
 			Required: true,
-		}, rewrite.NewTree("pushed union under route", op), nil
+		}, rewrite.NewTree("push union under route", op), nil
 	}
 
 	if len(sources) == len(op.Sources) {
 		return op, rewrite.SameTree, nil
 	}
-	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merged union inputs", op), nil
+	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merge union inputs", op), nil
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for

@@ -18,51 +18,51 @@ package operators
 
 import (
 	"maps"
+	"slices"
 
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// select 1 from user where id in (select id from music)
-
-// SubQueryFilter represents a subquery used for filtering rows in an outer query through a join.
-// The positioning of the outer query and subquery (left or right) depends on their correlation.
+// SubQueryFilter represents a subquery used for filtering rows in an
+// outer query through a join.
 type SubQueryFilter struct {
-	Outer      ops.Operator         // Operator of the outer query.
-	Subquery   ops.Operator         // Operator of the subquery.
-	FilterType opcode.PulloutOpcode // Type of the subquery filter.
-	Original   sqlparser.Expr       // Original expression (comparison or EXISTS).
+	// Fields filled in at the time of construction:
+	Outer      ops.Operator         // Outer query operator.
+	Subquery   ops.Operator         // Subquery operator.
+	FilterType opcode.PulloutOpcode // Type of subquery filter.
+	Original   sqlparser.Expr       // Original comparison or EXISTS expression.
+	_sq        *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
+	Predicates sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
 
-	_sq *sqlparser.Subquery // Represents a subquery like (SELECT foo from user LIMIT 1).
+	// Fields filled in at the subquery settling phase:
+	JoinPredicates    []JoinColumn         // Broken up join predicates.
+	LHSColumns        []*sqlparser.ColName // Left hand side columns of join predicates.
+	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
+	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
 
-	// Join-related fields:
-	// - JoinVars: Columns from the LHS used for the join (also found in Vars field).
-	// - JoinVarOffsets: Arguments copied from outer to inner, set during offset planning.
-	// For correlated subqueries, correlations might be in JoinVars, JoinVarOffsets, and comparisonColumns.
-	JoinVars       map[string]*sqlparser.ColName
-	JoinVarOffsets map[string]int
-	JoinPredicates sqlparser.Exprs
-
-	// For uncorrelated queries:
-	// - SubqueryValueName: Name of the value returned by the subquery.
-	// - HasValuesName: Name of the argument passed to the subquery.
-	SubqueryValueName string
-	HasValuesName     string
-
-	corrSubPredicate sqlparser.Expr // Expression pushed to RHS if subquery merge fails.
+	// Fields related to correlated subqueries:
+	Vars map[string]int // Arguments copied from outer to inner, set during offset planning.
 }
 
 func (sj *SubQueryFilter) planOffsets(ctx *plancontext.PlanningContext) error {
-	sj.JoinVarOffsets = make(map[string]int, len(sj.JoinVars))
-	for bindvarName, col := range sj.JoinVars {
-		offset, err := sj.Outer.AddColumn(ctx, true, false, aeWrap(col))
-		if err != nil {
-			return err
+	sj.Vars = make(map[string]int)
+	for _, jc := range sj.JoinPredicates {
+		for i, lhsExpr := range jc.LHSExprs {
+			offset, err := sj.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr))
+			if err != nil {
+				return err
+			}
+			sj.Vars[jc.BvNames[i]] = offset
+			col, ok := lhsExpr.(*sqlparser.ColName)
+			if !ok {
+				return vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr))
+			}
+			sj.LHSColumns = append(sj.LHSColumns, col)
 		}
-		sj.JoinVarOffsets[bindvarName] = offset
 	}
 	return nil
 }
@@ -72,7 +72,7 @@ func (sj *SubQueryFilter) SetOuter(operator ops.Operator) {
 }
 
 func (sj *SubQueryFilter) OuterExpressionsNeeded() []*sqlparser.ColName {
-	return maps2.Values(sj.JoinVars)
+	return sj.LHSColumns
 }
 
 var _ SubQuery = (*SubQueryFilter)(nil)
@@ -105,8 +105,10 @@ func (sj *SubQueryFilter) Clone(inputs []ops.Operator) ops.Operator {
 	default:
 		panic("wrong number of inputs")
 	}
-	klone.JoinVars = maps.Clone(sj.JoinVars)
-	klone.JoinVarOffsets = maps.Clone(sj.JoinVarOffsets)
+	klone.JoinPredicates = slices.Clone(sj.JoinPredicates)
+	klone.LHSColumns = slices.Clone(sj.LHSColumns)
+	klone.Vars = maps.Clone(sj.Vars)
+	klone.Predicates = sqlparser.CloneExprs(sj.Predicates)
 	return &klone
 }
 
@@ -137,7 +139,7 @@ func (sj *SubQueryFilter) SetInputs(inputs []ops.Operator) {
 }
 
 func (sj *SubQueryFilter) ShortDescription() string {
-	return sj.FilterType.String()
+	return sj.FilterType.String() + " WHERE " + sqlparser.String(sj.Predicates)
 }
 
 func (sj *SubQueryFilter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
@@ -166,9 +168,9 @@ func (sj *SubQueryFilter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlp
 }
 
 func (sj *SubQueryFilter) GetJoinPredicates() []sqlparser.Expr {
-	return sj.JoinPredicates
+	return sj.Predicates
 }
 
 func (sj *SubQueryFilter) ReplaceJoinPredicates(predicates sqlparser.Exprs) {
-	sj.JoinPredicates = predicates
+	sj.Predicates = predicates
 }

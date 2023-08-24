@@ -223,10 +223,10 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 	}
 
 	return &SubQueryFilter{
-		FilterType:     filterType,
-		Subquery:       opInner,
-		JoinPredicates: jpc.predicates,
-		Original:       original,
+		FilterType: filterType,
+		Subquery:   opInner,
+		Predicates: jpc.predicates,
+		Original:   original,
 	}, nil
 }
 
@@ -273,10 +273,10 @@ func createExistsSubquery(
 	}
 
 	return &SubQueryFilter{
-		Subquery:       opInner,
-		JoinPredicates: jpc.predicates,
-		FilterType:     opcode.PulloutExists,
-		Original:       org,
+		Subquery:   opInner,
+		Predicates: jpc.predicates,
+		FilterType: opcode.PulloutExists,
+		Original:   org,
 	}, nil
 }
 

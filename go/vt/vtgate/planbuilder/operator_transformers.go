@@ -78,12 +78,12 @@ func transformSubQueryFilter(ctx *plancontext.PlanningContext, op *operators.Sub
 		return nil, err
 	}
 
-	if len(op.JoinVars) == 0 {
+	if len(op.JoinPredicates) == 0 {
 		// no correlation, so uncorrelated it is
 		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
 	}
 
-	return newSemiJoin(outer, inner, op.JoinVarOffsets, op.OuterExpressionsNeeded()), nil
+	return newSemiJoin(outer, inner, op.Vars, op.OuterExpressionsNeeded()), nil
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {

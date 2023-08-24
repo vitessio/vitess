@@ -52,9 +52,10 @@ func getPhases(ctx *plancontext.PlanningContext) []Phase {
 			apply:  func(s semantics.QuerySignature) bool { return s.Union },
 		},
 		{
-			// Enhance filter columns for projections and aggregations.
+			// Split aggregation that has not been pushed under the routes into between work on mysql and vtgate.
 			Name:   "split aggregation between vtgate and mysql",
 			action: enableDelegateAggregatiion,
+			apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
 		},
 		{
 			// Add ORDER BY for aggregations above the route.
@@ -142,14 +143,21 @@ func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq S
 }
 
 func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
-	if len(sj.JoinVars) > 0 {
+	if len(sj.Predicates) > 0 {
 		if sj.FilterType != opcode.PulloutExists {
 			return nil, vterrors.VT12001("correlated subquery in WHERE clause")
 		}
-		sj.Subquery = &Filter{
-			Source:     sj.Subquery,
-			Predicates: []sqlparser.Expr{sj.corrSubPredicate},
+
+		f := &Filter{Source: sj.Subquery}
+		for _, pred := range sj.Predicates {
+			col, err := BreakExpressionInLHSandRHS(ctx, pred, TableID(outer))
+			if err != nil {
+				return nil, err
+			}
+			f.Predicates = append(f.Predicates, col.RHSExpr)
+			sj.JoinPredicates = append(sj.JoinPredicates, col)
 		}
+		sj.Subquery = f
 		return outer, nil
 	}
 

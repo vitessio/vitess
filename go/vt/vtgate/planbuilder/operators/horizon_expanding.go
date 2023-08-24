@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -85,12 +86,15 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		return nil, nil, err
 	}
 
+	extracted := []string{"Projection"}
+
 	if qp.NeedsDistinct() {
 		op = &Distinct{
 			Required: true,
 			Source:   op,
 			QP:       qp,
 		}
+		extracted = append(extracted, "Distinct")
 	}
 
 	if sel.Having != nil {
@@ -99,6 +103,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 			Predicates:           sqlparser.SplitAndExpression(nil, sel.Having.Expr),
 			PredicateWithOffsets: nil,
 		}
+		extracted = append(extracted, "Filter")
 	}
 
 	if len(qp.OrderExprs) > 0 {
@@ -106,6 +111,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 			Source: op,
 			Order:  qp.OrderExprs,
 		}
+		extracted = append(extracted, "Ordering")
 	}
 
 	if sel.Limit != nil {
@@ -113,9 +119,10 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 			Source: op,
 			AST:    sel.Limit,
 		}
+		extracted = append(extracted, "Limit")
 	}
 
-	return op, rewrite.NewTree("expand SELECT horizon into smaller components", op), nil
+	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")), op), nil
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {

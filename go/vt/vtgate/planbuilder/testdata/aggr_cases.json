@@ -1685,9 +1685,8 @@
       "Instructions": {
         "OperatorType": "SemiJoin",
         "JoinVars": {
-          "user_id": 0
+          "user_id": 1
         },
-        "ProjectedIndexes": "-2,-1",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1697,9 +1696,10 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.id, col, weight_string(id) from `user` where 1 != 1",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select `user`.id, col, weight_string(id) from `user` order by id asc",
+            "FieldQuery": "select col, id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(1|2) ASC",
+            "Query": "select col, id, weight_string(id) from `user` order by id asc",
+            "ResultColumns": 2,
             "Table": "`user`"
           },
           {
