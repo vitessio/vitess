@@ -343,6 +343,7 @@ message ApplySchemaRequest {
 
 message ApplySchemaResponse {
   repeated string uuid_list = 1;
+  map<string, uint64> rows_affected_by_shard = 2;
 }
 
 message ApplyVSchemaRequest {
@@ -411,6 +412,15 @@ message ChangeTabletTypeResponse {
   topodata.Tablet before_tablet = 1;
   topodata.Tablet after_tablet = 2;
   bool was_dry_run = 3;
+}
+
+message CleanupSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CleanupSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message CreateKeyspaceRequest {
@@ -1208,6 +1218,15 @@ message RestoreFromBackupResponse {
   string keyspace = 2;
   string shard = 3;
   logutil.Event event = 4;
+}
+
+message RetrySchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message RetrySchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message RunHealthCheckRequest {

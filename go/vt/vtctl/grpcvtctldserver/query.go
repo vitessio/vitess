@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 
@@ -30,10 +31,19 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
+const (
+	alterSingleSchemaMigrationSql = `alter vitess_migration %a `
+	selectSchemaMigrationsSql     = `select
+	*
+	from _vt.schema_migrations where %s %s %s`
+)
+
+func alterSingleSchemaMigrationQuery(command, uuid string) (string, error) {
+	return sqlparser.ParseAndBind(alterSingleSchemaMigrationSql+command, sqltypes.StringBindVariable(uuid))
+}
+
 func selectSchemaMigrationsQuery(condition, order, skipLimit string) string {
-	return fmt.Sprintf(`select
-		*
-		from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
+	return fmt.Sprintf(selectSchemaMigrationsSql, condition, order, skipLimit)
 }
 
 // rowToSchemaMigration converts a single row into a SchemaMigration protobuf.
