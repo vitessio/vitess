@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -384,7 +385,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 
 	if !isSameMajorMinorVersion(old, new) {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(`go[[:space:]]*([0-9.]+)`)},
+			[]*regexp.Regexp{regexp.MustCompile(`go[[:space:]]([0-9.]+).([0-9.]+)`)},
 			[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
 			"./go.mod",
 		)
@@ -510,17 +511,23 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 	}
 	defer f.Close()
 
-	content, err := io.ReadAll(f)
-	if err != nil {
-		return err
+	var res []string
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			panic(err)
+		}
+		for i, oldexp := range oldexps {
+			line = oldexp.ReplaceAllString(line, new[i])
+		}
+		res = append(res, line)
 	}
-	contentStr := string(content)
 
-	for i, oldex := range oldexps {
-		contentStr = oldex.ReplaceAllString(contentStr, new[i])
-	}
-
-	_, err = f.WriteAt([]byte(contentStr), 0)
+	_, err = f.WriteAt([]byte(strings.Join(res, "")), 0)
 	if err != nil {
 		return err
 	}
