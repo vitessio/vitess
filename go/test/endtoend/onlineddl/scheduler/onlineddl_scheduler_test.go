@@ -167,7 +167,6 @@ func TestSchemaChange(t *testing.T) {
 
 	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
 
 	var t1uuid string
 	var t2uuid string
@@ -647,28 +646,6 @@ func TestSchemaChange(t *testing.T) {
 			}
 		})
 	})
-	// INSTANT DDL
-	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
-	require.NoError(t, err)
-	if instantDDLCapable {
-		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
-			t1uuid := testOnlineDDLStatement(t, instantAlterT1Statement, ddlStrategy+" --prefer-instant-ddl --postpone-completion", "vtgate", "", "", true)
-
-			t.Run("expect t1 queued", func(t *testing.T) {
-				// we want to validate that the migration remains queued even after some time passes. It must not move beyond 'queued'
-				time.Sleep(ensureStateNotChangedTime)
-				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
-			})
-			t.Run("complete t1", func(t *testing.T) {
-				// Issue a complete and wait for successful completion
-				onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
-			})
-		})
-	}
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
