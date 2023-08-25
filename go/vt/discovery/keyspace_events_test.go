@@ -57,13 +57,13 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 	require.True(t, kss.onSrvKeyspace(nil, nil))
 }
 
-// TestKeyspaceResharding confirms that the keyspace event watcher thinks that a
+// TestTargetIsBeingResharded confirms that the keyspace event watcher thinks that a
 // resharding operation is underway when the expected conditions are present:
 // 1. The keyspace is inconsistent
-// 2. The tablet is primary
+// 2. The target tablet is primary
 // 3. The keyspace has overlapping shards
 // 4. The overlapping shard's tablet is serving
-func TestKeyspaceResharding(t *testing.T) {
+func TestTargetIsBeingResharded(t *testing.T) {
 	cell := "cell"
 	keyspace := "testks"
 	factory := faketopo.NewFakeTopoFactory()
@@ -139,16 +139,16 @@ func TestKeyspaceResharding(t *testing.T) {
 	require.True(t, resharding, "TargetIsBeingResharded should return true")
 }
 
-// TestShardPrimaryNotServing confirms that the keyspace event watcher thinks that there
+// TestPrimaryIsNotServing confirms that the keyspace event watcher thinks that there
 // is NOT a resharding operation underway and that it reports the expected primary not
 // serving state when one shard's primary is not serving, meaning that the following
 // conditions are met:
 // 1. The keyspace is inconsistent
-// 2. The tablet is a primary
-// 3. The tablet is not serving
-// 4. externallyReparented is not 0
-// 5. currentPrimary is not nil
-func TestShardPrimaryNotServing(t *testing.T) {
+// 2. The target tablet is a primary
+// 3. The target tablet is not serving
+// 4. The shard's externallyReparented state is not 0
+// 5. The shard's currentPrimary state is not nil
+func TestPrimaryIsNotServing(t *testing.T) {
 	cell := "cell"
 	keyspace := "testks"
 	factory := faketopo.NewFakeTopoFactory()
