@@ -50,7 +50,7 @@ const (
 
 	// regexpReplaceGoModGoVersion replaces the top-level golang version instruction in the go.mod file
 	// Example going from go1.20 to go1.20: `go 1.20` -> `go 1.21`
-	regexpReplaceGoModGoVersion = `go[[:space:]]([0-9.]+).([0-9.]+)`
+	regexpReplaceGoModGoVersion = `go[[:space:]]([0-9.]+)\.([0-9.]+)`
 
 	// The regular expressions below match the entire bootstrap_version declaration in Dockerfiles and Makefile
 	// A bootstrap version declaration is usually: 'ARG bootstrap_version = 18' in Dockerfile, and

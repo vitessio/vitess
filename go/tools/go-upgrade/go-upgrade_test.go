@@ -56,6 +56,14 @@ func TestRegularExpressions(t *testing.T) {
 			},
 		},
 		{
+			regexp: regexpReplaceGoModGoVersion,
+			input:  "go 1 20",
+			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
+				res := regexp.ReplaceAllString(input, "go 1.21")
+				require.Equal(t, "go 1 20", res)
+			},
+		},
+		{
 			regexp: regexpReplaceDockerfileBootstrapVersion,
 			input:  "ARG bootstrap_version=18.1",
 			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
@@ -90,7 +98,7 @@ func TestRegularExpressions(t *testing.T) {
 	}
 
 	for _, list := range lists {
-		t.Run(list.regexp, func(t *testing.T) {
+		t.Run(list.regexp+" "+list.input, func(t *testing.T) {
 			list.checkF(t, regexp.MustCompile(list.regexp), list.input)
 		})
 	}
