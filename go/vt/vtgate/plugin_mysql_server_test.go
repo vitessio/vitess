@@ -274,9 +274,7 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	root := t.TempDir()
 	tlstest.CreateCA(root)
@@ -308,8 +306,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 
 // TestKillMethods test the mysql plugin for kill method calls.
 func TestKillMethods(t *testing.T) {
-	executor, _, _, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, _ := createExecutorEnv(t)
 	vh := newVtgateHandler(&VTGate{executor: executor})
 
 	// connection does not exist

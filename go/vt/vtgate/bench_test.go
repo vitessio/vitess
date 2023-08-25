@@ -58,8 +58,7 @@ func init() {
 }
 
 func BenchmarkWithNormalizer(b *testing.B) {
-	vtgateInst, _, ctx, closer := createVtgateEnv(b)
-	defer closer()
+	vtgateInst, _, ctx := createVtgateEnv(b)
 
 	for i := 0; i < b.N; i++ {
 		_, _, err := vtgateInst.Execute(
@@ -79,8 +78,7 @@ func BenchmarkWithNormalizer(b *testing.B) {
 }
 
 func BenchmarkWithoutNormalizer(b *testing.B) {
-	vtgateInst, _, ctx, closer := createVtgateEnv(b)
-	defer closer()
+	vtgateInst, _, ctx := createVtgateEnv(b)
 
 	vtgateInst.executor.normalize = false
 

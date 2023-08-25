@@ -26,8 +26,7 @@ import (
 )
 
 func TestScatterStatsWithNoScatterQuery(t *testing.T) {
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
@@ -40,8 +39,7 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)
@@ -53,8 +51,7 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)

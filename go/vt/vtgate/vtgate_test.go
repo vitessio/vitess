@@ -45,8 +45,7 @@ var executeOptions = &querypb.ExecuteOptions{
 }
 
 func TestVTGateExecute(t *testing.T) {
-	vtg, sbc, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, sbc, ctx := createVtgateEnv(t)
 	counts := vtg.timings.Timings.Counts()
 
 	_, qr, err := vtg.Execute(
@@ -85,8 +84,7 @@ func TestVTGateExecute(t *testing.T) {
 }
 
 func TestVTGateExecuteError(t *testing.T) {
-	vtg, _, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, _, ctx := createVtgateEnv(t)
 
 	counts := vtg.timings.Timings.Counts()
 
@@ -116,8 +114,7 @@ func TestVTGateExecuteError(t *testing.T) {
 }
 
 func TestVTGatePrepare(t *testing.T) {
-	vtg, sbc, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, sbc, ctx := createVtgateEnv(t)
 
 	counts := vtg.timings.Timings.Counts()
 	_, qr, err := vtg.Prepare(
@@ -154,8 +151,7 @@ func TestVTGatePrepare(t *testing.T) {
 }
 
 func TestVTGatePrepareError(t *testing.T) {
-	vtg, _, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, _, ctx := createVtgateEnv(t)
 
 	counts := errorCounts.Counts()
 
@@ -184,8 +180,7 @@ func TestVTGatePrepareError(t *testing.T) {
 }
 
 func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
-	vtg, _, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, _, ctx := createVtgateEnv(t)
 
 	// Valid keyspace.
 	_, qr, err := vtg.Execute(
@@ -247,8 +242,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
-	vtg, sbc, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, sbc, ctx := createVtgateEnv(t)
 
 	var qrs []*sqltypes.Result
 	_, err := vtg.StreamExecute(
@@ -278,8 +272,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 }
 
 func TestVTGateBindVarError(t *testing.T) {
-	vtg, _, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, _, ctx := createVtgateEnv(t)
 
 	session := &vtgatepb.Session{}
 	bindVars := map[string]*querypb.BindVariable{
@@ -380,8 +373,7 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 // tablet and a rdonly tablet because we don't control the routing of
 // Commit.
 func TestErrorPropagation(t *testing.T) {
-	vtg, sbc, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, sbc, ctx := createVtgateEnv(t)
 
 	sbcs := []*sandboxconn.SandboxConn{
 		sbc,
@@ -463,8 +455,7 @@ func TestErrorPropagation(t *testing.T) {
 // This test makes sure that if we start a transaction and hit a critical
 // error, a rollback is issued.
 func TestErrorIssuesRollback(t *testing.T) {
-	vtg, sbc, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, sbc, ctx := createVtgateEnv(t)
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
@@ -594,8 +585,7 @@ var shardedVSchemaUnknownParams = `
 `
 
 func TestMultiInternalSavepointVtGate(t *testing.T) {
-	vtg, _, ctx, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, _, ctx := createVtgateEnv(t)
 
 	const customKeyspace = "CustomSharding"
 	s := createSandbox(customKeyspace)
@@ -693,8 +683,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 }
 
 func TestVSchemaVindexUnknownParams(t *testing.T) {
-	vtg, _, _, closer := createVtgateEnv(t)
-	defer closer()
+	vtg, _, _ := createVtgateEnv(t)
 
 	const customKeyspace = "CustomSharding"
 	s := createSandbox(customKeyspace)
@@ -726,15 +715,15 @@ func TestVSchemaVindexUnknownParams(t *testing.T) {
 	require.Equal(t, int64(0), unknownParams)
 }
 
-func createVtgateEnv(t testing.TB) (*VTGate, *sandboxconn.SandboxConn, context.Context, func()) {
+func createVtgateEnv(t testing.TB) (*VTGate, *sandboxconn.SandboxConn, context.Context) {
 	cell := "aa"
 	sb := createSandbox(KsTestSharded)
 	sb.ShardSpec = "-"
-	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
+	executor, _, _, sbc, ctx := createExecutorEnv(t)
 	executor.normalize = normalizeQueries
 
 	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, cell)
 	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
 
-	return vtg, sbc, ctx, closer
+	return vtg, sbc, ctx
 }

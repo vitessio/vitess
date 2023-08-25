@@ -17,7 +17,6 @@ limitations under the License.
 package helpers
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -27,9 +26,7 @@ import (
 )
 
 func TestTeeTopo(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		s1 := memorytopo.NewServer(ctx, test.LocalCellName)
 		s2 := memorytopo.NewServer(ctx, test.LocalCellName)

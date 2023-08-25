@@ -58,9 +58,7 @@ func checkChecksum(t *testing.T, tw *TopologyWatcher, want uint32) {
 }
 
 func TestStartAndCloseTopoWatcher(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "aa")
 	defer ts.Close()
@@ -118,9 +116,7 @@ func TestCellTabletsWatcherNoRefreshKnown(t *testing.T) {
 }
 
 func checkWatcher(t *testing.T, refreshKnownTablets bool) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "aa")
 	defer ts.Close()
@@ -443,9 +439,7 @@ var (
 )
 
 func TestFilterByKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	hc := NewFakeHealthCheck(nil)
 	f := NewFilterByKeyspace(testKeyspacesToWatch)
@@ -528,9 +522,7 @@ func TestFilterByKeyspace(t *testing.T) {
 //   - does not continuosly call GetTablets for tablets that do not satisfy the filter
 //   - does not add or remove these filtered out tablets from the its healtcheck
 func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "aa")
 	defer ts.Close()

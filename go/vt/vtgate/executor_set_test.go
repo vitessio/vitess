@@ -40,8 +40,7 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	executorEnv, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executorEnv, _, _, _, ctx := createExecutorEnv(t)
 
 	testcases := []struct {
 		in  string
@@ -282,8 +281,7 @@ func TestExecutorSet(t *testing.T) {
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	executor, _, _, sbclookup, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 	sysVarSetEnabled = true
 
 	returnResult := func(columnName, typ, value string) *sqltypes.Result {
@@ -382,67 +380,69 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
-	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
-	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
+	t.Run("Session 1", func(t *testing.T) {
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
-	vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
-	}()
+		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
+		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
+		assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
+	})
 
-	closer()
-	executor, _, _, _, ctx, closer = createExecutorEnv(t)
-	defer closer()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+	t.Run("Session 2", func(t *testing.T) {
+		vschemaacl.AuthorizedDDLUsers = "%"
+		defer func() {
+			vschemaacl.AuthorizedDDLUsers = ""
+		}()
 
-	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, set, nil)
-	assert.NoError(t, err, "%s error: %v", set, err)
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
-	show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
-	result, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
-	assert.NoError(t, err)
+		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
+		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
+		assert.NoError(t, err, "%s error: %v", set, err)
 
-	want := "1"
-	got := result.Rows[0][1].ToString()
-	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
+		show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
+		result, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
+		assert.NoError(t, err)
 
-	// Update metadata
-	set = "set @@vitess_metadata.app_keyspace_v2='2'"
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, set, nil)
-	assert.NoError(t, err, "%s error: %v", set, err)
+		want := "1"
+		got := result.Rows[0][1].ToString()
+		assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
 
-	show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
-	gotqr, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
-	assert.NoError(t, err)
+		// Update metadata
+		set = "set @@vitess_metadata.app_keyspace_v2='2'"
+		_, err = executor.Execute(ctx, nil, "TestExecute", session, set, nil)
+		assert.NoError(t, err, "%s error: %v", set, err)
 
-	wantqr := &sqltypes.Result{
-		Fields: buildVarCharFields("Key", "Value"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("app_keyspace_v1", "1"),
-			buildVarCharRow("app_keyspace_v2", "2"),
-		},
-		RowsAffected: 2,
-	}
+		show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
+		gotqr, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
+		assert.NoError(t, err)
 
-	assert.Equal(t, wantqr.Fields, gotqr.Fields)
-	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+		wantqr := &sqltypes.Result{
+			Fields: buildVarCharFields("Key", "Value"),
+			Rows: [][]sqltypes.Value{
+				buildVarCharRow("app_keyspace_v1", "1"),
+				buildVarCharRow("app_keyspace_v2", "2"),
+			},
+			RowsAffected: 2,
+		}
 
-	show = "show vitess_metadata variables"
-	gotqr, err = executor.Execute(ctx, nil, "TestExecute", session, show, nil)
-	require.NoError(t, err)
+		assert.Equal(t, wantqr.Fields, gotqr.Fields)
+		assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
 
-	assert.Equal(t, wantqr.Fields, gotqr.Fields)
-	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+		show = "show vitess_metadata variables"
+		gotqr, err = executor.Execute(ctx, nil, "TestExecute", session, show, nil)
+		require.NoError(t, err)
+
+		assert.Equal(t, wantqr.Fields, gotqr.Fields)
+		assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+	})
 }
 
 func TestPlanExecutorSetUDV(t *testing.T) {
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	testcases := []struct {
 		in  string
@@ -472,8 +472,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 }
 
 func TestSetUDVFromTabletInput(t *testing.T) {
-	executor, sbc1, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
 
 	fields := sqltypes.MakeTestFields("some", "VARCHAR")
 	sbc1.SetResults([]*sqltypes.Result{
@@ -504,8 +503,7 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 }
 
 func TestSetVar(t *testing.T) {
-	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, sbc, ctx := createExecutorEnv(t)
 	executor.normalize = true
 
 	oldVersion := sqlparser.GetParserVersion()
@@ -549,8 +547,7 @@ func TestSetVar(t *testing.T) {
 }
 
 func TestSetVarShowVariables(t *testing.T) {
-	executor, _, _, sbc, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, sbc, ctx := createExecutorEnv(t)
 	executor.normalize = true
 
 	oldVersion := sqlparser.GetParserVersion()
@@ -579,8 +576,7 @@ func TestSetVarShowVariables(t *testing.T) {
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
-	e, _, _, sbc, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	e, _, _, sbc, ctx := createExecutorEnv(t)
 	e.normalize = true
 
 	testcases := []struct {

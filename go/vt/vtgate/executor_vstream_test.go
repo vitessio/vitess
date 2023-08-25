@@ -37,8 +37,7 @@ import (
 // TestVStreamSQLUnsharded tests the experimental 'vstream * from' vtgate olap query
 func TestVStreamSQLUnsharded(t *testing.T) {
 	t.Skip("this test is failing due to races") // FIXME
-	executor, _, _, sbcLookup, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, sbcLookup, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 	send1 := []*binlogdatapb.VEvent{

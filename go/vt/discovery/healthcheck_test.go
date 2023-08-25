@@ -64,9 +64,7 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	// reset error counters
 	hcErrorCounters.ResetAll()
 	ts := memorytopo.NewServer(ctx, "cell")
@@ -210,9 +208,7 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -276,9 +272,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
 func TestHealthCheckErrorOnPrimary(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -341,9 +335,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 }
 
 func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -424,9 +416,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 }
 
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -472,9 +462,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 // TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
 func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -538,9 +526,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	// reset counters
 	hcErrorCounters.ResetAll()
@@ -615,9 +601,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 }
 
 func TestWaitForAllServingTablets(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -641,6 +625,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	// there will be a first result, get and discard it
 	<-resultChan
 	// empty
+	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
@@ -712,9 +697,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
 func TestRemoveTablet(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -824,9 +807,7 @@ func TestRemoveTablet(t *testing.T) {
 
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
@@ -1015,9 +996,7 @@ func TestGetHealthyTablets(t *testing.T) {
 }
 
 func TestPrimaryInOtherCell(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
@@ -1077,9 +1056,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 }
 
 func TestReplicaInOtherCell(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
@@ -1184,9 +1161,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 }
 
 func TestCellAliases(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
@@ -1249,9 +1224,7 @@ func TestCellAliases(t *testing.T) {
 }
 
 func TestHealthCheckChecksGrpcPort(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()

@@ -86,9 +86,7 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 
 func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		defer utils.EnsureNoLeaks(t)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := utils.LeakCheckContext(t)
 
 		vte := initTest(ctx, mode, opts, topts, t)
 		defer vte.Stop()
@@ -155,10 +153,7 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
@@ -198,10 +193,7 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()

@@ -85,9 +85,7 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 }
 
 func TestTabletGatewayShuffleTablets(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &fakeTopoServer{}
@@ -149,9 +147,7 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 }
 
 func TestTabletGatewayReplicaTransactionError(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "ks"
 	shard := "0"
@@ -177,9 +173,7 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 
 func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *querypb.Target) error) {
 	t.Helper()
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "ks"
 	shard := "0"
@@ -248,9 +242,7 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 
 func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *querypb.Target) error) {
 	t.Helper()
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "ks"
 	shard := "0"

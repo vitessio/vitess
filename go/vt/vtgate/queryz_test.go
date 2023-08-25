@@ -36,8 +36,7 @@ import (
 )
 
 func TestQueryzHandler(t *testing.T) {
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)

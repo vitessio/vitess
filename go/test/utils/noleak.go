@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strconv"
@@ -28,6 +29,24 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 )
+
+func LeakCheckContext(t testing.TB) context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		EnsureNoLeaks(t)
+	})
+	return ctx
+}
+
+func LeakCheckContextTimeout(t testing.TB, timeout time.Duration) context.Context {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	t.Cleanup(func() {
+		cancel()
+		EnsureNoLeaks(t)
+	})
+	return ctx
+}
 
 // EnsureNoLeaks checks for goroutine and socket leaks and fails the test if any are found.
 func EnsureNoLeaks(t testing.TB) {

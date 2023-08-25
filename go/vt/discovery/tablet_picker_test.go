@@ -305,9 +305,7 @@ func TestPickLocalPreferences(t *testing.T) {
 }
 
 func TestPickCellPreferenceLocalCell(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -346,9 +344,7 @@ func TestPickCellPreferenceLocalCell(t *testing.T) {
 }
 
 func TestPickCellPreferenceLocalAlias(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -364,9 +360,7 @@ func TestPickCellPreferenceLocalAlias(t *testing.T) {
 }
 
 func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
 
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -413,9 +407,7 @@ func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 }
 
 func TestTabletAppearsDuringSleep(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
 
 	te := newPickerTestEnv(t, ctx, []string{"cell"})
 	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
@@ -445,9 +437,7 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 }
 
 func TestPickErrorLocalPreferenceDefault(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	te := newPickerTestEnv(t, ctx, []string{"cell"})
 	_, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
@@ -477,9 +467,7 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 }
 
 func TestPickErrorOnlySpecified(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	te := newPickerTestEnv(t, ctx, []string{"cell"})
 
@@ -511,9 +499,7 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 // type has no available healthy serving tablets that we select a healthy
 // serving tablet from the secondary/second type.
 func TestPickFallbackType(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	cells := []string{"cell1", "cell2"}
 	localCell := cells[0]
@@ -532,6 +518,7 @@ func TestPickFallbackType(t *testing.T) {
 	replicaTablet := addTablet(ctx, te, 200, topodatapb.TabletType_REPLICA, localCell, false, false)
 	defer deleteTablet(t, te, replicaTablet)
 
+	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {

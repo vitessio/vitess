@@ -35,8 +35,7 @@ import (
 
 // TestAutocommitUpdateSharded: instant-commit.
 func TestAutocommitUpdateSharded(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "update user set a=2 where id = 1")
 	require.NoError(t, err)
@@ -53,8 +52,7 @@ func TestAutocommitUpdateSharded(t *testing.T) {
 
 // TestAutocommitUpdateLookup: transaction: select before update.
 func TestAutocommitUpdateLookup(t *testing.T) {
-	executor, sbc1, _, sbclookup, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"2|1",
@@ -83,8 +81,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 
 // TestAutocommitUpdateVindexChange: transaction: select & update before final update.
 func TestAutocommitUpdateVindexChange(t *testing.T) {
-	executor, sbc, _, sbclookup, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc, _, sbclookup, _ := createExecutorEnv(t)
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
 		"1|1|foo|0",
@@ -123,8 +120,7 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 
 // TestAutocommitDeleteSharded: instant-commit.
 func TestAutocommitDeleteSharded(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id = 1")
 	require.NoError(t, err)
@@ -141,8 +137,7 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 
 // TestAutocommitDeleteLookup: transaction: select before update.
 func TestAutocommitDeleteLookup(t *testing.T) {
-	executor, sbc1, _, sbclookup, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
 		"1|1|foo",
@@ -184,8 +179,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 
 // TestAutocommitDeleteIn: instant-commit.
 func TestAutocommitDeleteIn(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id in (1, 2)")
 	require.NoError(t, err)
@@ -202,8 +196,7 @@ func TestAutocommitDeleteIn(t *testing.T) {
 
 // TestAutocommitDeleteMultiShard: instant-commit.
 func TestAutocommitDeleteMultiShard(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id = user_id + 1")
 	require.NoError(t, err)
@@ -223,8 +216,7 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 
 // TestAutocommitDeleteMultiShardAutoCommit: instant-commit.
 func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1")
 	require.NoError(t, err)
@@ -244,8 +236,7 @@ func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
 
 // TestAutocommitInsertSharded: instant-commit.
 func TestAutocommitInsertSharded(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "insert into user_extra(user_id, v) values (1, 2)")
 	require.NoError(t, err)
@@ -264,8 +255,7 @@ func TestAutocommitInsertSharded(t *testing.T) {
 
 // TestAutocommitInsertLookup: transaction: select before update.
 func TestAutocommitInsertLookup(t *testing.T) {
-	executor, sbc1, _, sbclookup, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')")
 	require.NoError(t, err)
@@ -292,54 +282,55 @@ func TestAutocommitInsertLookup(t *testing.T) {
 
 // TestAutocommitInsertShardAutoCommit: instant-commit.
 func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
+	t.Run("1", func(t *testing.T) {
+		executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
-	_, err := autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
-	require.NoError(t, err)
+		_, err := autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
+		require.NoError(t, err)
 
-	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_0, 2)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id_0": sqltypes.Int64BindVariable(1),
-			"_user_id_1": sqltypes.Int64BindVariable(3),
-		},
-	}})
-	testCommitCount(t, "sbc1", sbc1, 0)
+		assertQueries(t, sbc1, []*querypb.BoundQuery{{
+			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_0, 2)",
+			BindVariables: map[string]*querypb.BindVariable{
+				"_user_id_0": sqltypes.Int64BindVariable(1),
+				"_user_id_1": sqltypes.Int64BindVariable(3),
+			},
+		}})
+		testCommitCount(t, "sbc1", sbc1, 0)
 
-	assertQueries(t, sbc2, []*querypb.BoundQuery{{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id_0": sqltypes.Int64BindVariable(1),
-			"_user_id_1": sqltypes.Int64BindVariable(3),
-		},
-	}})
-	testCommitCount(t, "sbc2", sbc2, 0)
+		assertQueries(t, sbc2, []*querypb.BoundQuery{{
+			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
+			BindVariables: map[string]*querypb.BindVariable{
+				"_user_id_0": sqltypes.Int64BindVariable(1),
+				"_user_id_1": sqltypes.Int64BindVariable(3),
+			},
+		}})
+		testCommitCount(t, "sbc2", sbc2, 0)
+	})
 
-	closer()
-	executor, sbc1, sbc2, _, _, closer = createExecutorEnv(t)
-	defer closer()
-	// Make the first shard fail - the second completes anyway
-	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "INVALID_ARGUMENT", "expected invalid argument error")
+	t.Run("2", func(t *testing.T) {
+		executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
-	testCommitCount(t, "sbc1", sbc1, 0)
+		// Make the first shard fail - the second completes anyway
+		sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+		_, err := autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "INVALID_ARGUMENT", "expected invalid argument error")
 
-	assertQueries(t, sbc2, []*querypb.BoundQuery{{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id_0": sqltypes.Int64BindVariable(1),
-			"_user_id_1": sqltypes.Int64BindVariable(3),
-		},
-	}})
-	testCommitCount(t, "sbc2", sbc2, 0)
+		testCommitCount(t, "sbc1", sbc1, 0)
 
+		assertQueries(t, sbc2, []*querypb.BoundQuery{{
+			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
+			BindVariables: map[string]*querypb.BindVariable{
+				"_user_id_0": sqltypes.Int64BindVariable(1),
+				"_user_id_1": sqltypes.Int64BindVariable(3),
+			},
+		}})
+		testCommitCount(t, "sbc2", sbc2, 0)
+	})
 }
 
 func TestAutocommitInsertMultishard(t *testing.T) {
-	executor, sbc1, sbc2, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "insert into user_extra(user_id, v) values (1, 2), (3, 4)")
 	require.NoError(t, err)
@@ -365,8 +356,7 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 
 // TestAutocommitInsertAutoinc: instant-commit: sequence fetch is not transactional.
 func TestAutocommitInsertAutoinc(t *testing.T) {
-	executor, _, _, sbclookup, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, sbclookup, _ := createExecutorEnv(t)
 
 	_, err := autocommitExec(executor, "insert into main1(id, name) values (null, 'myname')")
 	require.NoError(t, err)
@@ -385,8 +375,7 @@ func TestAutocommitInsertAutoinc(t *testing.T) {
 
 // TestAutocommitTransactionStarted: no instant-commit.
 func TestAutocommitTransactionStarted(t *testing.T) {
-	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
 	session := &vtgatepb.Session{
 		TargetString:    "@primary",
@@ -418,8 +407,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 
 // TestAutocommitDirectTarget: instant-commit.
 func TestAutocommitDirectTarget(t *testing.T) {
-	executor, _, _, sbclookup, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, sbclookup, _ := createExecutorEnv(t)
 
 	session := &vtgatepb.Session{
 		TargetString:    "TestUnsharded/0@primary",
@@ -440,8 +428,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 
 // TestAutocommitDirectRangeTarget: no instant-commit.
 func TestAutocommitDirectRangeTarget(t *testing.T) {
-	executor, sbc1, _, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
 	session := &vtgatepb.Session{
 		TargetString:    "TestExecutor[-]@primary",

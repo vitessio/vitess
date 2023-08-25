@@ -39,8 +39,7 @@ import (
 )
 
 func TestStreamSQLUnsharded(t *testing.T) {
-	executor, _, _, _, _, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, _ := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -54,9 +53,7 @@ func TestStreamSQLUnsharded(t *testing.T) {
 }
 
 func TestStreamSQLSharded(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	u := createSandbox(KsTestUnsharded)

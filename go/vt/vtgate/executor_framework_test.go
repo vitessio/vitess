@@ -127,7 +127,7 @@ func init() {
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
 
-func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context, closer func()) {
+func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(context.Background())
 	cell := "aa"
@@ -179,14 +179,17 @@ func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup 
 	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
-	return executor, sbc1, sbc2, sbclookup, ctx, func() {
+
+	t.Cleanup(func() {
+		defer utils.EnsureNoLeaks(t)
 		executor.Close()
 		cancel()
-		defer utils.EnsureNoLeaks(t)
-	}
+	})
+
+	return executor, sbc1, sbc2, sbclookup, ctx
 }
 
-func createCustomExecutor(t testing.TB, vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context, closer func()) {
+func createCustomExecutor(t testing.TB, vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(context.Background())
 	cell := "aa"
@@ -205,14 +208,17 @@ func createCustomExecutor(t testing.TB, vschema string) (executor *Executor, sbc
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
 	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
-	return executor, sbc1, sbc2, sbclookup, ctx, func() {
+
+	t.Cleanup(func() {
 		defer utils.EnsureNoLeaks(t)
-		defer cancel()
 		executor.Close()
-	}
+		cancel()
+	})
+
+	return executor, sbc1, sbc2, sbclookup, ctx
 }
 
-func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context, closer func()) {
+func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(context.Background())
 	cell := "aa"
@@ -238,11 +244,14 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
 	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
-	return executor, sbcs[0], sbcs[1], sbclookup, ctx, func() {
+
+	t.Cleanup(func() {
+		defer utils.EnsureNoLeaks(t)
 		executor.Close()
 		cancel()
-		defer utils.EnsureNoLeaks(t)
-	}
+	})
+
+	return executor, sbcs[0], sbcs[1], sbclookup, ctx
 }
 
 func executorExecSession(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {

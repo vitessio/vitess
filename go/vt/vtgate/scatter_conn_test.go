@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -43,9 +42,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestExecuteFailOnAutocommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -109,9 +106,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "keyspace"
 	createSandbox(keyspace)
@@ -137,9 +132,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 }
 
 func TestReservedBeginTableDriven(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	type testAction struct {
 		transaction, reserved    bool
@@ -299,9 +292,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 }
 
 func TestReservedConnFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "keyspace"
 	createSandbox(keyspace)

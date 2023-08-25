@@ -80,9 +80,8 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 }
 
 func TestExecuteBackup(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
+
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
@@ -226,9 +225,7 @@ func TestExecuteBackup(t *testing.T) {
 }
 
 func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
@@ -318,9 +315,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
 // occur due to various reasons, such as context time cancel. The process should not panic in these situations.
 func TestExecuteBackupWithCanceledContext(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -408,9 +403,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
 // occur due to various reasons, such as context timed-out. The process should not panic in these situations.
 func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())

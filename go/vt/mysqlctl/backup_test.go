@@ -45,9 +45,7 @@ import (
 // TestBackupExecutesBackupWithScopedParams tests that Backup passes
 // a Scope()-ed stats to backupengine ExecuteBackup.
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
@@ -68,10 +66,7 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 // TestBackupNoStats tests that if BackupParams.Stats is nil, then Backup will
 // pass non-nil Stats to sub-components.
 func TestBackupNoStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
-
+	env := createFakeBackupRestoreEnv(t)
 	env.setStats(nil)
 
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
@@ -84,9 +79,7 @@ func TestBackupNoStats(t *testing.T) {
 // TestBackupParameterizesBackupStorageWithScopedStats tests that Backup passes
 // a Scope()-ed stats to BackupStorage.WithParams.
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
@@ -105,9 +98,7 @@ func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 
 // TestBackupEmitsStats tests that Backup emits stats.
 func TestBackupEmitsStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	// Force ExecuteBackup to take time so we can test stats emission.
 	env.backupEngine.ExecuteBackupDuration = 1001 * time.Millisecond
@@ -123,9 +114,7 @@ func TestBackupEmitsStats(t *testing.T) {
 // backupstorage.Params to backupstorage, but only if it responds to
 // backupstorage.WithParams.
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
@@ -329,9 +318,7 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 
 // TestRestoreEmitsStats tests that Restore emits stats.
 func TestRestoreEmitsStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	// Force ExecuteRestore to take time so we can test stats emission.
 	env.backupEngine.ExecuteRestoreDuration = 1001 * time.Millisecond
@@ -347,9 +334,7 @@ func TestRestoreEmitsStats(t *testing.T) {
 // TestRestoreExecutesRestoreWithScopedParams tests that Restore passes
 // a Scope()-ed stats to backupengine ExecuteRestore.
 func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.Nil(t, err, env.logger.Events)
@@ -371,10 +356,7 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 // TestRestoreNoStats tests that if RestoreParams.Stats is nil, then Restore will
 // pass non-nil Stats to sub-components.
 func TestRestoreNoStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
-
+	env := createFakeBackupRestoreEnv(t)
 	env.setStats(nil)
 
 	_, err := Restore(env.ctx, env.restoreParams)
@@ -388,9 +370,7 @@ func TestRestoreNoStats(t *testing.T) {
 // TestRestoreParameterizesBackupStorageWithScopedStats tests that Restore passes
 // a Scope()-ed stats to BackupStorage.WithParams.
 func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.Nil(t, err, env.logger.Events)
@@ -412,9 +392,7 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 // backupstorage.Params to backupstorage, but only if it responds to
 // backupstorage.WithParams.
 func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	env, closer := createFakeBackupRestoreEnv(t)
-	defer closer()
+	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.Nil(t, err, env.logger.Events)
@@ -524,9 +502,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%s->%s upgradeSafe=%t", tc.fromVersion, tc.toVersion, tc.upgradeSafe), func(t *testing.T) {
-			defer utils.EnsureNoLeaks(t)
-			env, closer := createFakeBackupRestoreEnv(t)
-			defer closer()
+			env := createFakeBackupRestoreEnv(t)
 			env.mysqld.Version = tc.toVersion
 
 			manifest := BackupManifest{
@@ -580,7 +556,7 @@ type fakeBackupRestoreEnv struct {
 	stats         *backupstats.FakeStats
 }
 
-func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
+func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
@@ -663,7 +639,12 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 	previousBackupStorageImplementation := backupstorage.BackupStorageImplementation
 	backupstorage.BackupStorageImplementation = "fake"
 
-	closer := func() {
+	// all restore integration tests must be leak checked
+	t.Cleanup(func() {
+		utils.EnsureNoLeaks(t)
+	})
+
+	t.Cleanup(func() {
 		backupstats.DeprecatedBackupDurationS.Reset()
 		backupstats.DeprecatedRestoreDurationS.Reset()
 
@@ -674,7 +655,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 		backupstorage.BackupStorageImplementation = previousBackupStorageImplementation
 		mysqld.Close()
 		sqldb.Close()
-	}
+	})
 
 	return &fakeBackupRestoreEnv{
 		backupEngine:  &testBackupEngine,
@@ -685,7 +666,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 		mysqld:        mysqld,
 		restoreParams: restoreParams,
 		stats:         stats,
-	}, closer
+	}
 }
 
 func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {

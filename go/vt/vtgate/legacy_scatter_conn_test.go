@@ -44,9 +44,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -111,9 +109,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 
 func TestScatterConnExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		defer utils.EnsureNoLeaks(t)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := utils.LeakCheckContext(t)
 		res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 		rss, err := res.ResolveDestination(ctx, "TestScatterConnExecuteMultiShard", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
 		if err != nil {
@@ -135,9 +131,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		defer utils.EnsureNoLeaks(t)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := utils.LeakCheckContext(t)
 		res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 		rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecuteMulti", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
 		if err != nil {
@@ -165,9 +159,7 @@ func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vt
 }
 
 func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, shards []string) (*sqltypes.Result, error)) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	hc := discovery.NewFakeHealthCheck(nil)
 
@@ -273,9 +265,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 }
 
 func TestMaxMemoryRows(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	save := maxMemoryRows
 	maxMemoryRows = 3
@@ -332,9 +322,7 @@ func TestMaxMemoryRows(t *testing.T) {
 }
 
 func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -384,9 +372,7 @@ func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.R
 }
 
 func TestMultiExecs(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	createSandbox("TestMultiExecs")
 	hc := discovery.NewFakeHealthCheck(nil)
 	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
@@ -483,9 +469,7 @@ func TestMultiExecs(t *testing.T) {
 }
 
 func TestScatterConnSingleDB(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	createSandbox("TestScatterConnSingleDB")
 	hc := discovery.NewFakeHealthCheck(nil)
 
@@ -579,9 +563,7 @@ func TestAppendResult(t *testing.T) {
 }
 
 func TestReservePrequeries(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)

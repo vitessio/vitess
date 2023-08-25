@@ -1137,9 +1137,7 @@ func TestResolveVStreamParams(t *testing.T) {
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	cell := "aa"
 	ks := "TestVStream"

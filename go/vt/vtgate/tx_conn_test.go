@@ -43,9 +43,7 @@ var queries = []*querypb.BoundQuery{{Sql: "query1"}}
 var twoQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
 
 func TestTxConnBegin(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	session := &vtgatepb.Session{}
@@ -67,9 +65,7 @@ func TestTxConnBegin(t *testing.T) {
 }
 
 func TestTxConnCommitFailure(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -128,9 +124,7 @@ func TestTxConnCommitFailure(t *testing.T) {
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -183,9 +177,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitSuccess(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -269,9 +261,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "TestTxConn"
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, keyspace)
@@ -366,9 +356,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 }
 
 func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	keyspace := "TestTxConn"
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, keyspace)
@@ -463,9 +451,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure1(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -498,9 +484,7 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure2(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -534,9 +518,7 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -578,9 +560,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 }
 
 func TestTxConnCommitOrderSuccess(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -678,9 +658,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -823,9 +801,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnCommit2PC(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PC")
 
@@ -843,9 +819,7 @@ func TestTxConnCommit2PC(t *testing.T) {
 }
 
 func TestTxConnCommit2PCOneParticipant(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -857,9 +831,7 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCCreateTransactionFail")
 
@@ -883,9 +855,7 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCPrepareFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCPrepareFail")
 
@@ -907,9 +877,7 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCStartCommitFail")
 
@@ -931,9 +899,7 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCCommitPreparedFail")
 
@@ -955,9 +921,7 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCConcludeTransactionFail")
 
@@ -979,9 +943,7 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 }
 
 func TestTxConnRollback(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TxConnRollback")
 
@@ -997,9 +959,7 @@ func TestTxConnRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollback(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TxConnReservedRollback")
 
@@ -1036,9 +996,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, ctx, "TxConnReservedRollback")
 
@@ -1069,9 +1027,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 }
 
 func TestTxConnResolveOnPrepare(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1094,9 +1050,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 }
 
 func TestTxConnResolveOnRollback(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1119,9 +1073,7 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 }
 
 func TestTxConnResolveOnCommit(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1144,9 +1096,7 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 }
 
 func TestTxConnResolveInvalidDTID(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, _, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1156,9 +1106,7 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 }
 
 func TestTxConnResolveReadTransactionFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1171,9 +1119,7 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 }
 
 func TestTxConnResolveInternalError(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1194,9 +1140,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 }
 
 func TestTxConnResolveSetRollbackFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1222,9 +1166,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 }
 
 func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1250,9 +1192,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveCommitPreparedFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1278,9 +1218,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
@@ -1306,9 +1244,7 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 }
 
 func TestTxConnMultiGoSessions(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	txc := &TxConn{}
 
@@ -1377,9 +1313,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 }
 
 func TestTxConnAccessModeReset(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := utils.LeakCheckContext(t)
 
 	sc, _, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 

@@ -133,8 +133,7 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
@@ -162,8 +161,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -205,8 +203,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -275,8 +272,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -333,8 +329,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
 	vschema := executor.vm.GetCurrentSrvVschema()
@@ -394,8 +389,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -638,8 +632,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	// t.Skip("not yet planned")
-	executor, _, _, _, ctx, closer := createExecutorEnv(t)
-	defer closer()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 

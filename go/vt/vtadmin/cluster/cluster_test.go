@@ -177,7 +177,7 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
+	ctx := utils.LeakCheckContext(t)
 
 	type test struct {
 		name      string
@@ -186,8 +186,7 @@ func TestCreateShard(t *testing.T) {
 		shouldErr bool
 		assertion func(t *testing.T, tt *test)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
 	tests := []*test{
 		{
 			name: "ok",
@@ -279,10 +278,8 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
+	ctx := utils.LeakCheckContext(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	tests := []struct {
 		name      string
 		cfg       testutil.TestClusterConfig
@@ -364,8 +361,8 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
 	t.Parallel()
+	ctx := utils.LeakCheckContext(t)
 
 	type test struct {
 		name      string
@@ -375,8 +372,7 @@ func TestDeleteShards(t *testing.T) {
 		shouldErr bool
 		assertion func(t *testing.T, tt *test)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
 	tests := []*test{
 		{
 			name: "ok",
