@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
@@ -53,6 +54,145 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 		},
 	}
 	require.True(t, kss.onSrvKeyspace(nil, nil))
+}
+
+// TestKeyspaceResharding confirms that the keyspace event watcher thinks that a
+// resharding operation is underway when the expected conditions are present:
+// 1. The keyspace is inconsistent
+// 2. The tablet is primary
+// 3. The keyspace has overlapping shards
+// 4. The overlapping shard's tablet is serving
+func TestKeyspaceResharding(t *testing.T) {
+	cell := "cell"
+	keyspace := "testks"
+	factory := faketopo.NewFakeTopoFactory()
+	factory.AddCell(cell)
+	ts := faketopo.NewFakeTopoServer(factory)
+	ts2 := &fakeTopoServer{}
+	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
+	kss := &keyspaceState{
+		kew:      kew,
+		keyspace: keyspace,
+		shards: map[string]*shardState{
+			"-80": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "-80",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: false,
+			},
+			"80-": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "80-",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: false,
+			},
+			"-40": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "-40",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: true,
+			},
+			"40-80": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "40-80",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: true,
+			},
+			"80-c0": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "80-c0",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: true,
+			},
+			"c0-": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "c0-",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: true,
+			},
+		},
+	}
+	kew.keyspaces[keyspace] = &keyspaceState{
+		kew:        kew,
+		keyspace:   keyspace,
+		shards:     kss.shards,
+		consistent: false,
+	}
+
+	resharding := kew.TargetIsBeingResharded(kss.shards["-80"].target)
+	require.True(t, resharding, "TargetIsBeingResharded should return true")
+}
+
+// TestShardPrimaryNotServing confirms that the keyspace event watcher thinks that there
+// is NOT a resharding operation underway and that it reports the expected primary not
+// serving state when one shard's primary is not serving, meaning that the following
+// conditions are met:
+// 1. The keyspace is inconsistent
+// 2. The tablet is a primary
+// 3. The tablet is not serving
+// 4. externallyReparented is not 0
+// 5. currentPrimary is not nil
+func TestShardPrimaryNotServing(t *testing.T) {
+	cell := "cell"
+	keyspace := "testks"
+	factory := faketopo.NewFakeTopoFactory()
+	factory.AddCell(cell)
+	ts := faketopo.NewFakeTopoServer(factory)
+	ts2 := &fakeTopoServer{}
+	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
+	kss := &keyspaceState{
+		kew:      kew,
+		keyspace: keyspace,
+		shards: map[string]*shardState{
+			"-80": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "-80",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving:              false,
+				externallyReparented: time.Now().UnixNano(),
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: cell,
+					Uid:  100,
+				},
+			},
+			"80-": {
+				target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      "80-",
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				serving: true,
+			},
+		},
+	}
+	kew.keyspaces[keyspace] = &keyspaceState{
+		kew:        kew,
+		keyspace:   keyspace,
+		shards:     kss.shards,
+		consistent: false,
+	}
+
+	resharding := kew.TargetIsBeingResharded(kss.shards["-80"].target)
+	require.False(t, resharding, "TargetIsBeingResharded should return false")
+
+	_, primaryDown := kew.PrimaryIsNotServing(kss.shards["-80"].target)
+	require.True(t, primaryDown, "PrimaryIsNotServing should return true")
 }
 
 type fakeTopoServer struct {
