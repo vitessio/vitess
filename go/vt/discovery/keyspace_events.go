@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -142,18 +143,29 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 
-	// if the keyspace is gone, or if it has no known availability events, the keyspace
-	// cannot be in the middle of a resharding operation
-	if kss.deleted || kss.consistent {
+	// If the keyspace is gone, if it has no known availability events, or the keyspace
+	// is in the middle of a MoveTables then keyspace cannot be in the middle of a
+	// resharding operation.
+	if kss.deleted || kss.consistent || (kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesType(MoveTablesNone)) {
 		return false
 	}
 
-	// for all the known shards, try to find a primary shard besides the one we're trying to access
-	// and which is currently healthy. if there are other healthy primaries in the keyspace, it means
-	// we're in the middle of a resharding operation
-	// FIXME: probably doesn't work for anything other than 1->2 resharding
+	// If there are unequal and overlapping shards in the keyspace and any
+	// of them are currently serving then we assume that we are in the middle
+	// of a Reshard operation.
+	_, ckr, err := topo.ValidateShardName(currentShard)
+	if err != nil || ckr == nil { // Assume not and avoid potential panic
+		return false
+	}
 	for shard, sstate := range kss.shards {
-		if shard != currentShard && sstate.serving {
+		if !sstate.serving || shard == currentShard {
+			continue
+		}
+		_, skr, err := topo.ValidateShardName(shard)
+		if err != nil || skr == nil { // Assume not and avoid potential panic
+			return false
+		}
+		if key.KeyRangeIntersect(ckr, skr) {
 			return true
 		}
 	}
