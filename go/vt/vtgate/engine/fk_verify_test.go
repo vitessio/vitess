@@ -106,3 +106,82 @@ func TestFKVerifyUpdate(t *testing.T) {
 		})
 	})
 }
+
+// TestFKVerifyInsert tests the functionality of FkVerify Primitive to verify the validation of the foreign key constraints when executing an insert.
+func TestFKVerifyInsert(t *testing.T) {
+	verifyP := &Route{
+		Query: "select distinct cola, colb from parent where (cola, colb) in ::__vals",
+		RoutingParameters: &RoutingParameters{
+			Opcode:   Unsharded,
+			Keyspace: &vindexes.Keyspace{Name: "ks"},
+		},
+	}
+	childP := &Insert{
+		Opcode:   InsertUnsharded,
+		Query:    "insert into child (cola, colb, x) values (1, 'a', 1), (2, 'b', 2), (1, 'a', 3),",
+		Keyspace: &vindexes.Keyspace{Name: "ks"},
+	}
+	fkc := &FkVerify{
+		Verify: []*FkParent{
+			{
+				Values: []sqlparser.Exprs{
+					{sqlparser.NewIntLiteral("1"), sqlparser.NewStrLiteral("a")},
+					{sqlparser.NewIntLiteral("2"), sqlparser.NewStrLiteral("b")},
+					{sqlparser.NewIntLiteral("1"), sqlparser.NewStrLiteral("a")},
+				},
+				Cols: []CheckCol{
+					{Col: 0, Type: sqltypes.Int64, Collation: collations.CollationBinaryID},
+					{Col: 1, Type: sqltypes.VarChar, Collation: collations.CollationUtf8mb4ID},
+				},
+				BvName: "__vals",
+				Exec:   verifyP,
+			},
+		},
+		Exec: childP,
+	}
+
+	t.Run("foreign key verification success", func(t *testing.T) {
+		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "1|a", "2|b")
+		vc := newDMLTestVCursor("0")
+		vc.results = []*sqltypes.Result{fakeRes}
+		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		require.NoError(t, err)
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: select distinct cola, colb from parent where (cola, colb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} false false`,
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: insert into child (cola, colb, x) values (1, 'a', 1), (2, 'b', 2), (1, 'a', 3), {} true true`,
+		})
+
+		vc.Rewind()
+		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`StreamExecuteMulti select distinct cola, colb from parent where (cola, colb) in ::__vals ks.0: {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} `,
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: insert into child (cola, colb, x) values (1, 'a', 1), (2, 'b', 2), (1, 'a', 3), {} true true`,
+		})
+	})
+
+	t.Run("foreign key verification failure", func(t *testing.T) {
+		// Only 1 result from select, should cause the foreign key verification to fail.
+		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "2|b")
+		vc := newDMLTestVCursor("0")
+		vc.results = []*sqltypes.Result{fakeRes}
+		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: select distinct cola, colb from parent where (cola, colb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} false false`,
+		})
+
+		vc.Rewind()
+		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`StreamExecuteMulti select distinct cola, colb from parent where (cola, colb) in ::__vals ks.0: {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} `,
+		})
+	})
+}
