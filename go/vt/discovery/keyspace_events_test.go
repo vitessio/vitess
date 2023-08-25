@@ -126,12 +126,14 @@ func TestKeyspaceResharding(t *testing.T) {
 			},
 		},
 	}
+	kew.mu.Lock()
 	kew.keyspaces[keyspace] = &keyspaceState{
 		kew:        kew,
 		keyspace:   keyspace,
 		shards:     kss.shards,
 		consistent: false,
 	}
+	kew.mu.Unlock()
 
 	resharding := kew.TargetIsBeingResharded(kss.shards["-80"].target)
 	require.True(t, resharding, "TargetIsBeingResharded should return true")
@@ -182,12 +184,14 @@ func TestShardPrimaryNotServing(t *testing.T) {
 			},
 		},
 	}
+	kew.mu.Lock()
 	kew.keyspaces[keyspace] = &keyspaceState{
 		kew:        kew,
 		keyspace:   keyspace,
 		shards:     kss.shards,
 		consistent: false,
 	}
+	kew.mu.Unlock()
 
 	resharding := kew.TargetIsBeingResharded(kss.shards["-80"].target)
 	require.False(t, resharding, "TargetIsBeingResharded should return false")
