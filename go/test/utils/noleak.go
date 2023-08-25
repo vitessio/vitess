@@ -30,6 +30,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// LeakCheckContext returns a Context that will be automatically cancelled at the end
+// of this test. If the test has finished successfully, it will be checked for goroutine
+// leaks after context cancellation.
 func LeakCheckContext(t testing.TB) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
@@ -39,6 +42,8 @@ func LeakCheckContext(t testing.TB) context.Context {
 	return ctx
 }
 
+// LeakCheckContextTimeout behaves like LeakCheckContext but the returned Context will
+// be cancelled after `timeout`, or after the test finishes, whichever happens first.
 func LeakCheckContextTimeout(t testing.TB, timeout time.Duration) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(func() {
