@@ -25,14 +25,15 @@ import (
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // KeyspaceEventWatcher is an auxiliary watcher that watches all availability incidents
@@ -72,7 +73,7 @@ type KeyspaceEvent struct {
 
 type ShardEvent struct {
 	Tablet  *topodatapb.TabletAlias
-	Target  *query.Target
+	Target  *querypb.Target
 	Serving bool
 }
 
@@ -174,7 +175,7 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 }
 
 type shardState struct {
-	target               *query.Target
+	target               *querypb.Target
 	serving              bool
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
@@ -597,7 +598,7 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceSta
 // This is not a fully accurate heuristic, but it's good enough that we'd want to buffer the
 // request for the given target under the assumption that the reason why it cannot be completed
 // right now is transitory.
-func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bool {
+func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *querypb.Target) bool {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return false
 	}
@@ -618,7 +619,7 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bo
 // to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
 // RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
 // We return the tablet alias of the primary if it is serving.
-func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) (*topodatapb.TabletAlias, bool) {
+func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *querypb.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil, false
 	}
