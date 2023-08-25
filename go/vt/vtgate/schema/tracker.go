@@ -21,21 +21,19 @@ import (
 	"sync"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/callerid"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 type (
@@ -175,7 +173,7 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 		return map[string][]vindexes.Column{} // we know nothing about this KS, so that is the info we can give out
 	}
 
-	return m
+	return maps.Clone(m)
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
@@ -275,7 +273,7 @@ func (tm *tableMap) delete(ks, tbl string) {
 	delete(m, tbl)
 }
 
-// This empties out any previous schema for for all tables in a keyspace.
+// This empties out any previous schema for all tables in a keyspace.
 // You should call this before initializing/loading a keyspace of the same
 // name in the cache.
 func (t *Tracker) clearKeyspaceTables(ks string) {
