@@ -68,7 +68,9 @@ const (
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
+	DropSequenceStr     = "drop sequence"
 	AddAutoIncStr       = "add auto_increment"
+	DropAutoIncStr      = "drop auto_increment"
 
 	// Partition and subpartition type strings
 	HashTypeStr  = "hash"
@@ -452,7 +454,9 @@ const (
 	AddColVindexDDLAction
 	DropColVindexDDLAction
 	AddSequenceDDLAction
+	DropSequenceDDLAction
 	AddAutoIncDDLAction
+	DropAutoIncDDLAction
 	RevertDDLAction
 )
 
