@@ -40,6 +40,7 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 	ts := faketopo.NewFakeTopoServer(factory)
 	ts2 := &fakeTopoServer{}
 	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	defer hc.Close()
 	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
 	kss := &keyspaceState{
 		kew:      kew,
@@ -71,6 +72,7 @@ func TestTargetIsBeingResharded(t *testing.T) {
 	ts := faketopo.NewFakeTopoServer(factory)
 	ts2 := &fakeTopoServer{}
 	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	defer hc.Close()
 	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
 	kss := &keyspaceState{
 		kew:      kew,
@@ -156,6 +158,7 @@ func TestPrimaryIsNotServing(t *testing.T) {
 	ts := faketopo.NewFakeTopoServer(factory)
 	ts2 := &fakeTopoServer{}
 	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, cell, "")
+	defer hc.Close()
 	kew := NewKeyspaceEventWatcher(context.Background(), ts2, hc, cell)
 	kss := &keyspaceState{
 		kew:      kew,
