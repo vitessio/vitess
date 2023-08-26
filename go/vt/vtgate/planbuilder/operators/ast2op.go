@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -149,8 +150,110 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	if len(parentFKs) == 0 {
 		return insOp, nil
 	}
+	// TODO(@GuptaManan100, @harshit-gangal): Reject some queries that are unsupported
+	// return nil, vterrors.VT12002()
 
-	return nil, vterrors.VT12002()
+	insValues, isValues := ins.Rows.(sqlparser.Values)
+	if !isValues {
+		// TODO(@GuptaManan100, @harshit-gangal) - Fix error message
+		return nil, vterrors.VT12001()
+	}
+
+	// For each fk we create a FkParent
+	var verify []*FkParent
+	for _, fk := range parentFKs {
+		// Verification query looks like -
+		// SELECT distinct <parent cols in foreign keys> from parent where (<parent cols>) in ::fkv_vals
+		bvName := ctx.ReservedVars.ReserveVariable("fkv_vals")
+
+		var valTuple sqlparser.ValTuple
+		var selExprs sqlparser.SelectExprs
+		for _, column := range fk.ParentColumns {
+			valTuple = append(valTuple, sqlparser.NewColName(column.String()))
+			selExprs = append(selExprs, aeWrap(sqlparser.NewColName(column.String())))
+		}
+
+		selStmt := &sqlparser.Select{
+			Distinct:    true,
+			SelectExprs: selExprs,
+			From: []sqlparser.TableExpr{
+				ins.Table,
+			},
+			Where: &sqlparser.Where{
+				Type: sqlparser.WhereClause,
+				Expr: &sqlparser.ComparisonExpr{
+					Operator: sqlparser.InOp,
+					Left:     valTuple,
+					Right:    sqlparser.NewListArg(bvName),
+				},
+			},
+		}
+		selOp, err := createOpFromStmt(ctx, selStmt)
+		if err != nil {
+			return nil, err
+		}
+
+		var checkCols []engine.CheckCol
+		for idx, column := range fk.ChildColumns {
+			checkCol := engine.CheckCol{
+				Col: idx,
+			}
+			found := false
+			for _, col := range vindexTable.Columns {
+				if column.Equal(col.Name) {
+					found = true
+					checkCol.Type = col.Type
+					if col.CollationName != "" {
+						// TODO(@GuptaManan100, @harshit-gangal) - Convert Collation from string to ID.
+					} else {
+						checkCol.Collation = collations.CollationBinaryID
+					}
+					break
+				}
+			}
+			if !found {
+				// TODO(@GuptaManan100, @harshit-gangal) - Fix error message
+				return nil, vterrors.VT12002()
+			}
+			checkCols = append(checkCols, checkCol)
+		}
+
+		var colIdxs []int
+		for _, column := range fk.ChildColumns {
+			found := false
+			for idx, col := range ins.Columns {
+				if column.Equal(col) {
+					found = true
+					colIdxs = append(colIdxs, idx)
+					break
+				}
+			}
+			if !found {
+				// TODO(@GuptaManan100, @harshit-gangal) - Fix error message
+				return nil, vterrors.VT12002()
+			}
+		}
+
+		var vals []sqlparser.Exprs
+		for _, tuple := range insValues {
+			var exprs sqlparser.Exprs
+			for _, idx := range colIdxs {
+				exprs = append(exprs, tuple[idx])
+			}
+			vals = append(vals, exprs)
+		}
+		verify = append(verify, &FkParent{
+			Values: vals,
+			Cols:   checkCols,
+			BvName: bvName,
+			Op:     selOp,
+		})
+	}
+
+	return &FkVerify{
+		Input:  insOp,
+		Verify: verify,
+	}, nil
 }
 
 func createInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, routing Routing, vindexTable *vindexes.Table) (ops.Operator, error) {

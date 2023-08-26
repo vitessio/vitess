@@ -661,6 +661,16 @@
               "column": "col3",
               "name": "hash_vin"
             }
+          ],
+          "columns": [
+            {
+              "name": "col3",
+              "type": "INT16"
+            },
+            {
+              "name": "coly",
+              "type": "INT16"
+            }
           ]
         },
         "tbl4": {

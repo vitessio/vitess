@@ -67,9 +67,44 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformDistinct(ctx, op)
 	case *operators.FkCascade:
 		return transformFkCascade(ctx, op)
+	case *operators.FkVerify:
+		return transformFkVerify(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (logicalPlan, error) {
+	inputLP, err := transformToLogicalPlan(ctx, fkv.Input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Once we have the input logical plan, we can create the primitives for the verification operators.
+	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
+	ctx.SemTable = nil
+
+	// Go over the children and convert them to Primitives too.
+	var parents []*engine.FkParent
+	for _, verify := range fkv.Verify {
+		verifyLP, err := transformToLogicalPlan(ctx, verify.Op)
+		if err != nil {
+			return nil, err
+		}
+		err = verifyLP.Wireup(ctx)
+		if err != nil {
+			return nil, err
+		}
+		verifyEngine := verifyLP.Primitive()
+		parents = append(parents, &engine.FkParent{
+			BvName: verify.BvName,
+			Values: verify.Values,
+			Cols:   verify.Cols,
+			Exec:   verifyEngine,
+		})
+	}
+
+	return newFkVerify(inputLP, parents), nil
 }
 
 // transformFkCascade transforms a FkCascade operator into a logical plan.
@@ -77,7 +112,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	// We convert the parent operator to a logical plan.
 	parentLP, err := transformToLogicalPlan(ctx, fkc.Parent)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	// Once we have the parent logical plan, we can create the selection logical plan and the primitives for the children operators.

@@ -42,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -195,8 +194,8 @@ func TestViews(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
-	defer reset()
+	//reset := oprewriters.EnableDebugPrinting()
+	//defer reset()
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)

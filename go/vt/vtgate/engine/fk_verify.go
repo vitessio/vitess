@@ -152,6 +152,7 @@ func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
 			inputName: fmt.Sprintf("VerifyParent-%d", idx+1),
 			"BvName":  parent.BvName,
 			"Cols":    parent.Cols,
+			"Values":  parent.Values,
 		})
 		inputs = append(inputs, parent.Exec)
 	}

@@ -1,9 +1,86 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "insert into tbl3 (col3, coly) values (1,2),(3,4),(:v1,:v2)",
     "plan": {
-
+      "QueryType": "INSERT",
+      "Original": "insert into tbl3 (col3, coly) values (1,2),(3,4),(:v1,:v2)",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Child": {
+          "OperatorType": "Insert",
+          "Variant": "Sharded",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "insert into tbl3(col3, coly) values (:_col3_0, 2), (:_col3_1, 4), (:_col3_2, :v2)",
+          "TableName": "tbl3",
+          "VindexValues": {
+            "hash_vin": "INT64(1), INT64(3), :v1"
+          }
+        },
+        "Parent": [
+          {
+            "OperatorType": "FkVerifyParent",
+            "BvName": "fkv_vals",
+            "Cols": [
+              {
+                "Col": 0,
+                "WsCol": null,
+                "Type": 259,
+                "Collation": 63
+              }
+            ],
+            "Values": [
+              [
+                {
+                  "Type": 1,
+                  "Val": "2"
+                }
+              ],
+              [
+                {
+                  "Type": 1,
+                  "Val": "4"
+                }
+              ],
+              [
+                {
+                  "Name": "v2",
+                  "Type": -1
+                }
+              ]
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:1)"
+                ],
+                "ResultColumns": 1,
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_fk_allow",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select t1col1, weight_string(t1col1) from tbl3 where 1 != 1",
+                    "Query": "select distinct t1col1, weight_string(t1col1) from tbl3 where (t1col1) in ::fkv_vals",
+                    "Table": "tbl3"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl3"
+      ]
     }
   }
 ]
