@@ -132,6 +132,28 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
+	insOp, err := createInsertOperator(ctx, ins, routing, vindexTable)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the foreign key mode and store the ParentFKs that we need to verify.
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+		return insOp, nil
+	}
+	parentFKs := vindexTable.ParentFKsNeedsHandling()
+	if len(parentFKs) == 0 {
+		return insOp, nil
+	}
+
+	return nil, vterrors.VT12002()
+}
+
+func createInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, routing Routing, vindexTable *vindexes.Table) (ops.Operator, error) {
 	if _, target := routing.(*TargetedRouting); target {
 		return nil, vterrors.VT12001("INSERT with a target destination")
 	}
@@ -143,18 +165,6 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	route := &Route{
 		Source:  insOp,
 		Routing: routing,
-	}
-
-	// Find the foreign key mode and store the ParentFKs that we need to verify.
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.ParentFKsNeedsHandling()
-		if len(parentFKs) > 0 {
-			return nil, vterrors.VT12002()
-		}
 	}
 
 	// Table column list is nil then add all the columns
