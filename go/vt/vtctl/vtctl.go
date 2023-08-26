@@ -2125,7 +2125,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 
 	// MoveTables-only params
 	renameTables := subFlags.Bool("rename_tables", false, "MoveTables only. Rename tables instead of dropping them. --rename_tables is only supported for Complete.")
-	noRoutingRules := subFlags.Bool("no-routing-rules", false, "MoveTables only. Do not create routing rules for the target keyspace. --no_routing_rules is only supported for Create. You cannot use SwitchTraffic and can only Cancel the workflow after manually pointing the application to the target keyspace.")
+	noRoutingRules := subFlags.Bool("no-routing-rules", false, "MoveTables Create only. Do not create routing rules in the target keyspace. When this is used you cannot use SwitchTraffic for the workflow and instead can only Cancel the workflow after manually pointing the application to the target keyspace.")
 
 	// MoveTables and Reshard params
 	sourceShards := subFlags.String("source_shards", "", "Source shards")

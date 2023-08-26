@@ -69,10 +69,9 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	ctx := context.Background()
 	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, true)
 	require.NoError(t, err)
-	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
+	rr, err := env.wr.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
-	got := fmt.Sprintf("%v", vschema)
-	require.Contains(t, got, `keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{}} routing_rules:{} shard_routing_rules:{}`)
+	require.Equal(t, 0, len(rr.Rules))
 }
 
 func TestMigrateTables(t *testing.T) {

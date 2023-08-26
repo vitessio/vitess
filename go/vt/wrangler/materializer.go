@@ -208,7 +208,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 	if externalTopo == nil {
 		if noRoutingRules {
-			log.Warningf("Found --no-routing-rules flag, not creating routing rules, for workflow %s.%s", targetKeyspace, workflow)
+			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow)
 		} else {
 			// Save routing rules before vschema. If we save vschema first, and routing rules
 			// fails to save, we may generate duplicate table errors.
