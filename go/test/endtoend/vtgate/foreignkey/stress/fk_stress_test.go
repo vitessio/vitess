@@ -427,10 +427,12 @@ func waitForReplicaCatchup(t *testing.T) {
 func validateMetrics(t *testing.T, tcase *testCase) {
 	for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
 		t.Run(workloadTable, func(t *testing.T) {
+			t.Run("fk errors", func(t *testing.T) {
+				testSelectTableFKErrors(t, workloadTable, tcase)
+			})
 			var primaryRows, replicaRows int64
 			t.Run(tabletTestName(t, primary), func(t *testing.T) {
 				primaryRows = testSelectTableMetrics(t, primary, workloadTable, tcase)
-				testSelectTableFKErrors(t, workloadTable, tcase)
 			})
 			t.Run(tabletTestName(t, replica), func(t *testing.T) {
 				replicaRows = testSelectTableMetrics(t, replica, workloadTable, tcase)
