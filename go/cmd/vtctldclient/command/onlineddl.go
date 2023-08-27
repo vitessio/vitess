@@ -92,7 +92,7 @@ func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
 	case uuid == AllMigrationsIndicator:
 	case schema.IsOnlineDDLUUID(uuid):
 	default:
-		return fmt.Errorf("%s must be 'all' or a valid UUID", uuid)
+		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
 	}
 
 	cli.FinishedParsing(cmd)
