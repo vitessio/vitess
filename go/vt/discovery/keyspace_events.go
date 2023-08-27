@@ -144,9 +144,8 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 
-	// If the keyspace is gone, if it has no known availability events, or the keyspace
-	// is in the middle of a MoveTables then keyspace cannot be in the middle of a
-	// resharding operation.
+	// If the keyspace is gone, has no known availability events, or is in the middle of a
+	// MoveTables the then keyspace cannot be in the middle of a resharding operation.
 	if kss.deleted || kss.consistent || (kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesType(MoveTablesNone)) {
 		return false
 	}

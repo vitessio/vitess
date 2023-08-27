@@ -60,8 +60,8 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 
 // TestTargetIsBeingResharded confirms that the keyspace event watcher thinks that a
 // resharding operation is underway when the expected conditions are present:
-// 1. The keyspace is inconsistent
-// 2. The target tablet is primary
+// 1. The keyspace is inconsistent (in the middle of an availability event)
+// 2. The target tablet is a primary
 // 3. The keyspace has overlapping shards
 // 4. The overlapping shard's tablet is serving
 func TestTargetIsBeingResharded(t *testing.T) {
@@ -92,7 +92,7 @@ func TestTargetIsBeingResharded(t *testing.T) {
 					Shard:      "80-",
 					TabletType: topodatapb.TabletType_PRIMARY,
 				},
-				serving: false,
+				serving: true,
 			},
 			"-40": {
 				target: &querypb.Target{
@@ -116,7 +116,7 @@ func TestTargetIsBeingResharded(t *testing.T) {
 					Shard:      "80-c0",
 					TabletType: topodatapb.TabletType_PRIMARY,
 				},
-				serving: true,
+				serving: false,
 			},
 			"c0-": {
 				target: &querypb.Target{
@@ -124,7 +124,7 @@ func TestTargetIsBeingResharded(t *testing.T) {
 					Shard:      "c0-",
 					TabletType: topodatapb.TabletType_PRIMARY,
 				},
-				serving: true,
+				serving: false,
 			},
 		},
 	}
@@ -144,11 +144,11 @@ func TestTargetIsBeingResharded(t *testing.T) {
 // TestPrimaryIsNotServing confirms that the keyspace event watcher thinks that there
 // is NOT a resharding operation underway and that it reports the expected primary not
 // serving state when one shard's primary is not serving, meaning that the following
-// conditions are met:
-// 1. The keyspace is inconsistent
+// conditions exist:
+// 1. The keyspace is inconsistent (in the middle of an availability event)
 // 2. The target tablet is a primary
 // 3. The target tablet is not serving
-// 4. The shard's externallyReparented state is not 0
+// 4. The shard's externallyReparented time is not 0
 // 5. The shard's currentPrimary state is not nil
 func TestPrimaryIsNotServing(t *testing.T) {
 	cell := "cell"
