@@ -927,4 +927,5 @@ func (tme *testMigraterEnv) close(t *testing.T) {
 	tme.ts.Close()
 	tme.wr.tmc.Close()
 	tme.wr = nil
+	tme.tmeDB.Close()
 }

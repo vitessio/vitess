@@ -122,6 +122,7 @@ func (tenv *testEnv) close() {
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
 	tenv.ts.Close()
+	tenv.mysqld.Close()
 }
 
 //--------------------------------------
