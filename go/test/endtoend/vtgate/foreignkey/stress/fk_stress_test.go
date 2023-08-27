@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -90,6 +91,8 @@ type WriteMetrics struct {
 	insertsAttempts, insertsFailures, insertsNoops, inserts int64
 	updatesAttempts, updatesFailures, updatesNoops, updates int64
 	deletesAttempts, deletesFailures, deletesNoops, deletes int64
+
+	insertsFKErrors, updatesFKErrors, deletesFKErrors int64
 }
 
 func (w *WriteMetrics) Clear() {
@@ -421,15 +424,16 @@ func waitForReplicaCatchup(t *testing.T) {
 	}
 }
 
-func validateMetrics(t *testing.T, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
+func validateMetrics(t *testing.T, tcase *testCase) {
 	for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
 		t.Run(workloadTable, func(t *testing.T) {
 			var primaryRows, replicaRows int64
 			t.Run(tabletTestName(t, primary), func(t *testing.T) {
-				primaryRows = testSelectTableMetrics(t, primary, workloadTable, onDeleteAction, onUpdateAction)
+				primaryRows = testSelectTableMetrics(t, primary, workloadTable, tcase)
+				testSelectTableFKErrors(t, workloadTable, tcase)
 			})
 			t.Run(tabletTestName(t, replica), func(t *testing.T) {
-				replicaRows = testSelectTableMetrics(t, replica, workloadTable, onDeleteAction, onUpdateAction)
+				replicaRows = testSelectTableMetrics(t, replica, workloadTable, tcase)
 			})
 			t.Run("compare primary and replica", func(t *testing.T) {
 				assert.Equal(t, primaryRows, replicaRows)
@@ -488,7 +492,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		defer cancel()
 
 		t.Run("create schema", func(t *testing.T) {
-			createInitialSchema(t, tcase.onDeleteAction, tcase.onUpdateAction)
+			createInitialSchema(t, tcase)
 		})
 		t.Run("init tables", func(t *testing.T) {
 			populateTables(t)
@@ -524,14 +528,14 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 			waitForReplicaCatchup(t)
 		})
 		t.Run("validate metrics", func(t *testing.T) {
-			validateMetrics(t, tcase.onDeleteAction, tcase.onUpdateAction)
+			validateMetrics(t, tcase)
 		})
 		t.Run("validate replication health", func(t *testing.T) {
 			validateReplicationIsHealthy(t, replica)
 		})
 		t.Run("validate fk", func(t *testing.T) {
-			testFKIntegrity(t, primary, tcase.onDeleteAction, tcase.onUpdateAction)
-			testFKIntegrity(t, replica, tcase.onDeleteAction, tcase.onUpdateAction)
+			testFKIntegrity(t, primary, tcase)
+			testFKIntegrity(t, replica, tcase)
 		})
 	})
 }
@@ -567,7 +571,7 @@ func TestStressFK(t *testing.T) {
 }
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
-func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
+func createInitialSchema(t *testing.T, tcase *testCase) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -587,7 +591,7 @@ func createInitialSchema(t *testing.T, onDeleteAction sqlparser.ReferenceAction,
 				// parent table, no foreign keys
 				b.WriteString(sql)
 			} else {
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
+				b.WriteString(fmt.Sprintf(sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction]))
 			}
 			b.WriteString(";")
 		}
@@ -757,6 +761,25 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	return statement
 }
 
+func isFKError(err error) bool {
+	if err == nil {
+		return false
+	}
+	sqlErr, ok := err.(*sqlerror.SQLError)
+	if !ok {
+		return false
+	}
+
+	switch sqlErr.Number() {
+	case sqlerror.ERNoReferencedRow,
+		sqlerror.ERRowIsReferenced,
+		sqlerror.ERRowIsReferenced2,
+		sqlerror.ErNoReferencedRow2:
+		return true
+	}
+	return false
+}
+
 func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	parentId := rand.Int31n(int32(maxTableRows))
@@ -770,6 +793,9 @@ func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 		writeMetrics[tableName].insertsAttempts++
 		if err != nil {
 			writeMetrics[tableName].insertsFailures++
+			if isFKError(err) {
+				writeMetrics[tableName].insertsFKErrors++
+			}
 			return
 		}
 		assert.Less(t, qr.RowsAffected, uint64(2))
@@ -802,6 +828,9 @@ func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
 		writeMetrics[tableName].updatesAttempts++
 		if err != nil {
 			writeMetrics[tableName].updatesFailures++
+			if isFKError(err) {
+				writeMetrics[tableName].updatesFKErrors++
+			}
 			return
 		}
 		assert.Less(t, qr.RowsAffected, uint64(2))
@@ -826,6 +855,9 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 		writeMetrics[tableName].deletesAttempts++
 		if err != nil {
 			writeMetrics[tableName].deletesFailures++
+			if isFKError(err) {
+				writeMetrics[tableName].deletesFKErrors++
+			}
 			return
 		}
 		assert.Less(t, qr.RowsAffected, uint64(2))
@@ -994,10 +1026,9 @@ func testSelectTableMetrics(
 	t *testing.T,
 	tablet *cluster.Vttablet,
 	tableName string,
-	onDeleteAction sqlparser.ReferenceAction,
-	onUpdateAction sqlparser.ReferenceAction,
+	tcase *testCase,
 ) int64 {
-	switch onDeleteAction {
+	switch tcase.onDeleteAction {
 	case sqlparser.Cascade, sqlparser.SetNull:
 		if tableName != parentTableName {
 			// We can't validate those tables because they will have been affected by cascading rules.
@@ -1029,6 +1060,23 @@ func testSelectTableMetrics(
 	return numRows
 }
 
+// testSelectTableFKErrors
+func testSelectTableFKErrors(
+	t *testing.T,
+	tableName string,
+	tcase *testCase,
+) {
+	writeMetrics[tableName].mu.Lock()
+	defer writeMetrics[tableName].mu.Unlock()
+
+	if tcase.onDeleteAction == sqlparser.Cascade {
+		assert.Zerof(t, writeMetrics[tableName].deletesFKErrors, "unexpected foreign key errors for DELETEs in ON DELETE CASCADE")
+	}
+	if tcase.onUpdateAction == sqlparser.Cascade {
+		assert.Zerof(t, writeMetrics[tableName].updatesFKErrors, "unexpected foreign key errors for UPDATEs in ON UPDATE CASCADE")
+	}
+}
+
 // testFKIntegrity validates that foreign key consitency is maintained on the given tablet. We cross reference all
 // parent-child relationships.
 // There are two test types:
@@ -1038,25 +1086,26 @@ func testSelectTableMetrics(
 //   - On the primary database, this test trivially passes because of course MySQL maintains this integrity. But remember
 //     that we remove the foreign key constraints on the replica. Also remember that cascaded writes are not written to
 //     the binary log. And so, if VTGate does not do a proper job, then a parent and child will drift apart in CASCADE writes.
-func testFKIntegrity(t *testing.T, tablet *cluster.Vttablet, onDeleteAction sqlparser.ReferenceAction, onUpdateAction sqlparser.ReferenceAction) {
+func testFKIntegrity(
+	t *testing.T,
+	tablet *cluster.Vttablet,
+	tcase *testCase,
+) {
 	testName := tabletTestName(t, tablet)
 	t.Run(testName, func(t *testing.T) {
 		t.Run("matching parent-child rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsChild, "")
 			assert.NotZero(t, len(rs.Rows))
-			t.Logf("===== matching rows: %v", len(rs.Rows))
 		})
 		t.Run("matching parent-child2 rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsChild2, "")
 			assert.NotZero(t, len(rs.Rows))
-			t.Logf("===== matching rows: %v", len(rs.Rows))
 		})
 		t.Run("matching child-grandchild rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsGrandchild, "")
 			assert.NotZero(t, len(rs.Rows))
-			t.Logf("===== matching rows: %v", len(rs.Rows))
 		})
-		if onDeleteAction != sqlparser.SetNull && onUpdateAction != sqlparser.SetNull {
+		if tcase.onDeleteAction != sqlparser.SetNull && tcase.onUpdateAction != sqlparser.SetNull {
 			// Because with SET NULL there _are_ orphaned rows
 			t.Run("parent-child orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsChild, "")
