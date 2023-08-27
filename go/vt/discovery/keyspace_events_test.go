@@ -96,7 +96,44 @@ func TestKeyspaceEventTypes(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name: "resharding in progress",
+			name: "one to two resharding in progress",
+			kss: &keyspaceState{
+				kew:      kew,
+				keyspace: keyspace,
+				shards: map[string]*shardState{
+					"-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: false,
+					},
+					"-80": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-80",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+					"80-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "80-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+				},
+				consistent: false,
+			},
+			shardToCheck:            "-",
+			expectResharding:        true,
+			expectPrimaryNotServing: false,
+		},
+		{
+			name: "two to four resharding in progress",
 			kss: &keyspaceState{
 				kew:      kew,
 				keyspace: keyspace,
@@ -157,7 +194,33 @@ func TestKeyspaceEventTypes(t *testing.T) {
 			expectPrimaryNotServing: false,
 		},
 		{
-			name: "primary not serving",
+			name: "unsharded primary not serving",
+			kss: &keyspaceState{
+				kew:      kew,
+				keyspace: keyspace,
+				shards: map[string]*shardState{
+					"-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving:              false,
+						externallyReparented: time.Now().UnixNano(),
+						currentPrimary: &topodatapb.TabletAlias{
+							Cell: cell,
+							Uid:  100,
+						},
+					},
+				},
+				consistent: false,
+			},
+			shardToCheck:            "-",
+			expectResharding:        false,
+			expectPrimaryNotServing: true,
+		},
+		{
+			name: "sharded primary not serving",
 			kss: &keyspaceState{
 				kew:      kew,
 				keyspace: keyspace,
