@@ -33,12 +33,17 @@ import (
 
 const (
 	alterSingleSchemaMigrationSql = `alter vitess_migration %a `
+	alterAllSchemaMigrationSql    = `alter vitess_migration %s all`
 	selectSchemaMigrationsSql     = `select
 	*
 	from _vt.schema_migrations where %s %s %s`
+	AllMigrationsIndicator = "all"
 )
 
-func alterSingleSchemaMigrationQuery(command, uuid string) (string, error) {
+func alterSchemaMigrationQuery(command, uuid string) (string, error) {
+	if uuid == AllMigrationsIndicator {
+		return fmt.Sprintf(alterAllSchemaMigrationSql, command), nil
+	}
 	return sqlparser.ParseAndBind(alterSingleSchemaMigrationSql+command, sqltypes.StringBindVariable(uuid))
 }
 

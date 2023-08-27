@@ -163,6 +163,8 @@ type VtctldClient interface {
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
 	//
+	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
@@ -547,6 +549,15 @@ func (x *vtctldBackupShardClient) Recv() (*vtctldata.BackupResponse, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (c *vtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error) {
+	out := new(vtctldata.CancelSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CancelSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error) {
@@ -1368,6 +1379,8 @@ type VtctldServer interface {
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
 	//
+	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
@@ -1656,6 +1669,9 @@ func (UnimplementedVtctldServer) Backup(*vtctldata.BackupRequest, Vtctld_BackupS
 }
 func (UnimplementedVtctldServer) BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error {
 	return status.Errorf(codes.Unimplemented, "method BackupShard not implemented")
+}
+func (UnimplementedVtctldServer) CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelSchemaMigration not implemented")
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -2073,6 +2089,24 @@ type vtctldBackupShardServer struct {
 
 func (x *vtctldBackupShardServer) Send(m *vtctldata.BackupResponse) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func _Vtctld_CancelSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CancelSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CancelSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CancelSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CancelSchemaMigration(ctx, req.(*vtctldata.CancelSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -3638,6 +3672,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyVSchema",
 			Handler:    _Vtctld_ApplyVSchema_Handler,
+		},
+		{
+			MethodName: "CancelSchemaMigration",
+			Handler:    _Vtctld_CancelSchemaMigration_Handler,
 		},
 		{
 			MethodName: "ChangeTabletType",
