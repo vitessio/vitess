@@ -17,6 +17,7 @@ package grpcvtctldserver
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -41,7 +42,7 @@ const (
 )
 
 func alterSchemaMigrationQuery(command, uuid string) (string, error) {
-	if uuid == AllMigrationsIndicator {
+	if strings.ToLower(uuid) == AllMigrationsIndicator {
 		return fmt.Sprintf(alterAllSchemaMigrationSql, command), nil
 	}
 	return sqlparser.ParseAndBind(alterSingleSchemaMigrationSql+command, sqltypes.StringBindVariable(uuid))
