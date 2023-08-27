@@ -114,6 +114,10 @@ func (w *WriteMetrics) Clear() {
 	w.deletesAttempts = 0
 	w.deletesFailures = 0
 	w.deletesNoops = 0
+
+	w.insertsFKErrors = 0
+	w.updatesFKErrors = 0
+	w.deletesFKErrors = 0
 }
 
 func (w *WriteMetrics) String() string {
