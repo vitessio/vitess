@@ -123,7 +123,7 @@ func TestKeyspaceEventTypes(t *testing.T) {
 							Shard:      "80-",
 							TabletType: topodatapb.TabletType_PRIMARY,
 						},
-						serving: true,
+						serving: false,
 					},
 				},
 				consistent: false,
@@ -261,7 +261,7 @@ func TestKeyspaceEventTypes(t *testing.T) {
 			kew.keyspaces[keyspace] = tc.kss
 			kew.mu.Unlock()
 
-			require.NotNil(t, tc.kss.shards[tc.shardToCheck], "the specified shard of %q does not exist in the shardState", tc.shardToCheck)
+			require.NotNil(t, tc.kss.shards[tc.shardToCheck], "the specified shardToCheck of %q does not exist in the shardState", tc.shardToCheck)
 
 			resharding := kew.TargetIsBeingResharded(tc.kss.shards[tc.shardToCheck].target)
 			require.Equal(t, resharding, tc.expectResharding, "TargetIsBeingResharded should return %t", tc.expectResharding)
