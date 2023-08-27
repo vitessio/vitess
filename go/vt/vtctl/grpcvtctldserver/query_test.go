@@ -219,6 +219,11 @@ func TestAlterSchemaMigrationQuery(t *testing.T) {
 			uuid:    "all",
 			expect:  "alter vitess_migration cancel all",
 		},
+		{
+			command: "cancel",
+			uuid:    "ALL",
+			expect:  "alter vitess_migration cancel all",
+		},
 	}
 	for _, tcase := range tcases {
 		testName := fmt.Sprintf("%s %s", tcase.command, tcase.uuid)
