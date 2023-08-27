@@ -145,14 +145,13 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 	defer kss.mu.Unlock()
 
 	// If the keyspace is gone, has no known availability events, or is in the middle of a
-	// MoveTables the then keyspace cannot be in the middle of a resharding operation.
+	// MoveTables then the keyspace cannot be in the middle of a resharding operation.
 	if kss.deleted || kss.consistent || (kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesType(MoveTablesNone)) {
 		return false
 	}
 
-	// If there are unequal and overlapping shards in the keyspace and any
-	// of them are currently serving then we assume that we are in the middle
-	// of a Reshard operation.
+	// If there are unequal and overlapping shards in the keyspace and any of them are
+	// currently serving then we assume that we are in the middle of a Reshard.
 	_, ckr, err := topo.ValidateShardName(currentShard)
 	if err != nil || ckr == nil { // Assume not and avoid potential panic
 		return false
