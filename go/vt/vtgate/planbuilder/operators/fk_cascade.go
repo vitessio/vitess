@@ -17,8 +17,19 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
+
+type FkChild struct {
+	BVName string
+	Cols   []int // indexes
+	Op     ops.Operator
+
+	noColumns
+	noPredicates
+}
 
 // FkCascade is used to represent a foreign key cascade operation
 // as an operator. This operator is created for DML queries that require
@@ -40,7 +51,7 @@ func (fkc *FkCascade) Inputs() []ops.Operator {
 	inputs = append(inputs, fkc.Parent)
 	inputs = append(inputs, fkc.Selection)
 	for _, child := range fkc.Children {
-		inputs = append(inputs, child)
+		inputs = append(inputs, child.Op)
 	}
 	return inputs
 }
@@ -56,7 +67,7 @@ func (fkc *FkCascade) SetInputs(operators []ops.Operator) {
 		if idx < 2 {
 			continue
 		}
-		fkc.Children[idx-2] = operator.(*FkChild)
+		fkc.Children[idx-2].Op = operator
 	}
 }
 
@@ -73,7 +84,12 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 		if idx < 2 {
 			continue
 		}
-		newFkc.Children = append(newFkc.Children, operator.(*FkChild))
+
+		newFkc.Children = append(newFkc.Children, &FkChild{
+			BVName: fkc.Children[idx-2].BVName,
+			Cols:   slices.Clone(fkc.Children[idx-2].Cols),
+			Op:     operator,
+		})
 	}
 	return newFkc
 }
