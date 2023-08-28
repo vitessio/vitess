@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -124,80 +125,108 @@ func TestUpdateWithFK(t *testing.T) {
 
 // TestFkScenarios tests the various foreign key scenarios with different constraints
 // and makes sure that Vitess works with them as expected.
-// The test has 3 independent Schema's that are used for testing -
+// The test has 3 independent Schemas that are used for testing -
 /*
- *                      t1
- *                       │
- *                       │ On Delete Restrict
- *                       │ On Update Restrict
- *                       ▼
- *  ┌───────────────────t2────────────────┐
- *  │                                     │
- *  │On Delete Set Null                   │ On Delete Set Null
- *  │On Update Set Null                   │ On Update Set Null
- *  ▼                                     ▼
- * t7                                     t3───────────────────┐
- *                                        │                    │
- *                                        │                    │ On Delete Set Null
- *                     On Delete Set Null │                    │ On Update Set Null
- *                     On Update Set Null │                    │
- *                                        ▼                    ▼
- *                                        t4                   t6
- *                                        │
- *                                        │
- *                     On Delete Restrict │
- *                     On Update Restrict │
- *                                        │
- *                                        ▼
- *                                        t5
+ *                    fk_t1
+ *                        │
+ *                        │ On Delete Restrict
+ *                        │ On Update Restrict
+ *                        ▼
+ *   ┌────────────────fk_t2────────────────┐
+ *   │                                     │
+ *   │On Delete Set Null                   │ On Delete Set Null
+ *   │On Update Set Null                   │ On Update Set Null
+ *   ▼                                     ▼
+ * fk_t7                                fk_t3───────────────────┐
+ *                                         │                    │
+ *                                         │                    │ On Delete Set Null
+ *                      On Delete Set Null │                    │ On Update Set Null
+ *                      On Update Set Null │                    │
+ *                                         ▼                    ▼
+ *                                      fk_t4                fk_t6
+ *                                         │
+ *                                         │
+ *                      On Delete Restrict │
+ *                      On Update Restrict │
+ *                                         │
+ *                                         ▼
+ *                                      fk_t5
  */
 /*
- *                   t10
+ *                fk_t10
  *                   │
  * On Delete Cascade │
  * On Update Cascade │
  *                   │
  *                   ▼
- *                   t11──────────────────┐
+ *                fk_t11──────────────────┐
  *                   │                    │
  *                   │                    │ On Delete Restrict
  * On Delete Cascade │                    │ On Update Restrict
  * On Update Cascade │                    │
  *                   │                    │
  *                   ▼                    ▼
- *                   t12                  t13
+ *                fk_t12               fk_t13
  */
 /*
- *                    t15
+ *                 fk_t15
  *                    │
  *                    │
  *  On Delete Cascade │
  *  On Update Cascade │
  *                    │
  *                    ▼
- *                    t16
+ *                 fk_t16
  *                    │
  * On Delete Set Null │
  * On Update Set Null │
  *                    │
  *                    ▼
- *                    t17──────────────────┐
+ *                 fk_t17──────────────────┐
  *                    │                    │
  *                    │                    │ On Delete Set Null
  *  On Delete Cascade │                    │ On Update Set Null
  *  On Update Cascade │                    │
  *                    │                    │
  *                    ▼                    ▼
- *                    t18                  t19
+ *                 fk_t18               fk_t19
  */
 func TestFkScenarios(t *testing.T) {
+	// Wait for schema-tracking to be complete.
+	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t1", "col")
+	require.NoError(t, err)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t18", "col")
+	require.NoError(t, err)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t11", "col")
+	require.NoError(t, err)
+
 	testcases := []struct {
 		name             string
 		dataQueries      []string
 		dmlQuery         string
 		assertionQueries []string
 	}{
-		{},
+		{
+			name: "Insert failure due to parent key not existing",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 5)",
+			},
+			dmlQuery: "insert into t2(id, col) values (1, 7)",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+			},
+		}, {
+			name: "Insert success",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7)",
+			},
+			dmlQuery: "insert into fk_t2(id, col) values (1, 7)",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+			},
+		},
 	}
 
 	for _, tt := range testcases {
