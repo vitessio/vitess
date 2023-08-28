@@ -138,12 +138,12 @@ func TestNormalizedStatement(t *testing.T) {
 			typ:       tmutils.TableView,
 			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`t`",
 		},
-		// {
-		// 	statement: "create view `mydb`.v as select * from `mydb`.`mydb`",
-		// 	db:        "mydb",
-		// 	typ:       tmutils.TableView,
-		// 	expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`mydb`",
-		// },
+		{
+			statement: "create view `mydb`.v as select * from `mydb`.`mydb`",
+			db:        "mydb",
+			typ:       tmutils.TableView,
+			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`mydb`",
+		},
 	}
 	ctx := context.Background()
 	for _, tcase := range tcases {
