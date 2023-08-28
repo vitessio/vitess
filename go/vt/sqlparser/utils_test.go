@@ -187,85 +187,125 @@ func TestReplaceTableQualifiers(t *testing.T) {
 	tests := []struct {
 		name    string
 		in      string
+		origdb  string
 		newdb   string
 		out     string
 		wantErr bool
 	}{
 		{
 			name:    "invalid select",
+			origdb:  origDB,
 			in:      "select frog bar person",
 			out:     "",
 			wantErr: true,
 		},
 		{
-			name: "simple select",
-			in:   "select * from _vt.foo",
-			out:  "select * from foo",
+			name:   "simple select",
+			origdb: origDB,
+			in:     "select * from _vt.foo",
+			out:    "select * from foo",
 		},
 		{
-			name:  "simple select with new db",
-			in:    "select * from _vt.foo",
-			newdb: "_vt_test",
-			out:   "select * from _vt_test.foo",
+			name:   "simple select with new db",
+			in:     "select * from _vt.foo",
+			origdb: origDB,
+			newdb:  "_vt_test",
+			out:    "select * from _vt_test.foo",
 		},
 		{
-			name:  "simple select with new db same",
-			in:    "select * from _vt.foo where id=1", // should be unchanged
-			newdb: "_vt",
-			out:   "select * from _vt.foo where id=1",
+			name:   "simple select with new db same",
+			in:     "select * from _vt.foo where id=1", // should be unchanged
+			origdb: origDB,
+			newdb:  "_vt",
+			out:    "select * from _vt.foo where id=1",
 		},
 		{
-			name:  "simple select with new db needing escaping",
-			in:    "select * from _vt.foo",
-			newdb: "1_vt-test",
-			out:   "select * from `1_vt-test`.foo",
+			name:   "simple select with new db needing escaping",
+			in:     "select * from _vt.foo",
+			origdb: origDB,
+			newdb:  "1_vt-test",
+			out:    "select * from `1_vt-test`.foo",
 		},
 		{
-			name: "complex select",
-			in:   "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
-			out:  "select table_name, lastpk from copy_state where vrepl_id = 1 and id in (select max(id) from copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
+			name:   "complex select",
+			origdb: origDB,
+			in:     "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
+			out:    "select table_name, lastpk from copy_state where vrepl_id = 1 and id in (select max(id) from copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
 		},
 		{
-			name:  "complex mixed exists select",
-			in:    "select workflow_name, db_name from _vt.vreplication where id = 1 and exists (select v1 from mydb.foo where fname = 'matt') and not exists (select v2 from _vt.newsidecartable where _vt.newsidecartable.id = _vt.vreplication.workflow_name)",
-			newdb: "_vt_import",
-			out:   "select workflow_name, db_name from _vt_import.vreplication where id = 1 and exists (select v1 from mydb.foo where fname = 'matt') and not exists (select v2 from _vt_import.newsidecartable where _vt_import.newsidecartable.id = _vt_import.vreplication.workflow_name)",
+			name:   "complex mixed exists select",
+			in:     "select workflow_name, db_name from _vt.vreplication where id = 1 and exists (select v1 from mydb.foo where fname = 'matt') and not exists (select v2 from _vt.newsidecartable where _vt.newsidecartable.id = _vt.vreplication.workflow_name)",
+			origdb: origDB,
+			newdb:  "_vt_import",
+			out:    "select workflow_name, db_name from _vt_import.vreplication where id = 1 and exists (select v1 from mydb.foo where fname = 'matt') and not exists (select v2 from _vt_import.newsidecartable where _vt_import.newsidecartable.id = _vt_import.vreplication.workflow_name)",
 		},
 		{
-			name:  "derived table select",
-			in:    "select myder.id from (select max(id) as id from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
-			newdb: "__vt-metadata",
-			out:   "select myder.id from (select max(id) as id from `__vt-metadata`.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
+			name:   "derived table select",
+			in:     "select myder.id from (select max(id) as id from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
+			origdb: origDB,
+			newdb:  "__vt-metadata",
+			out:    "select myder.id from (select max(id) as id from `__vt-metadata`.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
 		},
 		{
-			name: "complex select",
-			in:   "select t1.col1, t2.col2 from _vt.t1 as t1 join _vt.t2 as t2 on t1.id = t2.id",
-			out:  "select t1.col1, t2.col2 from t1 as t1 join t2 as t2 on t1.id = t2.id",
+			name:   "complex select",
+			origdb: origDB,
+			in:     "select t1.col1, t2.col2 from _vt.t1 as t1 join _vt.t2 as t2 on t1.id = t2.id",
+			out:    "select t1.col1, t2.col2 from t1 as t1 join t2 as t2 on t1.id = t2.id",
 		},
 		{
-			name: "simple insert",
-			in:   "insert into _vt.foo(id) values (1)",
-			out:  "insert into foo(id) values (1)",
+			name:   "simple insert",
+			origdb: origDB,
+			in:     "insert into _vt.foo(id) values (1)",
+			out:    "insert into foo(id) values (1)",
 		},
 		{
-			name: "simple update",
-			in:   "update _vt.foo set id = 1",
-			out:  "update foo set id = 1",
+			name:   "simple update",
+			origdb: origDB,
+			in:     "update _vt.foo set id = 1",
+			out:    "update foo set id = 1",
 		},
 		{
-			name: "simple delete",
-			in:   "delete from _vt.foo where id = 1",
-			out:  "delete from foo where id = 1",
+			name:   "simple delete",
+			origdb: origDB,
+			in:     "delete from _vt.foo where id = 1",
+			out:    "delete from foo where id = 1",
 		},
 		{
-			name: "simple set",
-			in:   "set names 'binary'",
-			out:  "set names 'binary'",
+			name:   "simple set",
+			origdb: origDB,
+			in:     "set names 'binary'",
+			out:    "set names 'binary'",
+		},
+		{
+			name:   "simple create table",
+			origdb: origDB,
+			in:     "CREATE TABLE t (id int primary key)",
+			out:    "CREATE TABLE t (id int primary key)",
+		},
+		{
+			name:   "qualified create table",
+			origdb: origDB,
+			in:     "CREATE TABLE `t` (id int primary key)",
+			out:    "CREATE TABLE `t` (id int primary key)",
+		},
+		{
+			name:   "qualified create table, _vt",
+			origdb: origDB,
+			newdb:  "mydb",
+			in:     "create table `_vt`.`t` (id int primary key)",
+			out:    "create table mydb.t (\n\tid int primary key\n)",
+		},
+		{
+			name:   "empty qualifier create table",
+			origdb: "",
+			newdb:  "mydb",
+			in:     "CREATE TABLE `t` (id int primary key)",
+			out:    "create table mydb.t (\n\tid int primary key\n)",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ReplaceTableQualifiers(tt.in, origDB, tt.newdb)
+			got, err := ReplaceTableQualifiers(tt.in, tt.origdb, tt.newdb)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
