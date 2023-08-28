@@ -740,8 +740,13 @@
     "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
   },
   {
-    "comment": "update in a table with non-literal value - disallowed",
+    "comment": "update in a table with non-literal value - set null fail due to child update where condition",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
+    "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
+  },
+  {
+    "comment": "update in a table with non-literal value - with cascade fail as the cascade value is not known",
+    "query": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
     "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
   },
   {

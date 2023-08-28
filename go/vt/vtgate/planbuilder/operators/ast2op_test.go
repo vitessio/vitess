@@ -29,7 +29,12 @@ import (
 // It verifies the different cases in which foreign key handling is required on vtgate level.
 func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 	t1 := &vindexes.Table{
-		Name: sqlparser.NewIdentifierCS("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
+		Keyspace: &vindexes.Keyspace{Name: "ks"},
+	}
+	t2 := &vindexes.Table{
+		Name:     sqlparser.NewIdentifierCS("t2"),
+		Keyspace: &vindexes.Keyspace{Name: "ks2"},
 	}
 
 	tests := []struct {
@@ -50,13 +55,13 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 			},
 			childFks: []vindexes.ChildFKInfo{
 				{
-					Table:         t1,
+					Table:         t2,
 					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
 				},
 			},
 			parentFks: []vindexes.ParentFKInfo{
 				{
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("a", "b", "c"),
 				},
 			},
@@ -72,16 +77,16 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 			},
 			childFks: []vindexes.ChildFKInfo{
 				{
-					Table:         t1,
+					Table:         t2,
 					ParentColumns: sqlparser.MakeColumns("b", "a", "c"),
 				}, {
-					Table:         t1,
+					Table:         t2,
 					ParentColumns: sqlparser.MakeColumns("d", "c"),
 				},
 			},
 			parentFks: []vindexes.ParentFKInfo{
 				{
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("a", "b", "c"),
 				},
 			},
@@ -97,16 +102,16 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 			},
 			childFks: []vindexes.ChildFKInfo{
 				{
-					Table:         t1,
+					Table:         t2,
 					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
 				},
 			},
 			parentFks: []vindexes.ParentFKInfo{
 				{
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("b", "a", "c"),
 				}, {
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("d", "b"),
 				},
 			},
@@ -122,16 +127,16 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 			},
 			childFks: []vindexes.ChildFKInfo{
 				{
-					Table:         t1,
+					Table:         t2,
 					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
 				},
 			},
 			parentFks: []vindexes.ParentFKInfo{
 				{
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("b", "a", "c"),
 				}, {
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("a", "b"),
 				},
 			},
@@ -150,16 +155,16 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 			},
 			childFks: []vindexes.ChildFKInfo{
 				{
-					Table:         t1,
+					Table:         t2,
 					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
 				},
 			},
 			parentFks: []vindexes.ParentFKInfo{
 				{
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("b", "a", "c"),
 				}, {
-					Table:        t1,
+					Table:        t2,
 					ChildColumns: sqlparser.MakeColumns("a", "b"),
 				},
 			},
@@ -169,7 +174,9 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parentFksGot, childFksGot := fkNeedsHandlingForUpdates(tt.updateExprs, tt.parentFks, tt.childFks)
+			t1.ParentForeignKeys = tt.parentFks
+			t1.ChildForeignKeys = tt.childFks
+			parentFksGot, childFksGot := getFKRequirementsForUpdate(tt.updateExprs, t1)
 			var pFks []vindexes.ParentFKInfo
 			for idx, b := range tt.parentFKsWanted {
 				if b {

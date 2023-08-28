@@ -115,7 +115,29 @@ func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plan
 	}
 
 	// Check if any column in the parent table is being updated which has a child foreign key.
-	return !operators.ColumnModified(updateExprs, getFKInfo)
+	return !columnModified(updateExprs, getFKInfo)
+}
+
+// columnModified checks if any column in the parent table is being updated which has a child foreign key.
+func columnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo)) bool {
+	for _, updateExpr := range exprs {
+		parentFKs, childFks := getFks(updateExpr)
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
+		if isNull {
+			continue
+		}
+		for _, parentFk := range parentFKs {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
