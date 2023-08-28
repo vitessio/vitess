@@ -173,10 +173,3 @@ type WildcardPattern interface {
 type Charset = charset.Charset
 
 const PadToMax = math.MaxInt32
-
-func minInt(i1, i2 int) int {
-	if i1 < i2 {
-		return i1
-	}
-	return i2
-}

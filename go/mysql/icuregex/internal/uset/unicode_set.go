@@ -200,13 +200,6 @@ loopEnd:
 	u.list, u.buffer = u.buffer[:k], u.list
 }
 
-func max(a, b rune) rune {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func pinCodePoint(c *rune) rune {
 	if *c < unicodeSetLow {
 		*c = unicodeSetLow
