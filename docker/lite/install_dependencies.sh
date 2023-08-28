@@ -153,11 +153,11 @@ esac
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql57|mysql80|percona57)
-    echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/ps-80/apt bullseye main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/ps-80/apt buster main' > /etc/apt/sources.list.d/percona80.list
     ;;
 esac
 
