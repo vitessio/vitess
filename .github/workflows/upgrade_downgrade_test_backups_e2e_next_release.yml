@@ -13,7 +13,7 @@ jobs:
   get_next_release:
     if: always()
     name: Get Latest Release - Backups - E2E - Next Release
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 60
     if: always() && needs.get_next_release.result == 'success'
     name: Run Upgrade Downgrade Test - Backups - E2E - Next Release
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     needs:
       - get_next_release
 
@@ -88,7 +88,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.21.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -117,7 +117,7 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the next release of Vitess
     - name: Check out other version's code (${{ needs.get_next_release.outputs.next_release }})

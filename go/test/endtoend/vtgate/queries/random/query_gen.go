@@ -19,11 +19,9 @@ package random
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 
 	"vitess.io/vitess/go/slice"
-
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )

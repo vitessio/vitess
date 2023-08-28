@@ -352,7 +352,7 @@ func (c *Collation_unicode_bin) Wildcard(pat []byte, matchOne rune, matchMany ru
 }
 
 func collationBinary(left, right []byte, rightPrefix bool) int {
-	minLen := minInt(len(left), len(right))
+	minLen := min(len(left), len(right))
 	if diff := bytes.Compare(left[:minLen], right[:minLen]); diff != 0 {
 		return diff
 	}

@@ -60,6 +60,8 @@ service Vtctld {
   //
   // NOTE: This command automatically updates the serving graph.
   rpc ChangeTabletType(vtctldata.ChangeTabletTypeRequest) returns (vtctldata.ChangeTabletTypeResponse) {};
+  // CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
+  rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.
@@ -120,6 +122,12 @@ service Vtctld {
   // GetSchema returns the schema for a tablet, or just the schema for the
   // specified tables in that tablet.
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
+  // GetSchemaMigrations returns one or more online schema migrations for the
+  // specified keyspace, analagous to `SHOW VITESS_MIGRATIONS`.
+  //
+  // Different fields in the request message result in different filtering
+  // behaviors. See the documentation on GetSchemaMigrationsRequest for details.
+  rpc GetSchemaMigrations(vtctldata.GetSchemaMigrationsRequest) returns (vtctldata.GetSchemaMigrationsResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
   // GetShardRoutingRules returns the VSchema shard routing rules.
@@ -211,6 +219,8 @@ service Vtctld {
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
   // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
   rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
+  // RetrySchemaMigration marks a given schema migration for retry.
+  rpc RetrySchemaMigration(vtctldata.RetrySchemaMigrationRequest) returns (vtctldata.RetrySchemaMigrationResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.

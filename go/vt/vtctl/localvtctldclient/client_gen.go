@@ -166,6 +166,11 @@ func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctl
 	return client.s.ChangeTabletType(ctx, in)
 }
 
+// CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	return client.s.CleanupSchemaMigration(ctx, in)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	return client.s.CreateKeyspace(ctx, in)
@@ -279,6 +284,11 @@ func (client *localVtctldClient) GetRoutingRules(ctx context.Context, in *vtctld
 // GetSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaResponse, error) {
 	return client.s.GetSchema(ctx, in)
+}
+
+// GetSchemaMigrations is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	return client.s.GetSchemaMigrations(ctx, in)
 }
 
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
@@ -470,6 +480,11 @@ func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtct
 	}()
 
 	return stream, nil
+}
+
+// RetrySchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RetrySchemaMigration(ctx context.Context, in *vtctldatapb.RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	return client.s.RetrySchemaMigration(ctx, in)
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
