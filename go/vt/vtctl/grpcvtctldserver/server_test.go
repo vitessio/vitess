@@ -1254,8 +1254,9 @@ func TestCancelSchemaMigration(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 
-			ctx := context.Background()
-			ts := memorytopo.NewServer("zone1")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
