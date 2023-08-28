@@ -26,10 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/maps"
-
 	"vitess.io/vitess/go/constants/sidecar"
-
+	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -588,7 +586,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 		}
 	}
 
-	return maps.Values(dropped)
+	return maps2.Values(dropped)
 }
 
 func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool) (*sqltypes.Result, error) {

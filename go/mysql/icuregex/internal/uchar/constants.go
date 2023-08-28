@@ -21,9 +21,7 @@ limitations under the License.
 
 package uchar
 
-import "golang.org/x/exp/constraints"
-
-func uMask[T constraints.Integer](x T) uint32 {
+func Mask[T ~int | ~int8](x T) uint32 {
 	return 1 << x
 }
 
@@ -110,68 +108,68 @@ const (
 )
 
 var (
-	GcCnMask = uMask(GeneralOtherTypes)
+	GcCnMask = Mask(GeneralOtherTypes)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcLuMask = uMask(UppercaseLetter)
+	GcLuMask = Mask(UppercaseLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcLlMask = uMask(LowercaseLetter)
+	GcLlMask = Mask(LowercaseLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcLtMask = uMask(TitlecaseLetter)
+	GcLtMask = Mask(TitlecaseLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcLmMask = uMask(ModifierLetter)
+	GcLmMask = Mask(ModifierLetter)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcLoMask = uMask(OtherLetter)
+	GcLoMask = Mask(OtherLetter)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcMnMask = uMask(NonSpacingMask)
+	GcMnMask = Mask(NonSpacingMask)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcMeMask = uMask(EnclosingMark)
+	GcMeMask = Mask(EnclosingMark)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcMcMask = uMask(CombiningSpacingMask)
+	GcMcMask = Mask(CombiningSpacingMask)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcNdMask = uMask(DecimalDigitNumber)
+	GcNdMask = Mask(DecimalDigitNumber)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcNlMask = uMask(LetterNumber)
+	GcNlMask = Mask(LetterNumber)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcNoMask = uMask(OtherNumber)
+	GcNoMask = Mask(OtherNumber)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcZsMask = uMask(SpaceSeparator)
+	GcZsMask = Mask(SpaceSeparator)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcZlMask = uMask(LineSeparator)
+	GcZlMask = Mask(LineSeparator)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcZpMask = uMask(ParagraphSeparator)
+	GcZpMask = Mask(ParagraphSeparator)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcCcMask = uMask(ControlChar)
+	GcCcMask = Mask(ControlChar)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcCfMask = uMask(FormatChar)
+	GcCfMask = Mask(FormatChar)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcCoMask = uMask(PrivateUseChar)
+	GcCoMask = Mask(PrivateUseChar)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcCsMask = uMask(Surrogate)
+	GcCsMask = Mask(Surrogate)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcPdMask = uMask(DashPunctuation)
+	GcPdMask = Mask(DashPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcPsMask = uMask(StartPunctuation)
+	GcPsMask = Mask(StartPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcPeMask = uMask(EndPunctuation)
+	GcPeMask = Mask(EndPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcPcMask = uMask(ConnectorPunctuation)
+	GcPcMask = Mask(ConnectorPunctuation)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcPoMask = uMask(OtherPunctuation)
+	GcPoMask = Mask(OtherPunctuation)
 
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcSmMask = uMask(MathSymbol)
+	GcSmMask = Mask(MathSymbol)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcScMask = uMask(CurrencySymbol)
+	GcScMask = Mask(CurrencySymbol)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcSkMask = uMask(ModifierSymbol)
+	GcSkMask = Mask(ModifierSymbol)
 	/** Mask constant for a UCharCategory. @stable ICU 2.1 */
-	GcSoMask = uMask(OtherSymbol)
+	GcSoMask = Mask(OtherSymbol)
 
 	/** Mask constant for multiple UCharCategory bits (L Letters). @stable ICU 2.1 */
 	GcLMask = (GcLuMask | GcLlMask | GcLtMask | GcLmMask | GcLoMask)

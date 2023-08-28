@@ -850,10 +850,7 @@ func smallerTimeout(t1, t2 time.Duration) time.Duration {
 	if t2 == 0 {
 		return t1
 	}
-	if t1 < t2 {
-		return t1
-	}
-	return t2
+	return min(t1, t2)
 }
 
 // StreamExecute executes the query and streams the result.

@@ -17,9 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
