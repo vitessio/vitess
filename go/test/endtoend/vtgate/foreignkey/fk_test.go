@@ -124,6 +124,72 @@ func TestUpdateWithFK(t *testing.T) {
 
 // TestFkScenarios tests the various foreign key scenarios with different constraints
 // and makes sure that Vitess works with them as expected.
+// The test has 3 independent Schema's that are used for testing -
+/*
+ *                      t1
+ *                       │
+ *                       │ On Delete Restrict
+ *                       │ On Update Restrict
+ *                       ▼
+ *  ┌───────────────────t2────────────────┐
+ *  │                                     │
+ *  │On Delete Set Null                   │ On Delete Set Null
+ *  │On Update Set Null                   │ On Update Set Null
+ *  ▼                                     ▼
+ * t7                                     t3───────────────────┐
+ *                                        │                    │
+ *                                        │                    │ On Delete Set Null
+ *                     On Delete Set Null │                    │ On Update Set Null
+ *                     On Update Set Null │                    │
+ *                                        ▼                    ▼
+ *                                        t4                   t6
+ *                                        │
+ *                                        │
+ *                     On Delete Restrict │
+ *                     On Update Restrict │
+ *                                        │
+ *                                        ▼
+ *                                        t5
+ */
+/*
+ *                   t10
+ *                   │
+ * On Delete Cascade │
+ * On Update Cascade │
+ *                   │
+ *                   ▼
+ *                   t11──────────────────┐
+ *                   │                    │
+ *                   │                    │ On Delete Restrict
+ * On Delete Cascade │                    │ On Update Restrict
+ * On Update Cascade │                    │
+ *                   │                    │
+ *                   ▼                    ▼
+ *                   t12                  t13
+ */
+/*
+ *                    t15
+ *                    │
+ *                    │
+ *  On Delete Cascade │
+ *  On Update Cascade │
+ *                    │
+ *                    ▼
+ *                    t16
+ *                    │
+ * On Delete Set Null │
+ * On Update Set Null │
+ *                    │
+ *                    ▼
+ *                    t17──────────────────┐
+ *                    │                    │
+ *                    │                    │ On Delete Set Null
+ *  On Delete Cascade │                    │ On Update Set Null
+ *  On Update Cascade │                    │
+ *                    │                    │
+ *                    ▼                    ▼
+ *                    t18                  t19
+ */
 func TestFkScenarios(t *testing.T) {
 	testcases := []struct {
 		name             string
