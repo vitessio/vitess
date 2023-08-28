@@ -156,7 +156,7 @@ func IsGraphPOSIX(c rune) bool {
 	props := trie().Get16(c)
 	/* \p{space}\p{gc=Control} == \p{gc=Z}\p{Control} */
 	/* comparing ==0 returns FALSE for the categories mentioned */
-	return uMask(getCategory(props))&(GcCcMask|GcCsMask|GcCnMask|GcZMask) == 0
+	return Mask(getCategory(props))&(GcCcMask|GcCsMask|GcCnMask|GcZMask) == 0
 }
 
 func IsXDigit(c rune) bool {

@@ -78,7 +78,7 @@ func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []
 	case PadToMax:
 		padToMax = true
 	default:
-		copyCodepoints = minInt(copyCodepoints, numCodepoints)
+		copyCodepoints = min(copyCodepoints, numCodepoints)
 	}
 
 	dst = append(dst, src[:copyCodepoints]...)
@@ -92,7 +92,7 @@ func (c *Collation_8bit_bin) Hash(hasher *vthash.Hasher, src []byte, numCodepoin
 		return
 	}
 
-	tocopy := minInt(len(src), numCodepoints)
+	tocopy := min(len(src), numCodepoints)
 	hasher.Write(src[:tocopy])
 
 	numCodepoints -= tocopy
@@ -153,7 +153,7 @@ func (c *Collation_8bit_simple_ci) IsBinary() bool {
 
 func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix bool) int {
 	sortOrder := c.sort
-	cmpLen := minInt(len(left), len(right))
+	cmpLen := min(len(left), len(right))
 
 	for i := 0; i < cmpLen; i++ {
 		sortL, sortR := sortOrder[left[i]], sortOrder[right[i]]
@@ -178,7 +178,7 @@ func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints i
 	case PadToMax:
 		padToMax = true
 	default:
-		copyCodepoints = minInt(copyCodepoints, numCodepoints)
+		copyCodepoints = min(copyCodepoints, numCodepoints)
 	}
 
 	for _, ch := range src[:copyCodepoints] {
@@ -192,7 +192,7 @@ func (c *Collation_8bit_simple_ci) Hash(hasher *vthash.Hasher, src []byte, numCo
 
 	var tocopy = len(src)
 	if numCodepoints > 0 {
-		tocopy = minInt(tocopy, numCodepoints)
+		tocopy = min(tocopy, numCodepoints)
 	}
 
 	hasher.Write64(uint64(c.id))
@@ -280,7 +280,7 @@ func (c *Collation_binary) WeightString(dst, src []byte, numCodepoints int) []by
 	case PadToMax:
 		padToMax = true
 	default:
-		copyCodepoints = minInt(copyCodepoints, numCodepoints)
+		copyCodepoints = min(copyCodepoints, numCodepoints)
 	}
 
 	dst = append(dst, src[:copyCodepoints]...)
