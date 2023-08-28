@@ -143,7 +143,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
               "::__sq1"
@@ -436,7 +436,7 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "OrderBy": "0 ASC",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
+            "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1 order by col asc",
             "Table": "`user`"
           }
         ]
@@ -638,7 +638,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1",
+            "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -756,7 +756,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
+            "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1 order by rand()",
             "Table": "`user`"
           }
         ]

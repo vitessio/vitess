@@ -3150,7 +3150,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq_has_values2",
           "__sq2"
         ],
         "Inputs": [
@@ -3198,7 +3197,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and col = :__sq2",
+                "Query": "select id from `user` where :__sq_has_values1 and id in ::__vals and col = :__sq2",
                 "Table": "`user`",
                 "Values": [
                   "::__sq1"

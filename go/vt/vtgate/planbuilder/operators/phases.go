@@ -143,11 +143,7 @@ func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq S
 }
 
 func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
-	if len(sj.Predicates) > 0 {
-		if sj.FilterType != opcode.PulloutExists {
-			return nil, vterrors.VT12001("correlated subquery in WHERE clause")
-		}
-
+	if sj.FilterType == opcode.PulloutExists {
 		sj.Subquery = &Filter{
 			Source:     sj.Subquery,
 			Predicates: slice.Map(sj.JoinPredicates, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),

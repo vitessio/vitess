@@ -178,16 +178,25 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 
 	subqID := ctx.SemTable.StatementIDs[innerSel]
 	totalID := subqID.Merge(outerID)
-
 	jpc := &joinPredicateCollector{
 		totalID: totalID,
 		subqID:  subqID,
 		outerID: outerID,
 	}
 
+	sqL := &SubQueryContainer{}
+
 	// we can have connecting predicates both on the inside of the subquery, and in the comparison to the outer query
 	if innerSel.Where != nil {
 		for _, predicate := range sqlparser.SplitAndExpression(nil, innerSel.Where.Expr) {
+			sqlparser.RemoveKeyspaceFromColName(predicate)
+			isSubq, err := sqL.handleSubquery(ctx, predicate, totalID)
+			if err != nil {
+				return nil, err
+			}
+			if isSubq {
+				continue
+			}
 			jpc.inspectPredicate(ctx, predicate)
 		}
 	}
@@ -222,6 +231,8 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 	case sqlparser.NotInOp:
 		filterType = opcode.PulloutNotIn
 	}
+
+	opInner = sqL.getRootOperator(opInner)
 
 	return &SubQueryFilter{
 		FilterType: filterType,
@@ -316,7 +327,10 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	// if neither of the two sides of the predicate is enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
-	if !(!deps.IsSolvedBy(jpc.subqID) && !deps.IsSolvedBy(jpc.outerID)) || !deps.IsSolvedBy(jpc.totalID) {
+	b := !deps.IsSolvedBy(jpc.subqID)
+	by := !deps.IsSolvedBy(jpc.outerID)
+	solvedBy := !deps.IsSolvedBy(jpc.totalID)
+	if !(b && by) || solvedBy {
 		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
 		return
 	}

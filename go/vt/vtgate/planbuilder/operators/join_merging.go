@@ -28,7 +28,7 @@ import (
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (*Route, error) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil
@@ -193,11 +193,7 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 }
 
 func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	return &Route{
-		Source:     jm.getApplyJoin(op1, op2),
-		MergedWith: []*Route{op2},
-		Routing:    mergeShardedRouting(r1, r2),
-	}, nil
+	return jm.merge(op1, op2, mergeShardedRouting(r1, r2))
 }
 
 func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting {

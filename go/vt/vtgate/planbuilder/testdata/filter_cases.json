@@ -2159,7 +2159,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq_has_values1",
           "__sq1"
         ],
         "Inputs": [
@@ -3192,9 +3191,11 @@
       "QueryType": "SELECT",
       "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), 1",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "1"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -3224,8 +3225,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                "OrderBy": "(0|2) ASC, 1 ASC",
-                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 and `user`.col in ::__sq1",
                 "Table": "`user`"
               }
             ]

@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -600,7 +599,7 @@ func tryMergeJoinShardedRouting(
 	routeB *Route,
 	m merger,
 	joinPredicates []sqlparser.Expr,
-) (ops.Operator, error) {
+) (*Route, error) {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)

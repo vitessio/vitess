@@ -150,15 +150,13 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 		if err != nil {
 			return nil, nil, err
 		}
-
-		if newOuter == nil {
+		if _result == rewrite.SameTree {
 			remaining = append(remaining, inner)
 			continue
 		}
 
-		result = result.Merge(_result)
 		in.Outer = newOuter
-
+		result = result.Merge(_result)
 	}
 
 	if len(remaining) == 0 {
@@ -175,27 +173,86 @@ func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner Sub
 	case *Route:
 		return tryPushDownSubQueryInRoute(ctx, inner, o)
 	case *ApplyJoin:
-		return tryPushDownSubQueryInJoin(ctx, inner, o)
+		join, applyResult, err := tryPushDownSubQueryInJoin(ctx, inner, o)
+		if err != nil {
+			return nil, nil, err
+		}
+		if join == nil {
+			return outer, rewrite.SameTree, nil
+		}
+		return join, applyResult, nil
 	default:
-		return nil, nil, nil
+		return outer, rewrite.SameTree, nil
 	}
 }
 
-func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery SubQuery, outer *Route) (ops.Operator, *rewrite.ApplyResult, error) {
-	exprs := subQuery.GetJoinPredicates()
-	merger := &subqueryRouteMerger{
-		outer:    outer,
-		original: subQuery.OriginalExpression(),
+func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery SubQuery, outer *Route) (newOuter ops.Operator, result *rewrite.ApplyResult, err error) {
+	switch inner := subQuery.Inner().(type) {
+	case *Route:
+		exprs := subQuery.GetJoinPredicates()
+		merger := &subqueryRouteMerger{
+			outer:    outer,
+			original: subQuery.OriginalExpression(),
+		}
+		op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
+		if err != nil {
+			return nil, nil, err
+		}
+		if op == nil {
+			return outer, rewrite.SameTree, nil
+		}
+		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
+		return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
+	case *SubQueryContainer:
+		exprs := subQuery.GetJoinPredicates()
+		merger := &subqueryRouteMerger{
+			outer:    outer,
+			original: subQuery.OriginalExpression(),
+		}
+		outer1 := TableID(inner.Outer)
+		outer2 := TableID(outer)
+		op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
+		if err != nil {
+			return nil, nil, err
+		}
+		if op == nil {
+			return outer, rewrite.SameTree, nil
+		}
+		if TableID(op) != outer2.Merge(outer1) {
+			panic("uh oh. lost one")
+		}
+
+		op = Clone(op).(*Route)
+		op.Source = outer.Source
+		var finalResult *rewrite.ApplyResult
+		for _, subq := range inner.Inner {
+			newOuter, res, err := tryPushDownSubQueryInRoute(ctx, subq, op)
+			if err != nil {
+				return nil, nil, err
+			}
+			if res == rewrite.SameTree {
+				// we failed to merge one of the inners - we need to abort
+				return nil, rewrite.SameTree, nil
+			}
+			op = newOuter.(*Route)
+			removeFilterUnderRoute(op, subq)
+			finalResult = finalResult.Merge(res)
+		}
+
+		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
+		return op, finalResult.Merge(rewrite.NewTree("merge outer of two subqueries", subQuery)), nil
 	}
-	op, err := mergeJoinInputs(ctx, subQuery.Inner(), outer, exprs, merger)
-	if err != nil {
-		return nil, nil, err
+	return outer, rewrite.SameTree, nil
+}
+
+func removeFilterUnderRoute(op *Route, subq SubQuery) {
+	filter, ok := op.Source.(*Filter)
+	if ok {
+		if filter.Predicates[0] == subq.OriginalExpression() {
+			// we don't need this predicate
+			op.Source = filter.Source
+		}
 	}
-	if op == nil {
-		return nil, rewrite.SameTree, nil
-	}
-	outer.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
-	return op, rewrite.NewTree("push subquery into route", subQuery), nil
 }
 
 type subqueryRouteMerger struct {

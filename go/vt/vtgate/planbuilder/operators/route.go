@@ -773,3 +773,11 @@ func (r *Route) ShortDescription() string {
 func (r *Route) setTruncateColumnCount(offset int) {
 	r.ResultColumns = offset
 }
+
+func (r *Route) introducesTableID() semantics.TableSet {
+	id := semantics.EmptyTableSet()
+	for _, route := range r.MergedWith {
+		id = id.Merge(TableID(route))
+	}
+	return id
+}
