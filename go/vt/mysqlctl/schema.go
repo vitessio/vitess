@@ -424,76 +424,9 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	return colMap, err
 }
 
-// PreflightSchemaChange checks the schema changes in "changes" by applying them
-// to an intermediate database that has the same schema as the target database.
+// PreflightSchemaChange is deprecated
 func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
-	results := make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes))
-
-	// Get current schema from the real database.
-	req := &tabletmanagerdatapb.GetSchemaRequest{IncludeViews: true, TableSchemaOnly: true}
-	originalSchema, err := mysqld.GetSchema(ctx, dbName, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Populate temporary database with it.
-	initialCopySQL := "SET sql_log_bin = 0;\n"
-	initialCopySQL += "DROP DATABASE IF EXISTS _vt_preflight;\n"
-	initialCopySQL += "CREATE DATABASE _vt_preflight;\n"
-	initialCopySQL += "USE _vt_preflight;\n"
-	// We're not smart enough to create the tables in a foreign-key-compatible way,
-	// so we temporarily disable foreign key checks while adding the existing tables.
-	initialCopySQL += "SET foreign_key_checks = 0;\n"
-	for _, td := range originalSchema.TableDefinitions {
-		if td.Type == tmutils.TableBaseTable {
-			initialCopySQL += td.Schema + ";\n"
-		}
-	}
-	for _, td := range originalSchema.TableDefinitions {
-		if td.Type == tmutils.TableView {
-			// Views will have {{.DatabaseName}} in there, replace
-			// it with _vt_preflight
-			s := strings.Replace(td.Schema, tmutils.DatabaseNamePlaceholder, "`_vt_preflight`", -1)
-			initialCopySQL += s + ";\n"
-		}
-	}
-	if err = mysqld.executeSchemaCommands(ctx, initialCopySQL); err != nil {
-		return nil, err
-	}
-
-	// For each change, record the schema before and after.
-	for i, change := range changes {
-		req := &tabletmanagerdatapb.GetSchemaRequest{IncludeViews: true}
-		beforeSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", req)
-		if err != nil {
-			return nil, err
-		}
-
-		// apply schema change to the temporary database
-		sql := "SET sql_log_bin = 0;\n"
-		sql += "USE _vt_preflight;\n"
-		sql += change
-		if err = mysqld.executeSchemaCommands(ctx, sql); err != nil {
-			return nil, err
-		}
-
-		// get the result
-		afterSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", req)
-		if err != nil {
-			return nil, err
-		}
-
-		results[i] = &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}
-	}
-
-	// and clean up the extra database
-	dropSQL := "SET sql_log_bin = 0;\n"
-	dropSQL += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeSchemaCommands(ctx, dropSQL); err != nil {
-		return nil, err
-	}
-
-	return results, nil
+	return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "PreflightSchemaChange is deprecated")
 }
 
 // ApplySchemaChange will apply the schema change to the given database.
