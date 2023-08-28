@@ -188,7 +188,7 @@ func getIntPropertyValue(c rune, which Property) int32 {
 		iprop := intProps[which-UCharIntStart]
 		return iprop.getValue(iprop, c, which)
 	} else if which == UCharGeneralCategoryMask {
-		return int32(uMask(uchar.CharType(c)))
+		return int32(uchar.Mask(uchar.CharType(c)))
 	}
 	return 0 // undefined
 }

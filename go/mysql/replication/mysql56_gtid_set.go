@@ -19,10 +19,9 @@ package replication
 import (
 	"bytes"
 	"encoding/binary"
+	"slices"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"

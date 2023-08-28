@@ -23,8 +23,7 @@ package uset
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // HIGH_VALUE > all valid values. 110000 for codepoints
