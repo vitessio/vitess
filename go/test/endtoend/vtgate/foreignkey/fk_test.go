@@ -26,7 +26,8 @@ import (
 
 // TestInsertWithFK tests that insertions work as expected when foreign key management is enabled in Vitess.
 func TestInsertWithFK(t *testing.T) {
-	conn, closer := start(t)
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
 	defer closer()
 
 	// insert some data.
@@ -56,7 +57,8 @@ func TestInsertWithFK(t *testing.T) {
 
 // TestDeleteWithFK tests that deletions work as expected when foreign key management is enabled in Vitess.
 func TestDeleteWithFK(t *testing.T) {
-	conn, closer := start(t)
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
 	defer closer()
 
 	// insert some data.
@@ -85,7 +87,8 @@ func TestDeleteWithFK(t *testing.T) {
 
 // TestUpdations tests that update work as expected when foreign key management is enabled in Vitess.
 func TestUpdateWithFK(t *testing.T) {
-	conn, closer := start(t)
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
 	defer closer()
 
 	// insert some data.
@@ -117,4 +120,37 @@ func TestUpdateWithFK(t *testing.T) {
 	// child table have restrict in shard scoped and value exists in parent table.
 	_ = utils.Exec(t, conn, `update t6 set col1 = 40 where pk = 20`)
 	assert.EqualValues(t, 1, qr.RowsAffected)
+}
+
+// TestFkScenarios tests the various foreign key scenarios with different constraints
+// and makes sure that Vitess works with them as expected.
+func TestFkScenarios(t *testing.T) {
+	testcases := []struct {
+		name             string
+		dataQueries      []string
+		dmlQuery         string
+		assertionQueries []string
+	}{
+		{},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			mcmp, closer := start(t)
+			defer closer()
+
+			// Insert all the data required for running the test.
+			for _, query := range tt.dataQueries {
+				mcmp.Exec(query)
+			}
+
+			// Run the DML query that needs to be tested and verify output with MySQL.
+			_, _ = mcmp.ExecAllowAndCompareError(tt.dmlQuery)
+
+			// Run the assertion queries and verify we get the expected outputs.
+			for _, query := range tt.assertionQueries {
+				mcmp.Exec(query)
+			}
+		})
+	}
 }
