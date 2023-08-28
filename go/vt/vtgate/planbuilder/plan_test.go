@@ -55,6 +55,7 @@ func makeTestOutput(t *testing.T) string {
 }
 
 func TestPlan(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/schema.json", true),
 		TabletType_:   topodatapb.TabletType_PRIMARY,
@@ -348,6 +349,8 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
@@ -357,9 +360,9 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
-	ts := memorytopo.NewServer("cell1")
-	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
-	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
+	ts := memorytopo.NewServer(ctx, "cell1")
+	ts.CreateKeyspace(ctx, "main", &topodatapb.Keyspace{})
+	ts.CreateKeyspace(ctx, "user", &topodatapb.Keyspace{})
 	// Create a cache to use for lookups of the sidecar database identifier
 	// in use by each keyspace.
 	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {

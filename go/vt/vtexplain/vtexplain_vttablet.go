@@ -102,7 +102,7 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 	sidecardb.AddSchemaInitQueries(db, true)
 
@@ -117,7 +117,7 @@ func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTab
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), t.Alias)
+	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias)
 
 	tablet := explainTablet{db: db, tsv: tsv, vte: vte}
 	db.Handler = &tablet

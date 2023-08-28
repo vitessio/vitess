@@ -29,9 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
-var ctx = context.Background()
-
 func TestActivePoolClientRowsFound(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -58,6 +58,8 @@ func TestActivePoolClientRowsFound(t *testing.T) {
 }
 
 func TestActivePoolForAllTxProps(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -84,6 +86,8 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 }
 
 func TestStatefulPoolShutdownNonTx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -122,6 +126,8 @@ func TestStatefulPoolShutdownNonTx(t *testing.T) {
 }
 
 func TestStatefulPoolShutdownAll(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -157,7 +163,7 @@ func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 }
 
 func TestExecWithAbortedCtx(t *testing.T) {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -170,6 +176,8 @@ func TestExecWithAbortedCtx(t *testing.T) {
 }
 
 func TestExecWithDbconnClosed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -183,6 +191,8 @@ func TestExecWithDbconnClosed(t *testing.T) {
 }
 
 func TestExecWithDbconnClosedHavingTx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -197,6 +207,8 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 }
 
 func TestFailOnConnectionRegistering(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()

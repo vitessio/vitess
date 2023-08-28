@@ -149,6 +149,7 @@ type AddTabletOptions struct {
 // shard to serving. If that shard record already has a serving primary, then
 // AddTablet will fail the test.
 func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {
+	t.Helper()
 	tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	if opts == nil {
 		opts = &AddTabletOptions{}
@@ -200,6 +201,7 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 // AddTablets adds a list of tablets to the topology. See AddTablet for more
 // details.
 func AddTablets(ctx context.Context, t *testing.T, ts *topo.Server, opts *AddTabletOptions, tablets ...*topodatapb.Tablet) {
+	t.Helper()
 	for _, tablet := range tablets {
 		AddTablet(ctx, t, ts, tablet, opts)
 	}

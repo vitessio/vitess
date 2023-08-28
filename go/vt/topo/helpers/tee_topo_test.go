@@ -19,15 +19,17 @@ package helpers
 import (
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/test"
 )
 
 func TestTeeTopo(t *testing.T) {
-	test.TopoServerTestSuite(t, func() *topo.Server {
-		s1 := memorytopo.NewServer(test.LocalCellName)
-		s2 := memorytopo.NewServer(test.LocalCellName)
+	ctx := utils.LeakCheckContext(t)
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
+		s1 := memorytopo.NewServer(ctx, test.LocalCellName)
+		s2 := memorytopo.NewServer(ctx, test.LocalCellName)
 		tee, err := NewTee(s1, s2, false)
 		if err != nil {
 			t.Fatalf("NewTee() failed: %v", err)

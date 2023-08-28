@@ -231,12 +231,13 @@ func (c *Cluster) Close() error {
 			rec.RecordError(closer.Close())
 		}(closer)
 	}
+	wg.Wait()
 
 	if rec.HasErrors() {
 		return fmt.Errorf("failed to cleanly close cluster (id=%s): %w", c.ID, rec.Error())
 	}
 
-	return nil
+	return c.schemaCache.Close()
 }
 
 // ToProto returns a value-copy protobuf equivalent of the cluster.
