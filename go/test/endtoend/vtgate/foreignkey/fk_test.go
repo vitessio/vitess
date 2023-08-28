@@ -123,8 +123,9 @@ func TestUpdateWithFK(t *testing.T) {
 	assert.EqualValues(t, 1, qr.RowsAffected)
 }
 
-// TestFkScenarios tests the various foreign key scenarios with different constraints
-// and makes sure that Vitess works with them as expected.
+// TestCrossShardFkScenarios tests the various foreign key scenarios with different constraints
+// and makes sure that Vitess works with them as expected. All the tables are sharded in this test
+// and all the foreign key constraints are cross-shard ones.
 // The test has 3 independent Schemas that are used for testing -
 /*
  *                    fk_t1
@@ -191,7 +192,7 @@ func TestUpdateWithFK(t *testing.T) {
  *                    ▼                    ▼
  *                 fk_t18               fk_t19
  */
-func TestFkScenarios(t *testing.T) {
+func TestCrossShardFkScenarios(t *testing.T) {
 	// Wait for schema-tracking to be complete.
 	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t1", "col")
 	require.NoError(t, err)
@@ -225,6 +226,148 @@ func TestFkScenarios(t *testing.T) {
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
+			},
+		}, {
+			name: "Update failure with restrict foreign keys",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7)",
+				"insert into fk_t2(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t1 set col = 5 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+			},
+		}, {
+			name: "Update success with restrict foreign keys",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t1 set col = 5 where id = 2",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+			},
+		}, {
+			name: "Delete failure with restrict foreign keys",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7)",
+				"insert into fk_t2(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t1 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+			},
+		}, {
+			name: "Delete success with restrict foreign keys",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t1 where id = 2",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+			},
+		}, {
+			name: "Update success with set null foreign key",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t6(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t3 set col = 9 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+				"select * from fk_t3 order by id",
+				"select * from fk_t6 order by id",
+			},
+		}, {
+			name: "Update failure with set null foreign key with child having a restrict foreign key",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t4(id, col) values (1, 7)",
+				"insert into fk_t5(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t3 set col = 9 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+				"select * from fk_t3 order by id",
+				"select * from fk_t4 order by id",
+				"select * from fk_t5 order by id",
+			},
+		}, {
+			name: "Update success with cascaded set nulls",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t4(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t6(id, col) values (1, 7), (2, 9)",
+			},
+			dmlQuery: "update fk_t2 set col = 9 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+				"select * from fk_t3 order by id",
+				"select * from fk_t4 order by id",
+				"select * from fk_t6 order by id",
+			},
+		}, {
+			name: "Delete success with set null foreign key",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t6(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t3 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+				"select * from fk_t3 order by id",
+				"select * from fk_t6 order by id",
+			},
+		}, {
+			name: "Delete failure with set null foreign key with child having a restrict foreign key",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t4(id, col) values (1, 7)",
+				"insert into fk_t5(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t3 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+				"select * from fk_t3 order by id",
+				"select * from fk_t4 order by id",
+				"select * from fk_t5 order by id",
+			},
+		}, {
+			name: "Delete success with cascaded set nulls",
+			dataQueries: []string{
+				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t4(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t6(id, col) values (1, 7), (2, 9)",
+			},
+			dmlQuery: "delete from fk_t2 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t1 order by id",
+				"select * from fk_t2 order by id",
+				"select * from fk_t3 order by id",
+				"select * from fk_t4 order by id",
+				"select * from fk_t6 order by id",
 			},
 		},
 	}
