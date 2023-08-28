@@ -17,11 +17,10 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -29,8 +28,7 @@ import (
 )
 
 // checkShardReplication tests ShardReplication objects
-func checkShardReplication(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkShardReplication(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if _, err := ts.GetShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetShardReplication(not there): %v", err)
 	}

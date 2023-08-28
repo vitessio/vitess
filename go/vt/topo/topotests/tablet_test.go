@@ -34,8 +34,10 @@ func TestCreateTablet(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "shard1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// Create a tablet.
 	alias := &topodatapb.TabletAlias{

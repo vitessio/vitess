@@ -2148,7 +2148,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	vte, err := vtexplain.Init(srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	vte, err := vtexplain.Init(ctx, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
 	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}

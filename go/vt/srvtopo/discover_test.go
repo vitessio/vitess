@@ -48,8 +48,9 @@ func (a TargetArray) Less(i, j int) bool {
 }
 
 func TestFindAllTargets(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 
 	srvTopoCacheRefresh = 0
 	srvTopoCacheTTL = 0
@@ -58,7 +59,7 @@ func TestFindAllTargets(t *testing.T) {
 		srvTopoCacheTTL = 1 * time.Second
 
 	}()
-	rs := NewResilientServer(ts, "TestFindAllKeyspaceShards")
+	rs := NewResilientServer(ctx, ts, "TestFindAllKeyspaceShards")
 
 	// No keyspace / shards.
 	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})

@@ -108,7 +108,10 @@ func (s *streamHealthTabletServer) BroadcastHealth() {
 }
 
 func TestTabletData(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
@@ -137,9 +140,9 @@ func TestTabletData(t *testing.T) {
 	}()
 
 	// Start streaming and wait for the first result.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	result, err := thc.Get(ctx, tablet1.Tablet.Alias)
-	cancel()
+	requestCtx, requestCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer requestCancel()
+	result, err := thc.Get(requestCtx, tablet1.Tablet.Alias)
 	close(stop)
 
 	if err != nil {

@@ -119,7 +119,7 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 // The test will Sprintf a from clause and where clause as needed.
 func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards, targetShards []string, fmtQuery string) *testMigraterEnv {
 	tme := &testMigraterEnv{}
-	tme.ts = memorytopo.NewServer("cell1", "cell2")
+	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = sourceShards
@@ -383,7 +383,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shardsToMove []string, fmtQuery string) *testMigraterEnv {
 	require.Greater(t, len(shards), 1, "shard by shard migrations can only be done on sharded keyspaces")
 	tme := &testMigraterEnv{}
-	tme.ts = memorytopo.NewServer("cell1", "cell2")
+	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = shards
@@ -539,7 +539,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 
 func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testShardMigraterEnv {
 	tme := &testShardMigraterEnv{}
-	tme.ts = memorytopo.NewServer("cell1", "cell2")
+	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards

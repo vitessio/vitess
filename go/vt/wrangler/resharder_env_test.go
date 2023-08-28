@@ -82,14 +82,14 @@ func initTopo(t *testing.T, topo *topo.Server, keyspace string, sources, targets
 	topo.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ","))
 }
 
-func newTestResharderEnv(t *testing.T, sources, targets []string) *testResharderEnv {
+func newTestResharderEnv(t *testing.T, ctx context.Context, sources, targets []string) *testResharderEnv {
 	env := &testResharderEnv{
 		keyspace: "ks",
 		workflow: "resharderTest",
 		sources:  sources,
 		targets:  targets,
 		tablets:  make(map[int]*topodatapb.Tablet),
-		topoServ: memorytopo.NewServer("cell"),
+		topoServ: memorytopo.NewServer(ctx, "cell"),
 		cell:     "cell",
 		tmc:      newTestResharderTMClient(),
 	}

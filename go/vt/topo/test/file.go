@@ -26,9 +26,7 @@ import (
 )
 
 // checkFile tests the file part of the Conn API.
-func checkFile(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
-
+func checkFile(t *testing.T, ctx context.Context, ts *topo.Server) {
 	// global cell
 	t.Logf("===   checkFileInCell global")
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
@@ -203,8 +201,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 }
 
 // checkList tests the file part of the Conn API.
-func checkList(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkList(t *testing.T, ctx context.Context, ts *topo.Server) {
 	// global cell
 	conn, err := ts.ConnForCell(ctx, LocalCellName)
 	if err != nil {

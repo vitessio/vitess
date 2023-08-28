@@ -28,7 +28,6 @@ import (
 )
 
 func TestRebuildVSchema(t *testing.T) {
-	ctx := context.Background()
 	emptySrvVSchema := &vschemapb.SrvVSchema{
 		RoutingRules:      &vschemapb.RoutingRules{},
 		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
@@ -36,7 +35,10 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// Set up topology.
 	cells := []string{"cell1", "cell2"}
-	ts := memorytopo.NewServer(cells...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
 
 	// Rebuild with no keyspace / no vschema
 	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
