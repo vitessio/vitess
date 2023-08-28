@@ -127,7 +127,7 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 }
 
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
-var maxConstraintNameLength = 64
+var MaxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -1094,7 +1094,7 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 		}
 		hashExists[hash] = true
 		suffix := "_" + hash
-		maxAllowedNameLength := maxConstraintNameLength - len(suffix)
+		maxAllowedNameLength := MaxConstraintNameLength - len(suffix)
 		newName := oldName
 		if len(newName) > maxAllowedNameLength {
 			newName = newName[0:maxAllowedNameLength]
