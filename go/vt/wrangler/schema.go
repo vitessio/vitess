@@ -225,7 +225,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
 
-	createSQLstmts := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+	createSQLstmts, err := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+	if err != nil {
+		return err
+	}
 
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.PrimaryAlias)
 	if err != nil {
