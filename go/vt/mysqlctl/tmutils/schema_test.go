@@ -30,19 +30,19 @@ import (
 
 var basicTable1 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "table1",
-	Schema: "table schema 1",
+	Schema: "create table table1 (id int primary key)",
 	Type:   TableBaseTable,
 }
 var basicTable2 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "table2",
-	Schema: "table schema 2",
+	Schema: "create table table2 (id int primary key)",
 	Type:   TableBaseTable,
 }
 
 var table3 = &tabletmanagerdatapb.TableDefinition{
-	Name: "table2",
+	Name: "table3",
 	Schema: "CREATE TABLE `table3` (\n" +
-		"id bigint not null,\n" +
+		"id bigint not null\n" +
 		") Engine=InnoDB",
 	Type: TableBaseTable,
 }
@@ -73,7 +73,11 @@ func TestToSQLStrings(t *testing.T) {
 					view1,
 				},
 			},
-			want: []string{"CREATE DATABASE `{{.DatabaseName}}`", basicTable1.Schema, view1.Schema},
+			want: []string{
+				"CREATE DATABASE `{{.DatabaseName}}`",
+				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"view schema 1",
+			},
 		},
 		{
 			// SchemaDefinition doesn't need any tables or views
@@ -96,7 +100,11 @@ func TestToSQLStrings(t *testing.T) {
 					basicTable2,
 				},
 			},
-			want: []string{"CREATE DATABASE `{{.DatabaseName}}`", basicTable1.Schema, basicTable2.Schema},
+			want: []string{
+				"CREATE DATABASE `{{.DatabaseName}}`",
+				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"create table `{{.DatabaseName}}`.table2 (\n\tid int primary key\n)",
+			},
 		},
 		{
 			// multiple tables and views should be ordered with all tables before views
@@ -110,9 +118,10 @@ func TestToSQLStrings(t *testing.T) {
 				},
 			},
 			want: []string{
-				"CREATE DATABASE `{{.DatabaseName}}`",
-				basicTable1.Schema, basicTable2.Schema,
-				view1.Schema, view2.Schema,
+				"CREATE DATABASE `{{.DatabaseName}}`", "create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"create table `{{.DatabaseName}}`.table2 (\n\tid int primary key\n)",
+				"view schema 1",
+				"view schema 2",
 			},
 		},
 		{
@@ -126,16 +135,15 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				basicTable1.Schema,
-				"CREATE TABLE `{{.DatabaseName}}`.`table3` (\n" +
-					"id bigint not null,\n" +
-					") Engine=InnoDB",
+				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"create table `{{.DatabaseName}}`.table3 (\n\tid bigint not null\n) Engine InnoDB",
 			},
 		},
 	}
 
 	for _, tc := range testcases {
-		got := SchemaDefinitionToSQLStrings(tc.input)
+		got, err := SchemaDefinitionToSQLStrings(tc.input)
+		assert.NoError(t, err)
 		assert.Equal(t, tc.want, got)
 	}
 }

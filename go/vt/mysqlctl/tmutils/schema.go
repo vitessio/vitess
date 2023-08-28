@@ -27,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -215,7 +217,7 @@ func SchemaDefinitionGetTable(sd *tabletmanagerdatapb.SchemaDefinition, table st
 // SchemaDefinitionToSQLStrings converts a SchemaDefinition to an array of SQL strings. The array contains all
 // the SQL statements needed for creating the database, tables, and views - in that order.
 // All SQL statements will have {{.DatabaseName}} in place of the actual db name.
-func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []string {
+func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) ([]string, error) {
 	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
 	createViewSQL := make([]string, 0, len(sd.TableDefinitions))
 
@@ -232,17 +234,16 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 		if td.Type == TableView {
 			createViewSQL = append(createViewSQL, td.Schema)
 		} else {
-			lines := strings.Split(td.Schema, "\n")
-			for i, line := range lines {
-				if strings.HasPrefix(line, "CREATE TABLE `") {
-					lines[i] = strings.Replace(line, "CREATE TABLE `", fmt.Sprintf("CREATE TABLE `%s`.`", DatabaseNamePlaceholder), 1)
-				}
+			replaced, err := sqlparser.ReplaceTableQualifiers(td.Schema, "", DatabaseNamePlaceholder)
+			if err != nil {
+				// parsing unsuccessful
+				return nil, vterrors.Wrapf(err, "parsing schema: %v", td.Schema)
 			}
-			sqlStrings = append(sqlStrings, strings.Join(lines, "\n"))
+			sqlStrings = append(sqlStrings, replaced)
 		}
 	}
 
-	return append(sqlStrings, createViewSQL...)
+	return append(sqlStrings, createViewSQL...), nil
 }
 
 // DiffSchema generates a report on what's different between two SchemaDefinitions
