@@ -135,15 +135,13 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 	upd := Rewrite(in, func(cursor *Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case TableName:
-			if !node.Qualifier.IsEmpty() &&
-				node.Qualifier.String() == oldQualifier.String() {
+			if node.Qualifier.String() == oldQualifier.String() {
 				node.Qualifier = newQualifier
 				cursor.Replace(node)
 				modified = true
 			}
 		case *ShowBasic: // for things like 'show tables from _vt'
-			if !node.DbName.IsEmpty() &&
-				node.DbName.String() == oldQualifier.String() {
+			if node.DbName.String() == oldQualifier.String() {
 				node.DbName = newQualifier
 				cursor.Replace(node)
 				modified = true
