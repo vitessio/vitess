@@ -44,148 +44,91 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 		childFks        []vindexes.ChildFKInfo
 		parentFKsWanted []bool
 		childFKsWanted  []bool
-	}{
-		{
-			name: "No Fks filtered",
-			updateExprs: sqlparser.UpdateExprs{
-				&sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName("a"),
-					Expr: sqlparser.NewIntLiteral("1"),
-				},
-			},
-			childFks: []vindexes.ChildFKInfo{
-				{
-					Table:         t2,
-					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
-				},
-			},
-			parentFks: []vindexes.ParentFKInfo{
-				{
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("a", "b", "c"),
-				},
-			},
-			parentFKsWanted: []bool{true},
-			childFKsWanted:  []bool{true},
-		}, {
-			name: "Child Fks filtering",
-			updateExprs: sqlparser.UpdateExprs{
-				&sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName("a"),
-					Expr: sqlparser.NewIntLiteral("1"),
-				},
-			},
-			childFks: []vindexes.ChildFKInfo{
-				{
-					Table:         t2,
-					ParentColumns: sqlparser.MakeColumns("b", "a", "c"),
-				}, {
-					Table:         t2,
-					ParentColumns: sqlparser.MakeColumns("d", "c"),
-				},
-			},
-			parentFks: []vindexes.ParentFKInfo{
-				{
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("a", "b", "c"),
-				},
-			},
-			parentFKsWanted: []bool{true},
-			childFKsWanted:  []bool{true, false},
-		}, {
-			name: "Parent Fks filtered based on columns",
-			updateExprs: sqlparser.UpdateExprs{
-				&sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName("a"),
-					Expr: sqlparser.NewIntLiteral("1"),
-				},
-			},
-			childFks: []vindexes.ChildFKInfo{
-				{
-					Table:         t2,
-					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
-				},
-			},
-			parentFks: []vindexes.ParentFKInfo{
-				{
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("b", "a", "c"),
-				}, {
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("d", "b"),
-				},
-			},
-			parentFKsWanted: []bool{true, false},
-			childFKsWanted:  []bool{true},
-		}, {
-			name: "Parent Fks filtered because all null values",
-			updateExprs: sqlparser.UpdateExprs{
-				&sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName("a"),
-					Expr: &sqlparser.NullVal{},
-				},
-			},
-			childFks: []vindexes.ChildFKInfo{
-				{
-					Table:         t2,
-					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
-				},
-			},
-			parentFks: []vindexes.ParentFKInfo{
-				{
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("b", "a", "c"),
-				}, {
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("a", "b"),
-				},
-			},
-			parentFKsWanted: []bool{false, false},
-			childFKsWanted:  []bool{true},
-		}, {
-			name: "Parent Fks filtered because some column has null values",
-			updateExprs: sqlparser.UpdateExprs{
-				&sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName("a"),
-					Expr: sqlparser.NewIntLiteral("1"),
-				}, &sqlparser.UpdateExpr{
-					Name: sqlparser.NewColName("c"),
-					Expr: &sqlparser.NullVal{},
-				},
-			},
-			childFks: []vindexes.ChildFKInfo{
-				{
-					Table:         t2,
-					ParentColumns: sqlparser.MakeColumns("a", "b", "c"),
-				},
-			},
-			parentFks: []vindexes.ParentFKInfo{
-				{
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("b", "a", "c"),
-				}, {
-					Table:        t2,
-					ChildColumns: sqlparser.MakeColumns("a", "b"),
-				},
-			},
-			parentFKsWanted: []bool{false, true},
-			childFKsWanted:  []bool{true},
+	}{{
+		name: "No Fks filtered",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
 		},
-	}
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFKsWanted: []bool{true},
+		childFKsWanted:  []bool{true},
+	}, {
+		name: "Child Fks filtering",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("d", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFKsWanted: []bool{true},
+		childFKsWanted:  []bool{true, false},
+	}, {
+		name: "Parent Fks filtered based on columns",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("d", "b")},
+		},
+		parentFKsWanted: []bool{true, false},
+		childFKsWanted:  []bool{true},
+	}, {
+		name: "Parent Fks filtered because all null values",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: &sqlparser.NullVal{}},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b")},
+		},
+		parentFKsWanted: []bool{false, false},
+		childFKsWanted:  []bool{true},
+	}, {
+		name: "Parent Fks filtered because some column has null values",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("c"), Expr: &sqlparser.NullVal{}},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b")},
+		},
+		parentFKsWanted: []bool{false, true},
+		childFKsWanted:  []bool{true},
+	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t1.ParentForeignKeys = tt.parentFks
 			t1.ChildForeignKeys = tt.childFks
 			parentFksGot, childFksGot := getFKRequirementsForUpdate(tt.updateExprs, t1)
 			var pFks []vindexes.ParentFKInfo
-			for idx, b := range tt.parentFKsWanted {
-				if b {
+			for idx, expected := range tt.parentFKsWanted {
+				if expected {
 					pFks = append(pFks, tt.parentFks[idx])
 				}
 			}
 			var cFks []vindexes.ChildFKInfo
-			for idx, b := range tt.childFKsWanted {
-				if b {
+			for idx, expected := range tt.childFKsWanted {
+				if expected {
 					cFks = append(cFks, tt.childFks[idx])
 				}
 			}
