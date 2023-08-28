@@ -159,12 +159,12 @@ type VtctldClient interface {
 	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
+	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
 	//
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
-	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
@@ -1375,12 +1375,12 @@ type VtctldServer interface {
 	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
+	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
 	//
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
-	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
