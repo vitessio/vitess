@@ -1548,11 +1548,10 @@ func TestCleanupSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
-
-			ctx := context.Background()
-			ts := memorytopo.NewServer("zone1")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
@@ -9085,11 +9084,10 @@ func TestRetrySchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
-
-			ctx := context.Background()
-			ts := memorytopo.NewServer("zone1")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
@@ -9307,7 +9305,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 		name      string
 		ctx       context.Context
 		ts        *topo.Server
-		setup     func(*testing.T, *testcase)
+		setup     func(*testing.T, *testcase) context.Context
 		teardown  func(*testing.T, *testcase)
 		req       *vtctldatapb.SetShardIsPrimaryServingRequest
 		expected  *vtctldatapb.SetShardIsPrimaryServingResponse
@@ -9317,7 +9315,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 	tests := []*testcase{
 		{
 			name: "ok",
-			setup: func(t *testing.T, tt *testcase) {
+			setup: func(t *testing.T, tt *testcase) context.Context {
 				tt.ctx = ctx
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
 				testutil.AddShards(tt.ctx, t, tt.ts, &vtctldatapb.Shard{
@@ -9325,6 +9323,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 					Name:     "-",
 					Shard:    &topodatapb.Shard{},
 				})
+				return tt.ctx
 			},
 			req: &vtctldatapb.SetShardIsPrimaryServingRequest{
 				Keyspace:  "testkeyspace",
@@ -9339,7 +9338,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 		},
 		{
 			name: "lock error",
-			setup: func(t *testing.T, tt *testcase) {
+			setup: func(t *testing.T, tt *testcase) context.Context {
 				var cancel func()
 				tt.ctx, cancel = context.WithTimeout(ctx, time.Millisecond*50)
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
@@ -9349,7 +9348,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 					Shard:    &topodatapb.Shard{},
 				})
 
-				_, unlock, err := tt.ts.LockKeyspace(tt.ctx, "testkeyspace", "test lock")
+				lctx, unlock, err := tt.ts.LockKeyspace(tt.ctx, "testkeyspace", "test lock")
 				require.NoError(t, err)
 				tt.teardown = func(t *testing.T, tt *testcase) {
 					var err error
@@ -9357,6 +9356,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 					assert.NoError(t, err)
 					cancel()
 				}
+				return lctx
 			},
 			req: &vtctldatapb.SetShardIsPrimaryServingRequest{
 				Keyspace:  "testkeyspace",
@@ -9371,7 +9371,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setup != nil {
-				tt.setup(t, tt)
+				tt.ctx = tt.setup(t, tt)
 			}
 			if tt.teardown != nil {
 				defer tt.teardown(t, tt)
