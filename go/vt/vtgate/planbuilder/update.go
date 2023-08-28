@@ -127,8 +127,7 @@ func columnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.Upd
 				return true
 			}
 		}
-		_, isNull := updateExpr.Expr.(*sqlparser.NullVal)
-		if isNull {
+		if sqlparser.IsNull(updateExpr.Expr) {
 			continue
 		}
 		for _, parentFk := range parentFKs {

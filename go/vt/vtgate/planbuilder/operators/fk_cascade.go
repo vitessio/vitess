@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
+// FkChild is used to represent a foreign key child table operation
 type FkChild struct {
 	BVName string
 	Cols   []int // indexes

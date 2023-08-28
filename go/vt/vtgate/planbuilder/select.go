@@ -202,14 +202,14 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (logicalPlan, []string, error) {
+) (plan logicalPlan, tablesUsed []string, err error) {
 	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if ks, _ := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, tablesUsed, err := selectUnshardedShortcut(ctx, selStmt, ks)
+		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -227,7 +227,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op)
+	plan, err = transformToLogicalPlan(ctx, op)
 	if err != nil {
 		return nil, nil, err
 	}
