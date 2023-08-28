@@ -136,20 +136,27 @@ func TestNormalizedStatement(t *testing.T) {
 			statement: "create view `mydb`.v as select * from `mydb`.`t`",
 			db:        "mydb",
 			typ:       tmutils.TableView,
-			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`t`",
+			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.t",
+		},
+		{
+			statement: "create view `mydb`.v as select * from `mydb`.mydb",
+			db:        "mydb",
+			typ:       tmutils.TableView,
+			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.mydb",
 		},
 		{
 			statement: "create view `mydb`.v as select * from `mydb`.`mydb`",
 			db:        "mydb",
 			typ:       tmutils.TableView,
-			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`mydb`",
+			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.mydb",
 		},
 	}
 	ctx := context.Background()
 	for _, tcase := range tcases {
 		testName := tcase.statement
 		t.Run(testName, func(t *testing.T) {
-			result := normalizedStatement(ctx, tcase.statement, tcase.db, tcase.typ)
+			result, err := normalizedStatement(ctx, tcase.statement, tcase.db, tcase.typ)
+			assert.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}

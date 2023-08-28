@@ -34,6 +34,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -99,7 +100,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	if len(qr.Rows) == 0 {
 		return nil, fmt.Errorf("empty create database statement for %v", dbName)
 	}
-	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].ToString(), backtickDBName, "{{.DatabaseName}}", 1)
+	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].ToString(), backtickDBName, tmutils.DatabaseNamePlaceholder, 1)
 
 	tds, err := mysqld.collectBasicTableData(ctx, dbName, request.Tables, request.ExcludeTables, request.IncludeViews)
 	if err != nil {
@@ -250,21 +251,24 @@ func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tabl
 }
 
 // normalizedStatement returns a table schema with database names replaced, and auto_increment annotations removed.
-func normalizedStatement(ctx context.Context, statementQuery, dbName, tableType string) string {
-	backtickDBName := sqlescape.EscapeID(dbName)
-
+func normalizedStatement(ctx context.Context, statementQuery, dbName, tableType string) (string, error) {
 	// Normalize & remove auto_increment because it changes on every insert
 	// FIXME(alainjobart) find a way to share this with
 	// vt/tabletserver/table_info.go:162
 	norm := statementQuery
 	norm = autoIncr.ReplaceAllLiteralString(norm, "")
 	if tableType == tmutils.TableView {
-		// Views will have the dbname in there, replace it
-		// with {{.DatabaseName}}
-		norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
+		replaced, err := sqlparser.ReplaceTableQualifiers(norm, dbName, tmutils.DatabaseNamePlaceholder)
+		if err != nil {
+			// parsing unsuccessful
+			return norm, err
+		}
+		// Parsing successful
+		replaced = tmutils.UnqualifyDatabaseNamePlaceholder(replaced)
+		return replaced, nil
 	}
 
-	return norm
+	return norm, nil
 }
 
 // normalizedSchema returns a table schema with database names replaced, and auto_increment annotations removed.
@@ -281,7 +285,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	// Normalize & remove auto_increment because it changes on every insert
 	// FIXME(alainjobart) find a way to share this with
 	// vt/tabletserver/table_info.go:162
-	return normalizedStatement(ctx, qr.Rows[0][1].ToString(), dbName, tableType), nil
+	return normalizedStatement(ctx, qr.Rows[0][1].ToString(), dbName, tableType)
 }
 
 // ResolveTables returns a list of actual tables+views matching a list
@@ -449,7 +453,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 		if td.Type == tmutils.TableView {
 			// Views will have {{.DatabaseName}} in there, replace
 			// it with _vt_preflight
-			s := strings.Replace(td.Schema, "{{.DatabaseName}}", "`_vt_preflight`", -1)
+			s := strings.Replace(td.Schema, tmutils.DatabaseNamePlaceholder, "`_vt_preflight`", -1)
 			initialCopySQL += s + ";\n"
 		}
 	}

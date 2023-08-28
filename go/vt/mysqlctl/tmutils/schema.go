@@ -38,7 +38,16 @@ const (
 	TableBaseTable = "BASE TABLE"
 	// TableView indicates the table type is a view.
 	TableView = "VIEW"
+
+	DatabaseNamePlaceholder = "{{.DatabaseName}}"
 )
+
+func UnqualifyDatabaseNamePlaceholder(s string) string {
+	return strings.Replace(s, sqlescape.EscapeID(DatabaseNamePlaceholder), DatabaseNamePlaceholder, -1)
+}
+func QualifyDatabaseNamePlaceholder(s string) string {
+	return strings.Replace(s, DatabaseNamePlaceholder, sqlescape.EscapeID(DatabaseNamePlaceholder), -1)
+}
 
 // TableDefinitionGetColumn returns the index of a column inside a
 // TableDefinition.
@@ -212,8 +221,8 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 
 	// Backtick database name since keyspace names appear in the routing rules, and they might need to be escaped.
 	// We unescape() them first in case we have an explicitly escaped string was specified.
-	createDatabaseSQL := strings.Replace(sd.DatabaseSchema, "`{{.DatabaseName}}`", "{{.DatabaseName}}", -1)
-	createDatabaseSQL = strings.Replace(createDatabaseSQL, "{{.DatabaseName}}", sqlescape.EscapeID("{{.DatabaseName}}"), -1)
+	createDatabaseSQL := UnqualifyDatabaseNamePlaceholder(sd.DatabaseSchema)
+	createDatabaseSQL = QualifyDatabaseNamePlaceholder(createDatabaseSQL)
 	sqlStrings = append(sqlStrings, createDatabaseSQL)
 
 	for _, td := range sd.TableDefinitions {
@@ -226,7 +235,7 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 			lines := strings.Split(td.Schema, "\n")
 			for i, line := range lines {
 				if strings.HasPrefix(line, "CREATE TABLE `") {
-					lines[i] = strings.Replace(line, "CREATE TABLE `", "CREATE TABLE `{{.DatabaseName}}`.`", 1)
+					lines[i] = strings.Replace(line, "CREATE TABLE `", fmt.Sprintf("CREATE TABLE `%s`.`", DatabaseNamePlaceholder), 1)
 				}
 			}
 			sqlStrings = append(sqlStrings, strings.Join(lines, "\n"))
