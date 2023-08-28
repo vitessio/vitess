@@ -369,6 +369,80 @@ func TestCrossShardFkScenarios(t *testing.T) {
 				"select * from fk_t4 order by id",
 				"select * from fk_t6 order by id",
 			},
+		}, {
+			name: "Update success with cascade foreign key",
+			dataQueries: []string{
+				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t11(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t10 order by id",
+				"select * from fk_t11 order by id",
+			},
+		}, {
+			name: "Update failure with cascade foreign key with child having a restrict foreign key",
+			dataQueries: []string{
+				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t11(id, col) values (1, 7)",
+				"insert into fk_t13(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t10 order by id",
+				"select * from fk_t11 order by id",
+				"select * from fk_t13 order by id",
+			},
+		}, {
+			name: "Update success with cascaded cascade foreign keys",
+			dataQueries: []string{
+				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t11(id, col) values (1, 7)",
+				"insert into fk_t12(id, col) values (1, 7)",
+			},
+			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t10 order by id",
+				"select * from fk_t11 order by id",
+				"select * from fk_t12 order by id",
+			},
+		}, {
+			name: "Delete success with cascade foreign key",
+			dataQueries: []string{
+				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t11(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t10 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t10 order by id",
+				"select * from fk_t11 order by id",
+			},
+		}, {
+			name: "Delete failure with cascade foreign key with child having a restrict foreign key",
+			dataQueries: []string{
+				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t11(id, col) values (1, 7)",
+				"insert into fk_t13(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t10 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t10 order by id",
+				"select * from fk_t11 order by id",
+				"select * from fk_t13 order by id",
+			},
+		}, {
+			name: "Delete success with cascaded cascade foreign keys",
+			dataQueries: []string{
+				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t11(id, col) values (1, 7)",
+				"insert into fk_t12(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t10 where id = 1",
+			assertionQueries: []string{
+				"select * from fk_t10 order by id",
+				"select * from fk_t11 order by id",
+				"select * from fk_t12 order by id",
+			},
 		},
 	}
 
