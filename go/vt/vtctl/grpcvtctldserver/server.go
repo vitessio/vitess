@@ -528,7 +528,7 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 		return nil, err
 	}
 
-	log.Info("Calling ApplySchema to Cancel migration")
+	log.Info("Calling ApplySchema to cancel migration")
 	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
