@@ -52,6 +52,8 @@ RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
  && rm -f /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm
 RUN echo H4sICH852V8CA2ZvbwC1jr0OgkAQhPt7CgrbY7W6xOQaDaEgRqKxMMTiOFYg/F2WI9G39xCttKGg2UxmJrNfokWqeryxVjUo99ja45kLj3s757IxGqiWhbVmC9CURB352rW63u8oh0mCAHdWY1uRLoDlJtcF6kpuRlnhU97LGt0CoNVgqhLINNxFcIoPPIxDHgVX/v3OsFVpjZlcM5ZoMZhMWex/ES9TMIPyM7UYKj4sqT+kwdufAToNLcP5AvRgmV7zAQAA | base64 -d | gzip -dc > /etc/yum.repos.d/CentOS-Base.repo \
  && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs --enablerepo c7base --enablerepo c7updates --enablerepo c7extras install libev gperftools-libs numactl-libs sysstat strace
+RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+RUN yum install -y zstd
 RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
  && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
     jemalloc gperftools-libs procps-ng rsync wget openssl hostname curl tzdata make \
@@ -61,7 +63,7 @@ RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
     mysql-community-client mysql-community-server \
 # Have to use hacks to ignore conflicts on /etc/my.cnf install
  && mkdir -p /tmp/1 \
- && yum install -y --setopt=alwaysprompt=no --downloadonly --downloaddir=/tmp/1 --enablerepo mysql80-community --disablerepo mysql57-community percona-xtrabackup-80 percona-toolkit \
+ && yum install -y --skip-broken --setopt=alwaysprompt=no --downloadonly --downloaddir=/tmp/1 --enablerepo mysql80-community --disablerepo mysql57-community percona-xtrabackup-80 percona-toolkit \
  && rpm -Uvh --replacefiles /tmp/1/*rpm \
  && rm -rf /tmp/1 \
  && yum clean all \
