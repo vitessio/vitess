@@ -45,7 +45,7 @@ var (
 	}
 	OnlineDDLCancel = &cobra.Command{
 		Use:                   "cancel <keyspace> <uuid|all>",
-		Short:                 "CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.",
+		Short:                 "CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.",
 		Example:               "OnlineDDL cancel test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
