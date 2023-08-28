@@ -1,13 +1,16 @@
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -102,4 +105,52 @@ func TestColumnList(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `[name:"col1" type:VARCHAR]`, fmt.Sprintf("%+v", fields))
 
+}
+
+func TestNormalizedStatement(t *testing.T) {
+	tcases := []struct {
+		statement string
+		db        string
+		typ       string
+		expect    string
+	}{
+		{
+			statement: "create table mydb.t (id int primary key)",
+			db:        "mydb",
+			typ:       tmutils.TableBaseTable,
+			expect:    "create table mydb.t (id int primary key)",
+		},
+		{
+			statement: "create table `mydb`.t (id int primary key)",
+			db:        "mydb",
+			typ:       tmutils.TableBaseTable,
+			expect:    "create table `mydb`.t (id int primary key)",
+		},
+		{
+			statement: "create view `mydb`.v as select * from t",
+			db:        "mydb",
+			typ:       tmutils.TableView,
+			expect:    "create view {{.DatabaseName}}.v as select * from t",
+		},
+		{
+			statement: "create view `mydb`.v as select * from `mydb`.`t`",
+			db:        "mydb",
+			typ:       tmutils.TableView,
+			expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`t`",
+		},
+		// {
+		// 	statement: "create view `mydb`.v as select * from `mydb`.`mydb`",
+		// 	db:        "mydb",
+		// 	typ:       tmutils.TableView,
+		// 	expect:    "create view {{.DatabaseName}}.v as select * from {{.DatabaseName}}.`mydb`",
+		// },
+	}
+	ctx := context.Background()
+	for _, tcase := range tcases {
+		testName := tcase.statement
+		t.Run(testName, func(t *testing.T) {
+			result := normalizedStatement(ctx, tcase.statement, tcase.db, tcase.typ)
+			assert.Equal(t, tcase.expect, result)
+		})
+	}
 }

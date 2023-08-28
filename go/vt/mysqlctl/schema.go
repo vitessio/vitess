@@ -249,6 +249,24 @@ func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tabl
 	return fields, columns, schema, nil
 }
 
+// normalizedStatement returns a table schema with database names replaced, and auto_increment annotations removed.
+func normalizedStatement(ctx context.Context, statementQuery, dbName, tableType string) string {
+	backtickDBName := sqlescape.EscapeID(dbName)
+
+	// Normalize & remove auto_increment because it changes on every insert
+	// FIXME(alainjobart) find a way to share this with
+	// vt/tabletserver/table_info.go:162
+	norm := statementQuery
+	norm = autoIncr.ReplaceAllLiteralString(norm, "")
+	if tableType == tmutils.TableView {
+		// Views will have the dbname in there, replace it
+		// with {{.DatabaseName}}
+		norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
+	}
+
+	return norm
+}
+
 // normalizedSchema returns a table schema with database names replaced, and auto_increment annotations removed.
 func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
 	backtickDBName := sqlescape.EscapeID(dbName)
@@ -263,15 +281,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	// Normalize & remove auto_increment because it changes on every insert
 	// FIXME(alainjobart) find a way to share this with
 	// vt/tabletserver/table_info.go:162
-	norm := qr.Rows[0][1].ToString()
-	norm = autoIncr.ReplaceAllLiteralString(norm, "")
-	if tableType == tmutils.TableView {
-		// Views will have the dbname in there, replace it
-		// with {{.DatabaseName}}
-		norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
-	}
-
-	return norm, nil
+	return normalizedStatement(ctx, qr.Rows[0][1].ToString(), dbName, tableType), nil
 }
 
 // ResolveTables returns a list of actual tables+views matching a list
