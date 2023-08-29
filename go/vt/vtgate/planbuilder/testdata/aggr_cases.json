@@ -2580,7 +2580,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }  },
+    }
+  },
   {
     "comment": "we have to track the order of distinct aggregation expressions",
     "query": "select val2, count(distinct val1), count(*) from user group by val2",

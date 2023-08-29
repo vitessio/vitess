@@ -283,7 +283,6 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 	joinID := TableID(join)
 	innerID := TableID(inner.Inner())
 
-	// inner.col = lhs.col
 	deps := semantics.EmptyTableSet()
 	for _, predicate := range inner.GetJoinPredicates() {
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))

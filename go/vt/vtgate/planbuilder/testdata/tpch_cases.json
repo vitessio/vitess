@@ -150,75 +150,65 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS order_count",
-        "GroupBy": "(0|2)",
+        "GroupBy": "(0|3)",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "[COLUMN 1] as o_orderpriority",
-              "[COLUMN 2] as order_count",
-              "[COLUMN 3]"
-            ],
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "o_orderkey": 2
+            },
+            "TableName": "orders_lineitem",
             "Inputs": [
               {
-                "OperatorType": "SemiJoin",
-                "JoinVars": {
-                  "o_orderkey": 0
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
                 },
-                "TableName": "orders_lineitem",
+                "FieldQuery": "select o_orderpriority, count(*) as order_count, o_orderkey, weight_string(o_orderpriority) from orders where 1 != 1 group by o_orderpriority, o_orderkey, weight_string(o_orderpriority)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select o_orderpriority, count(*) as order_count, o_orderkey, weight_string(o_orderpriority) from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month group by o_orderpriority, o_orderkey, weight_string(o_orderpriority) order by o_orderpriority asc",
+                "Table": "orders"
+              },
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "Values": [
+                  ":o_orderkey"
+                ],
+                "Vindex": "lineitem_map",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "Scatter",
+                    "Variant": "IN",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": true
                     },
-                    "FieldQuery": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where 1 != 1 group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey)",
-                    "OrderBy": "(1|3) ASC",
-                    "Query": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey) order by o_orderpriority asc",
-                    "Table": "orders"
+                    "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                    "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                    "Table": "lineitem_map",
+                    "Values": [
+                      "::l_orderkey"
+                    ],
+                    "Vindex": "md5"
                   },
                   {
-                    "OperatorType": "VindexLookup",
-                    "Variant": "EqualUnique",
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": true
                     },
-                    "Values": [
-                      ":o_orderkey"
-                    ],
-                    "Vindex": "lineitem_map",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "IN",
-                        "Keyspace": {
-                          "Name": "main",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
-                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
-                        "Table": "lineitem_map",
-                        "Values": [
-                          "::l_orderkey"
-                        ],
-                        "Vindex": "md5"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "ByDestination",
-                        "Keyspace": {
-                          "Name": "main",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1 from lineitem where 1 != 1",
-                        "Query": "select 1 from lineitem where l_commitdate < l_receiptdate and l_orderkey = :o_orderkey",
-                        "Table": "lineitem"
-                      }
-                    ]
+                    "FieldQuery": "select 1 from lineitem where 1 != 1",
+                    "Query": "select 1 from lineitem where l_commitdate < l_receiptdate and l_orderkey = :o_orderkey",
+                    "Table": "lineitem"
                   }
                 ]
               }
@@ -1170,7 +1160,7 @@
             },
             "FieldQuery": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where 1 != 1",
             "OrderBy": "(0|5) ASC",
-            "Query": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where total_revenue = :__sq1 and s_suppkey = supplier_no order by s_suppkey asc",
+            "Query": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = :__sq1 order by s_suppkey asc",
             "ResultColumns": 5,
             "Table": "revenue0, supplier"
           }
@@ -1185,12 +1175,101 @@
   {
     "comment": "TPC-H query 16",
     "query": "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
-    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.uncorrelatedSubquery plan"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "3 DESC, (0|4) ASC, (1|5) ASC, (2|6) ASC",
+        "ResultColumns": 4,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count_distinct(3|7) AS supplier_cnt",
+            "GroupBy": "(0|4), (1|5), (2|6)",
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(0|4) ASC, (1|5) ASC, (2|6) ASC, (3|7) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,R:1,R:2,L:0,R:3,R:4,R:5,L:1",
+                    "JoinVars": {
+                      "ps_partkey": 2
+                    },
+                    "TableName": "partsupp_part",
+                    "Inputs": [
+                      {
+                        "OperatorType": "UncorrelatedSubquery",
+                        "Variant": "PulloutNotIn",
+                        "PulloutVars": [
+                          "__sq_has_values1",
+                          "__sq1"
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select s_suppkey from supplier where 1 != 1",
+                            "Query": "select s_suppkey from supplier where s_comment like '%Customer%Complaints%'",
+                            "Table": "supplier"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where 1 != 1",
+                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values1 and ps_suppkey not in ::__sq1",
+                            "Table": "partsupp"
+                          }
+                        ]
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select p_brand, p_type, p_size, weight_string(p_brand), weight_string(p_type), weight_string(p_size) from part where 1 != 1",
+                        "Query": "select p_brand, p_type, p_size, weight_string(p_brand), weight_string(p_type), weight_string(p_size) from part where p_brand != 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and p_partkey = :ps_partkey",
+                        "Table": "part",
+                        "Values": [
+                          ":ps_partkey"
+                        ],
+                        "Vindex": "hash"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.part",
+        "main.partsupp",
+        "main.supplier"
+      ]
+    }
   },
   {
     "comment": "TPC-H query 17",
     "query": "select sum(l_extendedprice) / 7.0 as avg_yearly from lineitem, part where p_partkey = l_partkey and p_brand = 'Brand#23' and p_container = 'MED BOX' and l_quantity < ( select 0.2 * avg(l_quantity) from lineitem where l_partkey = p_partkey )",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "TPC-H query 18",
@@ -1403,7 +1482,7 @@
   {
     "comment": "TPC-H query 20",
     "query": "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "TPC-H query 21",
@@ -1550,6 +1629,6 @@
   {
     "comment": "TPC-H query 22",
     "query": "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode",
-    "plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
+    "plan": "VT12001: unsupported: unsupported subquery: not exists (select 1 from orders where o_custkey = c_custkey)"
   }
 ]
