@@ -138,7 +138,7 @@ jobs:
         fi
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -166,7 +166,7 @@ jobs:
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
       run: |
-        if [[ " ${{steps.skip-workflow.outputs.is_draft}} " ==  "false" ]]; then
+        if [[ "${{steps.skip-workflow.outputs.is_draft}}" ==  "false" ]]; then
           # send recorded tests to launchable
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
         fi
