@@ -39,7 +39,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vschema"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -620,7 +620,7 @@ func (mz *materializer) filterSourceShards(targetShard *topo.ShardInfo) []*topo.
 // materialize settings, the provided source and target vschemas have the same
 // primary vindexes.
 func samePrimaryVindexes(ms *vtctldatapb.MaterializeSettings, source, target *vschema.Keyspace) bool {
-	// For keyspaces that are not unsharded, there are no primary vindexes to
+	// For keyspaces that are not sharded, there are no primary vindexes to
 	// compare.
 	if !source.Sharded || !target.Sharded {
 		return false
