@@ -86,8 +86,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		// no throttler
 		return true
 	}
-	lastTick := c.ticks.Load()
-	if c.lastSuccessfulThrottle >= lastTick {
+	if c.lastSuccessfulThrottle >= c.ticks.Load() {
 		// if last check was OK just very recently there is no need to check again
 		return true
 	}
@@ -100,7 +99,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
-	c.lastSuccessfulThrottle = lastTick
+	c.lastSuccessfulThrottle = c.ticks.Load()
 	return true
 
 }
