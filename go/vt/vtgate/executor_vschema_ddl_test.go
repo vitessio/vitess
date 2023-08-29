@@ -444,13 +444,6 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	ks := KsTestUnsharded
 
-	vschema := executor.vm.GetCurrentSrvVschema()
-
-	var vschemaTables []string
-	for t := range vschema.Keyspaces[ks].Tables {
-		vschemaTables = append(vschemaTables, t)
-	}
-
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	stmt := "alter vschema add table test_table"
