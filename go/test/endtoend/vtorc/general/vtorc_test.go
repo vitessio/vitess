@@ -215,6 +215,15 @@ func TestVTOrcRepairs(t *testing.T) {
 		// check that the writes still succeed
 		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 10*time.Second)
 	})
+
+	t.Run("Errant GTID Detected", func(t *testing.T) {
+		// insert an errant GTID in the replica
+		_, err := utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+		require.NoError(t, err)
+		// When VTOrc detects errant GTIDs, it should change the tablet to a drained type.
+		utils.WaitForTabletType(t, replica, "drained")
+	})
+
 }
 
 func TestRepairAfterTER(t *testing.T) {
