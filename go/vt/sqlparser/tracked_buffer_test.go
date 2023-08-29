@@ -106,7 +106,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{ // tablespace names are case-sensitive: https://dev.mysql.com/doc/refman/en/general-tablespaces.html
 			"create table a (v varchar(32)) engine=InnoDB tablespace innodb_system",
-			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB TABLESPACE innodb_system",
+			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB,\n  TABLESPACE innodb_system",
 		},
 		{
 			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine InnoDB tablespace foo)",
