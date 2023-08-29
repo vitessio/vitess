@@ -17,7 +17,6 @@ limitations under the License.
 package uca
 
 import (
-	"reflect"
 	"sync"
 	"unsafe"
 )
@@ -287,29 +286,29 @@ func (Layout_uca_legacy) applyPatches(page []uint16, offset int, weights []uint1
 }
 
 type tableWithPatch struct {
-	tableptr uintptr
-	patchptr uintptr
+	tableptr unsafe.Pointer
+	patchptr unsafe.Pointer
 }
 
 var cachedTables = make(map[tableWithPatch]Weights)
 var cachedTablesMu sync.Mutex
 
 func lookupCachedTable(table Weights, patch []Patch) (Weights, bool) {
-	hdr1 := (*reflect.SliceHeader)(unsafe.Pointer(&table))
-	hdr2 := (*reflect.SliceHeader)(unsafe.Pointer(&patch))
+	data1 := unsafe.Pointer(unsafe.SliceData(table))
+	data2 := unsafe.Pointer(unsafe.SliceData(patch))
 
 	cachedTablesMu.Lock()
 	defer cachedTablesMu.Unlock()
-	tbl, ok := cachedTables[tableWithPatch{hdr1.Data, hdr2.Data}]
+	tbl, ok := cachedTables[tableWithPatch{tableptr: data1, patchptr: data2}]
 	return tbl, ok
 }
 
 func storeCachedTable(table Weights, patch []Patch, result Weights) {
-	hdr1 := (*reflect.SliceHeader)(unsafe.Pointer(&table))
-	hdr2 := (*reflect.SliceHeader)(unsafe.Pointer(&patch))
+	data1 := unsafe.Pointer(unsafe.SliceData(table))
+	data2 := unsafe.Pointer(unsafe.SliceData(patch))
 
 	cachedTablesMu.Lock()
-	cachedTables[tableWithPatch{hdr1.Data, hdr2.Data}] = result
+	cachedTables[tableWithPatch{tableptr: data1, patchptr: data2}] = result
 	cachedTablesMu.Unlock()
 }
 
