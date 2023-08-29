@@ -34,6 +34,13 @@ jobs:
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
+        PR_DATA=$(curl \
+          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
+        draft=$(echo "$PR_DATA" | jq .draft -r)
+        echo "::set-output name=is_draft::${draft}" >> $GITHUB_OUTPUT
+
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v3
@@ -165,11 +172,13 @@ jobs:
         export NOVTADMINBUILD=1
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Print test output and Record test result in launchable
+    - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
       run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        if [[ "{{" ${{steps.skip-workflow.outputs.is_draft}} "}}" ==  "false" ]]; then
+          # send recorded tests to launchable
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        fi
 
         # print test output
         cat output.txt
