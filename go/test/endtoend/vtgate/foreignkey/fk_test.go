@@ -510,4 +510,68 @@ func TestCrossShardFkScenarios(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Transactions with intermediate failure", func(t *testing.T) {
+		mcmp, closer := start(t)
+		defer closer()
+
+		// Insert some rows
+		mcmp.Exec("INSERT INTO fk_t10(id, col) VALUES (1, 7), (2, 9), (3, 5)")
+		mcmp.Exec("INSERT INTO fk_t11(id, col) VALUES (1, 7), (2, 9), (3, 5)")
+		mcmp.Exec("INSERT INTO fk_t12(id, col) VALUES (1, 7), (2, 9), (3, 5)")
+
+		// Start a transaction
+		mcmp.Exec("BEGIN")
+
+		// Insert another row.
+		mcmp.Exec("INSERT INTO fk_t13(id, col) VALUES (1, 7)")
+
+		// Delete success for cascaded (2, 9)
+		mcmp.Exec("DELETE FROM fk_t10 WHERE id = 2")
+
+		// Verify the results
+		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+
+		// Update that fails
+		_, err = mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
+		require.Error(t, err)
+
+		// Verify the results
+		// Since we are in a transaction, we still expect the transaction to be ongoing, with no change to the tables
+		// since the update should fail.
+		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+
+		// Update that is a success
+		mcmp.Exec("UPDATE fk_t10 SET col = 15 where id = 3")
+
+		// Verify the results
+		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+
+		// Insert a new row
+		mcmp.Exec("INSERT INTO fk_t13(id, col) VALUES (3, 15)")
+
+		// Verify the results
+		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+
+		// Rollback the transaction.
+		mcmp.Exec("ROLLBACK")
+
+		// Verify the results
+		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+	})
 }
