@@ -240,6 +240,11 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			ersEnabled:           false,
 			analysisCode:         inst.PrimarySemiSyncMustBeSet,
 			wantRecoveryFunction: fixPrimaryFunc,
+		}, {
+			name:                 "ErrantGTIDDetected",
+			ersEnabled:           false,
+			analysisCode:         inst.ErrantGTIDDetected,
+			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
 		},
 	}
 

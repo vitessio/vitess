@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -48,6 +49,7 @@ const (
 	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
 	FixPrimaryRecoveryName                           string = "FixPrimary"
 	FixReplicaRecoveryName                           string = "FixReplica"
+	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
 )
 
 var (
@@ -86,6 +88,7 @@ const (
 	electNewPrimaryFunc
 	fixPrimaryFunc
 	fixReplicaFunc
+	recoverErrantGTIDDetectedFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -405,6 +408,8 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 			return recoverGenericProblemFunc
 		}
 		return recoverPrimaryTabletDeletedFunc
+	case inst.ErrantGTIDDetected:
+		return recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
 		return recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
@@ -461,6 +466,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case fixReplicaFunc:
 		return true
+	case recoverErrantGTIDDetectedFunc:
+		return true
 	default:
 		return false
 	}
@@ -489,6 +496,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return fixPrimary
 	case fixReplicaFunc:
 		return fixReplica
+	case recoverErrantGTIDDetectedFunc:
+		return recoverErrantGTIDDetected
 	default:
 		return nil
 	}
@@ -516,6 +525,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return FixPrimaryRecoveryName
 	case fixReplicaFunc:
 		return FixReplicaRecoveryName
+	case recoverErrantGTIDDetectedFunc:
+		return RecoverErrantGTIDDetectedName
 	default:
 		return ""
 	}
@@ -880,5 +891,40 @@ func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 	}
 
 	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
+	return true, topologyRecovery, err
+}
+
+// recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
+func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	if topologyRecovery == nil {
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another recoverErrantGTIDDetected.", analysisEntry.AnalyzedInstanceAlias))
+		return false, nil, err
+	}
+	log.Infof("Analysis: %v, will fix tablet %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		_ = resolveRecovery(topologyRecovery, nil)
+	}()
+
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil {
+		return false, topologyRecovery, err
+	}
+
+	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+	if err != nil {
+		log.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, err
+	}
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	if err != nil {
+		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, err
+	}
+
+	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_DRAINED, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
 	return true, topologyRecovery, err
 }
