@@ -397,26 +397,23 @@ func TestUnknownColumnMap2(t *testing.T) {
 
 	queries := []string{"select col from a, b", "select col from a as user, b as extra"}
 	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			parse, _ := sqlparser.Parse(query)
-			expr := extract(parse.(*sqlparser.Select), 0)
-
-			for _, test := range tests {
-				t.Run(test.name, func(t *testing.T) {
-					si := &FakeSI{Tables: test.schema}
-					tbl, err := Analyze(parse, "", si)
-					if test.err {
-						require.True(t, err != nil || tbl.NotSingleRouteErr != nil)
-					} else {
-						require.NoError(t, err)
-						require.NoError(t, tbl.NotSingleRouteErr)
-						typ, _, found := tbl.TypeForExpr(expr)
-						assert.True(t, found)
-						assert.Equal(t, test.typ, typ)
-					}
-				})
-			}
-		})
+		for _, test := range tests {
+			t.Run(query+":"+test.name, func(t *testing.T) {
+				parse, _ := sqlparser.Parse(query)
+				expr := extract(parse.(*sqlparser.Select), 0)
+				si := &FakeSI{Tables: test.schema}
+				tbl, err := Analyze(parse, "", si)
+				if test.err {
+					require.True(t, err != nil || tbl.NotSingleRouteErr != nil)
+				} else {
+					require.NoError(t, err)
+					require.NoError(t, tbl.NotSingleRouteErr)
+					typ, _, found := tbl.TypeForExpr(expr)
+					assert.True(t, found)
+					assert.Equal(t, test.typ, typ)
+				}
+			})
+		}
 	}
 }
 
