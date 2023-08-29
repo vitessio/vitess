@@ -212,8 +212,8 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 }
 
 // Inputs implements the Primitive interface
-func (sa *ScalarAggregate) Inputs() []Primitive {
-	return []Primitive{sa.Input}
+func (sa *ScalarAggregate) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{sa.Input}, nil
 }
 
 // description implements the Primitive interface

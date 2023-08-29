@@ -251,8 +251,8 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 }
 
 // Inputs returns the Primitive input for this aggregation
-func (oa *OrderedAggregate) Inputs() []Primitive {
-	return []Primitive{oa.Input}
+func (oa *OrderedAggregate) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{oa.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface

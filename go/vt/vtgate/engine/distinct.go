@@ -246,8 +246,8 @@ func (d *Distinct) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (d *Distinct) Inputs() []Primitive {
-	return []Primitive{d.Source}
+func (d *Distinct) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{d.Source}, nil
 }
 
 func (d *Distinct) description() PrimitiveDescription {

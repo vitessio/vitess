@@ -234,8 +234,8 @@ func (hj *HashJoin) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (hj *HashJoin) Inputs() []Primitive {
-	return []Primitive{hj.Left, hj.Right}
+func (hj *HashJoin) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{hj.Left, hj.Right}, nil
 }
 
 // description implements the Primitive interface

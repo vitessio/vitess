@@ -43,8 +43,8 @@ type PulloutSubquery struct {
 }
 
 // Inputs returns the input primitives for this join
-func (ps *PulloutSubquery) Inputs() []Primitive {
-	return []Primitive{ps.Subquery, ps.Underlying}
+func (ps *PulloutSubquery) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{ps.Subquery, ps.Underlying}, nil
 }
 
 // RouteType returns a description of the query routing type used by the primitive
