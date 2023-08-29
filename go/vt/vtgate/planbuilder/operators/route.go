@@ -396,13 +396,13 @@ func createRouteFromVSchemaTable(
 	planAlternates bool,
 ) (*Route, error) {
 	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
-		// we are dealing with a routed table
+		// we are dealing with a reference table
 		queryTable = queryTable.Clone()
 		name := queryTable.Table.Name
 		queryTable.Table.Name = vschemaTable.Name
 		astTable, ok := queryTable.Alias.Expr.(sqlparser.TableName)
 		if !ok {
-			return nil, vterrors.VT13001("a derived table should never be a routed table")
+			return nil, vterrors.VT13001("a derived table should never be a reference table")
 		}
 		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 		astTable.Name = realTableName

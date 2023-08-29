@@ -115,6 +115,13 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 
 		scope := tc.scoper.currentScope()
 		tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
+		if tbl != nil && t.Name != tbl.Name {
+			if node.As.IsEmpty() {
+				node.As = sqlparser.NewIdentifierCS(t.Name.String())
+			}
+			t.Name = tbl.Name
+			node.Expr = t
+		}
 
 		tc.Tables = append(tc.Tables, tableInfo)
 		return scope.addTable(tableInfo)
