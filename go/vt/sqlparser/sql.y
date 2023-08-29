@@ -2827,7 +2827,7 @@ table_option:
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4)}
+    $$ = &TableOption{Name:string($1), String: ($3.String() + $4), CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
