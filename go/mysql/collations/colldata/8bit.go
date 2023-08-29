@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package colldata
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -42,7 +43,7 @@ type simpletables struct {
 }
 
 type Collation_8bit_bin struct {
-	id   ID
+	id   collations.ID
 	name string
 	simpletables
 	charset charset.Charset
@@ -52,7 +53,7 @@ func (c *Collation_8bit_bin) Name() string {
 	return c.name
 }
 
-func (c *Collation_8bit_bin) ID() ID {
+func (c *Collation_8bit_bin) ID() collations.ID {
 	return c.id
 }
 
@@ -129,7 +130,7 @@ func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
 }
 
 type Collation_8bit_simple_ci struct {
-	id   ID
+	id   collations.ID
 	name string
 	simpletables
 	charset charset.Charset
@@ -139,7 +140,7 @@ func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
 }
 
-func (c *Collation_8bit_simple_ci) ID() ID {
+func (c *Collation_8bit_simple_ci) ID() collations.ID {
 	return c.id
 }
 
@@ -251,8 +252,8 @@ func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
 
 type Collation_binary struct{}
 
-func (c *Collation_binary) ID() ID {
-	return CollationBinaryID
+func (c *Collation_binary) ID() collations.ID {
+	return collations.CollationBinaryID
 }
 
 func (c *Collation_binary) Name() string {

@@ -279,7 +279,7 @@ func (cached *LikeExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Match vitess.io/vitess/go/mysql/collations.WildcardPattern
+	// field Match vitess.io/vitess/go/mysql/collations/colldata.WildcardPattern
 	if cc, ok := cached.Match.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
