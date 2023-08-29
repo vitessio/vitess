@@ -189,7 +189,7 @@ func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner Sub
 func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery SubQuery, outer *Route) (newOuter ops.Operator, result *rewrite.ApplyResult, err error) {
 	switch inner := subQuery.Inner().(type) {
 	case *Route:
-		exprs := subQuery.GetJoinPredicates()
+		exprs := subQuery.GetMergePredicates()
 		merger := &subqueryRouteMerger{
 			outer:    outer,
 			original: subQuery.OriginalExpression(),
@@ -204,22 +204,17 @@ func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery SubQu
 		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
 		return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
 	case *SubQueryContainer:
-		exprs := subQuery.GetJoinPredicates()
+		exprs := subQuery.GetMergePredicates()
 		merger := &subqueryRouteMerger{
 			outer:    outer,
 			original: subQuery.OriginalExpression(),
 		}
-		outer1 := TableID(inner.Outer)
-		outer2 := TableID(outer)
 		op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
 		if err != nil {
 			return nil, nil, err
 		}
 		if op == nil {
 			return outer, rewrite.SameTree, nil
-		}
-		if TableID(op) != outer2.Merge(outer1) {
-			panic("uh oh. lost one")
 		}
 
 		op = Clone(op).(*Route)

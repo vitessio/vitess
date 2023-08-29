@@ -76,7 +76,11 @@ func pushDownAggregationThroughSubquery(
 	pushedAggr.Pushed = false
 
 	for _, subQuery := range src.Inner {
-		for _, colName := range subQuery.OuterExpressionsNeeded() {
+		lhsCols, err := subQuery.OuterExpressionsNeeded(ctx, src.Outer)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, colName := range lhsCols {
 			idx := slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
 				return ctx.SemTable.EqualsExpr(ae.Expr, colName)
 			})

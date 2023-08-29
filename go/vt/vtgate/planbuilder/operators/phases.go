@@ -71,7 +71,7 @@ func getPhases(ctx *plancontext.PlanningContext) []Phase {
 		},
 		{
 			// Finalize subqueries after they've been pushed as far as possible.
-			Name:   "finalize subqueries",
+			Name:   "settle subqueries",
 			action: settleSubqueries,
 			apply:  func(s semantics.QuerySignature) bool { return s.SubQueries },
 		},
@@ -143,15 +143,11 @@ func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq S
 }
 
 func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
-	if len(sj.JoinPredicates) > 0 {
+	if len(sj.Predicates) > 0 {
 		if sj.FilterType != opcode.PulloutExists {
 			return nil, vterrors.VT12001("correlated subquery is only supported for EXISTS")
 		}
-		sj.Subquery = &Filter{
-			Source:     sj.Subquery,
-			Predicates: slice.Map(sj.JoinPredicates, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),
-		}
-		return outer, nil
+		return settleExistSubquery(ctx, sj, outer)
 	}
 
 	resultArg, hasValuesArg := ctx.ReservedVars.ReserveSubQueryWithHasValues()
@@ -198,6 +194,22 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 		Source:     outer,
 		Predicates: predicates,
 	}, nil
+}
+
+func settleExistSubquery(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
+	jcs, err := sj.GetJoinColumns(ctx, outer)
+	if err != nil {
+		return nil, err
+	}
+
+	sj.Subquery = &Filter{
+		Source:     sj.Subquery,
+		Predicates: slice.Map(jcs, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),
+	}
+
+	// the columns needed by the RHS expression are handled during offset planning time
+
+	return outer, nil
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

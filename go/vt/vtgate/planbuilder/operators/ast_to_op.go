@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/slice"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -209,17 +208,10 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 		innerSel.Where.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	}
 
-	predicate := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     outside,
-	}
-
 	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.VT13001("can't use unexpanded projections here")
 	}
-	predicate.Right = ae.Expr
-	jpc.addPredicate(predicate)
 
 	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
@@ -236,11 +228,19 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 
 	opInner = sqL.getRootOperator(opInner)
 
+	// this is a predicate that will only be used to check if we can merge the subquery with the outer query
+	predicate := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     outside,
+		Right:    ae.Expr,
+	}
+
 	return &SubQueryFilter{
-		FilterType: filterType,
-		Subquery:   opInner,
-		Predicates: jpc.predicates,
-		Original:   original,
+		FilterType:     filterType,
+		Subquery:       opInner,
+		Predicates:     jpc.predicates,
+		OuterPredicate: predicate,
+		Original:       original,
 	}, nil
 }
 
@@ -286,30 +286,11 @@ func createExistsSubquery(
 		return nil, err
 	}
 
-	mapper := func(in sqlparser.Expr) (JoinColumn, error) { return BreakExpressionInLHSandRHS(ctx, in, outerID) }
-	joinPredicates, err := slice.MapWithError(jpc.predicates, mapper)
-	if err != nil {
-		return nil, err
-	}
-
-	lhsCols := []*sqlparser.ColName{}
-	for _, jc := range joinPredicates {
-		for _, lhsExpr := range jc.LHSExprs {
-			col, ok := lhsExpr.(*sqlparser.ColName)
-			if !ok {
-				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr))
-			}
-			lhsCols = append(lhsCols, col)
-		}
-	}
-
 	return &SubQueryFilter{
-		Subquery:       opInner,
-		Predicates:     jpc.predicates,
-		FilterType:     opcode.PulloutExists,
-		Original:       org,
-		JoinPredicates: joinPredicates,
-		LHSColumns:     lhsCols,
+		Subquery:   opInner,
+		Predicates: jpc.predicates,
+		FilterType: opcode.PulloutExists,
+		Original:   org,
 	}, nil
 }
 
@@ -329,15 +310,11 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	// if neither of the two sides of the predicate is enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
-	b := !deps.IsSolvedBy(jpc.subqID)
-	by := !deps.IsSolvedBy(jpc.outerID)
-	solvedBy := !deps.IsSolvedBy(jpc.totalID)
-	if !(b && by) || solvedBy {
+	if !deps.IsSolvedBy(jpc.subqID) && !deps.IsSolvedBy(jpc.outerID) && deps.IsSolvedBy(jpc.totalID) {
+		jpc.addPredicate(predicate)
+	} else {
 		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
-		return
 	}
-
-	jpc.addPredicate(predicate)
 }
 
 func (jpc *joinPredicateCollector) addPredicate(predicate sqlparser.Expr) {

@@ -38,9 +38,11 @@ type (
 
 		OriginalExpression() sqlparser.Expr // tbl.id = (SELECT foo from user LIMIT 1)
 		SetOriginal(sqlparser.Expr)
-		OuterExpressionsNeeded() []*sqlparser.ColName
+		OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error)
+		GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error)
 		SetOuter(operator ops.Operator)
 		GetJoinPredicates() []sqlparser.Expr
+		GetMergePredicates() []sqlparser.Expr
 		ReplaceJoinPredicates(predicates sqlparser.Exprs)
 	}
 )
