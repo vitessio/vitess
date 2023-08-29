@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -122,7 +121,7 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
 	if params.Stats == nil {
-		params.Stats = stats.NoStats()
+		params.Stats = backupstats.NoStats()
 	}
 
 	startTs := time.Now()
@@ -137,8 +136,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	// Scope bsStats to selected storage engine.
 	bsStats := params.Stats.Scope(
-		stats.Component(stats.BackupStorage),
-		stats.Implementation(
+		backupstats.Component(backupstats.BackupStorage),
+		backupstats.Implementation(
 			titleCase(backupstorage.BackupStorageImplementation),
 		),
 	)
@@ -156,8 +155,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
-		stats.Component(stats.BackupEngine),
-		stats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Component(backupstats.BackupEngine),
+		backupstats.Implementation(titleCase(backupEngineImplementation)),
 	)
 	var be BackupEngine
 	if isIncrementalBackup(beParams) {
@@ -192,8 +191,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// The backup worked, so just return the finish error, if any.
-	stats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(stats.Operation("Backup")).TimedIncrement(time.Since(startTs))
+	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
 	return finishErr
 }
 
@@ -359,7 +358,7 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
 	if params.Stats == nil {
-		params.Stats = stats.NoStats()
+		params.Stats = backupstats.NoStats()
 	}
 
 	startTs := time.Now()
@@ -373,8 +372,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	// Scope bsStats to selected storage engine.
 	bsStats := params.Stats.Scope(
-		stats.Component(backupstats.BackupStorage),
-		stats.Implementation(
+		backupstats.Component(backupstats.BackupStorage),
+		backupstats.Implementation(
 			titleCase(backupstorage.BackupStorageImplementation),
 		),
 	)
@@ -428,8 +427,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// Scope stats to selected backup engine.
 	reParams := params.Copy()
 	reParams.Stats = params.Stats.Scope(
-		stats.Component(backupstats.BackupEngine),
-		stats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Component(backupstats.BackupEngine),
+		backupstats.Implementation(titleCase(backupEngineImplementation)),
 	)
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
@@ -487,8 +486,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
-	stats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(stats.Operation("Restore")).TimedIncrement(time.Since(startTs))
+	backupstats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(backupstats.Operation("Restore")).TimedIncrement(time.Since(startTs))
 	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }

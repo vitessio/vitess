@@ -322,14 +322,6 @@ func TestNewOnlineDDLs(t *testing.T) {
 }
 
 func TestNewOnlineDDLsForeignKeys(t *testing.T) {
-	type expect struct {
-		sqls            []string
-		notDDL          bool
-		parseError      bool
-		isError         bool
-		expectErrorText string
-		isView          bool
-	}
 	queries := []string{
 		"alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)",
 		"create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
