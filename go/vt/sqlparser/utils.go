@@ -118,6 +118,7 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 // replaces any cases of the provided database name with the
 // specified replacement name.
 // Note: both database names provided should be unescaped strings.
+// The returned query is formatted canonically (will look different than original query)
 func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 	if newdb == olddb {
 		// Nothing to do here.
@@ -154,7 +155,7 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 	// execute a query which slightly differs from the parsed
 	// version: e.g. 'where id=1' becomes 'where id = 1'.
 	if modified {
-		return String(upd), nil
+		return CanonicalString(upd), nil
 	}
 	return query, nil
 }

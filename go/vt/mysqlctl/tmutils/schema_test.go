@@ -49,13 +49,13 @@ var table3 = &tabletmanagerdatapb.TableDefinition{
 
 var view1 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "view1",
-	Schema: "view schema 1",
+	Schema: "create view view1 as select id from t1",
 	Type:   TableView,
 }
 
 var view2 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "view2",
-	Schema: "view schema 2",
+	Schema: "create view view2 as select id from t2",
 	Type:   TableView,
 }
 
@@ -75,8 +75,8 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
-				"view schema 1",
+				"CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
+				"create view view1 as select id from t1",
 			},
 		},
 		{
@@ -102,8 +102,8 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
-				"create table `{{.DatabaseName}}`.table2 (\n\tid int primary key\n)",
+				"CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `{{.DatabaseName}}`.`table2` (\n\t`id` int PRIMARY KEY\n)",
 			},
 		},
 		{
@@ -118,10 +118,10 @@ func TestToSQLStrings(t *testing.T) {
 				},
 			},
 			want: []string{
-				"CREATE DATABASE `{{.DatabaseName}}`", "create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
-				"create table `{{.DatabaseName}}`.table2 (\n\tid int primary key\n)",
-				"view schema 1",
-				"view schema 2",
+				"CREATE DATABASE `{{.DatabaseName}}`", "CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `{{.DatabaseName}}`.`table2` (\n\t`id` int PRIMARY KEY\n)",
+				"create view view1 as select id from t1",
+				"create view view2 as select id from t2",
 			},
 		},
 		{
@@ -135,8 +135,8 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
-				"create table `{{.DatabaseName}}`.table3 (\n\tid bigint not null\n) Engine InnoDB",
+				"CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `{{.DatabaseName}}`.`table3` (\n\t`id` bigint NOT NULL\n) ENGINE InnoDB",
 			},
 		},
 	}
