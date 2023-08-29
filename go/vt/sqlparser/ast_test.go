@@ -362,23 +362,6 @@ func TestWhere(t *testing.T) {
 	}
 }
 
-func TestIsAggregate(t *testing.T) {
-	f := FuncExpr{Name: NewIdentifierCI("avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("Avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("foo")}
-	if f.IsAggregate() {
-		t.Error("IsAggregate: true, want false")
-	}
-}
-
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
 		Operator: NotEqualOp,

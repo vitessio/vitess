@@ -603,7 +603,7 @@
         }
       }
     },
-    "user_fk_allow": {
+    "sharded_fk_allow": {
       "sharded": true,
       "foreignKeyMode": "FK_MANAGED",
       "vindexes": {
@@ -694,7 +694,61 @@
               "name": "hash_vin"
             }
           ]
+        },
+        "tbl8": {
+          "column_vindexes": [
+            {
+              "column": "col8",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl9": {
+          "column_vindexes": [
+            {
+              "column": "col9",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl10": {
+          "column_vindexes": [
+            {
+              "column": "sk",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tblrefDef": {
+          "column_vindexes": [
+            {
+              "column": "ref",
+              "name": "hash_vin"
+            }
+          ]
+        },
+        "tbl20": {
+          "column_vindexes": [
+            {
+              "column": "col",
+              "name": "hash_vin"
+            }
+          ]
         }
+      }
+    },
+    "unsharded_fk_allow": {
+      "foreignKeyMode": "FK_MANAGED",
+      "tables": {
+        "u_tbl1": {},
+        "u_tbl2": {},
+        "u_tbl3": {},
+        "u_tbl4": {},
+        "u_tbl5": {},
+        "u_tbl6": {},
+        "u_tbl7": {},
+        "u_tbl8": {},
+        "u_tbl9": {}
       }
     }
   }

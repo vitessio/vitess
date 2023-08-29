@@ -45,8 +45,10 @@ var (
 
 func TestMain(m *testing.M) {
 	exitCode := func() int {
-		ts := memorytopo.NewServer(cell)
-		ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{})
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ts := memorytopo.NewServer(ctx, cell)
+		ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
 		_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 			ki, err := ts.GetKeyspace(ctx, keyspace)
 			if err != nil {

@@ -21,14 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"

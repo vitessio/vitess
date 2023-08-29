@@ -212,6 +212,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.ServerNotAvailable:           {num: ERServerIsntAvailable, state: SSNetError},
 	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
 	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
+	vterrors.RowIsReferenced2:             {num: ERRowIsReferenced2, state: SSConstraintViolation},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},

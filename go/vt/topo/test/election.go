@@ -46,8 +46,8 @@ func waitForLeaderID(t *testing.T, mp topo.LeaderParticipation, expected string)
 
 // checkElection runs the tests on the LeaderParticipation part of the
 // topo.Conn API.
-func checkElection(t *testing.T, ts *topo.Server) {
-	conn, err := ts.ConnForCell(context.Background(), topo.GlobalCell)
+func checkElection(t *testing.T, ctx context.Context, ts *topo.Server) {
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 	if err != nil {
 		t.Fatalf("ConnForCell(global) failed: %v", err)
 	}
@@ -71,7 +71,7 @@ func checkElection(t *testing.T, ts *topo.Server) {
 
 	// A lot of implementations use a toplevel directory for their elections.
 	// Make sure it is marked as 'Ephemeral'.
-	entries, err := conn.ListDir(context.Background(), "/", true /*full*/)
+	entries, err := conn.ListDir(ctx, "/", true /*full*/)
 	if err != nil {
 		t.Fatalf("ListDir(/) failed: %v", err)
 	}
@@ -148,8 +148,8 @@ func checkElection(t *testing.T, ts *topo.Server) {
 }
 
 // checkWaitForNewLeader runs the WaitForLeadership test on the LeaderParticipation
-func checkWaitForNewLeader(t *testing.T, ts *topo.Server) {
-	conn, err := ts.ConnForCell(context.Background(), topo.GlobalCell)
+func checkWaitForNewLeader(t *testing.T, ctx context.Context, ts *topo.Server) {
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 	if err != nil {
 		t.Fatalf("ConnForCell(global) failed: %v", err)
 	}
@@ -195,7 +195,7 @@ func checkWaitForNewLeader(t *testing.T, ts *topo.Server) {
 		t.Fatalf("cannot create mp2: %v", err)
 	}
 
-	leaders, err := mp2.WaitForNewLeader(context.Background())
+	leaders, err := mp2.WaitForNewLeader(ctx)
 	if topo.IsErrType(err, topo.NoImplementation) {
 		t.Logf("%T does not support WaitForNewLeader()", mp2)
 		return

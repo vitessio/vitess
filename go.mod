@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.20
+go 1.21
 
 require (
 	cloud.google.com/go/storage v1.29.0
@@ -106,7 +106,7 @@ require (
 	github.com/spf13/afero v1.9.3
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0
-	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
+	go.uber.org/goleak v1.2.1
 	golang.org/x/sync v0.1.0
 	modernc.org/sqlite v1.20.3
 )

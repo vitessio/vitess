@@ -55,8 +55,9 @@ func TestTabletExecutorOpen(t *testing.T) {
 }
 
 func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("test_cell")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",

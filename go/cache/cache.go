@@ -38,6 +38,9 @@ type Cache interface {
 	UsedCapacity() int64
 	MaxCapacity() int64
 	SetCapacity(int64)
+
+	// Close shuts down this cache and stops any background goroutines.
+	Close()
 }
 
 type cachedObject interface {

@@ -44,7 +44,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.5
+          go-version: 1.21.0
 
       - name: Get base dependencies
         run: |
@@ -79,7 +79,7 @@ jobs:
           sudo apt-get install -y gnupg2
           sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
           sudo apt-get update
-          sudo apt-get install percona-xtrabackup-24
+          sudo apt-get install -y percona-xtrabackup-24
 
       - name: Building binaries
         timeout-minutes: 30

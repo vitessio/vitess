@@ -331,7 +331,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
 	go func() {
-		for range heartbeatTicker.C {
+		select {
+		case <-rs.ctx.Done():
+			return
+		case <-heartbeatTicker.C:
 			safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
 		}
 	}()

@@ -18,14 +18,12 @@ package operators
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -184,45 +182,6 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 			return nil, vterrors.VT13001("expected all sources of the UNION to be horizons")
 		}
 	}
-}
-
-func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
-	if u.distinct {
-		// first we remove unnecessary DISTINCTs
-		for idx, source := range u.Sources {
-			d, ok := source.(*Distinct)
-			if !ok || !d.Required {
-				continue
-			}
-			u.Sources[idx] = d.Source
-		}
-	}
-
-	var newSources []ops.Operator
-	var newSelects []sqlparser.SelectExprs
-	merged := false
-
-	for idx, source := range u.Sources {
-		other, ok := source.(*Union)
-
-		if ok && (u.distinct || !other.distinct) {
-			newSources = append(newSources, other.Sources...)
-			newSelects = append(newSelects, other.Selects...)
-			merged = true
-			continue
-		}
-
-		newSources = append(newSources, source)
-		newSelects = append(newSelects, u.Selects[idx])
-	}
-
-	if !merged {
-		return u, rewrite.SameTree, nil
-	}
-
-	u.Sources = newSources
-	u.Selects = newSelects
-	return u, rewrite.NewTree("merged UNIONs", u), nil
 }
 
 func (u *Union) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {

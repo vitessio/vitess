@@ -46,23 +46,17 @@ func gen4DeleteStmtPlanner(
 		}
 	}
 
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err := semantics.Analyze(deleteStmt, ksName, vschema)
+	ctx, err := plancontext.CreatePlanningContext(deleteStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
 
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
 	err = rewriteRoutedTables(deleteStmt, vschema)
 	if err != nil {
 		return nil, err
 	}
 
-	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if fkManagementNotRequired(vschema, tables) {
 			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
@@ -70,22 +64,21 @@ func gen4DeleteStmtPlanner(
 		}
 	}
 
-	if err := checkIfDeleteSupported(deleteStmt, semTable); err != nil {
+	if err := checkIfDeleteSupported(deleteStmt, ctx.SemTable); err != nil {
 		return nil, err
 	}
 
-	err = queryRewrite(semTable, reservedVars, deleteStmt)
+	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +104,7 @@ func fkManagementNotRequired(vschema plancontext.VSchema, vTables []*vindexes.Ta
 		if ksMode != vschemapb.Keyspace_FK_MANAGED {
 			continue
 		}
-		childFks := vTable.ChildFKsNeedsHandling()
+		childFks := vTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
 		if len(childFks) > 0 {
 			return false
 		}

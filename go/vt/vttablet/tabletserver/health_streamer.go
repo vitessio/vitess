@@ -156,6 +156,10 @@ func (hs *healthStreamer) Close() {
 		hs.cancel()
 		hs.cancel = nil
 	}
+	if hs.conns != nil {
+		hs.conns.Close()
+		hs.conns = nil
+	}
 }
 
 func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {

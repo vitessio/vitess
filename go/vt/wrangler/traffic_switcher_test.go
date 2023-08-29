@@ -29,12 +29,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -2142,6 +2144,37 @@ func TestIsPartialMoveTables(t *testing.T) {
 		})
 
 	}
+}
+
+// TestNoOrphanedRoutingRulesOnFailedCreate tests that no orphaned
+// routing rules are left in place when the workflow creation
+// fails -- specifically at the point where we try and create the
+// workflow streams.
+func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
+	defer tme.close(t)
+
+	// The target keyspace is sharded. Let's remove any vschema
+	// table definitions so that we know the workflow creation will
+	// fail. Let's also be sure that the routing rules are empty.
+	err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil)
+	require.NoError(t, err, "failed to save routing rules")
+	err = tme.ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{
+		Sharded: true,
+	})
+	require.NoError(t, err, "failed to save vschema")
+	err = tme.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err, "failed to rebuild serving vschema")
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
+	require.NoError(t, err, "failed to rebuild keyspace")
+
+	err = tme.wr.MoveTables(ctx, "testwf", "ks1", "ks2", "t1,t2", "cell1", "primary,replica", false, "", true, false, "", false, false, "", "", nil)
+	require.Error(t, err)
+
+	// Check that there are no orphaned routing rules.
+	emptyRules := make(map[string][]string)
+	checkRouting(t, tme.wr, emptyRules)
 }
 
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {

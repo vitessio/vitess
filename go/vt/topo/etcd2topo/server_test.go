@@ -245,7 +245,9 @@ func TestEtcd2Topo(t *testing.T) {
 	}
 
 	// Run the TopoServerTestSuite tests.
-	test.TopoServerTestSuite(t, func() *topo.Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		return newServer()
 	}, []string{})
 

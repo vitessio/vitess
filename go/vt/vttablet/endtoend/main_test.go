@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -84,7 +85,9 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err = framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err = framework.StartServer(ctx, connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

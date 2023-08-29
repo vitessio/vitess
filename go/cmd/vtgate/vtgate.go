@@ -130,7 +130,7 @@ func main() {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(tabletTypesToWait) != 0 {

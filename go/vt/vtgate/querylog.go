@@ -18,8 +18,8 @@ package vtgate
 
 import (
 	"net/http"
-	"sync"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -34,38 +34,28 @@ var (
 
 	// QueryzHandler is the debug UI path for exposing query plan stats
 	QueryzHandler = "/debug/queryz"
-
-	// QueryLogger enables streaming logging of queries
-	QueryLogger   *streamlog.StreamLogger[*logstats.LogStats]
-	queryLoggerMu sync.Mutex
 )
 
-func SetQueryLogger(logger *streamlog.StreamLogger[*logstats.LogStats]) {
-	queryLoggerMu.Lock()
-	defer queryLoggerMu.Unlock()
-	QueryLogger = logger
-}
-
-func initQueryLogger(vtg *VTGate) error {
-	SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
-	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
+func initQueryLogger(plans cache.Cache) (*streamlog.StreamLogger[*logstats.LogStats], error) {
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	queryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(queryLogger))
 
 	servenv.HTTPHandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
-		ch := QueryLogger.Subscribe("querylogz")
-		defer QueryLogger.Unsubscribe(ch)
+		ch := queryLogger.Subscribe("querylogz")
+		defer queryLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)
 	})
 
 	servenv.HTTPHandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
-		queryzHandler(vtg.executor, w, r)
+		queryzHandler(plans, w, r)
 	})
 
 	if queryLogToFile != "" {
-		_, err := QueryLogger.LogToFile(queryLogToFile, streamlog.GetFormatter(QueryLogger))
+		_, err := queryLogger.LogToFile(queryLogToFile, streamlog.GetFormatter(queryLogger))
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return queryLogger, nil
 }

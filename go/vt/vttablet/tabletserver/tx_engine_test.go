@@ -144,6 +144,8 @@ func TestTxEngineClose(t *testing.T) {
 }
 
 func TestTxEngineBegin(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -188,6 +190,8 @@ func TestTxEngineBegin(t *testing.T) {
 }
 
 func TestTxEngineRenewFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -556,6 +560,8 @@ func startTx(te *TxEngine, writeTransaction bool) error {
 }
 
 func TestTxEngineFailReserve(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
