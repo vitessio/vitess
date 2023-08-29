@@ -18,7 +18,7 @@
 
 # Use a temporary layer for the build stage.
 ARG bootstrap_version=18.1
-ARG image="frouioui/bootstrap:${bootstrap_version}-mysql80"
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}" AS builder
 

@@ -50,8 +50,8 @@ arch=$(uname -m)
 [ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'
 
 
-base_image="${base_image:-frouioui/bootstrap:$version-common}"
-image="${image:-frouioui/bootstrap:$version-$flavor$arch_ext}"
+base_image="${base_image:-vitess/bootstrap:$version-common}"
+image="${image:-vitess/bootstrap:$version-$flavor$arch_ext}"
 
 while [ $# -gt 0 ]; do
    if [[ $1 == *"--"* ]]; then
