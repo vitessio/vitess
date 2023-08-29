@@ -52,8 +52,6 @@ var (
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	shardName       = "0"
-	dbName          = "vt_ks"
-	mysqlUsers      = []string{"vt_dba", "vt_app", "vt_appdebug", "vt_repl", "vt_filtered"}
 	mysqlPassword   = "VtDbaPass"
 	vtgateUser      = "vtgate_user"
 	vtgatePassword  = "password123"

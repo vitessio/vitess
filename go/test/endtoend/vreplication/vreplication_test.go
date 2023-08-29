@@ -624,8 +624,6 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
 }
 
-var queryErrorCount int64
-
 // testVStreamFrom confirms that the "vstream * from" endpoint is serving data
 func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 	ctx := context.Background()
