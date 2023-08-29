@@ -141,6 +141,24 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 				cursor.Replace(node)
 				modified = true
 			}
+		case *CreateDatabase:
+			if node.DBName.String() == oldQualifier.String() {
+				node.DBName = newQualifier
+				cursor.Replace(node)
+				modified = true
+			}
+		case *AlterDatabase:
+			if node.DBName.String() == oldQualifier.String() {
+				node.DBName = newQualifier
+				cursor.Replace(node)
+				modified = true
+			}
+		case *DropDatabase:
+			if node.DBName.String() == oldQualifier.String() {
+				node.DBName = newQualifier
+				cursor.Replace(node)
+				modified = true
+			}
 		case *ShowBasic: // for things like 'show tables from _vt'
 			if node.DbName.String() == oldQualifier.String() {
 				node.DbName = newQualifier

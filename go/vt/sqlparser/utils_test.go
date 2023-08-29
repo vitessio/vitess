@@ -302,6 +302,34 @@ func TestReplaceTableQualifiers(t *testing.T) {
 			in:     "CREATE TABLE `t` (id int primary key)",
 			out:    "CREATE TABLE `mydb`.`t` (\n\t`id` int PRIMARY KEY\n)",
 		},
+		{
+			name:   "create database",
+			origdb: "{{.DatabaseName}}",
+			newdb:  "mydb",
+			in:     "CREATE DATABASE `{{.DatabaseName}}`",
+			out:    "CREATE DATABASE `mydb`",
+		},
+		{
+			name:   "create database, comments",
+			origdb: "{{.DatabaseName}}",
+			newdb:  "mydb",
+			in:     "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */",
+			out:    "CREATE DATABASE IF NOT EXISTS `mydb` DEFAULT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_0900_AI_CI DEFAULT ENCRYPTION 'N'",
+		},
+		{
+			name:   "create database, unqualified",
+			origdb: origDB,
+			newdb:  "mydb",
+			in:     "CREATE DATABASE _vt",
+			out:    "CREATE DATABASE `mydb`",
+		},
+		{
+			name:   "drop database, unqualified",
+			origdb: origDB,
+			newdb:  "mydb",
+			in:     "drop database _vt",
+			out:    "DROP DATABASE `mydb`",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
