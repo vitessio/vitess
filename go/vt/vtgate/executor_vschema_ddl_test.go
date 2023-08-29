@@ -423,14 +423,13 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
-	// Should fail adding a table on a sharded keyspace
-	ksSharded := "TestExecutor"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
+	// Should fail dropping a non-existing test sequence
+	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
-	stmt = "alter vschema add sequence sequence_table"
+	stmt = "alter vschema drop sequence test_seq"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 
-	wantErr := "add sequence table: unsupported on sharded keyspace TestExecutor"
+	wantErr := "vschema does not contain sequence test_seq in keyspace TestUnsharded"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("want error %v got %v", wantErr, err)
 	}
