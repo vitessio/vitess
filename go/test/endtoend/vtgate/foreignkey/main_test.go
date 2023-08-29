@@ -36,13 +36,19 @@ var (
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	shardedKs       = "ks"
+	unshardedKs     = "uks"
 	Cell            = "test"
-
 	//go:embed sharded_schema.sql
 	shardedSchemaSQL string
 
+	//go:embed unsharded_schema.sql
+	unshardedSchemaSQL string
+
 	//go:embed sharded_vschema.json
 	shardedVSchema string
+
+	//go:embed unsharded_vschema.json
+	unshardedVSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -67,6 +73,21 @@ func TestMain(m *testing.M) {
 		}
 
 		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		uKs := &cluster.Keyspace{
+			Name:      unshardedKs,
+			SchemaSQL: unshardedSchemaSQL,
+			VSchema:   unshardedVSchema,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}
@@ -109,6 +130,10 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks/80-`")
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+		for _, table := range []string{"u_t1", "u_t2"} {
+			_ = utils.Exec(t, mcmp.VtConn, "delete from "+table)
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 	}

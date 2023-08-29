@@ -81,6 +81,7 @@ func TestStatusHtml(t *testing.T) {
 	}
 
 	blpStats := binlogplayer.NewStats()
+	defer blpStats.Stop()
 	blpStats.SetLastPosition(pos)
 	blpStats.ReplicationLagSeconds.Store(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
@@ -130,7 +131,7 @@ func TestStatusHtml(t *testing.T) {
 
 func TestVReplicationStats(t *testing.T) {
 	blpStats := binlogplayer.NewStats()
-
+	defer blpStats.Stop()
 	testStats := &vrStats{}
 	testStats.isOpen = true
 	testStats.controllers = map[int32]*controller{

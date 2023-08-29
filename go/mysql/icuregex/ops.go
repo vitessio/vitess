@@ -22,7 +22,7 @@ limitations under the License.
 package icuregex
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/utf16"

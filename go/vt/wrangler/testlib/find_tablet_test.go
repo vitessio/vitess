@@ -17,9 +17,9 @@ limitations under the License.
 package testlib
 
 import (
-	"testing"
-
 	"context"
+	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -33,8 +33,9 @@ import (
 )
 
 func TestFindTablet(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, two good replicas

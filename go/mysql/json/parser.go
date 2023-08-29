@@ -21,12 +21,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/fastparse"
 

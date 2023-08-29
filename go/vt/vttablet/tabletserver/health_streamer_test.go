@@ -210,6 +210,8 @@ func TestReloadSchema(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			db := fakesqldb.New(t)
 			defer db.Close()
 			config := newConfig(db)
@@ -325,6 +327,8 @@ func TestReloadSchema(t *testing.T) {
 
 // TestReloadView tests that the health streamer tracks view changes correctly
 func TestReloadView(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)

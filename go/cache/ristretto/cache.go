@@ -75,7 +75,7 @@ type Cache struct {
 	// stop is used to stop the processItems goroutine.
 	stop chan struct{}
 	// indicates whether cache is closed.
-	isClosed bool
+	isClosed atomic.Bool
 	// cost calculates cost from a value.
 	cost func(value any) int64
 	// ignoreInternalCost dictates whether to ignore the cost of internally storing
@@ -211,7 +211,7 @@ func NewCache(config *Config) (*Cache, error) {
 
 // Wait blocks until all the current cache operations have been processed in the background
 func (c *Cache) Wait() {
-	if c == nil || c.isClosed {
+	if c == nil || c.isClosed.Load() {
 		return
 	}
 	wg := &sync.WaitGroup{}
@@ -224,7 +224,7 @@ func (c *Cache) Wait() {
 // value was found or not. The value can be nil and the boolean can be true at
 // the same time.
 func (c *Cache) Get(key string) (any, bool) {
-	if c == nil || c.isClosed {
+	if c == nil || c.isClosed.Load() {
 		return nil, false
 	}
 	keyHash, conflictHash := c.keyToHash(key)
@@ -253,7 +253,7 @@ func (c *Cache) Set(key string, value any) bool {
 // cost. The built-in Cost function will not be called to evaluate the object's cost
 // and instead the given value will be used.
 func (c *Cache) SetWithCost(key string, value any, cost int64) bool {
-	if c == nil || c.isClosed {
+	if c == nil || c.isClosed.Load() {
 		return false
 	}
 
@@ -289,7 +289,7 @@ func (c *Cache) SetWithCost(key string, value any, cost int64) bool {
 
 // Delete deletes the key-value item from the cache if it exists.
 func (c *Cache) Delete(key string) {
-	if c == nil || c.isClosed {
+	if c == nil || c.isClosed.Load() {
 		return
 	}
 	keyHash, conflictHash := c.keyToHash(key)
@@ -309,7 +309,11 @@ func (c *Cache) Delete(key string) {
 
 // Close stops all goroutines and closes all channels.
 func (c *Cache) Close() {
-	if c == nil || c.isClosed {
+	if c == nil {
+		return
+	}
+	wasClosed := c.isClosed.Swap(true)
+	if wasClosed {
 		return
 	}
 	c.Clear()
@@ -319,14 +323,14 @@ func (c *Cache) Close() {
 	close(c.stop)
 	close(c.setBuf)
 	c.policy.Close()
-	c.isClosed = true
+	c.isClosed.Store(true)
 }
 
 // Clear empties the hashmap and zeroes all policy counters. Note that this is
 // not an atomic operation (but that shouldn't be a problem as it's assumed that
 // Set/Get calls won't be occurring until after this).
 func (c *Cache) Clear() {
-	if c == nil || c.isClosed {
+	if c == nil || c.isClosed.Load() {
 		return
 	}
 	// Block until processItems goroutine is returned.

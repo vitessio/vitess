@@ -174,6 +174,7 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 	tableName := "test"
 	expectedWaits := int64(0)
 	testDB := fakesqldb.New(t)
+	defer testDB.Close()
 	hostres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"hostname|port",
 		"varchar|int64"),

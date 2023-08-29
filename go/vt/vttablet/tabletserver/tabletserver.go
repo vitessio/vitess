@@ -140,8 +140,8 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(name, tabletenv.NewCurrentConfig(), topoServer, alias)
+func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias)
 }
 
 var (
@@ -151,7 +151,7 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -165,7 +165,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
 
-	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
+	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
 
 	tabletTypeFunc := func() topodatapb.TabletType {
 		if tsv.sm == nil {
@@ -850,10 +850,7 @@ func smallerTimeout(t1, t2 time.Duration) time.Duration {
 	if t2 == 0 {
 		return t1
 	}
-	if t1 < t2 {
-		return t1
-	}
-	return t2
+	return min(t1, t2)
 }
 
 // StreamExecute executes the query and streams the result.
@@ -1724,8 +1721,11 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	}
 }
 
-// Close is a no-op.
+// Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
+	tsv.sm.closeAll()
+	tsv.qe.Close()
+	tsv.stats.Stop()
 	return nil
 }
 

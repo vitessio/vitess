@@ -17,7 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"

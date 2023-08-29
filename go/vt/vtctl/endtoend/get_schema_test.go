@@ -26,9 +26,10 @@ import (
 )
 
 func TestGetSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	topo := memorytopo.NewServer("zone1", "zone2", "zone3")
+	topo := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

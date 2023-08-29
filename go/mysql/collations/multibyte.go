@@ -51,7 +51,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 		return collationBinary(left, right, isPrefix)
 	}
 
-	cmpLen := minInt(len(left), len(right))
+	cmpLen := min(len(left), len(right))
 	cs := c.charset
 	sortOrder := c.sort
 	for i := 0; i < cmpLen; i++ {
@@ -62,7 +62,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 			}
 			_, widthL := cs.DecodeRune(left[i:])
 			_, widthR := cs.DecodeRune(right[i:])
-			switch minInt(widthL, widthR) {
+			switch min(widthL, widthR) {
 			case 4:
 				i++
 				if left[i] != right[i] {

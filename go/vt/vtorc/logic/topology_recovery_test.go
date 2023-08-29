@@ -125,7 +125,10 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	analysisEntry := &inst.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
 	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry)
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
@@ -177,7 +180,10 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
 	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
 	require.Nil(t, err)
 
