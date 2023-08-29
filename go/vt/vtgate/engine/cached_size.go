@@ -261,11 +261,11 @@ func (cached *FkCascade) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Selection.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Children []vitess.io/vitess/go/vt/vtgate/engine.FkChild
+	// field Children []*vitess.io/vitess/go/vt/vtgate/engine.FkChild
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Children)) * int64(56))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Children)) * int64(8))
 		for _, elem := range cached.Children {
-			size += elem.CachedSize(false)
+			size += elem.CachedSize(true)
 		}
 	}
 	// field Parent vitess.io/vitess/go/vt/vtgate/engine.Primitive
