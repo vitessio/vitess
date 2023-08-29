@@ -31,8 +31,10 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
-	ts := memorytopo.NewServer("zone1")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
 
 	t.Run("valid name", func(t *testing.T) {
 		err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
@@ -46,8 +48,10 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
-	ts := memorytopo.NewServer("zone1")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
 
 	t.Run("valid name", func(t *testing.T) {
 		// First, create the keyspace.

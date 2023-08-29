@@ -18,11 +18,10 @@ package schema
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"

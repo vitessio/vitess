@@ -16,6 +16,7 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -191,6 +192,45 @@ func TestValueToVTDuration(t *testing.T) {
 
 			require.NoError(t, err)
 			utils.MustMatch(t, test.expected, out, "failed to convert %s into vttime duration", test.value)
+		})
+	}
+}
+
+func TestAlterSchemaMigrationQuery(t *testing.T) {
+	uuid := "4e5dcf80_354b_11eb_82cd_f875a4d24e90"
+
+	tcases := []struct {
+		command string
+		uuid    string
+		expect  string
+	}{
+		{
+			command: "cleanup",
+			uuid:    uuid,
+			expect:  "alter vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90' cleanup",
+		},
+		{
+			command: "cancel",
+			uuid:    uuid,
+			expect:  "alter vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90' cancel",
+		},
+		{
+			command: "cancel",
+			uuid:    "all",
+			expect:  "alter vitess_migration cancel all",
+		},
+		{
+			command: "cancel",
+			uuid:    "ALL",
+			expect:  "alter vitess_migration cancel all",
+		},
+	}
+	for _, tcase := range tcases {
+		testName := fmt.Sprintf("%s %s", tcase.command, tcase.uuid)
+		t.Run(testName, func(t *testing.T) {
+			query, err := alterSchemaMigrationQuery(tcase.command, tcase.uuid)
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.expect, query)
 		})
 	}
 }

@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -78,6 +80,8 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 }
 
 func TestExecuteBackup(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
@@ -90,8 +94,6 @@ func TestExecuteBackup(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	ctx := context.Background()
-
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -103,7 +105,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
@@ -135,7 +137,10 @@ func TestExecuteBackup(t *testing.T) {
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	// mysqld.ShutdownTime = time.Minute
 
@@ -220,6 +225,8 @@ func TestExecuteBackup(t *testing.T) {
 }
 
 func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
 	filebackupstorage.FileBackupStorageRoot = backupRoot
@@ -232,8 +239,6 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	ctx := context.Background()
-
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -245,7 +250,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
@@ -278,7 +283,10 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
 	// It also needs to be allowed to receive the query to disable the innodb_fast_shutdown flag.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SET GLOBAL innodb_fast_shutdown=0": {},
@@ -307,6 +315,8 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
 // occur due to various reasons, such as context time cancel. The process should not panic in these situations.
 func TestExecuteBackupWithCanceledContext(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
@@ -321,9 +331,6 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	// Cancel the context deliberately
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -335,7 +342,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
@@ -361,10 +368,17 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	// "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	// Cancel the context deliberately
+	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
+	cancelCtx()
+
+	ok, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -389,6 +403,8 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
 // occur due to various reasons, such as context timed-out. The process should not panic in these situations.
 func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
@@ -403,7 +419,6 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	ctx := context.Background()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
@@ -415,7 +430,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
@@ -441,7 +456,10 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	// "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
 	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
@@ -465,7 +483,10 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 
 	// Now try to restore the above backup.
 	bh = filebackupstorage.NewBackupHandle(nil, "", "", true)
-	mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
 	fakeStats := backupstats.NewFakeStats()
@@ -539,7 +560,10 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	require.Equal(t, 4, sourceReadStats)
 
 	// Restore using timed-out context
-	mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	restoreParams.Mysqld = mysqld
 	timedOutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)

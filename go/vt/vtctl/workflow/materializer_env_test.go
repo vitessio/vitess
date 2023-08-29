@@ -67,14 +67,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
+func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
 	t.Helper()
 	env := &testMaterializerEnv{
 		ms:       ms,
 		sources:  sources,
 		targets:  targets,
 		tablets:  make(map[int]*topodatapb.Tablet),
-		topoServ: memorytopo.NewServer("cell"),
+		topoServ: memorytopo.NewServer(ctx, "cell"),
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}

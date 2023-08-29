@@ -186,7 +186,7 @@ func main() {
 		ts = topo.Open()
 	} else {
 		// Create topo server. We use a 'memorytopo' implementation.
-		ts = memorytopo.NewServer(tpb.Cells...)
+		ts = memorytopo.NewServer(context.Background(), tpb.Cells...)
 	}
 
 	// attempt to load any routing rules specified by tpb
@@ -279,7 +279,7 @@ func main() {
 	}
 
 	// vtgate configuration and init
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,

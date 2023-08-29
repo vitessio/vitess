@@ -17,9 +17,8 @@ limitations under the License.
 package test
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -27,8 +26,7 @@ import (
 )
 
 // checkKeyspace tests the keyspace part of the API
-func checkKeyspace(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkKeyspace(t *testing.T, ctx context.Context, ts *topo.Server) {
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces(empty): %v", err)

@@ -331,8 +331,9 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 // - 3 shards named '1', '2', '3'.
 // - A primary tablet for each shard.
 func newFakeTopo(t *testing.T) *topo.Server {
-	ts := memorytopo.NewServer("test_cell")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}

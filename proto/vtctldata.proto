@@ -402,6 +402,15 @@ message BackupShardRequest {
   string incremental_from_pos = 6;
 }
 
+message CancelSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CancelSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;

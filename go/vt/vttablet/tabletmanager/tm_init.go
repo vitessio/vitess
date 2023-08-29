@@ -452,6 +452,10 @@ func (tm *TabletManager) Stop() {
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
 
+	if tm.QueryServiceControl != nil {
+		tm.QueryServiceControl.Stats().Stop()
+	}
+
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.Disable()
 	}

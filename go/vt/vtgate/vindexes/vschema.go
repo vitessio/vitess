@@ -120,6 +120,11 @@ type Table struct {
 	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
 }
 
+// GetTableName gets the sqlparser.TableName for the vindex Table.
+func (t *Table) GetTableName() sqlparser.TableName {
+	return sqlparser.NewTableNameWithQualifier(t.Name.String(), t.Keyspace.Name)
+}
+
 // Keyspace contains the keyspcae info for each Table.
 type Keyspace struct {
 	Name    string

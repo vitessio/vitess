@@ -25,7 +25,7 @@ import (
 )
 
 func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQueryOp) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, op.Inner, false)
+	innerPlan, err := transformToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQu
 
 	argName := op.Extracted.GetArgName()
 	hasValuesArg := op.Extracted.GetHasValuesArg()
-	outerPlan, err := transformToLogicalPlan(ctx, op.Outer, false)
+	outerPlan, err := transformToLogicalPlan(ctx, op.Outer)
 
 	merged := mergeSubQueryOpPlan(ctx, innerPlan, outerPlan, op)
 	if merged != nil {
@@ -51,11 +51,11 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQu
 }
 
 func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.CorrelatedSubQueryOp) (logicalPlan, error) {
-	outer, err := transformToLogicalPlan(ctx, op.Outer, false)
+	outer, err := transformToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
 	}
-	inner, err := transformToLogicalPlan(ctx, op.Inner, false)
+	inner, err := transformToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
 	}

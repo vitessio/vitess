@@ -220,9 +220,9 @@ type sandboxTopo struct {
 // the given cells.
 //
 // when this version is used, WatchSrvVSchema can properly simulate watches
-func newSandboxForCells(cells []string) *sandboxTopo {
+func newSandboxForCells(ctx context.Context, cells []string) *sandboxTopo {
 	return &sandboxTopo{
-		topoServer: memorytopo.NewServer(cells...),
+		topoServer: memorytopo.NewServer(ctx, cells...),
 	}
 }
 
@@ -314,6 +314,9 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 	if !callback(current.Value, nil) {
 		panic("sandboxTopo callback returned false")
 	}
+	if updateChan == nil {
+		panic("sandboxTopo updateChan is nil")
+	}
 	currentHash := GetSrvVSchemaHash(current.Value)
 	go func() {
 		for {
@@ -321,6 +324,10 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 			case <-ctx.Done():
 				return
 			case update := <-updateChan:
+				// If the channel was closed, we're done.
+				if update == nil {
+					return
+				}
 				newHash := GetSrvVSchemaHash(update.Value)
 				if newHash == currentHash {
 					// sometimes we get the same update multiple times. This results in the plan cache to be cleared
