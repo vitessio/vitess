@@ -463,7 +463,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
 	}
 
-	stmt = "alter vschema on test_table drop auto_increment id using `db-name`.`test_seq`"
+	stmt = "alter vschema on test_table drop auto_increment"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
