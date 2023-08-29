@@ -32,12 +32,24 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+const (
+	AllMigrationsIndicator = "all"
+)
+
 var (
 	OnlineDDL = &cobra.Command{
 		Use:                   "OnlineDDL <cmd> <keyspace> [args]",
 		Short:                 "Operates on online DDL (schema migrations).",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(2),
+	}
+	OnlineDDLCancel = &cobra.Command{
+		Use:                   "cancel <keyspace> <uuid|all>",
+		Short:                 "CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.",
+		Example:               "OnlineDDL cancel test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLCancel,
 	}
 	OnlineDDLCleanup = &cobra.Command{
 		Use:                   "cleanup <keyspace> <uuid>",
@@ -71,6 +83,36 @@ OnlineDDL show test_keyspace failed`,
 		RunE:                  commandOnlineDDLShow,
 	}
 )
+
+func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	uuid := cmd.Flags().Arg(1)
+
+	switch {
+	case uuid == AllMigrationsIndicator:
+	case schema.IsOnlineDDLUUID(uuid):
+	default:
+		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.CancelSchemaMigration(commandCtx, &vtctldatapb.CancelSchemaMigrationRequest{
+		Keyspace: keyspace,
+		Uuid:     uuid,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
 
 func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 	keyspace := cmd.Flags().Arg(0)
@@ -194,6 +236,7 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	OnlineDDL.AddCommand(OnlineDDLCancel)
 	OnlineDDL.AddCommand(OnlineDDLCleanup)
 	OnlineDDL.AddCommand(OnlineDDLRetry)
 

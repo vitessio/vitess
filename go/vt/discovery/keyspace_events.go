@@ -221,7 +221,7 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 				if result == nil {
 					return
 				}
-				kew.processHealthCheck(result)
+				kew.processHealthCheck(ctx, result)
 			}
 		}
 	}()
@@ -234,7 +234,7 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 			return
 		}
 		for _, ks := range keyspaces {
-			kew.getKeyspaceStatus(ks)
+			kew.getKeyspaceStatus(ctx, ks)
 		}
 	}()
 }
@@ -544,22 +544,22 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 // newKeyspaceState allocates the internal state required to keep track of availability incidents
 // in this keyspace, and starts up a SrvKeyspace watcher on our topology server which will update
 // our keyspaceState with any topology changes in real time.
-func newKeyspaceState(kew *KeyspaceEventWatcher, cell, keyspace string) *keyspaceState {
+func newKeyspaceState(ctx context.Context, kew *KeyspaceEventWatcher, cell, keyspace string) *keyspaceState {
 	log.Infof("created dedicated watcher for keyspace %s/%s", cell, keyspace)
 	kss := &keyspaceState{
 		kew:      kew,
 		keyspace: keyspace,
 		shards:   make(map[string]*shardState),
 	}
-	kew.ts.WatchSrvKeyspace(context.Background(), cell, keyspace, kss.onSrvKeyspace)
-	kew.ts.WatchSrvVSchema(context.Background(), cell, kss.onSrvVSchema)
+	kew.ts.WatchSrvKeyspace(ctx, cell, keyspace, kss.onSrvKeyspace)
+	kew.ts.WatchSrvVSchema(ctx, cell, kss.onSrvVSchema)
 	return kss
 }
 
 // processHealthCheck is the callback that is called by the global HealthCheck stream that was initiated
 // by this KeyspaceEventWatcher. it redirects the TabletHealth event to the corresponding keyspaceState
-func (kew *KeyspaceEventWatcher) processHealthCheck(th *TabletHealth) {
-	kss := kew.getKeyspaceStatus(th.Target.Keyspace)
+func (kew *KeyspaceEventWatcher) processHealthCheck(ctx context.Context, th *TabletHealth) {
+	kss := kew.getKeyspaceStatus(ctx, th.Target.Keyspace)
 	if kss == nil {
 		return
 	}
@@ -569,12 +569,12 @@ func (kew *KeyspaceEventWatcher) processHealthCheck(th *TabletHealth) {
 
 // getKeyspaceStatus returns the keyspaceState object for the corresponding keyspace, allocating it
 // if we've never seen the keyspace before.
-func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceState {
+func (kew *KeyspaceEventWatcher) getKeyspaceStatus(ctx context.Context, keyspace string) *keyspaceState {
 	kew.mu.Lock()
 	defer kew.mu.Unlock()
 	kss := kew.keyspaces[keyspace]
 	if kss == nil {
-		kss = newKeyspaceState(kew, kew.localCell, keyspace)
+		kss = newKeyspaceState(ctx, kew, kew.localCell, keyspace)
 		kew.keyspaces[keyspace] = kss
 	}
 	if kss.deleted {
@@ -596,11 +596,11 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceSta
 // This is not a fully accurate heuristic, but it's good enough that we'd want to buffer the
 // request for the given target under the assumption that the reason why it cannot be completed
 // right now is transitory.
-func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *querypb.Target) bool {
+func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(ctx context.Context, target *querypb.Target) bool {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return false
 	}
-	ks := kew.getKeyspaceStatus(target.Keyspace)
+	ks := kew.getKeyspaceStatus(ctx, target.Keyspace)
 	if ks == nil {
 		return false
 	}
@@ -617,11 +617,11 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *querypb.Target) 
 // to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
 // RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
 // We return the tablet alias of the primary if it is serving.
-func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *querypb.Target) (*topodatapb.TabletAlias, bool) {
+func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target *querypb.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil, false
 	}
-	ks := kew.getKeyspaceStatus(target.Keyspace)
+	ks := kew.getKeyspaceStatus(ctx, target.Keyspace)
 	if ks == nil {
 		return nil, false
 	}

@@ -48,8 +48,9 @@ var (
 func TestApplyVSchema(t *testing.T) {
 	shard := "0"
 	ks := "ks"
-	ctx := context.Background()
-	env := newTestVTCtlEnv()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVTCtlEnv(ctx)
 	defer env.close()
 	_ = env.addTablet(100, ks, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
 
@@ -152,8 +153,9 @@ func TestMoveTables(t *testing.T) {
 	wf := "testwf"
 	ksWf := fmt.Sprintf("%s.%s", targetKs, wf)
 	minTableSize := 16384 // a single 16KiB InnoDB page
-	ctx := context.Background()
-	env := newTestVTCtlEnv()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVTCtlEnv(ctx)
 	defer env.close()
 	source := env.addTablet(100, sourceKs, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
 	target := env.addTablet(200, targetKs, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)

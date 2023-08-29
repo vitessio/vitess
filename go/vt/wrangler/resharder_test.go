@@ -17,13 +17,12 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 
@@ -39,7 +38,9 @@ const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_
 const eol = "$"
 
 func TestResharderOneToMany(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -73,7 +74,7 @@ func TestResharderOneToMany(t *testing.T) {
 	testCases = append(testCases, newTestCase("", "replica,rdonly"))
 
 	for _, tc := range testCases {
-		env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+		env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 
 		schm := &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
@@ -115,7 +116,9 @@ func TestResharderOneToMany(t *testing.T) {
 }
 
 func TestResharderManyToOne(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"-80", "80-"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -148,7 +151,9 @@ func TestResharderManyToOne(t *testing.T) {
 }
 
 func TestResharderManyToMany(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -191,7 +196,9 @@ func TestResharderManyToMany(t *testing.T) {
 // TestResharderOneRefTable tests the case where there's one ref table, but no stream for it.
 // This means that the table is being updated manually.
 func TestResharderOneRefTable(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -243,7 +250,9 @@ func TestResharderOneRefTable(t *testing.T) {
 
 // TestReshardStopFlags tests the flags -stop_started and -stop_after_copy
 func TestReshardStopFlags(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -294,7 +303,9 @@ func TestReshardStopFlags(t *testing.T) {
 
 // TestResharderOneRefStream tests the case where there's one ref table and an associated stream.
 func TestResharderOneRefStream(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -362,7 +373,9 @@ func TestResharderOneRefStream(t *testing.T) {
 
 // TestResharderNoRefStream tests the case where there's a stream, but it's not a reference.
 func TestResharderNoRefStream(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -438,7 +451,9 @@ func TestResharderNoRefStream(t *testing.T) {
 }
 
 func TestResharderCopySchema(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -478,7 +493,9 @@ func TestResharderCopySchema(t *testing.T) {
 }
 
 func TestResharderDupWorkflow(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -509,7 +526,9 @@ func TestResharderDupWorkflow(t *testing.T) {
 }
 
 func TestResharderServingState(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -551,7 +570,9 @@ func TestResharderServingState(t *testing.T) {
 }
 
 func TestResharderTargetAlreadyResharding(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -584,7 +605,9 @@ func TestResharderTargetAlreadyResharding(t *testing.T) {
 }
 
 func TestResharderUnnamedStream(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -632,7 +655,9 @@ func TestResharderUnnamedStream(t *testing.T) {
 }
 
 func TestResharderMismatchedRefStreams(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"-80", "80-"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -699,7 +724,9 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 }
 
 func TestResharderTableNotInVSchema(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -736,7 +763,9 @@ func TestResharderTableNotInVSchema(t *testing.T) {
 }
 
 func TestResharderMixedTablesOrder1(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -803,7 +832,9 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 }
 
 func TestResharderMixedTablesOrder2(t *testing.T) {
-	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{

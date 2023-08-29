@@ -314,7 +314,7 @@ func (qe *QueryEngine) Close() {
 	}
 	// Close in reverse order of Open.
 	qe.se.UnregisterNotifier("qe")
-	qe.plans.Clear()
+	qe.plans.Close()
 	qe.tables = make(map[string]*schema.Table)
 	qe.streamConns.Close()
 	qe.conns.Close()

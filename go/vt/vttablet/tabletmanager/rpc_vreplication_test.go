@@ -89,14 +89,15 @@ var (
 // from a VtctldServer MoveTablesCreate request to ensure
 // that the VReplication stream(s) are created correctly.
 func TestCreateVReplicationWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
 	targetTabletUID := 300
 	shard := "0"
 	wf := "testwf"
-	tenv := newTestEnv(t, sourceKs, []string{shard})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
@@ -202,7 +203,8 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // stream(s) are created correctly. Followed by ensuring that
 // SwitchTraffic and ReverseTraffic work as expected.
 func TestMoveTables(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -217,7 +219,7 @@ func TestMoveTables(t *testing.T) {
 		topodatapb.TabletType_RDONLY,
 	}
 
-	tenv := newTestEnv(t, sourceKs, []string{sourceShard})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{sourceShard})
 	defer tenv.close()
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
@@ -434,7 +436,8 @@ func TestMoveTables(t *testing.T) {
 }
 
 func TestUpdateVReplicationWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
 	workflow := "testwf"
@@ -442,7 +445,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	vreplID := 1
 	tabletUID := 100
 
-	tenv := newTestEnv(t, keyspace, []string{shard})
+	tenv := newTestEnv(t, ctx, keyspace, []string{shard})
 	defer tenv.close()
 
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
@@ -578,7 +581,8 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 // fails -- specifically after the point where we have created
 // the workflow streams.
 func TestFailedMoveTablesCreateCleanup(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	shard := "0"
@@ -589,7 +593,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	invalidTimeZone := "NOPE"
 	bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"%s\" filter:\"select * from %s\"}}",
 		sourceKs, shard, table, table)
-	tenv := newTestEnv(t, sourceKs, []string{shard})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
 	ws := workflow.NewServer(tenv.ts, tenv.tmc)
 

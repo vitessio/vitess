@@ -64,10 +64,12 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	// reset error counters
 	hcErrorCounters.ResetAll()
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	// close healthcheck
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
@@ -206,8 +208,11 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -267,8 +272,11 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
 func TestHealthCheckErrorOnPrimary(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -327,8 +335,11 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 }
 
 func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	resultChan := hc.Subscribe()
@@ -405,8 +416,11 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 }
 
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -448,8 +462,12 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 // TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
 func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	createFakeConn(tablet, input)
@@ -508,10 +526,13 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// reset counters
 	hcErrorCounters.ResetAll()
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	hc.healthCheckTimeout = 500 * time.Millisecond
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
@@ -580,8 +601,11 @@ func TestHealthCheckTimeout(t *testing.T) {
 }
 
 func TestWaitForAllServingTablets(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.Type = topodatapb.TabletType_REPLICA
@@ -601,7 +625,8 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	// there will be a first result, get and discard it
 	<-resultChan
 	// empty
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	err := hc.WaitForAllServingTablets(ctx, targets)
@@ -672,8 +697,11 @@ func TestWaitForAllServingTablets(t *testing.T) {
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
 func TestRemoveTablet(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.Type = topodatapb.TabletType_REPLICA
@@ -779,8 +807,11 @@ func TestRemoveTablet(t *testing.T) {
 
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.Type = topodatapb.TabletType_REPLICA
@@ -965,8 +996,11 @@ func TestGetHealthyTablets(t *testing.T) {
 }
 
 func TestPrimaryInOtherCell(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
 	// add a tablet as primary in different cell
@@ -1022,8 +1056,11 @@ func TestPrimaryInOtherCell(t *testing.T) {
 }
 
 func TestReplicaInOtherCell(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
 	// add a tablet as replica
@@ -1124,8 +1161,11 @@ func TestReplicaInOtherCell(t *testing.T) {
 }
 
 func TestCellAliases(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
 	cellsAlias := &topodatapb.CellsAlias{
@@ -1184,8 +1224,11 @@ func TestCellAliases(t *testing.T) {
 }
 
 func TestHealthCheckChecksGrpcPort(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -1204,6 +1247,7 @@ func TestHealthCheckChecksGrpcPort(t *testing.T) {
 }
 
 func TestTemplate(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
 	ParseTabletURLTemplateFromFlag()
 
@@ -1231,6 +1275,7 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestDebugURLFormatting(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	TabletURLTemplateString = "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"
 	ParseTabletURLTemplateFromFlag()
 
@@ -1270,8 +1315,8 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 	return nil, fmt.Errorf("tablet %v not found", key)
 }
 
-func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", "")
+func createTestHc(ctx context.Context, ts *topo.Server) *HealthCheckImpl {
+	return NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "")
 }
 
 type fakeConn struct {

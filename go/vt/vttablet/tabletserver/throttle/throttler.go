@@ -122,9 +122,9 @@ type Throttler struct {
 	cell     string
 
 	check     *ThrottlerCheck
-	isEnabled int64
-	isLeader  int64
-	isOpen    int64
+	isEnabled atomic.Bool
+	isLeader  atomic.Bool
+	isOpen    atomic.Bool
 
 	env             tabletenv.Env
 	pool            *connpool.Pool
@@ -162,6 +162,7 @@ type Throttler struct {
 
 	initMutex            sync.Mutex
 	enableMutex          sync.Mutex
+	cancelOpenContext    context.CancelFunc
 	cancelEnableContext  context.CancelFunc
 	throttledAppsMutex   sync.Mutex
 	watchSrvKeyspaceOnce sync.Once
@@ -190,9 +191,6 @@ type ThrottlerStatus struct {
 // NewThrottler creates a Throttler
 func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, cell string, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
-		isLeader: 0,
-		isOpen:   0,
-
 		cell:            cell,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
@@ -359,11 +357,11 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 }
 
 func (throttler *Throttler) IsEnabled() bool {
-	return atomic.LoadInt64(&throttler.isEnabled) > 0
+	return throttler.isEnabled.Load()
 }
 
 func (throttler *Throttler) IsOpen() bool {
-	return atomic.LoadInt64(&throttler.isOpen) > 0
+	return throttler.isOpen.Load()
 }
 
 // CheckIsOpen checks if this throttler is ready to serve. If not, it
@@ -386,12 +384,12 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if throttler.IsEnabled() {
+	isEnabled := throttler.isEnabled.Swap(true)
+	if isEnabled {
 		log.Infof("Throttler: already enabled")
 		return false
 	}
 	log.Infof("Throttler: enabling")
-	atomic.StoreInt64(&throttler.isEnabled, 1)
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
 	throttler.check.SelfChecks(ctx)
@@ -409,14 +407,13 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if !throttler.IsEnabled() {
+	isEnabled := throttler.isEnabled.Swap(false)
+	if !isEnabled {
 		log.Infof("Throttler: already disabled")
 		return false
 	}
 	log.Infof("Throttler: disabling")
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
-	atomic.StoreInt64(&throttler.isEnabled, 0)
-
 	throttler.aggregatedMetrics.Flush()
 	throttler.recentApps.Flush()
 	throttler.nonLowPriorityAppRequestsThrottled.Flush()
@@ -431,20 +428,22 @@ func (throttler *Throttler) Open() error {
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
-	if throttler.IsOpen() {
+
+	isOpen := throttler.isOpen.Swap(true)
+	if isOpen {
 		// already open
 		log.Infof("Throttler: throttler is already open")
 		return nil
 	}
 	log.Infof("Throttler: opening")
-	ctx := context.Background()
+	var ctx context.Context
+	ctx, throttler.cancelOpenContext = context.WithCancel(context.Background())
 	// The query needs to be dynamically built because the sidecar database name
 	// is not known when the TabletServer is created, which in turn creates the
 	// Throttler.
 	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query) // default
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
-	atomic.StoreInt64(&throttler.isOpen, 1)
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
@@ -454,7 +453,7 @@ func (throttler *Throttler) Open() error {
 	// opening of all other components. We thus read the throttler config in the background.
 	// However, we want to handle a situation where the read errors out.
 	// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
-	retryReadAndApplyThrottlerConfig := func() {
+	retryReadAndApplyThrottlerConfig := func(ctx context.Context) {
 		retryInterval := 10 * time.Second
 		retryTicker := time.NewTicker(retryInterval)
 		defer retryTicker.Stop()
@@ -465,7 +464,9 @@ func (throttler *Throttler) Open() error {
 				return
 			}
 
-			throttlerConfig, err := throttler.readThrottlerConfig(ctx)
+			requestCtx, requestCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer requestCancel()
+			throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
 			if err == nil {
 				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
 				// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
@@ -482,10 +483,16 @@ func (throttler *Throttler) Open() error {
 				return
 			}
 			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
-			<-retryTicker.C
+			select {
+			case <-ctx.Done():
+				// Throttler is not open so no need to keep retrying.
+				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+				return
+			case <-retryTicker.C:
+			}
 		}
 	}
-	go retryReadAndApplyThrottlerConfig()
+	go retryReadAndApplyThrottlerConfig(ctx)
 
 	return nil
 }
@@ -496,17 +503,18 @@ func (throttler *Throttler) Close() {
 	throttler.initMutex.Lock()
 	log.Infof("Throttler: acquired initMutex lock")
 	defer throttler.initMutex.Unlock()
-	if !throttler.IsOpen() {
+	isOpen := throttler.isOpen.Swap(false)
+	if !isOpen {
 		log.Infof("Throttler: throttler is not open")
 		return
 	}
 	ctx := context.Background()
 	throttler.Disable(ctx)
-	atomic.StoreInt64(&throttler.isLeader, 0)
+	throttler.isLeader.Store(false)
 
 	log.Infof("Throttler: closing pool")
 	throttler.pool.Close()
-	atomic.StoreInt64(&throttler.isOpen, 0)
+	throttler.cancelOpenContext()
 	log.Infof("Throttler: finished execution of Close")
 }
 
@@ -619,23 +627,22 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 						defer throttler.initMutex.Unlock()
 
 						// sparse
-						shouldBeLeader := int64(0)
+						shouldBeLeader := false
 						if throttler.IsOpen() {
 							if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
-								shouldBeLeader = 1
+								shouldBeLeader = true
 							}
 						}
 
+						isLeader := throttler.isLeader.Swap(shouldBeLeader)
 						transitionedIntoLeader := false
-						if shouldBeLeader > throttler.isLeader {
+						if shouldBeLeader && !isLeader {
 							log.Infof("Throttler: transition into leadership")
 							transitionedIntoLeader = true
 						}
-						if shouldBeLeader < throttler.isLeader {
+						if !shouldBeLeader && isLeader {
 							log.Infof("Throttler: transition out of leadership")
 						}
-
-						atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
 
 						if transitionedIntoLeader {
 							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
@@ -847,7 +854,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return
 			}
-			if atomic.LoadInt64(&throttler.isLeader) == 0 {
+			if !throttler.isLeader.Load() {
 				// not the leader (primary tablet)? Then no more work for us.
 				return
 			}
@@ -1167,9 +1174,9 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		Keyspace: throttler.keyspace,
 		Shard:    throttler.shard,
 
-		IsLeader:  (atomic.LoadInt64(&throttler.isLeader) > 0),
-		IsOpen:    (atomic.LoadInt64(&throttler.isOpen) > 0),
-		IsEnabled: (atomic.LoadInt64(&throttler.isEnabled) > 0),
+		IsLeader:  throttler.isLeader.Load(),
+		IsOpen:    throttler.isOpen.Load(),
+		IsEnabled: throttler.isEnabled.Load(),
 		IsDormant: throttler.isDormant(),
 
 		Query:     throttler.GetMetricsQuery(),

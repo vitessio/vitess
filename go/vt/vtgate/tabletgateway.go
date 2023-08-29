@@ -283,12 +283,12 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
 			if kev := gw.kev; kev != nil {
-				if kev.TargetIsBeingResharded(target) {
+				if kev.TargetIsBeingResharded(ctx, target) {
 					log.V(2).Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}
-				primary, notServing := kev.PrimaryIsNotServing(target)
+				primary, notServing := kev.PrimaryIsNotServing(ctx, target)
 				if notServing {
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReparentInProgress)
 					continue
