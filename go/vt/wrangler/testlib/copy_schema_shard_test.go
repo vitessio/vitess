@@ -113,7 +113,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 
 	setSQLMode := fmt.Sprintf("SET @@session.sql_mode='%v'", vreplication.SQLMode)
 	changeToDb := "USE `vt_ks`"
-	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
+	createDb := "CREATE DATABASE `vt_ks` DEFAULT CHARACTER SET UTF8"
 	createTable := "CREATE TABLE `vt_ks`.`table1` (\n" +
 		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
 		"  `msg` varchar(64) DEFAULT NULL,\n" +
