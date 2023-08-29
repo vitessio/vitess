@@ -1668,40 +1668,15 @@
         "TableName": "user_extra_`user`",
         "Inputs": [
           {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
-            "PulloutVars": [
-              "__sq_has_values1",
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select m2 from `user` where 1 != 1",
-                "Query": "select m2 from `user` where `user`.id = 5",
-                "Table": "`user`",
-                "Values": [
-                  "INT64(5)"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where :__sq_has_values1 and u.id in ::__sq1",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           },
           {
             "OperatorType": "Route",
@@ -1711,7 +1686,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id = 5",
+            "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
             "Table": "`user`",
             "Values": [
               "INT64(5)"

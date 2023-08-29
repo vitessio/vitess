@@ -284,7 +284,7 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 	innerID := TableID(inner.Inner())
 
 	deps := semantics.EmptyTableSet()
-	for _, predicate := range inner.GetJoinPredicates() {
+	for _, predicate := range inner.GetMergePredicates() {
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
 	}
 	deps = deps.Remove(innerID)
@@ -306,6 +306,9 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 	}
 
 	if deps.IsSolvedBy(joinID) {
+		// we can rewrite the predicate to not use the values from the lhs,
+		// and instead use arguments for these dependencies.
+		// this way we can push the subquery into the RHS of this join
 		var updatedPred sqlparser.Exprs
 		for _, predicate := range inner.GetJoinPredicates() {
 			col, err := BreakExpressionInLHSandRHS(ctx, predicate, lhs)
