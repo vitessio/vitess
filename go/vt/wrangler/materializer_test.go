@@ -2741,6 +2741,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 	}
 
 	type testcase struct {
+		name                         string
 		targetShards, sourceShards   []string
 		insertMap                    map[string][]string
 		targetVSchema, sourceVSchema *vschemapb.Keyspace
@@ -2790,6 +2791,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			getStreamInsert: getStreamInsert,
 		},
 		{
+			name:         "different primary vindex type, use all source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
 			insertMap: map[string][]string{
@@ -2817,6 +2819,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			},
 		},
 		{
+			name:         "different vindex type and name, use all source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
 			insertMap: map[string][]string{
@@ -2843,10 +2846,133 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*%s.*`, sourceShard, targetShard)
 			},
 		},
+		{
+			name:         "same vindex type but different name, use intersecting source shards",
+			targetShards: []string{"-80", "80-"},
+			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap:    map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash_vdx": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "c1",
+							Name:   "hash_vdx",
+						}},
+					},
+				},
+			},
+			getStreamInsert: getStreamInsert,
+		},
+		{
+			name:         "unsharded source, sharded target, use all source shards",
+			targetShards: []string{"-80", "80-"},
+			sourceShards: []string{"-"},
+			insertMap: map[string][]string{
+				"-80": {"-"},
+				"80-": {"-"},
+			},
+			sourceVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			targetVSchema:   targetVSchema,
+			getStreamInsert: getStreamInsert,
+		},
+		{
+			name:         "sharded source, unsharded target, use all source shards",
+			targetShards: []string{"-"},
+			sourceShards: []string{"-80", "80-"},
+			insertMap: map[string][]string{
+				"-": {"-80", "80-"},
+			},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			getStreamInsert: func(sourceShard, targetShard string) string {
+				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1`, sourceShard)
+			},
+		},
+		{
+			name:         "target secondary vindexes, use intersecting source shards",
+			targetShards: []string{"-80", "80-"},
+			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap:    map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+					"lookup_vdx": {
+						Type: "lookup",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+							{
+								Column: "c2",
+								Name:   "lookup_vdx",
+							},
+						},
+					},
+				},
+			},
+			getStreamInsert: getStreamInsert,
+		},
+		{
+			name:         "same vindex type but different cols, use all source shards",
+			targetShards: []string{"-80", "80-"},
+			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "c1",
+							Name:   "hash",
+						}},
+					},
+				},
+			},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "c2",
+							Name:   "hash",
+						}},
+					},
+				},
+			},
+			getStreamInsert: func(sourceShard, targetShard string) string {
+				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1`, sourceShard)
+			},
+		},
 	}
 
 	for _, tcase := range testcases {
-		t.Run("", func(t *testing.T) {
+		t.Run(tcase.name, func(t *testing.T) {
 			env := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
 			if err := env.topoServ.SaveVSchema(context.Background(), "targetks", tcase.targetVSchema); err != nil {
 				t.Fatal(err)
