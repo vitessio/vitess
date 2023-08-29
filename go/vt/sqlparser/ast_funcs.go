@@ -1996,17 +1996,6 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
-// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
-func isExprAliasForCurrentTimeStamp(expr Expr) bool {
-	switch node := expr.(type) {
-	case *FuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	case *CurTimeFuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	}
-	return false
-}
-
 // AtCount represents the '@' count in IdentifierCI
 type AtCount int
 
@@ -2169,19 +2158,6 @@ func (s SelectExprs) AllAggregation() bool {
 		}
 	}
 	return true
-}
-
-func isExprLiteral(expr Expr) bool {
-	switch expr := expr.(type) {
-	case *Literal:
-		return true
-	case BoolVal:
-		return true
-	case *UnaryExpr:
-		return isExprLiteral(expr.Expr)
-	default:
-		return false
-	}
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree

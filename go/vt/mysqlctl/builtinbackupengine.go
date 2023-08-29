@@ -44,15 +44,15 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/proto/mysqlctl"
-	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -331,7 +331,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// It's also nice for incremental backups that are taken on _other_ tablets, so that they don't need to understand what exactly was purged
 	// on _this_ tablet. They don't care, all they want to know is "what GTIDSet can we get from this".
 	incrementalBackupToPosition.GTIDSet = incrementalBackupToPosition.GTIDSet.Union(gtidPurged.GTIDSet)
-	req := &mysqlctl.ReadBinlogFilesTimestampsRequest{}
+	req := &mysqlctlpb.ReadBinlogFilesTimestampsRequest{}
 	for _, binlogFile := range binaryLogsToBackup {
 		fe := FileEntry{Base: backupBinlogDir, Name: binlogFile}
 		fullPath, err := fe.fullPath(params.Cnf)
