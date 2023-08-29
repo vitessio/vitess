@@ -117,10 +117,6 @@ type Executor struct {
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
 
-	// truncateErrorLen truncates errors sent to client if they are above this value
-	// (0 means do not truncate).
-	truncateErrorLen int
-
 	// queryLogger is passed in for logging from this vtgate executor.
 	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 }
