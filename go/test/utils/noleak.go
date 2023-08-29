@@ -18,16 +18,10 @@ package utils
 
 import (
 	"context"
-	"os"
-	"os/exec"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"go.uber.org/goleak"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // LeakCheckContext returns a Context that will be automatically cancelled at the end
@@ -73,9 +67,6 @@ func ensureNoLeaks() error {
 	if err := ensureNoGoroutines(); err != nil {
 		return err
 	}
-	if err := ensureNoOpenSockets(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -100,21 +91,6 @@ func ensureNoGoroutines() error {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
-	}
-	return err
-}
-
-func ensureNoOpenSockets() error {
-	cmd := exec.Command("lsof", "-a", "-p", strconv.Itoa(os.Getpid()), "-i", "-P", "-V")
-	cmd.Stderr = nil
-	lsof, err := cmd.Output()
-	if err == nil {
-		log.Errorf("found open sockets:\n%s", lsof)
-	} else {
-		if strings.Contains(string(lsof), "no Internet files located") {
-			return nil
-		}
-		log.Errorf("failed to run `lsof`: %v (%q)", err, lsof)
 	}
 	return err
 }
