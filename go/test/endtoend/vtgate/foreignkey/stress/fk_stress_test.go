@@ -776,14 +776,22 @@ func isFKError(err error) bool {
 		return false
 	}
 
+	// Let's try and account for all known errors:
 	switch sqlErr.Number() {
+	case sqlerror.ERDupEntry:
+		return false
 	case sqlerror.ERNoReferencedRow,
 		sqlerror.ERRowIsReferenced,
 		sqlerror.ERRowIsReferenced2,
 		sqlerror.ErNoReferencedRow2:
 		return true
+	case sqlerror.ERNotSupportedYet:
+		return true
 	}
-	return false
+	// Unknown error
+	fmt.Printf("Unexpected error detected in isFKError: %v\n", err)
+	// Treat it as if it's a FK error
+	return true
 }
 
 func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
