@@ -76,11 +76,26 @@ func TestDeleteWithFK(t *testing.T) {
 
 	// table's child foreign key has cross shard fk, so query will fail at vtgate.
 	_, err = utils.ExecAllowError(t, conn, `delete from t1 where id = 42`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: foreign keys management at vitess (errno 1235) (sqlstate 42000)")
+	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys (errno 1235) (sqlstate 42000)")
 
-	// child foreign key is cascade, so query will fail at vtgate.
-	_, err = utils.ExecAllowError(t, conn, `delete from multicol_tbl1 where cola = 100`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: foreign keys management at vitess (errno 1235) (sqlstate 42000)")
+	// child foreign key is cascade, so this should work as expected.
+	qr = utils.Exec(t, conn, `delete from multicol_tbl1 where cola = 100`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// we also verify that the rows in the child table were deleted.
+	qr = utils.Exec(t, conn, `select * from multicol_tbl2 where cola = 100`)
+	assert.Zero(t, qr.Rows)
+
+	// Unsharded keyspace tests
+	utils.Exec(t, conn, `use uks`)
+	// insert some data.
+	utils.Exec(t, conn, `insert into u_t1(id, col1) values (100, 123), (10, 12), (1, 13), (1000, 1234)`)
+	utils.Exec(t, conn, `insert into u_t2(id, col2) values (342, 123), (19, 1234)`)
+
+	// Delete from u_t1 which has a foreign key constraint to t2 with SET NULL type.
+	qr = utils.Exec(t, conn, `delete from u_t1 where id = 100`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// Verify the result in u_t2 as well
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(342) NULL] [INT64(19) INT64(1234)]]`)
 }
 
 // TestUpdations tests that update work as expected when foreign key management is enabled in Vitess.
@@ -91,7 +106,7 @@ func TestUpdateWithFK(t *testing.T) {
 	// insert some data.
 	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123),(10, 12),(1, 13),(1000, 1234)`)
 	utils.Exec(t, conn, `insert into t2(id, col, mycol) values (100, 125, 'foo'), (1, 132, 'bar')`)
-	utils.Exec(t, conn, `insert into t4(id, col, t2_mycol) values (1, 321, 'bar')`)
+	utils.Exec(t, conn, `insert into t4(id, col, t2_col, t2_mycol) values (1, 321, 132, 'bar')`)
 	utils.Exec(t, conn, `insert into t5(pk, sk, col1) values (1, 1, 1),(2, 1, 1),(3, 1, 10),(4, 1, 20),(5, 1, 30),(6, 1, 40)`)
 	utils.Exec(t, conn, `insert into t6(pk, sk, col1) values (10, 1, 1), (20, 1, 20)`)
 
@@ -106,10 +121,6 @@ func TestUpdateWithFK(t *testing.T) {
 	qr := utils.Exec(t, conn, `update t4 set col = 20 where id = 1`)
 	assert.EqualValues(t, 1, qr.RowsAffected)
 
-	// child table have cascade which is cross shard. Query will fail at vtgate.
-	_, err = utils.ExecAllowError(t, conn, `update t2 set col = 125 where id = 100`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: foreign keys management at vitess (errno 1235) (sqlstate 42000)")
-
 	// updating column which does not have foreign key constraint, so query will succeed.
 	_ = utils.Exec(t, conn, `update t2 set mycol = 'baz' where id = 100`)
 	assert.EqualValues(t, 1, qr.RowsAffected)
@@ -117,4 +128,31 @@ func TestUpdateWithFK(t *testing.T) {
 	// child table have restrict in shard scoped and value exists in parent table.
 	_ = utils.Exec(t, conn, `update t6 set col1 = 40 where pk = 20`)
 	assert.EqualValues(t, 1, qr.RowsAffected)
+
+	// Unsharded keyspace tests
+	utils.Exec(t, conn, `use uks`)
+	// insert some data.
+	utils.Exec(t, conn, `insert into u_t1(id, col1) values (100, 123), (10, 12), (1, 13), (1000, 1234)`)
+	utils.Exec(t, conn, `insert into u_t2(id, col2) values (342, 123), (19, 1234)`)
+	utils.Exec(t, conn, `insert into u_t3(id, col3) values (32, 123), (1, 12)`)
+
+	t.Run("Cascade update with a new value", func(t *testing.T) {
+		t.Skip("This doesn't work right now. We are able to only cascade updates for which the data already exists in the parent table")
+		_ = utils.Exec(t, conn, `update u_t1 set col1 = 2 where id = 100`)
+	})
+
+	// Update u_t1 which has a foreign key constraint to u_t2 with SET NULL type, and to u_t3 with CASCADE type.
+	qr = utils.Exec(t, conn, `update u_t1 set col1 = 13 where id = 100`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// Verify the result in u_t2 and u_t3 as well.
+	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) NULL]]`)
+	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
+
+	// Update u_t1 which has a foreign key constraint to u_t2 with SET NULL type, and to u_t3 with CASCADE type.
+	// This update however doesn't change the table.
+	qr = utils.Exec(t, conn, `update u_t1 set col1 = 1234 where id = 1000`)
+	assert.EqualValues(t, 0, qr.RowsAffected)
+	// Verify the result in u_t2 and u_t3 as well.
+	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) NULL]]`)
+	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
 }

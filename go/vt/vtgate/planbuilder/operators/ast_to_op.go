@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+const foriegnKeyContraintValues = "fkc_vals"
+
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
 	switch node := selStmt.(type) {
@@ -427,173 +429,14 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	return newHorizon(union, node), nil
 }
 
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
+func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+	newCtx, err := plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
 	if err != nil {
 		return nil, err
 	}
+	ctx = newCtx
 
-	assignments := make(map[string]sqlparser.Expr)
-	for _, set := range updStmt.Exprs {
-		assignments[set.Name.Name.String()] = set.Expr
-	}
-
-	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "update")
-	if err != nil {
-		return nil, err
-	}
-
-	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
-	if err != nil {
-		return nil, err
-	}
-
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vp
-	}
-
-	r := &Route{
-		Source: &Update{
-			QTable:              qt,
-			VTable:              vindexTable,
-			Assignments:         assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			AST:                 updStmt,
-		},
-		Routing: routing,
-	}
-
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.ParentFKsNeedsHandling()
-		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
-		if (len(childFks) > 0 || len(parentFKs) > 0) &&
-			ColumnModified(updStmt.Exprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-				return parentFKs, childFks
-			}) {
-			return nil, vterrors.VT12003()
-		}
-	}
-
-	outerID := TableID(r)
-
-	sqL := &SubQueryContainer{}
-	for _, predicate := range qt.Predicates {
-		if isSubq, err := sqL.handleSubquery(ctx, predicate, outerID); err != nil {
-			return nil, err
-		} else if isSubq {
-			continue
-		}
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if routing.OpCode() == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
-	}
-
-	return sqL.getRootOperator(r), nil
-}
-
-// ColumnModified checks if any column in the parent table is being updated which has a child foreign key.
-func ColumnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo)) bool {
-	for _, updateExpr := range exprs {
-		parentFKs, childFks := getFks(updateExpr)
-		for _, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-		for _, parentFk := range parentFKs {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (ops.Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
-	if err != nil {
-		return nil, err
-	}
-
-	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "delete")
-	if err != nil {
-		return nil, err
-	}
-
-	del := &Delete{
-		QTable: qt,
-		VTable: vindexTable,
-		AST:    deleteStmt,
-	}
-	route := &Route{
-		Source:  del,
-		Routing: routing,
-	}
-
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
-		if len(childFks) > 0 {
-			return nil, vterrors.VT12003()
-		}
-	}
-
-	if !vindexTable.Keyspace.Sharded {
-		return route, nil
-	}
-
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vindexAndPredicates
-	}
-
-	var ovq string
-	if len(vindexTable.Owned) > 0 {
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: qt.Alias.As}
-		ovq = generateOwnedVindexQuery(tblExpr, deleteStmt, vindexTable, primaryVindex.Columns)
-	}
-
-	del.OwnedVindexQuery = ovq
-
-	sqL := &SubQueryContainer{}
-	for _, predicate := range qt.Predicates {
-		if isSubQ, err := sqL.handleSubquery(ctx, predicate, TableID(route)); err != nil {
-			return nil, err
-		} else if isSubQ {
-			continue
-		}
-		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if routing.OpCode() == engine.Scatter && deleteStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
-	}
-
-	return sqL.getRootOperator(route), nil
+	return PlanQuery(ctx, stmt)
 }
 
 func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (ops.Operator, error) {
@@ -1049,4 +892,36 @@ func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 			ctx.SemTable.AddColumnEquality(right, expr.Left)
 		}
 	}
+}
+
+func isRestrict(onDelete sqlparser.ReferenceAction) bool {
+	switch onDelete {
+	case sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction:
+		return true
+	default:
+		return false
+	}
+}
+
+// createSelectionOp creates the selection operator to select the parent columns for the foreign key constraints.
+// The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_update>`
+// TODO (@Harshit, @GuptaManan100): Compress the columns in the SELECT statement, if there are multiple foreign key constraints using the same columns.
+func createSelectionOp(ctx *plancontext.PlanningContext, selectExprs []sqlparser.SelectExpr, tableExprs sqlparser.TableExprs, where *sqlparser.Where) (ops.Operator, error) {
+	selectionStmt := &sqlparser.Select{
+		SelectExprs: selectExprs,
+		From:        tableExprs,
+		Where:       where,
+	}
+	return createOpFromStmt(ctx, selectionStmt)
+}
+
+func selectParentColumns(fk vindexes.ChildFKInfo, lastOffset int) ([]int, []sqlparser.SelectExpr) {
+	var cols []int
+	var exprs []sqlparser.SelectExpr
+	for _, column := range fk.ParentColumns {
+		cols = append(cols, lastOffset)
+		exprs = append(exprs, aeWrap(sqlparser.NewColName(column.String())))
+		lastOffset++
+	}
+	return cols, exprs
 }

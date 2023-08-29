@@ -46,7 +46,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
-	defer ts.Close()
 	srvTopoCacheTTL = 200 * time.Millisecond
 	srvTopoCacheRefresh = 80 * time.Millisecond
 	defer func() {
@@ -365,7 +364,6 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "test_cell")
-	defer ts.Close()
 	srvTopoCacheTTL = 100 * time.Millisecond
 	srvTopoCacheRefresh = 40 * time.Millisecond
 	defer func() {
@@ -437,7 +435,6 @@ func TestWatchSrvVSchema(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "test_cell")
-	defer ts.Close()
 	rs := NewResilientServer(ctx, ts, "TestWatchSrvVSchema")
 
 	// mu protects watchValue and watchErr.
@@ -523,7 +520,6 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
-	defer ts.Close()
 
 	time.Sleep(1 * time.Second)
 
@@ -682,7 +678,6 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
-	defer ts.Close()
 	srvTopoCacheTTL = 100 * time.Millisecond
 	srvTopoCacheRefresh = 40 * time.Millisecond
 	defer func() {
@@ -809,7 +804,6 @@ func TestSrvKeyspaceListener(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "test_cell")
-	defer ts.Close()
 	srvTopoCacheTTL = 100 * time.Millisecond
 	srvTopoCacheRefresh = 40 * time.Millisecond
 	defer func() {

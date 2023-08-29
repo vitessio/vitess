@@ -231,6 +231,9 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 
 // ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
 func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) {
+	if st == nil {
+		return
+	}
 	if id.NumberOfTables() != 1 {
 		// This is probably a derived table
 		return
@@ -418,6 +421,9 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 
 // GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
+	if st == nil {
+		return nil
+	}
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {
 		if extractedSubquery.Merged {
