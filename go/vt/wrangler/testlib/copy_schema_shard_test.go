@@ -94,12 +94,12 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 			{
 				Name:   "table1",
-				Schema: "CREATE TABLE `table1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+				Schema: "CREATE TABLE `vt_ks`.`table1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
 				Type:   tmutils.TableBaseTable,
 			},
 			{
 				Name:   "view1",
-				Schema: "CREATE TABLE `view1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+				Schema: "CREATE TABLE `vt_ks`.`view1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
 				Type:   tmutils.TableView,
 			},
 		},
@@ -121,7 +121,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	createTableView := "CREATE TABLE `view1` (\n" +
+	createTableView := "CREATE TABLE `vt_ks`.`view1` (\n" +
 		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
 		"  `msg` varchar(64) DEFAULT NULL,\n" +
 		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n" +
