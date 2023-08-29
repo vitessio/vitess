@@ -27,16 +27,10 @@ import (
 )
 
 func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStmt *sqlparser.Insert, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err := semantics.Analyze(insStmt, ksName, vschema)
+	ctx, err := plancontext.CreatePlanningContext(insStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
 
 	err = rewriteRoutedTables(insStmt, vschema)
 	if err != nil {
@@ -48,34 +42,32 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 
 	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
 	// We cannot shortcut here as sequence column needs additional planning.
-	ks, tables := semTable.SingleUnshardedKeyspace()
+	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
 	if ks != nil && tables[0].AutoIncrement == nil {
 		plan := insertUnshardedShortcut(insStmt, ks, tables)
 		plan = pushCommentDirectivesOnPlan(plan, insStmt)
 		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 	}
 
-	tblInfo, err := semTable.TableInfoFor(semTable.TableSetFor(insStmt.Table))
+	tblInfo, err := ctx.SemTable.TableInfoFor(ctx.SemTable.TableSetFor(insStmt.Table))
 	if err != nil {
 		return nil, err
 	}
-	if tblInfo.GetVindexTable().Keyspace.Sharded && semTable.NotUnshardedErr != nil {
-		return nil, semTable.NotUnshardedErr
+	if tblInfo.GetVindexTable().Keyspace.Sharded && ctx.SemTable.NotUnshardedErr != nil {
+		return nil, ctx.SemTable.NotUnshardedErr
 	}
 
-	err = queryRewrite(semTable, reservedVars, insStmt)
+	err = queryRewrite(ctx.SemTable, reservedVars, insStmt)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	op, err := operators.PlanQuery(ctx, insStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
 		return nil, err
 	}

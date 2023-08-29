@@ -58,7 +58,7 @@ func TestDeleteCascade(t *testing.T) {
 	}
 	fkc := &FkCascade{
 		Selection: inputP,
-		Children:  []FkChild{{BVName: "__vals", Cols: []int{0, 1}, Exec: childP}},
+		Children:  []*FkChild{{BVName: "__vals", Cols: []int{0, 1}, Exec: childP}},
 		Parent:    parentP,
 	}
 
@@ -119,7 +119,7 @@ func TestUpdateCascade(t *testing.T) {
 	}
 	fkc := &FkCascade{
 		Selection: inputP,
-		Children:  []FkChild{{BVName: "__vals", Cols: []int{0, 1}, Exec: childP}},
+		Children:  []*FkChild{{BVName: "__vals", Cols: []int{0, 1}, Exec: childP}},
 		Parent:    parentP,
 	}
 
