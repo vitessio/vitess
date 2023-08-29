@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"strconv"
 	"testing"
 	"unsafe"
@@ -95,12 +94,12 @@ func TestWeightsForAllCodepoints(t *testing.T) {
 }
 
 func TestWeightTablesAreDeduplicated(t *testing.T) {
-	sliceptr := func(table uca.Weights) uintptr {
-		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&table))
-		return hdr.Data
+	sliceptr := func(table uca.Weights) unsafe.Pointer {
+		data := unsafe.SliceData(table)
+		return unsafe.Pointer(data)
 	}
 
-	uniqueTables := make(map[uintptr]int)
+	uniqueTables := make(map[unsafe.Pointer]int)
 	for _, col := range testall() {
 		var weights uca.Weights
 		switch col := col.(type) {

@@ -22091,8 +22091,6 @@ var decode = [...]uint16{
 	23844: 0x4DAE,
 }
 
-const numEncodeTables = 5
-
 // encodeX are the encoding tables from Unicode to GBK code,
 // sorted by decreasing length.
 // encode0: 28965 entries for runes in [11905, 40870).
