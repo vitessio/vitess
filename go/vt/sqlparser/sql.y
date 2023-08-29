@@ -3267,15 +3267,11 @@ alter_statement:
         },
     }
   }
-| ALTER comment_opt VSCHEMA ON table_name DROP AUTO_INCREMENT sql_id USING table_name
+| ALTER comment_opt VSCHEMA ON table_name DROP AUTO_INCREMENT
   {
     $$ = &AlterVschema{
         Action: DropAutoIncDDLAction,
         Table: $5,
-        AutoIncSpec: &AutoIncSpec{
-            Column: $8,
-            Sequence: $10,
-        },
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY
