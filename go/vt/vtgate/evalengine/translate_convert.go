@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -27,15 +28,11 @@ import (
 )
 
 func (ast *astCompiler) binaryCollationForCollation(collation collations.ID) collations.ID {
-	binary := collation.Get()
+	binary := colldata.Lookup(collation)
 	if binary == nil {
 		return collations.Unknown
 	}
-	binaryCollation := collations.Local().BinaryCollationForCharset(binary.Charset().Name())
-	if binaryCollation == nil {
-		return collations.Unknown
-	}
-	return binaryCollation.ID()
+	return collations.Local().BinaryCollationForCharset(binary.Charset().Name())
 }
 
 func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (collations.ID, error) {
@@ -50,11 +47,10 @@ func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (co
 		return collation, nil
 	}
 	charset = strings.ToLower(charset)
-	collation := collations.Local().DefaultCollationForCharset(charset)
-	if collation == nil {
+	collationID := collations.Local().DefaultCollationForCharset(charset)
+	if collationID == collations.Unknown {
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
-	collationID := collation.ID()
 	if binary {
 		collationID = ast.binaryCollationForCollation(collationID)
 		if collationID == collations.Unknown {
