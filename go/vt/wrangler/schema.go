@@ -17,11 +17,9 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
-	"text/template"
 	"time"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -29,9 +27,11 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -237,10 +237,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	for _, createSQL := range createSQLstmts {
 		err = wr.applySQLShard(ctx, destTabletInfo, createSQL)
 		if err != nil {
-			return fmt.Errorf("creating a table failed."+
+			return vterrors.Wrapf(err, "creating a table failed."+
 				" Most likely some tables already exist on the destination and differ from the source."+
 				" Please remove all to be copied tables from the destination manually and run this command again."+
-				" Full error: %v", err)
+				" CREATE statement: %v", createSQL)
 		}
 	}
 
@@ -291,7 +291,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
 func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string) error {
-	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
+	filledChange, err := sqlparser.ReplaceTableQualifiers(change, tmutils.DatabaseNamePlaceholder, tabletInfo.DbName())
 	if err != nil {
 		return fmt.Errorf("fillStringTemplate failed: %v", err)
 	}
@@ -305,14 +305,4 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 		SQLMode:          vreplication.SQLMode,
 	})
 	return err
-}
-
-// fillStringTemplate returns the string template filled
-func fillStringTemplate(tmpl string, vars any) (string, error) {
-	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
-		return "", err
-	}
-	return data.String(), nil
 }
