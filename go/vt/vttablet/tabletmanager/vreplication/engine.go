@@ -295,6 +295,9 @@ func (vre *Engine) IsOpen() bool {
 func (vre *Engine) Close() {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
+	if vre.throttlerClient != nil {
+		vre.throttlerClient.Close()
+	}
 
 	// If we're retrying, we're not open.
 	// Just cancel the retry loop.

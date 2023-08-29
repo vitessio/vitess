@@ -66,7 +66,7 @@ type Engine struct {
 	wg sync.WaitGroup
 
 	mu              sync.Mutex
-	isOpen          int32 // 0 or 1 in place of atomic.Bool added in go 1.19
+	isOpen          atomic.Bool // 0 or 1 in place of atomic.Bool added in go 1.19
 	streamIdx       int
 	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
@@ -155,22 +155,24 @@ func (vse *Engine) InitDBConfig(keyspace, shard string) {
 func (vse *Engine) Open() {
 	log.Info("VStreamer: opening")
 	// If it's not already open, then open it now.
-	atomic.CompareAndSwapInt32(&vse.isOpen, 0, 1)
+	vse.isOpen.Store(true)
 }
 
 // IsOpen checks if the engine is opened
 func (vse *Engine) IsOpen() bool {
-	return atomic.LoadInt32(&vse.isOpen) == 1
+	return vse.isOpen.Load()
 }
 
 // Close closes the Engine service.
 func (vse *Engine) Close() {
 	func() {
-		if atomic.LoadInt32(&vse.isOpen) == 0 {
-			return
-		}
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
+		isOpen := vse.isOpen.Swap(false)
+		if !isOpen {
+			return
+		}
+		vse.throttlerClient.Close()
 		// cancels are non-blocking.
 		for _, s := range vse.streamers {
 			s.Cancel()
@@ -181,7 +183,6 @@ func (vse *Engine) Close() {
 		for _, s := range vse.resultStreamers {
 			s.Cancel()
 		}
-		atomic.StoreInt32(&vse.isOpen, 0)
 	}()
 
 	// Wait only after releasing the lock because the end of every
@@ -236,7 +237,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 	// Create stream and add it to the map.
 	streamer, idx, err := func() (*uvstreamer, int, error) {
-		if atomic.LoadInt32(&vse.isOpen) == 0 {
+		if !vse.IsOpen() {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
 		vse.mu.Lock()
@@ -277,7 +278,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
-		if atomic.LoadInt32(&vse.isOpen) == 0 {
+		if !vse.IsOpen() {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
 		vse.mu.Lock()
@@ -312,7 +313,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
-		if atomic.LoadInt32(&vse.isOpen) == 0 {
+		if !vse.IsOpen() {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
 		vse.mu.Lock()

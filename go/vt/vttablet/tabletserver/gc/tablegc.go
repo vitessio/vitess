@@ -210,6 +210,8 @@ func (collector *TableGC) Close() {
 	collector.stateMutex.Lock()
 	defer collector.stateMutex.Unlock()
 	log.Infof("TableGC - acquired lock")
+	collector.throttlerClient.Close()
+
 	if collector.isOpen == 0 {
 		log.Infof("TableGC - no collector is open")
 		// not open

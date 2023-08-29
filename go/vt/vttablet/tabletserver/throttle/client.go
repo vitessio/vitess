@@ -19,7 +19,6 @@ package throttle
 import (
 	"context"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,21 +29,6 @@ const (
 	throttleCheckDuration = 250 * time.Millisecond
 )
 
-var throttleTicks int64
-var throttleInit sync.Once
-
-func initThrottleTicker() {
-	throttleInit.Do(func() {
-		go func() {
-			tick := time.NewTicker(throttleCheckDuration)
-			defer tick.Stop()
-			for range tick.C {
-				atomic.AddInt64(&throttleTicks, 1)
-			}
-		}()
-	})
-}
-
 // Client construct is used by apps who wish to consult with a throttler. It encapsulates the check/throttling/backoff logic
 type Client struct {
 	throttler *Throttler
@@ -53,33 +37,39 @@ type Client struct {
 	flags     CheckFlags
 
 	lastSuccessfulThrottle int64
-}
-
-// NewProductionClient creates a client suitable for foreground/production jobs, which have normal priority.
-func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
-	initThrottleTicker()
-	return &Client{
-		throttler: throttler,
-		appName:   appName,
-		checkType: checkType,
-		flags: CheckFlags{
-			LowPriority: false,
-		},
-	}
+	ticks                  atomic.Int64
+	cancel                 context.CancelFunc
 }
 
 // NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
 // e.g. migration, table pruning, vreplication
 func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
-	initThrottleTicker()
-	return &Client{
+	ctx, cancel := context.WithCancel(context.Background())
+
+	client := &Client{
 		throttler: throttler,
 		appName:   appName,
 		checkType: checkType,
 		flags: CheckFlags{
 			LowPriority: true,
 		},
+		cancel: cancel,
 	}
+
+	go func() {
+		tick := time.NewTicker(throttleCheckDuration)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				client.ticks.Add(1)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return client
 }
 
 // ThrottleCheckOK checks the throttler, and returns 'true' when the throttler is satisfied.
@@ -96,7 +86,8 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		// no throttler
 		return true
 	}
-	if c.lastSuccessfulThrottle >= atomic.LoadInt64(&throttleTicks) {
+	lastTick := c.ticks.Load()
+	if c.lastSuccessfulThrottle >= lastTick {
 		// if last check was OK just very recently there is no need to check again
 		return true
 	}
@@ -109,12 +100,12 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
-	c.lastSuccessfulThrottle = atomic.LoadInt64(&throttleTicks)
+	c.lastSuccessfulThrottle = lastTick
 	return true
 
 }
 
-// ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' mmediately,
+// ThrottleCheckOKOrWaitAppName checks the throttler; if throttler is satisfied, the function returns 'true' mmediately,
 // otherwise it briefly sleeps and returns 'false'.
 // Non-empty appName overrides the default appName.
 // The function is not thread safe.
@@ -145,4 +136,11 @@ func (c *Client) Throttle(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (c *Client) Close() {
+	if c.throttler != nil {
+		c.throttler.Close()
+	}
+	c.cancel()
 }
