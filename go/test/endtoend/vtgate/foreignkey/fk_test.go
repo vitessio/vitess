@@ -161,9 +161,9 @@ func TestUpdateWithFK(t *testing.T) {
 	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
 }
 
-// TestCrossShardFkScenarios tests the various foreign key scenarios with different constraints
-// and makes sure that Vitess works with them as expected. All the tables are sharded in this test
-// and all the foreign key constraints are cross-shard ones.
+// TestFkScenarios tests the various foreign key scenarios with different constraints
+// and makes sure that Vitess works with them as expected. All the tables are present in both sharded and unsharded keyspace
+// and all the foreign key constraints are cross-shard ones for the sharded keyspace.
 // The test has 3 independent Schemas that are used for testing -
 /*
  *                    fk_t1
@@ -230,13 +230,19 @@ func TestUpdateWithFK(t *testing.T) {
  *                    ▼                    ▼
  *                 fk_t18               fk_t19
  */
-func TestCrossShardFkScenarios(t *testing.T) {
+func TestFkScenarios(t *testing.T) {
 	// Wait for schema-tracking to be complete.
-	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t1", "col")
+	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t1", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t18", "col")
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t18", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, "ks", "fk_t11", "col")
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t11", "col")
+	require.NoError(t, err)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t1", "col")
+	require.NoError(t, err)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t18", "col")
+	require.NoError(t, err)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t11", "col")
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -530,86 +536,106 @@ func TestCrossShardFkScenarios(t *testing.T) {
 	}
 
 	for _, tt := range testcases {
-		t.Run(tt.name, func(t *testing.T) {
-			mcmp, closer := start(t)
-			defer closer()
+		for _, testSharded := range []bool{false, true} {
+			t.Run(getTestName(tt.name, testSharded), func(t *testing.T) {
+				mcmp, closer := start(t)
+				defer closer()
+				// To test unsharded case in vtgate, we just change the keyspace we use for the test.
+				if !testSharded {
+					_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+				}
 
-			// Insert all the data required for running the test.
-			for _, query := range tt.dataQueries {
-				mcmp.Exec(query)
-			}
+				// Insert all the data required for running the test.
+				for _, query := range tt.dataQueries {
+					mcmp.Exec(query)
+				}
 
-			// Run the DML query that needs to be tested and verify output with MySQL.
-			_, _ = mcmp.ExecAllowAndCompareError(tt.dmlQuery)
+				// Run the DML query that needs to be tested and verify output with MySQL.
+				_, _ = mcmp.ExecAllowAndCompareError(tt.dmlQuery)
 
-			// Run the assertion queries and verify we get the expected outputs.
-			for _, query := range tt.assertionQueries {
-				mcmp.Exec(query)
-			}
-		})
+				// Run the assertion queries and verify we get the expected outputs.
+				for _, query := range tt.assertionQueries {
+					mcmp.Exec(query)
+				}
+			})
+		}
 	}
 
-	t.Run("Transactions with intermediate failure", func(t *testing.T) {
-		mcmp, closer := start(t)
-		defer closer()
+	for _, testSharded := range []bool{false, true} {
+		t.Run(getTestName("Transactions with intermediate failure", testSharded), func(t *testing.T) {
+			mcmp, closer := start(t)
+			defer closer()
+			// To test unsharded case in vtgate, we just change the keyspace we use for the test.
+			if !testSharded {
+				_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+			}
 
-		// Insert some rows
-		mcmp.Exec("INSERT INTO fk_t10(id, col) VALUES (1, 7), (2, 9), (3, 5)")
-		mcmp.Exec("INSERT INTO fk_t11(id, col) VALUES (1, 7), (2, 9), (3, 5)")
-		mcmp.Exec("INSERT INTO fk_t12(id, col) VALUES (1, 7), (2, 9), (3, 5)")
+			// Insert some rows
+			mcmp.Exec("INSERT INTO fk_t10(id, col) VALUES (1, 7), (2, 9), (3, 5)")
+			mcmp.Exec("INSERT INTO fk_t11(id, col) VALUES (1, 7), (2, 9), (3, 5)")
+			mcmp.Exec("INSERT INTO fk_t12(id, col) VALUES (1, 7), (2, 9), (3, 5)")
 
-		// Start a transaction
-		mcmp.Exec("BEGIN")
+			// Start a transaction
+			mcmp.Exec("BEGIN")
 
-		// Insert another row.
-		mcmp.Exec("INSERT INTO fk_t13(id, col) VALUES (1, 7)")
+			// Insert another row.
+			mcmp.Exec("INSERT INTO fk_t13(id, col) VALUES (1, 7)")
 
-		// Delete success for cascaded (2, 9)
-		mcmp.Exec("DELETE FROM fk_t10 WHERE id = 2")
+			// Delete success for cascaded (2, 9)
+			mcmp.Exec("DELETE FROM fk_t10 WHERE id = 2")
 
-		// Verify the results
-		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+			// Verify the results
+			mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
-		// Update that fails
-		_, err = mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
-		require.Error(t, err)
+			// Update that fails
+			_, err = mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
+			require.Error(t, err)
 
-		// Verify the results
-		// Since we are in a transaction, we still expect the transaction to be ongoing, with no change to the tables
-		// since the update should fail.
-		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+			// Verify the results
+			// Since we are in a transaction, we still expect the transaction to be ongoing, with no change to the tables
+			// since the update should fail.
+			mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
-		// Update that is a success
-		mcmp.Exec("UPDATE fk_t10 SET col = 15 where id = 3")
+			// Update that is a success
+			mcmp.Exec("UPDATE fk_t10 SET col = 15 where id = 3")
 
-		// Verify the results
-		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+			// Verify the results
+			mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
-		// Insert a new row
-		mcmp.Exec("INSERT INTO fk_t13(id, col) VALUES (3, 15)")
+			// Insert a new row
+			mcmp.Exec("INSERT INTO fk_t13(id, col) VALUES (3, 15)")
 
-		// Verify the results
-		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+			// Verify the results
+			mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
-		// Rollback the transaction.
-		mcmp.Exec("ROLLBACK")
+			// Rollback the transaction.
+			mcmp.Exec("ROLLBACK")
 
-		// Verify the results
-		mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
-		mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
-	})
+			// Verify the results
+			mcmp.Exec("SELECT * FROM fk_t10 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t11 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t12 ORDER BY id")
+			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
+		})
+	}
+}
+
+// getTestName prepends whether the test is for a sharded keyspace or not to the test name.
+func getTestName(testName string, testSharded bool) string {
+	if testSharded {
+		return "Sharded - " + testName
+	}
+	return "Unsharded - " + testName
 }

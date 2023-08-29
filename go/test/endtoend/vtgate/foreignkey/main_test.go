@@ -132,8 +132,12 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-		for _, table := range []string{"u_t1", "u_t2"} {
-			_ = utils.Exec(t, mcmp.VtConn, "delete from "+table)
+		tables = []string{"u_t1", "u_t2", "u_t3"}
+		for i := 20; i > 0; i-- {
+			tables = append(tables, fmt.Sprintf("fk_t%v", i))
+		}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 	}
