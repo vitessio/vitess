@@ -25,25 +25,24 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/topo"
-
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/srvtopo"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var mu sync.Mutex
@@ -749,7 +748,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "jn1"},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	wantjn1 := &binlogdata.VStreamResponse{Events: []*binlogdatapb.VEvent{
+	wantjn1 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: ks,
@@ -797,7 +796,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "jn2"},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	wantjn2 := &binlogdata.VStreamResponse{Events: []*binlogdatapb.VEvent{
+	wantjn2 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: ks,
