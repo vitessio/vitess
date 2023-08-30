@@ -125,10 +125,7 @@ func TestHavingRewrite(t *testing.T) {
 		input:  "select count(*) k from t1 having k = 10",
 		output: "select count(*) as k from t1 having count(*) = 10",
 	}, {
-		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
-		output: "select 1 from t1 where :__sq_has_values1 = 1 and x in ::__sq1",
-		sqs:    map[string]string{"__sq1": "select 1 from t2 where a = 1"},
-	}, {input: "select 1 from t1 group by a having a = 1 and count(*) > 1",
+		input:  "select 1 from t1 group by a having a = 1 and count(*) > 1",
 		output: "select 1 from t1 where a = 1 group by a having count(*) > 1",
 	}}
 	for _, tcase := range tcases {
@@ -137,14 +134,6 @@ func TestHavingRewrite(t *testing.T) {
 			err := queryRewrite(semTable, reservedVars, sel)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.output, sqlparser.String(sel))
-			squeries, found := semTable.SubqueryMap[sel]
-			if len(tcase.sqs) > 0 {
-				assert.True(t, found, "no subquery found in the query")
-				assert.Equal(t, len(tcase.sqs), len(squeries), "number of subqueries not matched")
-			}
-			for _, sq := range squeries {
-				assert.Equal(t, tcase.sqs[sq.GetArgName()], sqlparser.String(sq.Subquery.Select))
-			}
 		})
 	}
 }

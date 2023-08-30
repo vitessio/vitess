@@ -116,8 +116,6 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
 		Comments:          comments,
-		SubqueryMap:       a.binder.subqueryMap,
-		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 		Collation:         coll,
 		ExpandedColumns:   a.rewriter.expandedColumns,

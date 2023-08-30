@@ -2095,59 +2095,6 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 	panic("[BUG]: unknown type for SelectStatement")
 }
 
-// SetArgName sets argument name.
-func (es *ExtractedSubquery) SetArgName(n string) {
-	es.argName = n
-	es.updateAlternative()
-}
-
-// SetHasValuesArg sets has_values argument.
-func (es *ExtractedSubquery) SetHasValuesArg(n string) {
-	es.hasValuesArg = n
-	es.updateAlternative()
-}
-
-// GetArgName returns argument name.
-func (es *ExtractedSubquery) GetArgName() string {
-	return es.argName
-}
-
-// GetHasValuesArg returns has values argument.
-func (es *ExtractedSubquery) GetHasValuesArg() string {
-	return es.hasValuesArg
-
-}
-
-func (es *ExtractedSubquery) updateAlternative() {
-	switch original := es.Original.(type) {
-	case *ExistsExpr:
-		es.alternative = NewArgument(es.hasValuesArg)
-	case *Subquery:
-		es.alternative = NewArgument(es.argName)
-	case *ComparisonExpr:
-		// other_side = :__sq
-		cmp := &ComparisonExpr{
-			Left:     es.OtherSide,
-			Right:    NewArgument(es.argName),
-			Operator: original.Operator,
-		}
-		var expr Expr = cmp
-		switch original.Operator {
-		case InOp:
-			// :__sq_has_values = 1 and other_side in ::__sq
-			cmp.Right = NewListArg(es.argName)
-			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
-			expr = AndExpressions(hasValue, cmp)
-		case NotInOp:
-			// :__sq_has_values = 0 or other_side not in ::__sq
-			cmp.Right = NewListArg(es.argName)
-			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
-			expr = &OrExpr{hasValue, cmp}
-		}
-		es.alternative = expr
-	}
-}
-
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
 	if !ae.As.IsEmpty() {

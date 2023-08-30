@@ -145,16 +145,6 @@ func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sq
 // extractValueFromUpdate given an UpdateExpr, builds an evalengine.Expr
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
 	expr := upd.Expr
-	if sq, ok := expr.(*sqlparser.ExtractedSubquery); ok {
-		// if we are planning an update that needs one or more values from the outside, we can trust that they have
-		// been correctly extracted from this query before we reach this far
-		// if Merged is true, it means that this subquery was happily merged with the outer.
-		// But in that case we should not be here, so we fail
-		if sq.Merged {
-			return nil, invalidUpdateExpr(upd, expr)
-		}
-		expr = sqlparser.NewArgument(sq.GetArgName())
-	}
 
 	pv, err := evalengine.Translate(expr, nil)
 	if err != nil || sqlparser.IsSimpleTuple(expr) {

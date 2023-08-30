@@ -307,7 +307,6 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 			sel: node,
 		}
 
-		replaceSubQuery(ctx, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan, truncateColumns)
 		if err != nil {

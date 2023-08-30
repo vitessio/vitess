@@ -164,8 +164,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
 	case *ExtractValueExpr:
 		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
-	case *ExtractedSubquery:
-		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
 		return a.rewriteRefOfFirstOrLastValueExpr(parent, node, replacer)
 	case *Flush:
@@ -2742,48 +2740,6 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 	}
 	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
 		parent.(*ExtractValueExpr).XPathExpr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfExtractedSubquery(parent SQLNode, node *ExtractedSubquery, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Original, func(newNode, parent SQLNode) {
-		parent.(*ExtractedSubquery).Original = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*ExtractedSubquery).Subquery = newNode.(*Subquery)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.OtherSide, func(newNode, parent SQLNode) {
-		parent.(*ExtractedSubquery).OtherSide = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.alternative, func(newNode, parent SQLNode) {
-		parent.(*ExtractedSubquery).alternative = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -9422,8 +9378,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
 	case *ExtractValueExpr:
 		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
-	case *ExtractedSubquery:
-		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
 		return a.rewriteRefOfFirstOrLastValueExpr(parent, node, replacer)
 	case *FuncExpr:

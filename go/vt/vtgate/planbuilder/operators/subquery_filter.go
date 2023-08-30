@@ -209,7 +209,10 @@ func (sj *SubQueryFilter) GetJoinPredicates() []sqlparser.Expr {
 
 // GetMergePredicates returns the predicates that we can use to try to merge this subquery with the outer query.
 func (sj *SubQueryFilter) GetMergePredicates() []sqlparser.Expr {
-	return append(sj.Predicates, sj.OuterPredicate)
+	if sj.OuterPredicate != nil {
+		return append(sj.Predicates, sj.OuterPredicate)
+	}
+	return sj.Predicates
 }
 
 func (sj *SubQueryFilter) ReplaceJoinPredicates(predicates sqlparser.Exprs) {

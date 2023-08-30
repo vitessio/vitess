@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -517,94 +515,6 @@ func TestScopeForSubqueries(t *testing.T) {
 			require.NoError(t, semTable.NotSingleRouteErr)
 			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 			assert.Equal(t, tc.deps, s1)
-		})
-	}
-}
-
-func TestSubqueriesMappingWhereClause(t *testing.T) {
-	tcs := []struct {
-		sql           string
-		opCode        opcode.PulloutOpcode
-		otherSideName string
-	}{
-		{
-			sql:           "select id from t1 where id in (select uid from t2)",
-			opCode:        opcode.PulloutIn,
-			otherSideName: "id",
-		},
-		{
-			sql:           "select id from t1 where id not in (select uid from t2)",
-			opCode:        opcode.PulloutNotIn,
-			otherSideName: "id",
-		},
-		{
-			sql:           "select id from t where col1 = (select uid from t2 order by uid desc limit 1)",
-			opCode:        opcode.PulloutValue,
-			otherSideName: "col1",
-		},
-		{
-			sql:           "select id from t where exists (select uid from t2 where uid = 42)",
-			opCode:        opcode.PulloutExists,
-			otherSideName: "",
-		},
-		{
-			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
-			opCode:        opcode.PulloutValue,
-			otherSideName: "col1",
-		},
-	}
-
-	for i, tc := range tcs {
-		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
-			sel, _ := stmt.(*sqlparser.Select)
-
-			var subq *sqlparser.Subquery
-			switch whereExpr := sel.Where.Expr.(type) {
-			case *sqlparser.ComparisonExpr:
-				subq = whereExpr.Right.(*sqlparser.Subquery)
-			case *sqlparser.ExistsExpr:
-				subq = whereExpr.Subquery
-			}
-
-			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, sel.Where.Expr))
-			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
-			if tc.otherSideName == "" {
-				assert.Nil(t, extractedSubq.OtherSide)
-			} else {
-				assert.True(t, sqlparser.Equals.Expr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
-			}
-		})
-	}
-}
-
-func TestSubqueriesMappingSelectExprs(t *testing.T) {
-	tcs := []struct {
-		sql        string
-		selExprIdx int
-	}{
-		{
-			sql:        "select (select id from t1)",
-			selExprIdx: 0,
-		},
-		{
-			sql:        "select id, (select id from t1) from t1",
-			selExprIdx: 1,
-		},
-	}
-
-	for i, tc := range tcs {
-		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
-			sel, _ := stmt.(*sqlparser.Select)
-
-			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
-			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, subq))
-			assert.EqualValues(t, opcode.PulloutValue, extractedSubq.OpCode)
 		})
 	}
 }

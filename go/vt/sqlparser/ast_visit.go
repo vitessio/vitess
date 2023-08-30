@@ -164,8 +164,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractValueExpr:
 		return VisitRefOfExtractValueExpr(in, f)
-	case *ExtractedSubquery:
-		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *Flush:
@@ -1564,27 +1562,6 @@ func VisitRefOfExtractValueExpr(in *ExtractValueExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.XPathExpr, f); err != nil {
-		return err
-	}
-	return nil
-}
-func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitExpr(in.Original, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.OtherSide, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.alternative, f); err != nil {
 		return err
 	}
 	return nil
@@ -4807,8 +4784,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractValueExpr:
 		return VisitRefOfExtractValueExpr(in, f)
-	case *ExtractedSubquery:
-		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:

@@ -109,11 +109,6 @@ type (
 		// It doesn't recurse inside derived tables to find the original dependencies.
 		Direct ExprDependencies
 
-		// SubqueryMap holds extracted subqueries for each statement.
-		SubqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-		// SubqueryRef maps subquery pointers to their extracted subquery.
-		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
-
 		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
@@ -368,13 +363,6 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 			return true, nil
 		}
 
-		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
-			if extracted.OtherSide != nil {
-				set := d.dependencies(extracted.OtherSide)
-				deps = deps.Merge(set)
-			}
-			return false, nil
-		}
 		set, found := d[expr]
 		deps = deps.Merge(set)
 
@@ -407,30 +395,6 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.
 		cursor.Replace(&col)
 
 	}, nil).(sqlparser.Expr)
-}
-
-// FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
-func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
-	for foundSubq, extractedSubquery := range st.SubqueryRef {
-		if sqlparser.Equals.RefOfSubquery(subquery, foundSubq) {
-			return extractedSubquery
-		}
-	}
-	return nil
-}
-
-// GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
-func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
-	if st == nil {
-		return nil
-	}
-	var res []*sqlparser.ExtractedSubquery
-	for _, extractedSubquery := range st.SubqueryRef {
-		if extractedSubquery.Merged {
-			res = append(res, extractedSubquery)
-		}
-	}
-	return res
 }
 
 // CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign

@@ -18,7 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -78,27 +78,6 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		node.Expr = tableName
 	}
 	return true
-}
-
-func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
-	semTableSQ, err := r.getSubQueryRef(node.Subquery)
-	if err != nil {
-		return err
-	}
-
-	r.inSubquery++
-	hasValuesArg := r.reservedVars.ReserveHasValuesSubQuery()
-	semTableSQ.SetHasValuesArg(hasValuesArg)
-	cursor.Replace(semTableSQ)
-	return nil
-}
-
-func (r *rewriter) getSubQueryRef(sq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
-	semTableSQ, found := r.semTable.SubqueryRef[sq]
-	if !found {
-		return nil, vterrors.VT13001("got subquery that was not in the subq map")
-	}
-	return semTableSQ, nil
 }
 
 func rewriteHavingClause(node *sqlparser.Select) {

@@ -75,19 +75,6 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	}, nil
 }
 
-func (c *PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
-	ext, ok := e.(*sqlparser.Subquery)
-	if !ok {
-		return false
-	}
-	for _, extractedSubq := range c.SemTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.Merged && c.SemTable.EqualsExpr(extractedSubq.Subquery, ext) {
-			return true
-		}
-	}
-	return false
-}
-
 func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string) string {
 	for key, name := range ctx.ReservedArguments {
 		if ctx.SemTable.EqualsExpr(key, expr) {

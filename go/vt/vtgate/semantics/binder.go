@@ -27,14 +27,12 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	recursive   ExprDependencies
-	direct      ExprDependencies
-	scoper      *scoper
-	tc          *tableCollector
-	org         originable
-	typer       *typer
-	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+	recursive ExprDependencies
+	direct    ExprDependencies
+	scoper    *scoper
+	tc        *tableCollector
+	org       originable
+	typer     *typer
 
 	// every table will have an entry in the outer map. it will point to a map with all the columns
 	// that this map is joined with using USING.
@@ -50,8 +48,6 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		org:           org,
 		tc:            tc,
 		typer:         typer,
-		subqueryMap:   map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
-		subqueryRef:   map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
 		usingJoinInfo: map[TableSet]map[string]TableSet{},
 	}
 }

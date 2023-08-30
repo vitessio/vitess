@@ -336,7 +336,6 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon) (
 			sel: node,
 		}
 
-		replaceSubQuery(ctx, node)
 		plan, err := hp.planHorizon(ctx, source, true)
 		if err != nil {
 			return nil, err
@@ -429,12 +428,12 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
 	}
-	condition := getVindexPredicate(ctx, op)
+	condition := getVindexPredicate(op)
 	sel, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
-	replaceSubQuery(ctx, sel)
+
 	eroute, err := routeToEngineRoute(ctx, op)
 	for _, order := range op.Ordering {
 		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
@@ -563,7 +562,6 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
 	ast := upd.AST
-	replaceSubQuery(ctx, ast)
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	err := op.Routing.UpdateRoutingParams(ctx, rp)
 	if err != nil {
@@ -589,7 +587,6 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 
 func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
 	ast := del.AST
-	replaceSubQuery(ctx, ast)
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	err := op.Routing.UpdateRoutingParams(ctx, rp)
 	if err != nil {
@@ -620,21 +617,7 @@ func transformDMLPlan(vtable *vindexes.Table, edml *engine.DML, routing operator
 	}
 }
 
-func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) {
-	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
-	if len(extractedSubqueries) == 0 {
-		return
-	}
-	sqr := &subQReplacer{subqueryToReplace: extractedSubqueries}
-	sqlparser.SafeRewrite(sel, nil, sqr.replacer)
-	for sqr.replaced {
-		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
-		sqr.replaced = false
-		sqlparser.SafeRewrite(sel, nil, sqr.replacer)
-	}
-}
-
-func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) sqlparser.Expr {
+func getVindexPredicate(op *operators.Route) sqlparser.Expr {
 	tr, ok := op.Routing.(*operators.ShardedRouting)
 	if !ok || tr.Selected == nil {
 		return nil
@@ -661,12 +644,6 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 			argName = engine.ListVarName
 		}
 
-		if subq, isSubq := cmp.Right.(*sqlparser.Subquery); isSubq {
-			extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
-			if extractedSubquery != nil {
-				extractedSubquery.SetArgName(argName)
-			}
-		}
 		cmp.Right = sqlparser.ListArg(argName)
 	}
 	return condition
@@ -773,25 +750,4 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 	}
 
 	return createLimit(plan, op.AST)
-}
-
-type subQReplacer struct {
-	subqueryToReplace []*sqlparser.ExtractedSubquery
-	replaced          bool
-}
-
-func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
-	ext, ok := cursor.Node().(*sqlparser.ExtractedSubquery)
-	if !ok {
-		return true
-	}
-	for _, replaceByExpr := range sqr.subqueryToReplace {
-		// we are comparing the ArgNames in case the expressions have been cloned
-		if ext.GetArgName() == replaceByExpr.GetArgName() {
-			cursor.Replace(ext.Original)
-			sqr.replaced = true
-			return true
-		}
-	}
-	return true
 }
