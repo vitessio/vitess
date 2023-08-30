@@ -162,12 +162,6 @@ var regexMatchStrings = []string{
 	"'c'", "'i'", "'m'", "'n'", "'u'", "'cimnu'", "'cimnuunmic'",
 }
 
-var regexCounters = []string{
-	"NULL",
-	"0", "1", "5", "100000",
-	"'2'", "0.4", "0.5", "0x1",
-}
-
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"
 
 var inputStrings = []string{

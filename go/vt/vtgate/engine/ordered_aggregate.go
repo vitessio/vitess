@@ -80,8 +80,7 @@ func (gbp GroupByParams) String() string {
 	}
 
 	if sqltypes.IsText(gbp.Type) && gbp.CollationID != collations.Unknown {
-		collation := gbp.CollationID.Get()
-		out += " COLLATE " + collation.Name()
+		out += " COLLATE " + collations.Local().LookupName(gbp.CollationID)
 	}
 
 	return out

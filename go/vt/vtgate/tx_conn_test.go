@@ -43,7 +43,9 @@ var queries = []*querypb.BoundQuery{{Sql: "query1"}}
 var twoQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
 
 func TestTxConnBegin(t *testing.T) {
-	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	session := &vtgatepb.Session{}
 
 	// begin
@@ -63,7 +65,9 @@ func TestTxConnBegin(t *testing.T) {
 }
 
 func TestTxConnCommitFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -120,7 +124,9 @@ func TestTxConnCommitFailure(t *testing.T) {
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -171,7 +177,9 @@ func TestTxConnCommitSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -253,8 +261,10 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "TestTxConn"
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, keyspace)
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, keyspace)
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure shard session order
@@ -346,8 +356,10 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 }
 
 func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "TestTxConn"
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, keyspace)
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, keyspace)
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure shard session order
@@ -439,7 +451,9 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure1(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
@@ -470,7 +484,9 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure2(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -502,7 +518,9 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -542,7 +560,9 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 }
 
 func TestTxConnCommitOrderSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -638,7 +658,9 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -779,7 +801,9 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnCommit2PC(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PC")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PC")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -795,7 +819,9 @@ func TestTxConnCommit2PC(t *testing.T) {
 }
 
 func TestTxConnCommit2PCOneParticipant(t *testing.T) {
-	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCOneParticipant")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -805,7 +831,9 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCCreateTransactionFail")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCCreateTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -827,7 +855,9 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCPrepareFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCPrepareFail")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCPrepareFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -847,7 +877,9 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCStartCommitFail")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCStartCommitFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -867,7 +899,9 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCCommitPreparedFail")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCCommitPreparedFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -887,7 +921,9 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCConcludeTransactionFail")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCConcludeTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -907,7 +943,9 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 }
 
 func TestTxConnRollback(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnRollback")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TxConnRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -921,7 +959,9 @@ func TestTxConnRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollback(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -956,7 +996,9 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, ctx, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
@@ -985,7 +1027,9 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 }
 
 func TestTxConnResolveOnPrepare(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1006,7 +1050,9 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 }
 
 func TestTxConnResolveOnRollback(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1027,7 +1073,9 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 }
 
 func TestTxConnResolveOnCommit(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1048,7 +1096,9 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 }
 
 func TestTxConnResolveInvalidDTID(t *testing.T) {
-	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, _, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	err := sc.txConn.Resolve(ctx, "abcd")
 	want := "invalid parts in dtid: abcd"
@@ -1056,7 +1106,9 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 }
 
 func TestTxConnResolveReadTransactionFail(t *testing.T) {
-	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -1067,7 +1119,9 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 }
 
 func TestTxConnResolveInternalError(t *testing.T) {
-	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1086,7 +1140,9 @@ func TestTxConnResolveInternalError(t *testing.T) {
 }
 
 func TestTxConnResolveSetRollbackFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1110,7 +1166,9 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 }
 
 func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1134,7 +1192,9 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveCommitPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1158,7 +1218,9 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1182,6 +1244,8 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 }
 
 func TestTxConnMultiGoSessions(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	txc := &TxConn{}
 
 	input := []*vtgatepb.Session_ShardSession{{
@@ -1249,7 +1313,9 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 }
 
 func TestTxConnAccessModeReset(t *testing.T) {
-	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	ctx := utils.LeakCheckContext(t)
+
+	sc, _, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
 	tcases := []struct {
 		name string
@@ -1290,14 +1356,14 @@ func TestTxConnAccessModeReset(t *testing.T) {
 	}
 }
 
-func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
+func newTestTxConnEnv(t *testing.T, ctx context.Context, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 	var err error
 	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)

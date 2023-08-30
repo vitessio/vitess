@@ -208,8 +208,10 @@ func TestStripConstraints(t *testing.T) {
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
 	srcks := "source"
 	ws := &Server{
 		ts: ts,
@@ -417,6 +419,8 @@ func TestAddTablesToVSchema(t *testing.T) {
 }
 
 func TestMigrateVSchema(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		Cell:           "cell",
@@ -427,7 +431,7 @@ func TestMigrateVSchema(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -438,7 +442,6 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
-	ctx := context.Background()
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,
 		Cells:          []string{ms.Cell},
@@ -468,7 +471,6 @@ func TestMigrateVSchema(t *testing.T) {
 //   - TestPlayerDDL tests that the vplayer correctly implements the ddl behavior
 //   - We have a manual e2e test for the full behavior: TestVReplicationDDLHandling
 func TestMoveTablesDDLFlag(t *testing.T) {
-	ctx := context.Background()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -481,7 +483,9 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			// This is the default and go does not marshal defaults
 			// for prototext fields so we use the default insert stmt.

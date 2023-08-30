@@ -92,23 +92,6 @@ func newQueryGraph() *QueryGraph {
 	return &QueryGraph{}
 }
 
-func (qg *QueryGraph) collectPredicates(ctx *plancontext.PlanningContext, sel *sqlparser.Select) error {
-	predicates := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-
-	for _, predicate := range predicates {
-		qg.collectPredicate(ctx, predicate)
-	}
-	return nil
-}
-
-func (qg *QueryGraph) getPredicateByDeps(ts semantics.TableSet) ([]sqlparser.Expr, bool) {
-	for _, join := range qg.innerJoins {
-		if join.deps == ts {
-			return join.exprs, true
-		}
-	}
-	return nil, false
-}
 func (qg *QueryGraph) addJoinPredicates(ctx *plancontext.PlanningContext, ts semantics.TableSet, predicate sqlparser.Expr) {
 	for _, join := range qg.innerJoins {
 		if join.deps == ts {

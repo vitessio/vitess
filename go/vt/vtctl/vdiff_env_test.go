@@ -69,11 +69,11 @@ type testVDiffEnv struct {
 //----------------------------------------------
 // testVDiffEnv
 
-func newTestVDiffEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
+func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
 	env := &testVDiffEnv{
 		workflow:   "vdiffTest",
 		tablets:    make(map[int]*testVDiffTablet),
-		topoServ:   memorytopo.NewServer("cell"),
+		topoServ:   memorytopo.NewServer(ctx, "cell"),
 		cell:       "cell",
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVDiffTMClient(),

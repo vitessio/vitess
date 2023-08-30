@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,8 +26,8 @@ import (
 )
 
 func BenchmarkVisitLargeExpression(b *testing.B) {
-	gen := NewGenerator(1, 5)
-	exp := gen.Expression()
+	gen := NewGenerator(rand.New(rand.NewSource(1)), 5)
+	exp := gen.Expression(ExprGeneratorConfig{})
 
 	depth := 0
 	for i := 0; i < b.N; i++ {

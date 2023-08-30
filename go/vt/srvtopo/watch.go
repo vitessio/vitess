@@ -33,6 +33,7 @@ const (
 	watchStateIdle watchState = iota
 	watchStateStarting
 	watchStateRunning
+	watchStateStopped
 )
 
 type watchEntry struct {
@@ -100,7 +101,10 @@ func (entry *watchEntry) addListener(ctx context.Context, callback func(any, err
 	callback(v, err)
 }
 
-func (entry *watchEntry) ensureWatchingLocked() {
+func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
 	switch entry.watchState {
 	case watchStateRunning, watchStateStarting:
 	case watchStateIdle:
@@ -121,7 +125,7 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 		return entry.value, entry.lastError
 	}
 
-	entry.ensureWatchingLocked()
+	entry.ensureWatchingLocked(ctx)
 
 	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < entry.rw.cacheTTL
 	if cacheValid {
@@ -146,12 +150,12 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 	return nil, entry.lastError
 }
 
-func (entry *watchEntry) update(value any, err error, init bool) {
+func (entry *watchEntry) update(ctx context.Context, value any, err error, init bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
 	if err != nil {
-		entry.onErrorLocked(err, init)
+		entry.onErrorLocked(ctx, err, init)
 	} else {
 		entry.onValueLocked(value)
 	}
@@ -179,7 +183,7 @@ func (entry *watchEntry) onValueLocked(value any) {
 	entry.lastErrorTime = time.Time{}
 }
 
-func (entry *watchEntry) onErrorLocked(err error, init bool) {
+func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool) {
 	entry.rw.counts.Add(errorCategory, 1)
 
 	entry.lastErrorTime = time.Now()
@@ -217,12 +221,13 @@ func (entry *watchEntry) onErrorLocked(err error, init bool) {
 	entry.watchState = watchStateIdle
 
 	// only retry the watch if we haven't been explicitly interrupted
+
 	if len(entry.listeners) > 0 && !topo.IsErrType(err, topo.Interrupted) {
 		go func() {
 			time.Sleep(entry.rw.cacheRefreshInterval)
 
 			entry.mutex.Lock()
-			entry.ensureWatchingLocked()
+			entry.ensureWatchingLocked(ctx)
 			entry.mutex.Unlock()
 		}()
 	}

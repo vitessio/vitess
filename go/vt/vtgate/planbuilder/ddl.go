@@ -20,18 +20,6 @@ const (
 	DifferentDestinations string = "Tables or Views specified in the query do not belong to the same destination"
 )
 
-type fkStrategy int
-
-const (
-	fkAllow fkStrategy = iota
-	fkDisallow
-)
-
-var fkStrategyMap = map[string]fkStrategy{
-	"allow":    fkAllow,
-	"disallow": fkDisallow,
-}
-
 type fkContraint struct {
 	found bool
 }

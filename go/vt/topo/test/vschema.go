@@ -17,9 +17,8 @@ limitations under the License.
 package test
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -31,8 +30,7 @@ import (
 )
 
 // checkVSchema runs the tests on the VSchema part of the API
-func checkVSchema(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkVSchema(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -92,9 +90,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 }
 
 // checkRoutingRules runs the tests on the routing rules part of the API
-func checkRoutingRules(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
-
+func checkRoutingRules(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if _, err := ts.GetRoutingRules(ctx); err != nil {
 		t.Fatal(err)
 	}

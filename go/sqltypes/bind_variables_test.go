@@ -18,7 +18,6 @@ package sqltypes
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -30,16 +29,83 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// TestProtoConversions checks coverting to and fro between querypb.Value and sqltypes.Value.
 func TestProtoConversions(t *testing.T) {
-	v := TestValue(Int64, "1")
-	got := ValueToProto(v)
-	want := &querypb.Value{Type: Int64, Value: []byte("1")}
-	if !proto.Equal(got, want) {
-		t.Errorf("ValueToProto: %v, want %v", got, want)
+	tcases := []struct {
+		name     string
+		val      Value
+		protoVal *querypb.Value
+	}{
+		{
+			name:     "integer value",
+			val:      TestValue(Int64, "1"),
+			protoVal: &querypb.Value{Type: Int64, Value: []byte("1")},
+		}, {
+			name: "tuple value",
+			val: Value{
+				typ: Tuple,
+				values: []Value{
+					TestValue(VarChar, "1"),
+					TestValue(Int64, "3"),
+				},
+			},
+			protoVal: &querypb.Value{
+				Type: Tuple,
+				Values: []*querypb.Value{
+					{
+						Type:  VarChar,
+						Value: []byte("1"),
+					}, {
+						Type:  Int64,
+						Value: []byte("3"),
+					},
+				},
+			},
+		}, {
+			name: "tuple of tuple as a value",
+			val: Value{
+				typ: Tuple,
+				values: []Value{
+					{
+						typ: Tuple,
+						values: []Value{
+							TestValue(VarChar, "1"),
+							TestValue(Int64, "3"),
+						},
+					},
+					TestValue(Int64, "5"),
+				},
+			},
+			protoVal: &querypb.Value{
+				Type: Tuple,
+				Values: []*querypb.Value{
+					{
+						Type: Tuple,
+						Values: []*querypb.Value{
+							{
+								Type:  VarChar,
+								Value: []byte("1"),
+							}, {
+								Type:  Int64,
+								Value: []byte("3"),
+							},
+						},
+					}, {
+						Type:  Int64,
+						Value: []byte("5"),
+					},
+				},
+			},
+		},
 	}
-	gotback := ProtoToValue(got)
-	if !reflect.DeepEqual(gotback, v) {
-		t.Errorf("ProtoToValue: %v, want %v", gotback, v)
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			got := ValueToProto(tcase.val)
+			require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
+			gotback := ProtoToValue(got)
+			require.EqualValues(t, tcase.val, gotback)
+		})
 	}
 }
 

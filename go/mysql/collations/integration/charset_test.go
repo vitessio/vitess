@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/remote"
@@ -45,7 +47,7 @@ func TestLocalEncodings(t *testing.T) {
 	for _, tc := range cases {
 		local := collations.Local().LookupByName(tc.collation)
 		remote := remote.NewCollation(conn, tc.collation)
-		verifyTranscoding(t, local, remote, tc.input)
+		verifyTranscoding(t, colldata.Lookup(local), remote, tc.input)
 	}
 }
 

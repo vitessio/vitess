@@ -14,23 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package colldata
 
 import (
 	"math"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Collation_multibyte struct {
-	id      ID
+	id      collations.ID
 	name    string
 	sort    *[256]byte
 	charset charset.Charset
 }
 
-func (c *Collation_multibyte) ID() ID {
+func (c *Collation_multibyte) ID() collations.ID {
 	return c.id
 }
 
@@ -51,7 +52,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 		return collationBinary(left, right, isPrefix)
 	}
 
-	cmpLen := minInt(len(left), len(right))
+	cmpLen := min(len(left), len(right))
 	cs := c.charset
 	sortOrder := c.sort
 	for i := 0; i < cmpLen; i++ {
@@ -62,7 +63,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 			}
 			_, widthL := cs.DecodeRune(left[i:])
 			_, widthR := cs.DecodeRune(right[i:])
-			switch minInt(widthL, widthR) {
+			switch min(widthL, widthR) {
 			case 4:
 				i++
 				if left[i] != right[i] {

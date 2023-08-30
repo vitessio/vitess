@@ -60,5 +60,10 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
-    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor -t $image --build-arg bootstrap_version=$version --build-arg image=$base_image .
+    docker build \
+      -f docker/bootstrap/Dockerfile.$flavor \
+      -t $image \
+      --build-arg bootstrap_version=$version \
+      --build-arg image=$base_image \
+      .
 fi

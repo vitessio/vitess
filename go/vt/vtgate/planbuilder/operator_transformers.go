@@ -37,7 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, isRoot bool) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -54,7 +54,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
-		return transformHorizon(ctx, op, isRoot)
+		return transformHorizon(ctx, op)
 	case *operators.Projection:
 		return transformProjection(ctx, op)
 	case *operators.Limit:
@@ -65,13 +65,53 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformAggregator(ctx, op)
 	case *operators.Distinct:
 		return transformDistinct(ctx, op)
+	case *operators.FkCascade:
+		return transformFkCascade(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
+// transformFkCascade transforms a FkCascade operator into a logical plan.
+func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCascade) (logicalPlan, error) {
+	// We convert the parent operator to a logical plan.
+	parentLP, err := transformToLogicalPlan(ctx, fkc.Parent)
+	if err != nil {
+		return nil, nil
+	}
+
+	// Once we have the parent logical plan, we can create the selection logical plan and the primitives for the children operators.
+	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
+	ctx.SemTable = nil
+	selLP, err := transformToLogicalPlan(ctx, fkc.Selection)
+	if err != nil {
+		return nil, err
+	}
+
+	// Go over the children and convert them to Primitives too.
+	var children []*engine.FkChild
+	for _, child := range fkc.Children {
+		childLP, err := transformToLogicalPlan(ctx, child.Op)
+		if err != nil {
+			return nil, err
+		}
+		err = childLP.Wireup(ctx)
+		if err != nil {
+			return nil, err
+		}
+		childEngine := childLP.Primitive()
+		children = append(children, &engine.FkChild{
+			BVName: child.BVName,
+			Cols:   child.Cols,
+			Exec:   childEngine,
+		})
+	}
+
+	return newFkCascade(parentLP, selLP, children), nil
+}
+
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +151,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 }
 
 func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
-	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	src, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +159,7 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +192,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 }
 
 func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
-	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	src, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +272,7 @@ func elementsMatchIndices(in []int) bool {
 }
 
 func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -262,11 +302,11 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 	}, nil
 }
 
-func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
+func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon) (logicalPlan, error) {
 	if op.IsDerived() {
 		return transformDerivedPlan(ctx, op)
 	}
-	source, err := transformToLogicalPlan(ctx, op.Source, isRoot)
+	source, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -305,11 +345,11 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
-	lhs, err := transformToLogicalPlan(ctx, n.LHS, false)
+	lhs, err := transformToLogicalPlan(ctx, n.LHS)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToLogicalPlan(ctx, n.RHS, false)
+	rhs, err := transformToLogicalPlan(ctx, n.RHS)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +461,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	if ins.Input == nil {
 		eins.Query = generateQuery(ins.AST)
 	} else {
-		i.source, err = transformToLogicalPlan(ctx, ins.Input, true)
+		i.source, err = transformToLogicalPlan(ctx, ins.Input)
 		if err != nil {
 			return
 		}
@@ -640,7 +680,7 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (logicalPlan, error) {
 	sources, err := slice.MapWithError(op.Sources, func(src ops.Operator) (logicalPlan, error) {
-		plan, err := transformToLogicalPlan(ctx, src, false)
+		plan, err := transformToLogicalPlan(ctx, src)
 		if err != nil {
 			return nil, err
 		}
@@ -667,7 +707,7 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizo
 	// expression containing our derived table's inner select and the derived
 	// table's alias.
 
-	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -707,7 +747,7 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizo
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}

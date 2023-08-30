@@ -20,6 +20,7 @@ import (
 	"bytes"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -41,7 +42,7 @@ type (
 	LikeExpr struct {
 		BinaryExpr
 		Negate         bool
-		Match          collations.WildcardPattern
+		Match          colldata.WildcardPattern
 		MatchCollation collations.ID
 	}
 
@@ -569,7 +570,7 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	if l.Match != nil && l.MatchCollation == coll {
 		return l.Match.Match(left)
 	}
-	fullColl := coll.Get()
+	fullColl := colldata.Lookup(coll)
 	wc := fullColl.Wildcard(right, 0, 0, 0)
 	return wc.Match(left)
 }
@@ -639,12 +640,12 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	var merged collations.TypedCollation
-	var coerceLeft collations.Coercion
-	var coerceRight collations.Coercion
+	var coerceLeft colldata.Coercion
+	var coerceRight colldata.Coercion
 	var env = collations.Local()
 
 	if lt.Col.Collation != rt.Col.Collation {
-		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
+		merged, coerceLeft, coerceRight, err = colldata.Merge(env, lt.Col, rt.Col, colldata.CoercionOptions{
 			ConvertToSuperset:   true,
 			ConvertWithCoercion: true,
 		})
@@ -656,7 +657,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	if coerceLeft == nil && coerceRight == nil {
-		c.asm.Like_collate(expr, merged.Collation.Get())
+		c.asm.Like_collate(expr, colldata.Lookup(merged.Collation))
 	} else {
 		if coerceLeft == nil {
 			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
@@ -665,7 +666,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
 		}
 		c.asm.Like_coerce(expr, &compiledCoercion{
-			col:   merged.Collation.Get(),
+			col:   colldata.Lookup(merged.Collation),
 			left:  coerceLeft,
 			right: coerceRight,
 		})

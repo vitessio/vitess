@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -83,9 +85,12 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 }
 
 func TestTabletGatewayShuffleTablets(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &fakeTopoServer{}
-	tg := NewTabletGateway(context.Background(), hc, ts, "local")
+	tg := NewTabletGateway(ctx, hc, ts, "local")
+	defer tg.Close(ctx)
 
 	ts1 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell1", "host1"),
@@ -142,6 +147,8 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 }
 
 func TestTabletGatewayReplicaTransactionError(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "ks"
 	shard := "0"
 	// transactions on REPLICA are not allowed from tabletgateway
@@ -156,7 +163,8 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &fakeTopoServer{}
-	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
 
 	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	_, err := tg.Execute(context.Background(), target, "query", nil, 1, 0, nil)
@@ -165,6 +173,8 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 
 func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *querypb.Target) error) {
 	t.Helper()
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -177,7 +187,8 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &fakeTopoServer{}
-	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
 
 	// no tablet
 	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
@@ -231,6 +242,8 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 
 func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *querypb.Target) error) {
 	t.Helper()
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "ks"
 	shard := "0"
 	// test with PRIMARY because replica transactions don't use gateway's queryservice
@@ -245,7 +258,8 @@ func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *q
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &fakeTopoServer{}
-	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
 
 	// retry error - no retry
 	sc1 := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)

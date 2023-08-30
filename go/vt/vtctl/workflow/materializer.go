@@ -71,11 +71,6 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 	if err != nil {
 		return err
 	}
-	if mz.isPartial {
-		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
-			return err
-		}
-	}
 	if err := mz.deploySchema(); err != nil {
 		return err
 	}

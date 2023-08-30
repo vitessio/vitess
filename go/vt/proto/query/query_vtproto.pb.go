@@ -213,6 +213,18 @@ func (m *Value) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Values) > 0 {
+		for iNdEx := len(m.Values) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Values[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
 	if len(m.Value) > 0 {
 		i -= len(m.Value)
 		copy(dAtA[i:], m.Value)
@@ -4339,6 +4351,12 @@ func (m *Value) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if len(m.Values) > 0 {
+		for _, e := range m.Values {
+			l = e.SizeVT()
+			n += 1 + l + sov(uint64(l))
+		}
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -6377,6 +6395,40 @@ func (m *Value) UnmarshalVT(dAtA []byte) error {
 			m.Value = append(m.Value[:0], dAtA[iNdEx:postIndex]...)
 			if m.Value == nil {
 				m.Value = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Values", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Values = append(m.Values, &Value{})
+			if err := m.Values[len(m.Values)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:

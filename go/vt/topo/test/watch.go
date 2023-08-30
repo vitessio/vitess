@@ -114,8 +114,8 @@ func waitForInitialValueRecursive(t *testing.T, conn topo.Conn, srvKeyspace *top
 
 // checkWatch runs the tests on the Watch part of the Conn API.
 // We use a SrvKeyspace object.
-func checkWatch(t *testing.T, ts *topo.Server) {
-	ctx, cancel := context.WithCancel(context.Background())
+func checkWatch(t *testing.T, ctx context.Context, ts *topo.Server) {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	conn, err := ts.ConnForCell(ctx, LocalCellName)
 	if err != nil {
@@ -227,8 +227,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 }
 
 // checkWatchInterrupt tests we can interrupt a watch.
-func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkWatchInterrupt(t *testing.T, ctx context.Context, ts *topo.Server) {
 	conn, err := ts.ConnForCell(ctx, LocalCellName)
 	if err != nil {
 		t.Fatalf("ConnForCell(test) failed: %v", err)
@@ -298,8 +297,8 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 }
 
 // checkWatchRecursive tests we can setup a recursive watch
-func checkWatchRecursive(t *testing.T, ts *topo.Server) {
-	ctx, cancel := context.WithCancel(context.Background())
+func checkWatchRecursive(t *testing.T, ctx context.Context, ts *topo.Server) {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	conn, err := ts.ConnForCell(ctx, LocalCellName)
 	if err != nil {

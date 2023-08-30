@@ -601,31 +601,6 @@ func (node *ColName) Equal(c *ColName) bool {
 	return node.Name.Equal(c.Name) && node.Qualifier == c.Qualifier
 }
 
-// Aggregates is a map of all aggregate functions.
-var Aggregates = map[string]bool{
-	"avg":          true,
-	"bit_and":      true,
-	"bit_or":       true,
-	"bit_xor":      true,
-	"count":        true,
-	"group_concat": true,
-	"max":          true,
-	"min":          true,
-	"std":          true,
-	"stddev_pop":   true,
-	"stddev_samp":  true,
-	"stddev":       true,
-	"sum":          true,
-	"var_pop":      true,
-	"var_samp":     true,
-	"variance":     true,
-}
-
-// IsAggregate returns true if the function is an aggregate.
-func (node *FuncExpr) IsAggregate() bool {
-	return Aggregates[node.Name.Lowered()]
-}
-
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
 	return IdentifierCI{
@@ -666,6 +641,19 @@ func NewTableNameWithQualifier(name, qualifier string) TableName {
 	}
 }
 
+// NewSubquery makes a new Subquery
+func NewSubquery(selectStatement SelectStatement) *Subquery {
+	return &Subquery{Select: selectStatement}
+}
+
+// NewDerivedTable makes a new DerivedTable
+func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+	return &DerivedTable{
+		Lateral: lateral,
+		Select:  selectStatement,
+	}
+}
+
 // NewAliasedTableExpr makes a new AliasedTableExpr with an alias
 func NewAliasedTableExpr(simpleTableExpr SimpleTableExpr, alias string) *AliasedTableExpr {
 	return &AliasedTableExpr{
@@ -700,12 +688,21 @@ func NewAliasedExpr(expr Expr, alias string) *AliasedExpr {
 	}
 }
 
+func (ae *AliasedExpr) SetAlias(alias string) {
+	ae.As = NewIdentifierCI(alias)
+}
+
 // NewOrder makes a new Order
 func NewOrder(expr Expr, direction OrderDirection) *Order {
 	return &Order{
 		Expr:      expr,
 		Direction: direction,
 	}
+}
+
+// NewNotExpr makes a new NotExpr
+func NewNotExpr(expr Expr) *NotExpr {
+	return &NotExpr{Expr: expr}
 }
 
 // NewComparisonExpr makes a new ComparisonExpr
@@ -716,6 +713,11 @@ func NewComparisonExpr(operator ComparisonExprOperator, left, right, escape Expr
 		Right:    right,
 		Escape:   escape,
 	}
+}
+
+// NewExistsExpr makes a new ExistsExpr
+func NewExistsExpr(subquery *Subquery) *ExistsExpr {
+	return &ExistsExpr{Subquery: subquery}
 }
 
 // NewCaseExpr makes a new CaseExpr
@@ -749,14 +751,6 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 			Type: IntVal,
 			Val:  fmt.Sprint(rowCount),
 		},
-	}
-}
-
-// NewDerivedTable makes a new DerivedTable
-func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
-	return &DerivedTable{
-		Lateral: lateral,
-		Select:  selectStatement,
 	}
 }
 
@@ -2002,17 +1996,6 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
-// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
-func isExprAliasForCurrentTimeStamp(expr Expr) bool {
-	switch node := expr.(type) {
-	case *FuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	case *CurTimeFuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	}
-	return false
-}
-
 // AtCount represents the '@' count in IdentifierCI
 type AtCount int
 
@@ -2175,19 +2158,6 @@ func (s SelectExprs) AllAggregation() bool {
 		}
 	}
 	return true
-}
-
-func isExprLiteral(expr Expr) bool {
-	switch expr := expr.(type) {
-	case *Literal:
-		return true
-	case BoolVal:
-		return true
-	case *UnaryExpr:
-		return isExprLiteral(expr.Expr)
-	default:
-		return false
-	}
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree

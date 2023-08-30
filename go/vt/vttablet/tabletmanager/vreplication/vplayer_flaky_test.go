@@ -202,6 +202,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}()
 
 	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
 
 	type testcount struct {

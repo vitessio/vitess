@@ -693,13 +693,6 @@ func RescalePair(d1 Decimal, d2 Decimal) (Decimal, Decimal) {
 	return d1, d2.rescale(baseScale)
 }
 
-func min(x, y int32) int32 {
-	if x >= y {
-		return y
-	}
-	return x
-}
-
 // largestForm returns the largest decimal that can be represented
 // with the given amount of integral and fractional digits
 // Example:

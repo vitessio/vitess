@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -139,7 +140,7 @@ func evalCollation(e eval) collations.TypedCollation {
 	}
 }
 
-func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, collations.Coercion, collations.Coercion, error) {
+func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, colldata.Coercion, colldata.Coercion, error) {
 	if c1.Collation == c2.Collation {
 		return c1, nil, nil, nil
 	}
@@ -157,7 +158,7 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (co
 	}
 
 	env := collations.Local()
-	return env.MergeCollations(c1, c2, collations.CoercionOptions{
+	return colldata.Merge(env, c1, c2, colldata.CoercionOptions{
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
@@ -202,7 +203,7 @@ func (ca *collationAggregation) add(env *collations.Environment, tc collations.T
 		ca.cur = tc
 	} else {
 		var err error
-		ca.cur, _, _, err = env.MergeCollations(ca.cur, tc, collations.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
+		ca.cur, _, _, err = colldata.Merge(env, ca.cur, tc, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
 		if err != nil {
 			return err
 		}

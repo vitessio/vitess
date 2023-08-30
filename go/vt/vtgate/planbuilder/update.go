@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -37,45 +38,39 @@ func gen4UpdateStmtPlanner(
 		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err := semantics.Analyze(updStmt, ksName, vschema)
+	ctx, err := plancontext.CreatePlanningContext(updStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
 
 	err = rewriteRoutedTables(updStmt, vschema)
 	if err != nil {
 		return nil, err
 	}
 
-	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan := updateUnshardedShortcut(updStmt, ks, tables)
-		plan = pushCommentDirectivesOnPlan(plan, updStmt)
-		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+		if fkManagementNotRequiredForUpdate(ctx.SemTable, vschema, tables, updStmt.Exprs) {
+			plan := updateUnshardedShortcut(updStmt, ks, tables)
+			plan = pushCommentDirectivesOnPlan(plan, updStmt)
+			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		}
 	}
 
-	if semTable.NotUnshardedErr != nil {
-		return nil, semTable.NotUnshardedErr
+	if ctx.SemTable.NotUnshardedErr != nil {
+		return nil, ctx.SemTable.NotUnshardedErr
 	}
 
-	err = queryRewrite(semTable, reservedVars, updStmt)
+	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +84,59 @@ func gen4UpdateStmtPlanner(
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+// TODO: Handle all this in semantic analysis.
+func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plancontext.VSchema, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
+	childFkMap := make(map[string][]vindexes.ChildFKInfo)
+
+	// Find the foreign key mode and check for any managed child foreign keys.
+	for _, vTable := range vTables {
+		ksMode, err := vschema.ForeignKeyMode(vTable.Keyspace.Name)
+		if err != nil {
+			return false
+		}
+		if ksMode != vschemapb.Keyspace_FK_MANAGED {
+			continue
+		}
+		childFks := vTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
+		if len(childFks) > 0 {
+			childFkMap[vTable.String()] = childFks
+		}
+	}
+
+	getFKInfo := func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+		tblInfo, err := semTable.TableInfoForExpr(expr.Name)
+		if err != nil {
+			return nil, nil
+		}
+		vTable := tblInfo.GetVindexTable()
+		return vTable.ParentForeignKeys, childFkMap[vTable.String()]
+	}
+
+	// Check if any column in the parent table is being updated which has a child foreign key.
+	return !columnModified(updateExprs, getFKInfo)
+}
+
+// columnModified checks if any column in the parent table is being updated which has a child foreign key.
+func columnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo)) bool {
+	for _, updateExpr := range exprs {
+		parentFKs, childFks := getFks(updateExpr)
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		if sqlparser.IsNull(updateExpr.Expr) {
+			continue
+		}
+		for _, parentFk := range parentFKs {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
