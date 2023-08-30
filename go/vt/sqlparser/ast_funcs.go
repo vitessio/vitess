@@ -86,7 +86,8 @@ type IndexOption struct {
 	String string
 }
 
-// TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
+// TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD,
+// TABLESPACE, etc
 type TableOption struct {
 	Name          string
 	Value         *Literal
