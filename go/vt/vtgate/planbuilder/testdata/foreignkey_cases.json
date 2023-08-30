@@ -2,7 +2,74 @@
   {
     "comment": "Insertion in a table with cross-shard foreign keys disallowed",
     "query": "insert into tbl3 (col3, coly) values (1, 3)",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into tbl3 (col3, coly) values (1, 3)",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Child": {
+          "OperatorType": "Insert",
+          "Variant": "Sharded",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "insert into tbl3(col3, coly) values (:_col3_0, 3)",
+          "TableName": "tbl3",
+          "VindexValues": {
+            "hash_vin": "INT64(1)"
+          }
+        },
+        "Parent": [
+          {
+            "OperatorType": "FkVerifyParent",
+            "BvName": "fkv_vals",
+            "Cols": [
+              {
+                "Col": 0,
+                "WsCol": null,
+                "Type": 259,
+                "Collation": 63
+              }
+            ],
+            "Values": [
+              [
+                {
+                  "Type": 1,
+                  "Val": "3"
+                }
+              ]
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:1)"
+                ],
+                "ResultColumns": 1,
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_fk_allow",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select t1col1, weight_string(t1col1) from tbl3 where 1 != 1",
+                    "Query": "select distinct t1col1, weight_string(t1col1) from tbl3 where (t1col1) in ::fkv_vals",
+                    "Table": "tbl3"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl3"
+      ]
+    }
   },
   {
     "comment": "Insertion in a table with shard-scoped foreign keys is allowed",
@@ -492,7 +559,71 @@
   {
     "comment": "update table with column's parent foreign key cross shard - disallowed",
     "query": "update tbl10 set col = 'foo'",
-    "plan": "VT12002: unsupported: foreign keys management at vitess"
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl10 set col = 'foo'",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Child": {
+          "OperatorType": "Update",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "sharded_fk_allow",
+            "Sharded": true
+          },
+          "TargetTabletType": "PRIMARY",
+          "Query": "update tbl10 set col = 'foo'",
+          "Table": "tbl10"
+        },
+        "Parent": [
+          {
+            "OperatorType": "FkVerifyParent",
+            "BvName": "fkc_vals",
+            "Cols": [
+              {
+                "Col": 0,
+                "WsCol": null,
+                "Type": 6165,
+                "Collation": 0
+              }
+            ],
+            "Values": [
+              [
+                {
+                  "Type": 0,
+                  "Val": "foo"
+                }
+              ]
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0: utf8mb4_0900_ai_ci"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_fk_allow",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from tbl3 where 1 != 1",
+                    "Query": "select distinct col from tbl3 where (col) in ::fkc_vals",
+                    "Table": "tbl3"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl10",
+        "sharded_fk_allow.tbl3"
+      ]
+    }
   },
   {
     "comment": "delete table with shard scoped foreign key set default - disallowed",

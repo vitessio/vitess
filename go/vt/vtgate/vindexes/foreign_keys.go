@@ -112,26 +112,6 @@ func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) Chil
 	}
 }
 
-// AddForeignKey is for testing only.
-func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
-	ks, ok := vschema.Keyspaces[ksname]
-	if !ok {
-		return fmt.Errorf("keyspace %s not found in vschema", ksname)
-	}
-	cTbl, ok := ks.Tables[childTableName]
-	if !ok {
-		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
-	}
-	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
-	pTbl, ok := ks.Tables[parentTableName]
-	if !ok {
-		return fmt.Errorf("parent table %s not found in keyspace %s", parentTableName, ksname)
-	}
-	pTbl.ChildForeignKeys = append(pTbl.ChildForeignKeys, NewChildFkInfo(cTbl, fkConstraint))
-	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
-	return nil
-}
-
 // ParentFKsNeedsHandling returns all the parent fk constraints on this table that are not shard scoped.
 func (t *Table) ParentFKsNeedsHandling() (fks []ParentFKInfo) {
 	for _, fk := range t.ParentForeignKeys {
@@ -224,4 +204,24 @@ func isShardScoped(pTable *Table, cTable *Table, pCols sqlparser.Columns, cCols 
 		}
 	}
 	return true
+}
+
+// AddForeignKey is for testing only.
+func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	cTbl, ok := ks.Tables[childTableName]
+	if !ok {
+		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
+	}
+	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
+	pTbl, ok := ks.Tables[parentTableName]
+	if !ok {
+		return fmt.Errorf("parent table %s not found in keyspace %s", parentTableName, ksname)
+	}
+	pTbl.ChildForeignKeys = append(pTbl.ChildForeignKeys, NewChildFkInfo(cTbl, fkConstraint))
+	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
+	return nil
 }
