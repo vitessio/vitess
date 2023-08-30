@@ -22,9 +22,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 var _ Primitive = (*ScalarAggregate)(nil)
@@ -66,7 +63,13 @@ func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindV
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.Aggregates)}
+
+	_, fields, err := newAggregation(qr.Fields, sa.Aggregates)
+	if err != nil {
+		return nil, err
+	}
+
+	qr = &sqltypes.Result{Fields: fields}
 	return qr.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -81,36 +84,22 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
-	fields := convertFields(result.Fields, sa.Aggregates)
-	out := &sqltypes.Result{
-		Fields: fields,
-	}
 
-	var resultRow []sqltypes.Value
-	var curDistincts []sqltypes.Value
-	for _, row := range result.Rows {
-		if resultRow == nil {
-			resultRow, curDistincts = convertRow(fields, row, sa.Aggregates)
-			continue
-		}
-		resultRow, curDistincts, err = merge(fields, resultRow, row, curDistincts, sa.Aggregates)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if resultRow == nil {
-		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
-		// different aggregation functions
-		resultRow, err = sa.createEmptyRow()
-	} else {
-		resultRow, err = convertFinal(resultRow, sa.Aggregates)
-	}
+	agg, fields, err := newAggregation(result.Fields, sa.Aggregates)
 	if err != nil {
 		return nil, err
 	}
 
-	out.Rows = [][]sqltypes.Value{resultRow}
+	for _, row := range result.Rows {
+		if err := agg.add(row); err != nil {
+			return nil, err
+		}
+	}
+
+	out := &sqltypes.Result{
+		Fields: fields,
+		Rows:   [][]sqltypes.Value{agg.finish()},
+	}
 	return out.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -119,11 +108,11 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(sa.TruncateColumnCount))
 	}
-	var current []sqltypes.Value
-	var curDistincts []sqltypes.Value
-	var fields []*querypb.Field
-	fieldsSent := false
+
 	var mu sync.Mutex
+	var agg aggregationState
+	var fields []*querypb.Field
+	var fieldsSent bool
 
 	err := vcursor.StreamExecutePrimitive(ctx, sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
 		// as the underlying primitive call is not sync
@@ -131,23 +120,23 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// for correct aggregation.
 		mu.Lock()
 		defer mu.Unlock()
-		if len(result.Fields) != 0 && !fieldsSent {
-			fields = convertFields(result.Fields, sa.Aggregates)
+
+		if agg == nil {
+			var err error
+			agg, fields, err = newAggregation(result.Fields, sa.Aggregates)
+			if err != nil {
+				return err
+			}
+		}
+		if !fieldsSent {
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
 			fieldsSent = true
 		}
 
-		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
-			if current == nil {
-				current, curDistincts = convertRow(fields, row, sa.Aggregates)
-				continue
-			}
-			var err error
-			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Aggregates)
-			if err != nil {
+			if err := agg.add(row); err != nil {
 				return err
 			}
 		}
@@ -157,58 +146,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		return err
 	}
 
-	if current == nil {
-		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
-		// different aggregation functions
-		current, err = sa.createEmptyRow()
-		if err != nil {
-			return err
-		}
-	} else {
-		current, err = convertFinal(current, sa.Aggregates)
-		if err != nil {
-			return err
-		}
-	}
-
-	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}})
-}
-
-// creates the empty row for the case when we are missing grouping keys and have empty input table
-func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
-	out := make([]sqltypes.Value, len(sa.Aggregates))
-	for i, aggr := range sa.Aggregates {
-		op := aggr.Opcode
-		if aggr.OrigOpcode != AggregateUnassigned {
-			op = aggr.OrigOpcode
-		}
-		value, err := createEmptyValueFor(op)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = value
-	}
-	return out, nil
-}
-
-func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
-	switch opcode {
-	case
-		AggregateCountDistinct,
-		AggregateCount,
-		AggregateCountStar:
-		return countZero, nil
-	case
-		AggregateSumDistinct,
-		AggregateSum,
-		AggregateMin,
-		AggregateMax,
-		AggregateAnyValue,
-		AggregateGroupConcat:
-		return sqltypes.NULL, nil
-
-	}
-	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
+	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}})
 }
 
 // Inputs implements the Primitive interface
