@@ -2479,23 +2479,6 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
-// MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesCreate")
-	defer span.Finish()
-
-	defer panicHandler(&err)
-
-	span.Annotate("keyspace", req.TargetKeyspace)
-	span.Annotate("workflow", req.Workflow)
-	span.Annotate("cells", req.Cells)
-	span.Annotate("tablet_types", req.TabletTypes)
-	span.Annotate("on_ddl", req.OnDdl)
-
-	resp, err = s.ws.MoveTablesCreate(ctx, req)
-	return resp, err
-}
-
 // LaunchSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldatapb.LaunchSchemaMigrationRequest) (resp *vtctldatapb.LaunchSchemaMigrationResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.LaunchSchemaMigration")
@@ -2525,6 +2508,23 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
+}
+
+// MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("on_ddl", req.OnDdl)
+
+	resp, err = s.ws.MoveTablesCreate(ctx, req)
+	return resp, err
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.
