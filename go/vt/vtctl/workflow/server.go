@@ -27,11 +27,11 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
@@ -964,7 +964,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	var (
 		tables       = req.IncludeTables
 		externalTopo *topo.Server
-		sourceTopo   *topo.Server = s.ts
+		sourceTopo   = s.ts
 	)
 
 	// When the source is an external cluster mounted using the Mount command.
@@ -2380,7 +2380,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return handleError("invalid request", fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
-	var cells []string = req.Cells
+	var cells = req.Cells
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")

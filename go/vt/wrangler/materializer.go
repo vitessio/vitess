@@ -289,6 +289,11 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		} else {
 			// Save routing rules before vschema. If we save vschema first, and routing rules
 			// fails to save, we may generate duplicate table errors.
+			if mz.isPartial {
+				if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
+					return err
+				}
+			}
 			rules, err := topotools.GetRoutingRules(ctx, wr.ts)
 			if err != nil {
 				return err
