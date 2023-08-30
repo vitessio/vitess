@@ -17,6 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"strings"
+
+	"vitess.io/vitess/go/mysql/collations"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -57,21 +61,12 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return updOp, nil
 	}
 
-	if len(parentFks) > 0 {
-		return nil, vterrors.VT12003()
-	}
-
-	// If there are no foreign key constraints, then we don't need to do anything.
-	if len(childFks) == 0 {
-		return updOp, nil
-	}
-
 	// If the delete statement has a limit, we don't support it yet.
 	if updStmt.Limit != nil {
 		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
 	}
 
-	return createFKCascadeOp(ctx, updOp, updClone, childFks)
+	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks)
 }
 
 func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
@@ -186,7 +181,20 @@ func getFKRequirementsForUpdate(updateExprs sqlparser.UpdateExprs, vindexTable *
 	return pFksNeedsHandling, cFksNeedsHandling
 }
 
+func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+	op, err := createFKCascadeOp(ctx, updOp, updClone, childFks)
+	if err != nil {
+		return nil, err
+	}
+
+	return createFKVerifyOp(ctx, op, updClone, parentFks)
+}
+
 func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+	if len(childFks) == 0 {
+		return parentOp, nil
+	}
+
 	// We only support simple expressions in update queries with cascade.
 	for _, updateExpr := range updStmt.Exprs {
 		switch updateExpr.Expr.(type) {
@@ -323,5 +331,79 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		BVName: bvName,
 		Cols:   cols,
 		Op:     childOp,
+	}, nil
+}
+
+func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, updStmt *sqlparser.Update, parentFks []vindexes.ParentFKInfo) (ops.Operator, error) {
+	if len(parentFks) == 0 {
+		return childOp, nil
+	}
+
+	collEnv := collations.NewEnvironment("8.0")
+
+	var FkParents []*FkParent
+	for _, fk := range parentFks {
+		// SELECT distinct <parent cols in foreign keys> from parent where (<parent cols>) = :fkv_vals
+		var selExprs sqlparser.SelectExprs
+		var valTuple sqlparser.ValTuple
+		var values []sqlparser.Exprs
+		var checkCols []engine.CheckCol
+		for idx, column := range fk.ChildColumns {
+			found := false
+			var exprs sqlparser.Exprs
+			for _, updateExpr := range updStmt.Exprs {
+				if column.Equal(updateExpr.Name.Name) {
+					found = true
+					exprs = append(exprs, updateExpr.Expr)
+				}
+			}
+			if !found {
+				return nil, vterrors.VT12001("foreign keys management at vitess with partial foreign key columns update")
+			}
+			col := sqlparser.NewColName(fk.ParentColumns[idx].String())
+			selExprs = append(selExprs, aeWrap(col))
+			valTuple = append(valTuple, col)
+			values = append(values, exprs)
+			tblCol := fk.Table.FindColumn(column)
+			if tblCol == nil {
+				return nil, vterrors.VT13001(fmt.Sprintf("column '%s' in parent foreign key table not found in the vindex table '%s'", sqlparser.String(column), fk.Table.String()))
+			}
+			checkCols = append(checkCols, engine.CheckCol{
+				Col:       idx,
+				Type:      tblCol.Type,
+				Collation: collEnv.LookupByName(strings.ToLower(tblCol.CollationName)),
+			})
+		}
+		bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+		selStmt := &sqlparser.Select{
+			Distinct:    true,
+			SelectExprs: selExprs,
+			From: []sqlparser.TableExpr{
+				sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), ""),
+			},
+			Where: &sqlparser.Where{
+				Type: sqlparser.WhereClause,
+				Expr: &sqlparser.ComparisonExpr{
+					Operator: sqlparser.InOp,
+					Left:     valTuple,
+					Right:    sqlparser.NewListArg(bvName),
+				},
+			},
+		}
+		selOp, err := createOpFromStmt(ctx, selStmt)
+		if err != nil {
+			return nil, err
+		}
+		FkParents = append(FkParents, &FkParent{
+			Op:     selOp,
+			BvName: bvName,
+			Values: values,
+			Cols:   checkCols,
+		})
+	}
+
+	return &FkVerify{
+		Verify: FkParents,
+		Input:  childOp,
 	}, nil
 }
