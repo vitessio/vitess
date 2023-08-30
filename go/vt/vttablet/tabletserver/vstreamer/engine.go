@@ -547,9 +547,12 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 // and maps the column names to field indexes in the MinimalTable struct.
 func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.MinimalTable) ([]int, error) {
 	mysqld := mysqlctl.NewMysqld(vse.env.Config().DB)
-	pkeColNames, err := mysqld.GetPrimaryKeyEquivalentColumns(ctx, vse.env.Config().DB.DBName, table.Name)
+	pkeColNames, indexName, err := mysqld.GetPrimaryKeyEquivalentColumns(ctx, vse.env.Config().DB.DBName, table.Name)
 	if err != nil {
 		return nil, err
+	}
+	if len(pkeColNames) > 0 && indexName != "" {
+		table.PKIndex = indexName
 	}
 	pkeCols := make([]int, len(pkeColNames))
 	matches := 0

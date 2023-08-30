@@ -451,6 +451,10 @@ message MinimalTable {
   string name = 1;
   repeated query.Field fields = 2;
   repeated int64 p_k_columns = 3;
+  // This will be PRIMARY when the actual primary key is used and it
+  // will be the name of the Primary Key equivalent if one is used
+  // instead.
+  string p_k_index = 4;
 }
 
 message MinimalSchema {

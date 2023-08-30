@@ -577,16 +577,16 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
 // the available PKE indexes on the table.
-func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
+func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer conn.Recycle()
 
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
-            SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
+            SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
             (
                 SELECT stats.INDEX_NAME, SUM(
                                               CASE LOWER(cols.DATA_TYPE)
@@ -629,15 +629,17 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	sql = fmt.Sprintf(sql, encodedDbName, encodedTable, encodedDbName, encodedTable, encodedDbName, encodedTable)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	named := qr.Named()
 	cols := make([]string, len(qr.Rows))
+	index := ""
 	for i, row := range named.Rows {
 		cols[i] = row.AsString("column_name", "")
+		index = row.AsString("index_name", "")
 	}
-	return cols, err
+	return cols, index, err
 }
 
 // tableDefinitions is a sortable collection of table definitions

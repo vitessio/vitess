@@ -180,7 +180,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	rs.sendQuery, err = rs.buildSelect()
+	rs.sendQuery, err = rs.buildSelect(st)
 	if err != nil {
 		return err
 	}
@@ -220,6 +220,8 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 			pkColumns[i] = i
 		}
 		return pkColumns, nil
+	} else {
+		st.PKIndex = "PRIMARY"
 	}
 	for _, pk := range st.PKColumns {
 		if pk >= int64(len(st.Fields)) {
@@ -230,7 +232,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	return pkColumns, nil
 }
 
-func (rs *rowStreamer) buildSelect() (string, error) {
+func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select ")
@@ -245,7 +247,15 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
+	// If we know the index name that we should be using then tell MySQL
+	// to use it if possible. This helps to ensure that we are able to
+	// leverage the ordering from the index itself and avoid having to
+	// do a FILESORT of all the results.
+	var indexHint string
+	if st.PKIndex != "" {
+		indexHint = fmt.Sprintf(" force index (`%s`)", st.PKIndex)
+	}
+	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)

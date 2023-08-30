@@ -1422,6 +1422,13 @@ func (m *MinimalTable) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.PKIndex) > 0 {
+		i -= len(m.PKIndex)
+		copy(dAtA[i:], m.PKIndex)
+		i = encodeVarint(dAtA, i, uint64(len(m.PKIndex)))
+		i--
+		dAtA[i] = 0x22
+	}
 	if len(m.PKColumns) > 0 {
 		var pksize2 int
 		for _, num := range m.PKColumns {
@@ -2683,6 +2690,10 @@ func (m *MinimalTable) SizeVT() (n int) {
 			l += sov(uint64(e))
 		}
 		n += 1 + sov(uint64(l)) + l
+	}
+	l = len(m.PKIndex)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -6925,6 +6936,38 @@ func (m *MinimalTable) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field PKColumns", wireType)
 			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PKIndex", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PKIndex = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

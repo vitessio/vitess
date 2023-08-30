@@ -601,8 +601,8 @@ func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(ctx context.Context, dbName, ta
 }
 
 // GetPrimaryKeyEquivalentColumns is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
-	return []string{}, nil
+func (fmd *FakeMysqlDaemon) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, string, error) {
+	return []string{}, "", nil
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface
