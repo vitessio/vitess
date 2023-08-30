@@ -22,7 +22,6 @@ import (
 	"net"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func checkDistribution(t *testing.T, rand *rand.Rand, data []*net.SRV, margin float64) {
@@ -59,7 +58,7 @@ func testUniformity(t *testing.T, size int, margin float64) {
 	for i := 0; i < size; i++ {
 		data[i] = &net.SRV{Target: fmt.Sprintf("%c", 'a'+i), Weight: 1}
 	}
-	checkDistribution(t, rand.New(rand.NewSource(time.Now().UTC().UnixNano())), data, margin)
+	checkDistribution(t, rand.New(rand.NewSource(1)), data, margin)
 }
 
 func TestUniformity(t *testing.T) {
