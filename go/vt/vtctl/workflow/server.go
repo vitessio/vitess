@@ -1126,14 +1126,14 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
 				return nil, err
 			}
-
-			if vschema != nil {
-				// We added to the vschema.
-				if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-					return nil, err
-				}
+		}
+		if vschema != nil {
+			// We added to the vschema.
+			if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return nil, err
 			}
 		}
+
 	}
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err

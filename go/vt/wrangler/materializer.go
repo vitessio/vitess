@@ -308,14 +308,14 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
 				return err
 			}
-
-			if vschema != nil {
-				// We added to the vschema.
-				if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-					return err
-				}
+		}
+		if vschema != nil {
+			// We added to the vschema.
+			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return err
 			}
 		}
+
 	}
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
