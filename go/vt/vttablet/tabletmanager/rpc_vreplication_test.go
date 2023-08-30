@@ -579,7 +579,8 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 // TestSourceShardSelection tests the RPC calls made by VtctldServer to tablet
 // managers include the correct set of BLS settings.
 func TestSourceShardSelection(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	sourceKs := "sourceks"
 	sourceShard0 := "-55"
@@ -597,7 +598,7 @@ func TestSourceShardSelection(t *testing.T) {
 
 	wf := "testwf"
 
-	tenv := newTestEnv(t, sourceKs, []string{sourceShard0, sourceShard1, sourceShard2})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{sourceShard0, sourceShard1, sourceShard2})
 	defer tenv.close()
 
 	sourceTablets := map[int]*fakeTabletConn{
