@@ -120,29 +120,24 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 // settleSubquery is run when the subqueries have been pushed as far down as they can go.
 // At this point, we know that the subqueries will not be pushed under a Route, so we need to
 // plan for how to run them on the vtgate
-func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq SubQuery) (ops.Operator, error) {
-	var err error
+func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq *SubQuery) (ops.Operator, error) {
 	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
 	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
 	// this query is equivalent to
 	// select * from user where id = 5 and exists(select 1 from music where baz = 13 and user.id = bar)
 	// Long term, we should have a cost based optimizer that can make this decision for us.
-	switch subq := subq.(type) {
-	case *SubQueryFilter:
-		outer, err = settleSubqueryFilter(ctx, subq, outer)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, vterrors.VT13001("unexpected subquery type")
+
+	newOuter, err := settleSubqueryFilter(ctx, subq, outer)
+	if err != nil {
+		return nil, err
 	}
 
-	subq.SetOuter(outer)
+	subq.Outer = newOuter
 
 	return subq, nil
 }
 
-func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
+func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQuery, outer ops.Operator) (ops.Operator, error) {
 	if len(sj.Predicates) > 0 {
 		if sj.FilterType != opcode.PulloutExists {
 			return nil, vterrors.VT12001("correlated subquery is only supported for EXISTS")
@@ -200,7 +195,7 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 	}, nil
 }
 
-func settleExistSubquery(ctx *plancontext.PlanningContext, sj *SubQueryFilter, outer ops.Operator) (ops.Operator, error) {
+func settleExistSubquery(ctx *plancontext.PlanningContext, sj *SubQuery, outer ops.Operator) (ops.Operator, error) {
 	jcs, err := sj.GetJoinColumns(ctx, outer)
 	if err != nil {
 		return nil, err

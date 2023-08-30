@@ -28,22 +28,7 @@ type (
 	// for merging
 	SubQueryContainer struct {
 		Outer ops.Operator
-		Inner []SubQuery
-	}
-
-	SubQuery interface {
-		ops.Operator
-
-		Inner() ops.Operator
-
-		OriginalExpression() sqlparser.Expr // tbl.id = (SELECT foo from user LIMIT 1)
-		SetOriginal(sqlparser.Expr)
-		OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error)
-		GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error)
-		SetOuter(operator ops.Operator)
-		GetJoinPredicates() []sqlparser.Expr
-		GetMergePredicates() []sqlparser.Expr
-		ReplaceJoinPredicates(predicates sqlparser.Exprs)
+		Inner []*SubQuery
 	}
 )
 
@@ -55,7 +40,7 @@ func (s *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
 		Outer: inputs[0],
 	}
 	for idx := range s.Inner {
-		inner, ok := inputs[idx+1].(SubQuery)
+		inner, ok := inputs[idx+1].(*SubQuery)
 		if !ok {
 			panic("got bad input")
 		}

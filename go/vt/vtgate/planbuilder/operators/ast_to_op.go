@@ -142,7 +142,7 @@ func createSubquery(
 	expr sqlparser.Expr,
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
-) (SubQuery, error) {
+) (*SubQuery, error) {
 	switch expr := expr.(type) {
 	case *sqlparser.NotExpr:
 		switch inner := expr.Expr.(type) {
@@ -185,7 +185,7 @@ func createSubqueryFilter(
 	outerID semantics.TableSet,
 	predicate sqlparser.Expr,
 	filterType opcode.PulloutOpcode,
-) (*SubQueryFilter, error) {
+) (*SubQuery, error) {
 	innerSel, ok := subq.Select.(*sqlparser.Select)
 	if !ok {
 		return nil, vterrors.VT13001("yucki unions")
@@ -229,7 +229,7 @@ func createSubqueryFilter(
 
 	opInner = sqL.getRootOperator(opInner)
 
-	return &SubQueryFilter{
+	return &SubQuery{
 		FilterType:     filterType,
 		Subquery:       opInner,
 		Predicates:     jpc.predicates,
@@ -244,7 +244,7 @@ func createComparisonSubQuery(
 	original *sqlparser.ComparisonExpr,
 	subFromOutside *sqlparser.Subquery,
 	outerID semantics.TableSet,
-) (SubQuery, error) {
+) (*SubQuery, error) {
 	subq, outside := semantics.GetSubqueryAndOtherSide(original)
 	if outside == nil || subq != subFromOutside {
 		panic("uh oh")
@@ -280,7 +280,7 @@ func createExistsSubquery(
 	sq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	filterType opcode.PulloutOpcode,
-) (*SubQueryFilter, error) {
+) (*SubQuery, error) {
 	org = cloneASTAndSemState(ctx, org)
 	return createSubqueryFilter(ctx, org, sq, outerID, nil, filterType)
 }
@@ -290,7 +290,7 @@ func createValueSubquery(
 	org sqlparser.Expr,
 	sq *sqlparser.Subquery,
 	outerID semantics.TableSet,
-) (SubQuery, error) {
+) (*SubQuery, error) {
 	org = cloneASTAndSemState(ctx, org)
 
 	return createSubqueryFilter(ctx, org, sq, outerID, nil, opcode.PulloutValue)

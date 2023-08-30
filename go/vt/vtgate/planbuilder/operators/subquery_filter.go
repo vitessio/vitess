@@ -29,9 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// SubQueryFilter represents a subquery used for filtering rows in an
+// SubQuery represents a subquery used for filtering rows in an
 // outer query through a join.
-type SubQueryFilter struct {
+type SubQuery struct {
 	// Fields filled in at the time of construction:
 	Outer          ops.Operator         // Outer query operator.
 	Subquery       ops.Operator         // Subquery operator.
@@ -52,7 +52,7 @@ type SubQueryFilter struct {
 	outerID semantics.TableSet
 }
 
-func (sj *SubQueryFilter) planOffsets(ctx *plancontext.PlanningContext) error {
+func (sj *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
 	sj.Vars = make(map[string]int)
 	for _, jc := range sj.JoinColumns {
 		for i, lhsExpr := range jc.LHSExprs {
@@ -66,11 +66,7 @@ func (sj *SubQueryFilter) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (sj *SubQueryFilter) SetOuter(operator ops.Operator) {
-	sj.Outer = operator
-}
-
-func (sj *SubQueryFilter) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error) {
+func (sj *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error) {
 	joinColumns, err := sj.GetJoinColumns(ctx, outer)
 	if err != nil {
 		return nil, err
@@ -87,7 +83,7 @@ func (sj *SubQueryFilter) OuterExpressionsNeeded(ctx *plancontext.PlanningContex
 	return sj.LHSColumns, nil
 }
 
-func (sj *SubQueryFilter) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error) {
+func (sj *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error) {
 	if outer == nil {
 		return nil, vterrors.VT13001("outer operator cannot be nil")
 	}
@@ -109,26 +105,8 @@ func (sj *SubQueryFilter) GetJoinColumns(ctx *plancontext.PlanningContext, outer
 	return sj.JoinColumns, nil
 }
 
-var _ SubQuery = (*SubQueryFilter)(nil)
-
-func (sj *SubQueryFilter) Inner() ops.Operator {
-	return sj.Subquery
-}
-
-func (sj *SubQueryFilter) OriginalExpression() sqlparser.Expr {
-	return sj.Original
-}
-
-func (sj *SubQueryFilter) SetOriginal(expr sqlparser.Expr) {
-	sj.Original = expr
-}
-
-func (sj *SubQueryFilter) sq() *sqlparser.Subquery {
-	return sj._sq
-}
-
 // Clone implements the Operator interface
-func (sj *SubQueryFilter) Clone(inputs []ops.Operator) ops.Operator {
+func (sj *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	klone := *sj
 	switch len(inputs) {
 	case 1:
@@ -146,12 +124,12 @@ func (sj *SubQueryFilter) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-func (sj *SubQueryFilter) GetOrdering() ([]ops.OrderBy, error) {
+func (sj *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
 	return sj.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (sj *SubQueryFilter) Inputs() []ops.Operator {
+func (sj *SubQuery) Inputs() []ops.Operator {
 	if sj.Outer == nil {
 		return []ops.Operator{sj.Subquery}
 	}
@@ -160,7 +138,7 @@ func (sj *SubQueryFilter) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (sj *SubQueryFilter) SetInputs(inputs []ops.Operator) {
+func (sj *SubQuery) SetInputs(inputs []ops.Operator) {
 	switch len(inputs) {
 	case 1:
 		sj.Subquery = inputs[0]
@@ -172,11 +150,11 @@ func (sj *SubQueryFilter) SetInputs(inputs []ops.Operator) {
 	}
 }
 
-func (sj *SubQueryFilter) ShortDescription() string {
+func (sj *SubQuery) ShortDescription() string {
 	return sj.FilterType.String() + " WHERE " + sqlparser.String(sj.Predicates)
 }
 
-func (sj *SubQueryFilter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (sj *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	newOuter, err := sj.Outer.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err
@@ -185,36 +163,26 @@ func (sj *SubQueryFilter) AddPredicate(ctx *plancontext.PlanningContext, expr sq
 	return sj, nil
 }
 
-func (sj *SubQueryFilter) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+func (sj *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
 	return sj.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sj *SubQueryFilter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (sj *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	return sj.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sj *SubQueryFilter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (sj *SubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return sj.Outer.GetColumns(ctx)
 }
 
-func (sj *SubQueryFilter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (sj *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return sj.Outer.GetSelectExprs(ctx)
 }
 
-// GetJoinPredicates returns the predicates that live on the inside of the subquery,
-// and depend on both the outer and inner query.
-func (sj *SubQueryFilter) GetJoinPredicates() []sqlparser.Expr {
-	return sj.Predicates
-}
-
 // GetMergePredicates returns the predicates that we can use to try to merge this subquery with the outer query.
-func (sj *SubQueryFilter) GetMergePredicates() []sqlparser.Expr {
+func (sj *SubQuery) GetMergePredicates() []sqlparser.Expr {
 	if sj.OuterPredicate != nil {
 		return append(sj.Predicates, sj.OuterPredicate)
 	}
 	return sj.Predicates
-}
-
-func (sj *SubQueryFilter) ReplaceJoinPredicates(predicates sqlparser.Exprs) {
-	sj.Predicates = predicates
 }

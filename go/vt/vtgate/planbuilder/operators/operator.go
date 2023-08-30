@@ -140,7 +140,7 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	switch op := op.(type) {
 	case *Limit:
 		return tryTruncateColumnsAt(op.Source, truncateAt)
-	case *SubQueryFilter:
+	case *SubQuery:
 		for _, offset := range op.Vars {
 			if offset >= truncateAt {
 				return false
