@@ -389,7 +389,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
 	vschema := executor.vm.GetCurrentSrvVschema()
@@ -408,7 +408,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 
 	// add test sequence
 	stmt := "alter vschema add sequence test_seq"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
 	vschema = executor.vm.GetCurrentSrvVschema()
@@ -420,14 +420,14 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 
 	// drop existing test sequence
 	stmt = "alter vschema drop sequence test_seq"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
 	// Should fail dropping a non-existing test sequence
 	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	stmt = "alter vschema drop sequence test_seq"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 
 	wantErr := "vschema does not contain sequence test_seq in keyspace TestUnsharded"
 	if err == nil || err.Error() != wantErr {
@@ -440,17 +440,17 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	stmt := "alter vschema add table test_table"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
@@ -461,7 +461,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	}
 
 	stmt = "alter vschema on test_table drop auto_increment"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
 	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
