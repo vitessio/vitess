@@ -169,6 +169,8 @@ type VtctldClient interface {
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion
+	CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -574,6 +576,15 @@ func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.Chang
 func (c *vtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	out := new(vtctldata.CleanupSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CleanupSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error) {
+	out := new(vtctldata.CompleteSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CompleteSchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1396,6 +1407,8 @@ type VtctldServer interface {
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion
+	CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -1691,6 +1704,9 @@ func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.Ch
 }
 func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CleanupSchemaMigration not implemented")
+}
+func (UnimplementedVtctldServer) CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CompleteSchemaMigration not implemented")
 }
 func (UnimplementedVtctldServer) CreateKeyspace(context.Context, *vtctldata.CreateKeyspaceRequest) (*vtctldata.CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
@@ -2157,6 +2173,24 @@ func _Vtctld_CleanupSchemaMigration_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).CleanupSchemaMigration(ctx, req.(*vtctldata.CleanupSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_CompleteSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CompleteSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CompleteSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CompleteSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CompleteSchemaMigration(ctx, req.(*vtctldata.CompleteSchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3718,6 +3752,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CleanupSchemaMigration",
 			Handler:    _Vtctld_CleanupSchemaMigration_Handler,
+		},
+		{
+			MethodName: "CompleteSchemaMigration",
+			Handler:    _Vtctld_CompleteSchemaMigration_Handler,
 		},
 		{
 			MethodName: "CreateKeyspace",

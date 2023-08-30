@@ -128,6 +128,15 @@ func (client *gRPCVtctldClient) CleanupSchemaMigration(ctx context.Context, in *
 	return client.c.CleanupSchemaMigration(ctx, in, opts...)
 }
 
+// CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CompleteSchemaMigration(ctx, in, opts...)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	if client.c == nil {
