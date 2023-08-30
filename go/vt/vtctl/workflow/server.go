@@ -1096,38 +1096,42 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules in place.
 	if externalTopo == nil {
-		// Save routing rules before vschema. If we save vschema first, and routing
-		// rules fails to save, we may generate duplicate table errors.
-		if mz.isPartial {
-			if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+		if req.NoRoutingRules {
+			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
+		} else {
+			// Save routing rules before vschema. If we save vschema first, and routing
+			// rules fails to save, we may generate duplicate table errors.
+			if mz.isPartial {
+				if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+					return nil, err
+				}
+			}
+
+			rules, err := topotools.GetRoutingRules(ctx, s.ts)
+			if err != nil {
 				return nil, err
 			}
-		}
-
-		rules, err := topotools.GetRoutingRules(ctx, s.ts)
-		if err != nil {
-			return nil, err
-		}
-		for _, table := range tables {
-			toSource := []string{sourceKeyspace + "." + table}
-			rules[table] = toSource
-			rules[table+"@replica"] = toSource
-			rules[table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[targetKeyspace+"."+table+"@replica"] = toSource
-			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[sourceKeyspace+"."+table+"@replica"] = toSource
-			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-		}
-		if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
-			return nil, err
-		}
-
-		if vschema != nil {
-			// We added to the vschema.
-			if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+			for _, table := range tables {
+				toSource := []string{sourceKeyspace + "." + table}
+				rules[table] = toSource
+				rules[table+"@replica"] = toSource
+				rules[table+"@rdonly"] = toSource
+				rules[targetKeyspace+"."+table] = toSource
+				rules[targetKeyspace+"."+table+"@replica"] = toSource
+				rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+				rules[targetKeyspace+"."+table] = toSource
+				rules[sourceKeyspace+"."+table+"@replica"] = toSource
+				rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+			}
+			if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
 				return nil, err
+			}
+
+			if vschema != nil {
+				// We added to the vschema.
+				if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
