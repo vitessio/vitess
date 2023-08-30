@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM debian:latest
 
 ARG MYSQL_VERSION=8.0.34
 
