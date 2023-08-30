@@ -472,7 +472,7 @@
   {
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "plan": "VT12001: unsupported: unsupported subquery: u.col = 6 or exists (select 1 from user_extra as ue where ue.col = u.col and u.col = ue.col2)"
+    "plan": "VT12001: unsupported: subquery: u.col = 6 or exists (select 1 from user_extra as ue where ue.col = u.col and u.col = ue.col2)"
   },
   {
     "comment": "cant switch sides for outer joins",

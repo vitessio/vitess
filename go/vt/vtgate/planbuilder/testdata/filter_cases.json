@@ -2777,7 +2777,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-        "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
+        "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5)",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2810,7 +2810,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
+            "Query": "select 1 from `user` as u2 where u2.id = 5",
             "Table": "`user`",
             "Values": [
               "INT64(5)"

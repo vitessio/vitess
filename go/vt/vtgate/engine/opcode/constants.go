@@ -33,13 +33,15 @@ const (
 	PulloutIn
 	PulloutNotIn
 	PulloutExists
+	PulloutNotExists
 )
 
 var pulloutName = map[PulloutOpcode]string{
-	PulloutValue:  "PulloutValue",
-	PulloutIn:     "PulloutIn",
-	PulloutNotIn:  "PulloutNotIn",
-	PulloutExists: "PulloutExists",
+	PulloutValue:     "PulloutValue",
+	PulloutIn:        "PulloutIn",
+	PulloutNotIn:     "PulloutNotIn",
+	PulloutExists:    "PulloutExists",
+	PulloutNotExists: "PulloutNotExists",
 }
 
 func (code PulloutOpcode) String() string {

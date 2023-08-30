@@ -190,55 +190,69 @@ func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner Sub
 func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery SubQuery, outer *Route) (newOuter ops.Operator, result *rewrite.ApplyResult, err error) {
 	switch inner := subQuery.Inner().(type) {
 	case *Route:
-		exprs := subQuery.GetMergePredicates()
-		merger := &subqueryRouteMerger{
-			outer:    outer,
-			original: subQuery.OriginalExpression(),
-		}
-		op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
-		if err != nil {
-			return nil, nil, err
-		}
-		if op == nil {
-			return outer, rewrite.SameTree, nil
-		}
-		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
-		return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
+		return tryMergeSubqueryWithOuter(ctx, subQuery, outer, inner)
 	case *SubQueryContainer:
-		exprs := subQuery.GetMergePredicates()
-		merger := &subqueryRouteMerger{
-			outer:    outer,
-			original: subQuery.OriginalExpression(),
-		}
-		op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
-		if err != nil {
-			return nil, nil, err
-		}
-		if op == nil {
-			return outer, rewrite.SameTree, nil
-		}
-
-		op = Clone(op).(*Route)
-		op.Source = outer.Source
-		var finalResult *rewrite.ApplyResult
-		for _, subq := range inner.Inner {
-			newOuter, res, err := tryPushDownSubQueryInRoute(ctx, subq, op)
-			if err != nil {
-				return nil, nil, err
-			}
-			if res == rewrite.SameTree {
-				// we failed to merge one of the inners - we need to abort
-				return nil, rewrite.SameTree, nil
-			}
-			op = newOuter.(*Route)
-			removeFilterUnderRoute(op, subq)
-			finalResult = finalResult.Merge(res)
-		}
-
-		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
-		return op, finalResult.Merge(rewrite.NewTree("merge outer of two subqueries", subQuery)), nil
+		return tryMergeSubqueriesRecursively(ctx, subQuery, outer, inner)
 	}
 	return outer, rewrite.SameTree, nil
+}
+
+// tryMergeSubqueriesRecursively attempts to merge a SubQueryContainer with the outer Route.
+func tryMergeSubqueriesRecursively(
+	ctx *plancontext.PlanningContext,
+	subQuery SubQuery,
+	outer *Route,
+	inner *SubQueryContainer,
+) (ops.Operator, *rewrite.ApplyResult, error) {
+	exprs := subQuery.GetMergePredicates()
+	merger := &subqueryRouteMerger{
+		outer:    outer,
+		original: subQuery.OriginalExpression(),
+	}
+	op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
+	if err != nil {
+		return nil, nil, err
+	}
+	if op == nil {
+		return outer, rewrite.SameTree, nil
+	}
+
+	op = Clone(op).(*Route)
+	op.Source = outer.Source
+	var finalResult *rewrite.ApplyResult
+	for _, subq := range inner.Inner {
+		newOuter, res, err := tryPushDownSubQueryInRoute(ctx, subq, op)
+		if err != nil {
+			return nil, nil, err
+		}
+		if res == rewrite.SameTree {
+			// we failed to merge one of the inners - we need to abort
+			return nil, rewrite.SameTree, nil
+		}
+		op = newOuter.(*Route)
+		removeFilterUnderRoute(op, subq)
+		finalResult = finalResult.Merge(res)
+	}
+
+	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
+	return op, finalResult.Merge(rewrite.NewTree("merge outer of two subqueries", subQuery)), nil
+}
+
+func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery SubQuery, outer *Route, inner ops.Operator) (ops.Operator, *rewrite.ApplyResult, error) {
+	exprs := subQuery.GetMergePredicates()
+	merger := &subqueryRouteMerger{
+		outer:    outer,
+		original: subQuery.OriginalExpression(),
+	}
+	op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
+	if err != nil {
+		return nil, nil, err
+	}
+	if op == nil {
+		return outer, rewrite.SameTree, nil
+	}
+	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.OriginalExpression()}}
+	return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
 }
 
 func removeFilterUnderRoute(op *Route, subq SubQuery) {

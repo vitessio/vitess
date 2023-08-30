@@ -2118,19 +2118,6 @@ func (s SelectExprs) AllAggregation() bool {
 	return true
 }
 
-func isExprLiteral(expr Expr) bool {
-	switch expr := expr.(type) {
-	case *Literal:
-		return true
-	case BoolVal:
-		return true
-	case *UnaryExpr:
-		return isExprLiteral(expr.Expr)
-	default:
-		return false
-	}
-}
-
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
 func RemoveKeyspaceFromColName(expr Expr) {
 	RemoveKeyspace(expr)

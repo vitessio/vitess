@@ -178,6 +178,10 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQueryFilter, 
 	case opcode.PulloutExists:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg))
 		sj.HasValuesName = hasValuesArg
+	case opcode.PulloutNotExists:
+		sj.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
+		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg)))
+		sj.HasValuesName = hasValuesArg
 	case opcode.PulloutIn:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg), rhsPred)
 		sj.HasValuesName = hasValuesArg

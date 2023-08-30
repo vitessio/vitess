@@ -3256,7 +3256,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
-    "plan": "VT12001: unsupported: unsupported subquery: music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5"
+    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5"
   },
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as routing predicate",
@@ -3283,7 +3283,7 @@
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as non-routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
-    "plan": "VT12001: unsupported: unsupported subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
+    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
   },
   {
     "comment": "Mergeable scatter subquery",
@@ -3858,7 +3858,7 @@
   {
     "comment": "`None` subquery nested inside `OR` expression - outer query keeps routing information",
     "query": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
-    "plan": "VT12001: unsupported: unsupported subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
+    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
   },
   {
     "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together",
