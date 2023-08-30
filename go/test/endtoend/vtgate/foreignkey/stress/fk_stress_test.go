@@ -778,7 +778,9 @@ func isFKError(err error) bool {
 
 	// Let's try and account for all known errors:
 	switch sqlErr.Number() {
-	case sqlerror.ERDupEntry:
+	case sqlerror.ERDupEntry: // happens since we hammer the tables randomly
+		return false
+	case sqlerror.ERTooManyUserConnections: // can happen in Online DDL cut-over
 		return false
 	case sqlerror.ERNoReferencedRow,
 		sqlerror.ERRowIsReferenced,
