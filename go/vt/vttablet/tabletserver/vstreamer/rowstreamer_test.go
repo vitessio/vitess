@@ -61,6 +61,7 @@ func TestStreamRowsScan(t *testing.T) {
 		"drop table t2",
 		"drop table t3",
 		"drop table t4",
+		"drop table t5",
 	})
 
 	engine.se.Reload(context.Background())
