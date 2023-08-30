@@ -59,6 +59,14 @@ var (
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandOnlineDDLCleanup,
 	}
+	OnlineDDLComplete = &cobra.Command{
+		Use:                   "complete <keyspace> <uuid|all>",
+		Short:                 "complete one or all migrations executed with --postpone-completion",
+		Example:               "OnlineDDL complete test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLComplete,
+	}
 	OnlineDDLLaunch = &cobra.Command{
 		Use:                   "launch <keyspace> <uuid|all>",
 		Short:                 "launch one or all migrations executed with --postpone-launch",
@@ -132,6 +140,36 @@ func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CleanupSchemaMigration(commandCtx, &vtctldatapb.CleanupSchemaMigrationRequest{
+		Keyspace: keyspace,
+		Uuid:     uuid,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandOnlineDDLComplete(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	uuid := cmd.Flags().Arg(1)
+
+	switch {
+	case strings.ToLower(uuid) == AllMigrationsIndicator:
+	case schema.IsOnlineDDLUUID(uuid):
+	default:
+		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.CompleteSchemaMigration(commandCtx, &vtctldatapb.CompleteSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
 	})
@@ -276,6 +314,7 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 func init() {
 	OnlineDDL.AddCommand(OnlineDDLCancel)
 	OnlineDDL.AddCommand(OnlineDDLCleanup)
+	OnlineDDL.AddCommand(OnlineDDLComplete)
 	OnlineDDL.AddCommand(OnlineDDLLaunch)
 	OnlineDDL.AddCommand(OnlineDDLRetry)
 

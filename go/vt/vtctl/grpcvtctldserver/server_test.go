@@ -1777,6 +1777,210 @@ func TestCleanupSchemaMigration(t *testing.T) {
 	}
 }
 
+func TestCompleteSchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tablets   []*topodatapb.Tablet
+		tmc       *testutil.TabletManagerClient
+		req       *vtctldatapb.CompleteSchemaMigrationRequest
+		expected  *vtctldatapb.CompleteSchemaMigrationResponse
+		shouldErr bool
+	}{
+		{
+			tablets: []*topodatapb.Tablet{
+				{
+					Keyspace: "ks",
+					Shard:    "-80",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Keyspace: "ks",
+					Shard:    "80-",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{
+							RowsAffected: 1,
+						},
+					},
+					"zone1-0000000200": {
+						Response: &querypb.QueryResult{},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+					"zone1-0000000200": {},
+				},
+				ReloadSchemaResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+			},
+			req: &vtctldatapb.CompleteSchemaMigrationRequest{
+				Keyspace: "ks",
+				Uuid:     "abc",
+			},
+			expected: &vtctldatapb.CompleteSchemaMigrationResponse{
+				RowsAffectedByShard: map[string]uint64{
+					"-80": 1,
+					"80-": 0,
+				},
+			},
+		},
+		{
+			name: "no shard primary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Keyspace: "ks",
+					Shard:    "-80",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Keyspace: "ks",
+					Shard:    "80-",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{},
+					},
+					"zone1-0000000200": {
+						Response: &querypb.QueryResult{},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+					"zone1-0000000200": {},
+				},
+				ReloadSchemaResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+			},
+			req: &vtctldatapb.CompleteSchemaMigrationRequest{
+				Keyspace: "ks",
+				Uuid:     "abc",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "executeQuery failure",
+			tablets: []*topodatapb.Tablet{
+				{
+					Keyspace: "ks",
+					Shard:    "-80",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Keyspace: "ks",
+					Shard:    "80-",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+					"zone1-0000000200": {
+						Response: &querypb.QueryResult{},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+					"zone1-0000000200": {},
+				},
+				ReloadSchemaResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+			},
+			req: &vtctldatapb.CompleteSchemaMigrationRequest{
+				Keyspace: "ks",
+				Uuid:     "abc",
+			},
+			shouldErr: true,
+		},
+		// execute query failure
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+
+			ctx, Complete := context.WithCancel(context.Background())
+			defer Complete()
+			ts := memorytopo.NewServer(ctx, "zone1")
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, test.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			resp, err := vtctld.CompleteSchemaMigration(ctx, test.req)
+			if test.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, test.expected, resp)
+		})
+	}
+}
+
 func TestCreateKeyspace(t *testing.T) {
 	t.Parallel()
 
