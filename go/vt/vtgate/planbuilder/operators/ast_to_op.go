@@ -107,7 +107,7 @@ func (sq *SubQueryContainer) handleSubquery(
 		return false, nil
 	}
 
-	sqInner, err := createExtractedSubquery(ctx, expr, subq, outerID)
+	sqInner, err := createSubquery(ctx, expr, subq, outerID)
 	if err != nil {
 		return false, err
 	}
@@ -137,24 +137,41 @@ func getSubQuery(expr sqlparser.Expr) *sqlparser.Subquery {
 	return subqueryExprExists
 }
 
-func createExtractedSubquery(
+func createSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 ) (SubQuery, error) {
-
 	switch expr := expr.(type) {
 	case *sqlparser.ExistsExpr:
 		return createExistsSubquery(ctx, expr, subq, outerID)
 	case *sqlparser.ComparisonExpr:
 		return createComparisonSubQuery(ctx, expr, subq, outerID)
+		//default:
+		//	return createValueSubquery(ctx, expr, subq, outerID)
 	}
 	return nil, vterrors.VT12001("unsupported subquery: " + sqlparser.String(expr))
 }
 
+//func createValueSubquery(
+//	ctx *plancontext.PlanningContext,
+//	org sqlparser.Expr,
+//	subq *sqlparser.Subquery,
+//	outerID semantics.TableSet,
+//) (SubQuery, error) {
+//	org = cloneASTAndSemState(ctx, org)
+//
+//	return &SubQueryFilter{
+//		Subquery:   opInner,
+//		Predicates: jpc.predicates,
+//		FilterType: opcode.PulloutValue,
+//		Original:   org,
+//	}, nil
+//}
+
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
-func cloneASTAndSemState(ctx *plancontext.PlanningContext, original sqlparser.SQLNode) sqlparser.SQLNode {
+func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, original T) T {
 	return sqlparser.CopyOnRewrite(original, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		sqlNode, ok := cursor.Node().(sqlparser.Expr)
 		if !ok {
@@ -162,19 +179,20 @@ func cloneASTAndSemState(ctx *plancontext.PlanningContext, original sqlparser.SQ
 		}
 		node := sqlparser.CloneExpr(sqlNode)
 		cursor.Replace(node)
-	}, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(T)
 }
 
-func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlparser.ComparisonExpr, subFromOutside *sqlparser.Subquery, outerID semantics.TableSet) (SubQuery, error) {
-	subq, outside := semantics.GetSubqueryAndOtherSide(original)
-	if outside == nil || subq != subFromOutside {
-		panic("uh oh")
-	}
-	original = cloneASTAndSemState(ctx, original).(*sqlparser.ComparisonExpr)
-
+func createSubqueryFilter(
+	ctx *plancontext.PlanningContext,
+	original sqlparser.Expr,
+	subq *sqlparser.Subquery,
+	outerID semantics.TableSet,
+	predicate sqlparser.Expr,
+	filterType opcode.PulloutOpcode,
+) (*SubQueryFilter, error) {
 	innerSel, ok := subq.Select.(*sqlparser.Select)
 	if !ok {
-		return nil, vterrors.VT13001("should return uncorrelated subquery here")
+		return nil, vterrors.VT13001("yucki unions")
 	}
 
 	subqID := ctx.SemTable.StatementIDs[innerSel]
@@ -208,14 +226,45 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 		innerSel.Where.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	}
 
+	opInner, err := translateQueryToOp(ctx, innerSel)
+	if err != nil {
+		return nil, err
+	}
+
+	opInner = sqL.getRootOperator(opInner)
+
+	return &SubQueryFilter{
+		FilterType:     filterType,
+		Subquery:       opInner,
+		Predicates:     jpc.predicates,
+		OuterPredicate: predicate,
+		Original:       original,
+	}, nil
+
+}
+
+func createComparisonSubQuery(
+	ctx *plancontext.PlanningContext,
+	original *sqlparser.ComparisonExpr,
+	subFromOutside *sqlparser.Subquery,
+	outerID semantics.TableSet,
+) (SubQuery, error) {
+	subq, outside := semantics.GetSubqueryAndOtherSide(original)
+	if outside == nil || subq != subFromOutside {
+		panic("uh oh")
+	}
+	original = cloneASTAndSemState(ctx, original)
+
 	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.VT13001("can't use unexpanded projections here")
 	}
 
-	opInner, err := translateQueryToOp(ctx, innerSel)
-	if err != nil {
-		return nil, err
+	// this is a predicate that will only be used to check if we can merge the subquery with the outer query
+	predicate := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     outside,
+		Right:    ae.Expr,
 	}
 
 	filterType := opcode.PulloutValue
@@ -226,72 +275,18 @@ func createComparisonSubQuery(ctx *plancontext.PlanningContext, original *sqlpar
 		filterType = opcode.PulloutNotIn
 	}
 
-	opInner = sqL.getRootOperator(opInner)
-
-	// this is a predicate that will only be used to check if we can merge the subquery with the outer query
-	predicate := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     outside,
-		Right:    ae.Expr,
-	}
-
-	return &SubQueryFilter{
-		FilterType:     filterType,
-		Subquery:       opInner,
-		Predicates:     jpc.predicates,
-		OuterPredicate: predicate,
-		Original:       original,
-	}, nil
+	return createSubqueryFilter(ctx, original, subq, outerID, predicate, filterType)
 }
 
 func createExistsSubquery(
 	ctx *plancontext.PlanningContext,
-	org sqlparser.Expr,
+	org *sqlparser.ExistsExpr,
 	sq *sqlparser.Subquery,
 	outerID semantics.TableSet,
-) (SubQuery, error) {
-	org = sqlparser.CloneExpr(org)
-	innerSel, ok := sq.Select.(*sqlparser.Select)
-	if !ok {
-		return nil, vterrors.VT13001("yucki unions")
-	}
+) (*SubQueryFilter, error) {
+	org = cloneASTAndSemState(ctx, org)
 
-	var expr sqlparser.Expr
-
-	if innerSel.Where != nil {
-		expr = innerSel.Where.Expr
-	}
-
-	subqID := ctx.SemTable.StatementIDs[innerSel]
-	totalID := subqID.Merge(outerID)
-
-	jpc := &joinPredicateCollector{
-		totalID: totalID,
-		subqID:  subqID,
-		outerID: outerID,
-	}
-
-	for _, predicate := range sqlparser.SplitAndExpression(nil, expr) {
-		jpc.inspectPredicate(ctx, predicate)
-	}
-
-	if len(jpc.remainingPredicates) == 0 {
-		innerSel.Where = nil
-	} else {
-		innerSel.Where.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
-	}
-
-	opInner, err := translateQueryToOp(ctx, innerSel)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SubQueryFilter{
-		Subquery:   opInner,
-		Predicates: jpc.predicates,
-		FilterType: opcode.PulloutExists,
-		Original:   org,
-	}, nil
+	return createSubqueryFilter(ctx, org, sq, outerID, nil, opcode.PulloutExists)
 }
 
 type joinPredicateCollector struct {
@@ -320,68 +315,6 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 func (jpc *joinPredicateCollector) addPredicate(predicate sqlparser.Expr) {
 	jpc.predicates = append(jpc.predicates, predicate)
 }
-
-// func (jpc *joinPredicateCollector) calcJoinColumns(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
-// 	cmp, ok := predicate.(*sqlparser.ComparisonExpr)
-// 	if !ok || cmp.Operator != sqlparser.EqualOp {
-// 		return
-// 	}
-//
-// 	innerE, outerE := cmp.Left, cmp.Right
-// 	subDeps := ctx.SemTable.RecursiveDeps(innerE)
-// 	outerDeps := ctx.SemTable.RecursiveDeps(outerE)
-// 	if !subDeps.IsSolvedBy(jpc.subqID) || !outerDeps.IsSolvedBy(jpc.outerID) {
-// 		subDeps, outerDeps = outerDeps, subDeps
-// 		innerE, outerE = outerE, innerE
-// 	}
-//
-// 	// we check again, if we still haven't figured it out, we can't use these sides for merging or routing
-// 	if !subDeps.IsSolvedBy(jpc.subqID) || !outerDeps.IsSolvedBy(jpc.outerID) {
-// 		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
-// 		return
-// 	}
-//
-// 	outerCol := getColName(outerE)
-// 	innerCol := getColName(innerE)
-// 	if outerCol != nil || innerCol != nil {
-// 		jpc.comparisonColumns = append(jpc.comparisonColumns, [2]*sqlparser.ColName{outerCol, innerCol})
-// 	}
-// }
-//
-// // calcJoinVars finds all the columns from the outer query that we need to copy to the inner query
-// // and replaces them with bindvars in the predicate for the RHS
-// func (jpc *joinPredicateCollector) calcJoinVars(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
-// 	pre := func(node, _ sqlparser.SQLNode) bool {
-// 		_, isSubQuery := node.(*sqlparser.Subquery)
-// 		return !isSubQuery
-// 	}
-//
-// 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
-// 		col, ok := cursor.Node().(*sqlparser.ColName)
-// 		if !ok {
-// 			return
-// 		}
-// 		deps := ctx.SemTable.RecursiveDeps(col)
-// 		if deps.IsSolvedBy(jpc.subqID) {
-// 			return
-// 		}
-//
-// 		var bindvarName string
-// 		for name, existing := range jpc.joinVars {
-// 			if ctx.SemTable.EqualsExprWithDeps(col, existing) {
-// 				bindvarName = name
-// 			}
-// 		}
-// 		if bindvarName == "" {
-// 			bindvarName = ctx.ReservedVars.ReserveColName(col)
-// 		}
-// 		cursor.Replace(sqlparser.NewArgument(bindvarName))
-// 		jpc.joinVars[bindvarName] = col
-// 	}
-//
-// 	rhsPred := sqlparser.CopyOnRewrite(predicate, pre, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
-// 	jpc.rhsPredicate = sqlparser.AndExpressions(jpc.rhsPredicate, rhsPred)
-// }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
 	opLHS, err := translateQueryToOp(ctx, node.Left)
