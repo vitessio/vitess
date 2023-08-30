@@ -100,17 +100,26 @@ OnlineDDL show test_keyspace failed`,
 	}
 )
 
-func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	uuid := cmd.Flags().Arg(1)
+// analyzeOnlineDDLCommandWithUuidOrAllArgument is a general helper function for OnlineDDL commands that
+// accept either a valid UUID or the "all" argument.
+func analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd *cobra.Command) (keyspace, uuid string, err error) {
+	keyspace = cmd.Flags().Arg(0)
+	uuid = cmd.Flags().Arg(1)
 
 	switch {
 	case strings.ToLower(uuid) == AllMigrationsIndicator:
 	case schema.IsOnlineDDLUUID(uuid):
 	default:
-		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
+		return "", "", fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
 	}
+	return keyspace, uuid, nil
+}
 
+func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
+	}
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CancelSchemaMigration(commandCtx, &vtctldatapb.CancelSchemaMigrationRequest{
@@ -157,16 +166,10 @@ func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 }
 
 func commandOnlineDDLComplete(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	uuid := cmd.Flags().Arg(1)
-
-	switch {
-	case strings.ToLower(uuid) == AllMigrationsIndicator:
-	case schema.IsOnlineDDLUUID(uuid):
-	default:
-		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
 	}
-
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CompleteSchemaMigration(commandCtx, &vtctldatapb.CompleteSchemaMigrationRequest{
@@ -187,16 +190,10 @@ func commandOnlineDDLComplete(cmd *cobra.Command, args []string) error {
 }
 
 func commandOnlineDDLLaunch(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	uuid := cmd.Flags().Arg(1)
-
-	switch {
-	case strings.ToLower(uuid) == AllMigrationsIndicator:
-	case schema.IsOnlineDDLUUID(uuid):
-	default:
-		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
 	}
-
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.LaunchSchemaMigration(commandCtx, &vtctldatapb.LaunchSchemaMigrationRequest{
