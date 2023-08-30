@@ -523,7 +523,7 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("uuid", req.Uuid)
 
-	query, err := alterSchemaMigrationQuery("Cancel", req.Uuid)
+	query, err := alterSchemaMigrationQuery("cancel", req.Uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -2463,6 +2463,37 @@ func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.Mo
 
 	resp, err = s.ws.MoveTablesCreate(ctx, req)
 	return resp, err
+}
+
+// LaunchSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldatapb.LaunchSchemaMigrationRequest) (resp *vtctldatapb.LaunchSchemaMigrationResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LaunchSchemaMigration")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	query, err := alterSchemaMigrationQuery("launch", req.Uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("Calling ApplySchema to launch migration")
+	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
+		Keyspace:            req.Keyspace,
+		Sql:                 []string{query},
+		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.LaunchSchemaMigrationResponse{
+		RowsAffectedByShard: qr.RowsAffectedByShard,
+	}
+	return resp, nil
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.

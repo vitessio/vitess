@@ -45,7 +45,7 @@ var (
 	}
 	OnlineDDLCancel = &cobra.Command{
 		Use:                   "cancel <keyspace> <uuid|all>",
-		Short:                 "CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.",
+		Short:                 "cancel one or all migrations, terminating any runnign ones as needed.",
 		Example:               "OnlineDDL cancel test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -58,6 +58,14 @@ var (
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandOnlineDDLCleanup,
+	}
+	OnlineDDLLaunch = &cobra.Command{
+		Use:                   "launch <keyspace> <uuid|all>",
+		Short:                 "launch one or all migrations executed with --postpone-launch",
+		Example:               "OnlineDDL launch test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLLaunch,
 	}
 	OnlineDDLRetry = &cobra.Command{
 		Use:                   "retry <keyspace> <uuid>",
@@ -89,7 +97,7 @@ func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
 	uuid := cmd.Flags().Arg(1)
 
 	switch {
-	case uuid == AllMigrationsIndicator:
+	case strings.ToLower(uuid) == AllMigrationsIndicator:
 	case schema.IsOnlineDDLUUID(uuid):
 	default:
 		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
@@ -124,6 +132,36 @@ func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CleanupSchemaMigration(commandCtx, &vtctldatapb.CleanupSchemaMigrationRequest{
+		Keyspace: keyspace,
+		Uuid:     uuid,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandOnlineDDLLaunch(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	uuid := cmd.Flags().Arg(1)
+
+	switch {
+	case strings.ToLower(uuid) == AllMigrationsIndicator:
+	case schema.IsOnlineDDLUUID(uuid):
+	default:
+		return fmt.Errorf("argument must be 'all' or a valid UUID. Got '%s'", uuid)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.LaunchSchemaMigration(commandCtx, &vtctldatapb.LaunchSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
 	})
@@ -238,6 +276,7 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 func init() {
 	OnlineDDL.AddCommand(OnlineDDLCancel)
 	OnlineDDL.AddCommand(OnlineDDLCleanup)
+	OnlineDDL.AddCommand(OnlineDDLLaunch)
 	OnlineDDL.AddCommand(OnlineDDLRetry)
 
 	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "Output JSON instead of human-readable table.")

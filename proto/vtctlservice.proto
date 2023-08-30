@@ -166,6 +166,8 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch
+  rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
   // MoveTablesCreate creates a workflow which moves one or more tables from a
   // source keyspace to a target keyspace.
   rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
