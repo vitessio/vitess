@@ -1726,6 +1726,7 @@ func (tsv *TabletServer) Close(ctx context.Context) error {
 	tsv.sm.closeAll()
 	tsv.qe.Close()
 	tsv.stats.Stop()
+	tsv.lagThrottler.Close()
 	return nil
 }
 

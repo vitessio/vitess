@@ -138,8 +138,5 @@ func (c *Client) Throttle(ctx context.Context) {
 }
 
 func (c *Client) Close() {
-	if c.throttler != nil {
-		c.throttler.Close()
-	}
 	c.cancel()
 }
