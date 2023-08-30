@@ -14,23 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package colldata
 
 import (
 	"math"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Collation_multibyte struct {
-	id      ID
+	id      collations.ID
 	name    string
 	sort    *[256]byte
 	charset charset.Charset
 }
 
-func (c *Collation_multibyte) ID() ID {
+func (c *Collation_multibyte) ID() collations.ID {
 	return c.id
 }
 

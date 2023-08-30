@@ -542,29 +542,6 @@ func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-// Reset all vindex predicates on this route and re-build their options from
-// the list of seen routing predicates.
-func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
-	tr.RouteOpCode = engine.Scatter
-	tr.Selected = nil
-	for i, vp := range tr.VindexPreds {
-		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
-	}
-
-	var routing Routing = tr
-	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return err
-		}
-	}
-	if routing != tr {
-		return vterrors.VT13001("uh-oh. we ended up with a different type of routing")
-	}
-	return nil
-}
-
 func (tr *ShardedRouting) SelectedVindex() vindexes.Vindex {
 	if tr.Selected == nil {
 		return nil

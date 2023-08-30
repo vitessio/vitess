@@ -16,6 +16,8 @@ limitations under the License.
 
 package evalengine
 
+import "vitess.io/vitess/go/mysql/collations/colldata"
+
 func (expr *Literal) constant() bool {
 	return true
 }
@@ -78,7 +80,7 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	if lit, ok := expr.Right.(*Literal); ok {
 		if b, ok := lit.inner.(*evalBytes); ok && (b.isVarChar() || b.isBinary()) {
 			expr.MatchCollation = b.col.Collation
-			coll := expr.MatchCollation.Get()
+			coll := colldata.Lookup(expr.MatchCollation)
 			expr.Match = coll.Wildcard(b.bytes, 0, 0, 0)
 		}
 	}

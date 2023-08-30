@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -155,7 +156,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 			if collationID == collations.CollationBinaryID {
 				return bytes.Compare(v1.Raw(), v2.Raw()), nil
 			}
-			coll := collationID.Get()
+			coll := colldata.Lookup(collationID)
 			if coll == nil {
 				return 0, UnsupportedCollationError{ID: collationID}
 			}

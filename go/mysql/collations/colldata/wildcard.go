@@ -38,7 +38,7 @@ limitations under the License.
 //
 // Because of this, we intend to enable the recursive algorithm by default.
 
-package collations
+package colldata
 
 import (
 	"unicode/utf8"

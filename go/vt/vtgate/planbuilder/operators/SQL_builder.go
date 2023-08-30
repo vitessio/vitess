@@ -21,7 +21,6 @@ import (
 	"io"
 	"slices"
 	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -267,31 +266,6 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 	}
 }
 
-func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName string) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		col, ok := node.(*sqlparser.ColName)
-		if !ok {
-			return true, nil
-		}
-		hasTable := qb.hasTable(col.Qualifier.Name.String())
-		if hasTable {
-			col.Qualifier = sqlparser.TableName{
-				Name: sqlparser.NewIdentifierCS(dtName),
-			}
-		}
-		return true, nil
-	}, expr)
-}
-
-func (qb *queryBuilder) hasTable(tableName string) bool {
-	for _, name := range qb.tableNames {
-		if strings.EqualFold(tableName, name) {
-			return true
-		}
-	}
-	return false
-}
-
 func (qb *queryBuilder) sortTables() {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		sel, isSel := node.(*sqlparser.Select)
@@ -337,20 +311,6 @@ func (ts *tableSorter) Less(i, j int) bool {
 // Swap implements the Sort interface
 func (ts *tableSorter) Swap(i, j int) {
 	ts.sel.From[i], ts.sel.From[j] = ts.sel.From[j], ts.sel.From[i]
-}
-
-func (h *Horizon) toSQL(qb *queryBuilder) error {
-	err := stripDownQuery(h.Query, qb.sel)
-	if err != nil {
-		return err
-	}
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
-			removeKeyspaceFromSelectExpr(aliasedExpr)
-		}
-		return true, nil
-	}, qb.sel)
-	return nil
 }
 
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {

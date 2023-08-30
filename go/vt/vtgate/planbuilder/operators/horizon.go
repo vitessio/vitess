@@ -65,42 +65,6 @@ func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-// findOutputColumn returns the index on which the given name is found in the slice of
-// *sqlparser.SelectExprs of the derivedTree. The *sqlparser.SelectExpr must be of type
-// *sqlparser.AliasedExpr and match the given name.
-// If name is not present but the query's select expressions contain a *sqlparser.StarExpr
-// the function will return no error and an index equal to -1.
-// If name is not present and the query does not have a *sqlparser.StarExpr, the function
-// will return an unknown column error.
-func (h *Horizon) findOutputColumn(name *sqlparser.ColName) (int, error) {
-	hasStar := false
-	for j, exp := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
-		switch exp := exp.(type) {
-		case *sqlparser.AliasedExpr:
-			if !exp.As.IsEmpty() && exp.As.Equal(name.Name) {
-				return j, nil
-			}
-			if exp.As.IsEmpty() {
-				col, ok := exp.Expr.(*sqlparser.ColName)
-				if !ok {
-					return 0, vterrors.VT12001("complex expression needs column alias: %s", sqlparser.String(exp))
-				}
-				if name.Name.Equal(col.Name) {
-					return j, nil
-				}
-			}
-		case *sqlparser.StarExpr:
-			hasStar = true
-		}
-	}
-
-	// we have found a star but no matching *sqlparser.AliasedExpr, thus we return -1 with no error.
-	if hasStar {
-		return -1, nil
-	}
-	return 0, vterrors.VT03014(name.Name.String(), "field list")
-}
-
 // IsMergeable is not a great name for this function. Suggestions for a better one are welcome!
 // This function will return false if the derived table inside it has to run on the vtgate side, and so can't be merged with subqueries
 // This logic can also be used to check if this is a derived table that can be had on the left hand side of a vtgate join.
@@ -242,10 +206,6 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, err
 	}
 	h.QP = qp
 	return h.QP, nil
-}
-
-func (h *Horizon) setQP(qp *QueryProjection) {
-	h.QP = qp
 }
 
 func (h *Horizon) ShortDescription() string {

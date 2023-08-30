@@ -1048,7 +1048,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vc.keyspace)
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(vc.collation.Get().Name())
+	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {

@@ -36,7 +36,6 @@ type Union struct {
 
 	unionColumns              sqlparser.SelectExprs
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
-	offsetPlanned             bool
 }
 
 func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {

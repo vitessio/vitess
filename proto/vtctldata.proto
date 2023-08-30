@@ -432,6 +432,16 @@ message CleanupSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+
+message CompleteSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CompleteSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
 message CreateKeyspaceRequest {
   // Name is the name of the keyspace.
   string name = 1;
@@ -973,6 +983,15 @@ message InitShardPrimaryRequest {
 
 message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
+}
+
+message LaunchSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message LaunchSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message MoveTablesCreateRequest {
