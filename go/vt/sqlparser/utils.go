@@ -173,7 +173,7 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 	// execute a query which slightly differs from the parsed
 	// version: e.g. 'where id=1' becomes 'where id = 1'.
 	if modified {
-		return CanonicalString(upd), nil
+		return String(upd), nil
 	}
 	return query, nil
 }

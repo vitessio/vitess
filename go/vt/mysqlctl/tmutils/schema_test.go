@@ -75,7 +75,7 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				"CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
+				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
 				"create view view1 as select id from t1",
 			},
 		},
@@ -102,8 +102,8 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				"CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
-				"CREATE TABLE `{{.DatabaseName}}`.`table2` (\n\t`id` int PRIMARY KEY\n)",
+				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"create table `{{.DatabaseName}}`.table2 (\n\tid int primary key\n)",
 			},
 		},
 		{
@@ -118,8 +118,8 @@ func TestToSQLStrings(t *testing.T) {
 				},
 			},
 			want: []string{
-				"CREATE DATABASE `{{.DatabaseName}}`", "CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
-				"CREATE TABLE `{{.DatabaseName}}`.`table2` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE DATABASE `{{.DatabaseName}}`", "create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"create table `{{.DatabaseName}}`.table2 (\n\tid int primary key\n)",
 				"create view view1 as select id from t1",
 				"create view view2 as select id from t2",
 			},
@@ -135,8 +135,8 @@ func TestToSQLStrings(t *testing.T) {
 			},
 			want: []string{
 				"CREATE DATABASE `{{.DatabaseName}}`",
-				"CREATE TABLE `{{.DatabaseName}}`.`table1` (\n\t`id` int PRIMARY KEY\n)",
-				"CREATE TABLE `{{.DatabaseName}}`.`table3` (\n\t`id` bigint NOT NULL\n) ENGINE InnoDB",
+				"create table `{{.DatabaseName}}`.table1 (\n\tid int primary key\n)",
+				"create table `{{.DatabaseName}}`.table3 (\n\tid bigint not null\n) Engine InnoDB",
 			},
 		},
 	}
