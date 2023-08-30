@@ -2165,7 +2165,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded_a.col from unsharded_a, unsharded_b where 1 != 1",
-            "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
+            "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq_has_values1 and unsharded_a.col in ::__sq1",
             "Table": "unsharded_a, unsharded_b"
           }
         ]
@@ -2203,95 +2203,39 @@
             "Table": "`user`"
           },
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "unsharded_`user`",
+            "OperatorType": "Filter",
+            "Predicate": ":__sq_has_values1 and `user`.col in ::__sq1",
+            "ResultColumns": 1,
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-                "Query": "select unsharded.col from unsharded",
-                "Table": "unsharded"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.unsharded",
-        "user.user"
-      ]
-    }
-  },
-  {
-    "comment": "subquery in ON clause, with left join primitives\n# The subquery is not pulled all the way out.",
-    "query": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
-      "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Join",
-            "Variant": "LeftJoin",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "unsharded_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-                "Query": "select unsharded.col from unsharded",
-                "Table": "unsharded"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
-                "Table": "`user`"
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "TableName": "unsharded_`user`",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
+                    "Query": "select unsharded.col from unsharded",
+                    "Table": "unsharded"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.col from `user` where 1 != 1",
+                    "Query": "select `user`.col from `user`",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }
@@ -2310,29 +2254,18 @@
       "QueryType": "SELECT",
       "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
       "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "unsharded_`user`_unsharded_a",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "R:0",
-            "TableName": "`user`_unsharded, unsharded_a",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values1",
+              "__sq1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2341,22 +2274,58 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`",
                 "Table": "`user`"
               },
               {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select unsharded.col from unsharded, unsharded_a where 1 != 1",
-                "Query": "select unsharded.col from unsharded, unsharded_a",
-                "Table": "unsharded, unsharded_a"
+                "OperatorType": "Filter",
+                "Predicate": ":__sq_has_values1 and `user`.col in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0",
+                    "TableName": "unsharded_`user`",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
+                        "Query": "select unsharded.col from unsharded",
+                        "Table": "unsharded"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+                        "Query": "select `user`.col from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded_a where 1 != 1",
+            "Query": "select 1 from unsharded_a",
+            "Table": "unsharded_a"
           }
         ]
       },

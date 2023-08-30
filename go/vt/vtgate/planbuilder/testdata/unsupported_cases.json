@@ -498,5 +498,15 @@
     "comment": "Cannot have more than one aggr(distinct...",
     "query": "select count(distinct a), count(distinct b) from user",
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
+  },
+  {
+    "comment": "subqueries not supported in the join condition of outer joins",
+    "query": "select unsharded_a.col from unsharded_a left join unsharded_b on unsharded_a.col IN (select col from user)",
+    "plan": "VT12001: unsupported: subquery in outer join predicate"
+  },
+  {
+    "comment": "subquery in ON clause, with left join primitives",
+    "query": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
+    "plan": "VT12001: unsupported: subquery in outer join predicate"
   }
 ]

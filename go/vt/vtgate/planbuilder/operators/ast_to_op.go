@@ -76,12 +76,12 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 }
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
-	sqL := &SubQueryContainer{}
+	sqc := &SubQueryContainer{}
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
 		sqlparser.RemoveKeyspaceFromColName(expr)
-		isSubq, err := sqL.handleSubquery(ctx, expr, outerID)
+		isSubq, err := sqc.handleSubquery(ctx, expr, outerID)
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +94,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		}
 		addColumnEquality(ctx, expr)
 	}
-	return sqL.getRootOperator(op), nil
+	return sqc.getRootOperator(op), nil
 }
 
 func (sq *SubQueryContainer) handleSubquery(

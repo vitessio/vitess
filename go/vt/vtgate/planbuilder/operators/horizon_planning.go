@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -277,10 +278,10 @@ func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error
 var _ merger = (*subqueryRouteMerger)(nil)
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
-func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	lhs := TableID(join.LHS)
-	rhs := TableID(join.RHS)
-	joinID := TableID(join)
+func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+	lhs := TableID(outer.LHS)
+	rhs := TableID(outer.RHS)
+	joinID := TableID(outer)
 	innerID := TableID(inner.Inner())
 
 	deps := semantics.EmptyTableSet()
@@ -291,18 +292,34 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 
 	if deps.IsSolvedBy(lhs) {
 		// we can safely push down the subquery on the LHS
-		join.LHS = addSubQuery(join.LHS, inner)
-		return join, rewrite.NewTree("push subquery into LHS of join", inner), nil
+		outer.LHS = addSubQuery(outer.LHS, inner)
+		return outer, rewrite.NewTree("push subquery into LHS of join", inner), nil
 	}
 
-	if join.LeftJoin {
+	if outer.LeftJoin {
+		return nil, rewrite.SameTree, nil
+	}
+
+	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
+	// since this side is executed once per row from the LHS, so we would unnecessarily execute
+	// the subquery multiple times. The exception is if we can merge the subquery with the RHS of the join.
+	merged, result, err := tryMergeWithRHS(ctx, inner, outer)
+	if err != nil {
+		return nil, nil, err
+	}
+	if merged != nil {
+		return merged, result, nil
+	}
+
+	if len(inner.GetJoinPredicates()) == 0 {
+		// we don't want to push uncorrelated subqueries to the RHS of a join
 		return nil, rewrite.SameTree, nil
 	}
 
 	if deps.IsSolvedBy(rhs) {
 		// we can push down the subquery filter on RHS of the join
-		join.RHS = addSubQuery(join.RHS, inner)
-		return join, rewrite.NewTree("push subquery into RHS of join", inner), nil
+		outer.RHS = addSubQuery(outer.RHS, inner)
+		return outer, rewrite.NewTree("push subquery into RHS of join", inner), nil
 	}
 
 	if deps.IsSolvedBy(joinID) {
@@ -315,8 +332,8 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 			if err != nil {
 				return nil, rewrite.SameTree, nil
 			}
-			join.Predicate = ctx.SemTable.AndExpressions(predicate, join.Predicate)
-			join.JoinPredicates = append(join.JoinPredicates, col)
+			outer.Predicate = ctx.SemTable.AndExpressions(predicate, outer.Predicate)
+			outer.JoinPredicates = append(outer.JoinPredicates, col)
 			updatedPred = append(updatedPred, col.RHSExpr)
 			for idx, expr := range col.LHSExprs {
 				argName := col.BvNames[idx]
@@ -326,11 +343,99 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner SubQuery,
 		}
 		inner.ReplaceJoinPredicates(updatedPred)
 		// we can't push down filter on outer joins
-		join.RHS = addSubQuery(join.RHS, inner)
-		return join, rewrite.NewTree("push subquery into RHS of join removing LHS expr", inner), nil
+		outer.RHS = addSubQuery(outer.RHS, inner)
+		return outer, rewrite.NewTree("push subquery into RHS of join removing LHS expr", inner), nil
 	}
 
 	return nil, rewrite.SameTree, nil
+}
+
+// findOrAddColNameBindVarName goes through the JoinColumns and looks for the given colName and returns the argument name if found.
+// if it's not found, a new JoinColumn passing this through will be added
+func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) (string, error) {
+	for _, thisCol := range aj.JoinColumns {
+		idx := slices.IndexFunc(thisCol.LHSExprs, func(e sqlparser.Expr) bool {
+			return ctx.SemTable.EqualsExpr(e, col)
+		})
+		if idx != -1 {
+			return thisCol.BvNames[idx], nil
+		}
+	}
+	for _, thisCol := range aj.JoinPredicates {
+		idx := slices.IndexFunc(thisCol.LHSExprs, func(e sqlparser.Expr) bool {
+			return ctx.SemTable.EqualsExpr(e, col)
+		})
+		if idx != -1 {
+			return thisCol.BvNames[idx], nil
+		}
+	}
+	// we didn't find it, so we need to add it
+	bvName := ctx.ReservedVars.ReserveColName(col)
+	aj.JoinColumns = append(aj.JoinColumns, JoinColumn{
+		Original: aeWrap(col),
+		BvNames:  []string{bvName},
+		LHSExprs: []sqlparser.Expr{col},
+		GroupBy:  false,
+	})
+	return bvName, nil
+}
+
+// rewriteOriginalPushedToRHS rewrites the original expression to use the argument names instead of the column names
+// this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
+// instead of the column names
+func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, error) {
+	var err error
+	outerID := TableID(outer.LHS)
+	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok || ctx.SemTable.RecursiveDeps(col) != outerID {
+			// we are only interested in columns that are coming from the LHS of the join
+			return
+		}
+		// this is a dependency we are being fed from the LHS of the join, so we
+		// need to find the argument name for it and use that instead
+		// we can't use the column name directly, because we're in the RHS of the join
+		name, innerErr := outer.findOrAddColNameBindVarName(ctx, col)
+		if err != nil {
+			err = innerErr
+			cursor.StopTreeWalk()
+			return
+		}
+		cursor.Replace(sqlparser.NewArgument(name))
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return result.(sqlparser.Expr), nil
+}
+
+// tryMergeWithRHS attempts to merge a subquery with the RHS of a join
+func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+	// both sides need to be routes
+	outerRoute, ok := outer.RHS.(*Route)
+	if !ok {
+		return nil, nil, nil
+	}
+	innerRoute, ok := inner.Inner().(*Route)
+	if !ok {
+		return nil, nil, nil
+	}
+
+	newExpr, err := rewriteOriginalPushedToRHS(ctx, inner.OriginalExpression(), outer)
+	if err != nil {
+		return nil, nil, err
+	}
+	sqm := &subqueryRouteMerger{
+		outer:    outerRoute,
+		original: newExpr,
+	}
+	newOp, err := mergeJoinInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
+	if err != nil || newOp == nil {
+		return nil, nil, err
+	}
+
+	outer.RHS = newOp
+	return outer, rewrite.NewTree("merged subquery with rhs of join", inner), nil
 }
 
 func replaceSingleExpr(ctx *plancontext.PlanningContext, expr, from, to sqlparser.Expr) sqlparser.Expr {

@@ -2248,7 +2248,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u1_col": 1
+          "u1_col1": 1
         },
         "TableName": "`user`_`user`_user_extra",
         "Inputs": [
@@ -2289,7 +2289,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
+                "Query": "select 1 from user_extra as ue where ue.col = :u1_col1 and ue.col = :u2_col",
                 "Table": "user_extra"
               }
             ]

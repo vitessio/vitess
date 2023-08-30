@@ -581,8 +581,7 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 
 func tryMergeJoinShardedRouting(
 	ctx *plancontext.PlanningContext,
-	routeA *Route,
-	routeB *Route,
+	routeA, routeB *Route,
 	m merger,
 	joinPredicates []sqlparser.Expr,
 ) (*Route, error) {

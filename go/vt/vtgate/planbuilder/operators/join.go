@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -88,6 +89,10 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
+	subq := getSubQuery(tableExpr.Condition.On)
+	if subq != nil {
+		return nil, vterrors.VT12001("subquery in outer join predicate")
+	}
 	predicate := tableExpr.Condition.On
 	sqlparser.RemoveKeyspaceFromColName(predicate)
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}, nil
@@ -109,16 +114,25 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Ope
 
 func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
 	op := createJoin(ctx, lhs, rhs)
-	pred := tableExpr.Condition.On
-	if pred != nil {
-		var err error
-		sqlparser.RemoveKeyspaceFromColName(pred)
+	sqc := &SubQueryContainer{}
+	outerID := TableID(op)
+	joinPredicate := tableExpr.Condition.On
+	sqlparser.RemoveKeyspaceFromColName(joinPredicate)
+	exprs := sqlparser.SplitAndExpression(nil, joinPredicate)
+	for _, pred := range exprs {
+		isSubq, err := sqc.handleSubquery(ctx, pred, outerID)
+		if err != nil {
+			return nil, err
+		}
+		if isSubq {
+			continue
+		}
 		op, err = op.AddPredicate(ctx, pred)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return op, nil
+	return sqc.getRootOperator(op), nil
 }
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
