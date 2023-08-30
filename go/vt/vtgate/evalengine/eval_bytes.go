@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
@@ -82,8 +83,8 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 		typedcol.Collation = col
 
 		if col != collations.CollationBinaryID {
-			fromCollation := b.col.Collation.Get()
-			toCollation := col.Get()
+			fromCollation := colldata.Lookup(b.col.Collation)
+			toCollation := colldata.Lookup(col)
 
 			var err error
 			bytes, err = charset.Convert(nil, toCollation.Charset(), bytes, fromCollation.Charset())
@@ -109,7 +110,7 @@ func (e *evalBytes) Hash(h *vthash.Hasher) {
 		_, _ = h.Write(e.bytes)
 	default:
 		h.Write16(hashPrefixBytes)
-		col := e.col.Collation.Get()
+		col := colldata.Lookup(e.col.Collation)
 		col.Hash(h, e.bytes, 0)
 	}
 }
@@ -153,7 +154,7 @@ func (e *evalBytes) truncateInPlace(size int) {
 			e.bytes = e.bytes[:size]
 		}
 	case sqltypes.IsText(tt):
-		collation := e.col.Collation.Get()
+		collation := colldata.Lookup(e.col.Collation)
 		e.bytes = charset.Slice(collation.Charset(), e.bytes, 0, size)
 	default:
 		panic("called EvalResult.truncate on non-quoted")

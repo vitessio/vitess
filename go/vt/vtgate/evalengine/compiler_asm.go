@@ -35,6 +35,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -692,7 +694,7 @@ func (asm *assembler) CmpString_coerce(coercion *compiledCoercion) {
 	}, "CMP VARCHAR(SP-2), VARCHAR(SP-1) COERCE AND COLLATE '%s'", coercion.col.Name())
 }
 
-func (asm *assembler) CmpString_collate(collation collations.Collation) {
+func (asm *assembler) CmpString_collate(collation colldata.Collation) {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2024,7 +2026,7 @@ func (asm *assembler) Fn_CONV_uc(t sqltypes.Type, col collations.TypedCollation)
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := evalCollation(env.vm.stack[env.vm.sp-1])
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText([]byte(v.Collation.Get().Name()), col)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText([]byte(collations.Local().LookupName(v.Collation)), col)
 		return 1
 	}, "FN COLLATION (SP-1)")
 }
@@ -2292,7 +2294,7 @@ func (asm *assembler) Fn_CHAR_LENGTH() {
 		if sqltypes.IsBinary(arg.SQLType()) {
 			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(len(arg.bytes)))
 		} else {
-			coll := arg.col.Collation.Get()
+			coll := colldata.Lookup(arg.col.Collation)
 			count := charset.Length(coll.Charset(), arg.bytes)
 			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(count))
 		}
@@ -2321,8 +2323,8 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-			coll := str.col.Collation.Get()
-			csa, ok := coll.(collations.CaseAwareCollation)
+			coll := colldata.Lookup(str.col.Collation)
+			csa, ok := coll.(colldata.CaseAwareCollation)
 			if !ok {
 				env.vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 			} else {
@@ -2335,8 +2337,8 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-			coll := str.col.Collation.Get()
-			csa, ok := coll.(collations.CaseAwareCollation)
+			coll := colldata.Lookup(str.col.Collation)
+			csa, ok := coll.(colldata.CaseAwareCollation)
 			if !ok {
 				env.vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 			} else {
@@ -2366,7 +2368,7 @@ func (asm *assembler) Fn_MULTICMP_b(args int, lessThan bool) {
 }
 
 func (asm *assembler) Fn_MULTICMP_c(args int, lessThan bool, tc collations.TypedCollation) {
-	col := tc.Collation.Get()
+	col := colldata.Lookup(tc.Collation)
 
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2495,7 +2497,7 @@ func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
 			return 1
 		}
 
-		cs := col.Collation.Get().Charset()
+		cs := colldata.Lookup(col.Collation).Charset()
 		strLen := charset.Length(cs, str.bytes)
 
 		str.tt = int16(sqltypes.VarChar)
@@ -2526,7 +2528,7 @@ func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
 			return 1
 		}
 
-		cs := col.Collation.Get().Charset()
+		cs := colldata.Lookup(col.Collation).Charset()
 		strLen := charset.Length(cs, str.bytes)
 
 		str.tt = int16(sqltypes.VarChar)
@@ -2563,7 +2565,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 			return 1
 		}
 
-		cs := col.Collation.Get().Charset()
+		cs := colldata.Lookup(col.Collation).Charset()
 		strLen := charset.Length(cs, str.bytes)
 		l := int(length.i)
 
@@ -2617,7 +2619,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 			return 1
 		}
 
-		cs := col.Collation.Get().Charset()
+		cs := colldata.Lookup(col.Collation).Charset()
 		strLen := charset.Length(cs, str.bytes)
 		l := int(length.i)
 
@@ -2968,7 +2970,7 @@ func (asm *assembler) Like_coerce(expr *LikeExpr, coercion *compiledCoercion) {
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COERCE AND COLLATE '%s'", coercion.col.Name())
 }
 
-func (asm *assembler) Like_collate(expr *LikeExpr, collation collations.Collation) {
+func (asm *assembler) Like_collate(expr *LikeExpr, collation colldata.Collation) {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -4304,7 +4306,7 @@ func (asm *assembler) Fn_REGEXP_LIKE(m *icuregex.Matcher, negate bool, c charset
 	}, "FN REGEXP_LIKE VARCHAR(SP-2), VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_REGEXP_LIKE_slow(negate bool, c collations.Charset, flags icuregex.RegexpFlag, offset int) {
+func (asm *assembler) Fn_REGEXP_LIKE_slow(negate bool, c colldata.Charset, flags icuregex.RegexpFlag, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		var err error
@@ -4406,7 +4408,7 @@ func (asm *assembler) Fn_REGEXP_INSTR(m *icuregex.Matcher, c charset.Charset, of
 	}, "FN REGEXP_INSTR VARCHAR(SP-2), VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_REGEXP_INSTR_slow(c collations.Charset, flags icuregex.RegexpFlag, offset int) {
+func (asm *assembler) Fn_REGEXP_INSTR_slow(c colldata.Charset, flags icuregex.RegexpFlag, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
@@ -4488,7 +4490,7 @@ func (asm *assembler) Fn_REGEXP_SUBSTR(m *icuregex.Matcher, merged collations.Ty
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
-		c := merged.Collation.Get().Charset()
+		c := colldata.Lookup(merged.Collation).Charset()
 		runes := charset.Expand(nil, input.bytes, c)
 
 		pos := int64(1)
@@ -4542,7 +4544,7 @@ func (asm *assembler) Fn_REGEXP_SUBSTR_slow(merged collations.TypedCollation, fl
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
 		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		c := merged.Collation.Get().Charset()
+		c := colldata.Lookup(merged.Collation).Charset()
 		runes := charset.Expand(nil, input.bytes, c)
 
 		pos := int64(1)
@@ -4614,7 +4616,7 @@ func (asm *assembler) Fn_REGEXP_REPLACE(m *icuregex.Matcher, merged collations.T
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
 		repl := env.vm.stack[env.vm.sp-offset+1].(*evalBytes)
 
-		c := merged.Collation.Get().Charset()
+		c := colldata.Lookup(merged.Collation).Charset()
 		inputRunes := charset.Expand(nil, input.bytes, c)
 		replRunes := charset.Expand(nil, repl.bytes, c)
 
@@ -4640,7 +4642,8 @@ func (asm *assembler) Fn_REGEXP_REPLACE(m *icuregex.Matcher, merged collations.T
 
 		m.Reset(inputRunes[pos-1:])
 
-		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, merged.Collation.Get().Charset())
+		cs := colldata.Lookup(merged.Collation).Charset()
+		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, cs)
 		if err != nil {
 			env.vm.err = err
 			env.vm.sp -= offset
@@ -4663,7 +4666,7 @@ func (asm *assembler) Fn_REGEXP_REPLACE_slow(merged collations.TypedCollation, f
 		pattern := env.vm.stack[env.vm.sp-offset].(*evalBytes)
 		repl := env.vm.stack[env.vm.sp-offset+1].(*evalBytes)
 
-		c := merged.Collation.Get().Charset()
+		c := colldata.Lookup(merged.Collation).Charset()
 		inputRunes := charset.Expand(nil, input.bytes, c)
 		replRunes := charset.Expand(nil, repl.bytes, c)
 
@@ -4706,7 +4709,7 @@ func (asm *assembler) Fn_REGEXP_REPLACE_slow(merged collations.TypedCollation, f
 		m := icuregex.NewMatcher(p)
 		m.Reset(inputRunes[pos-1:])
 
-		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, merged.Collation.Get().Charset())
+		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, colldata.Lookup(merged.Collation).Charset())
 		if err != nil {
 			env.vm.err = err
 			env.vm.sp -= offset

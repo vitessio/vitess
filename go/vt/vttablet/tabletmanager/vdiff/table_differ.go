@@ -54,9 +54,9 @@ var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int                  // index of the column in the filter's select
-	collation collations.Collation // is the collation of the column, if any
-	isPK      bool                 // is this column part of the primary key
+	colIndex  int           // index of the column in the filter's select
+	collation collations.ID // is the collation of the column, if any
+	isPK      bool          // is this column part of the primary key
 	colName   string
 }
 
@@ -637,10 +637,9 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 			collationID collations.ID
 		)
 		// If the collation is nil or unknown, use binary collation to compare as bytes.
-		if col.collation == nil {
+		collationID = col.collation
+		if collationID == collations.Unknown {
 			collationID = collations.CollationBinaryID
-		} else {
-			collationID = col.collation.ID()
 		}
 		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
 		if err != nil {

@@ -61,7 +61,7 @@ func init() {
 
 func defaultCollation() collations.TypedCollation {
 	return collations.TypedCollation{
-		Collation:    collationEnv.LookupByName("utf8mb4_bin").ID(),
+		Collation:    collationEnv.LookupByName("utf8mb4_bin"),
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -1107,7 +1107,7 @@ func TestNullComparisons(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collationEnv.LookupByName("utf8mb4_general_ci").ID()
+	collation := collationEnv.LookupByName("utf8mb4_general_ci")
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int

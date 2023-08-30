@@ -55,6 +55,7 @@ func makeTestOutput(t *testing.T) string {
 }
 
 func TestPlan(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/schema.json", true),
 		TabletType_:   topodatapb.TabletType_PRIMARY,
@@ -126,26 +127,40 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl10", createFkDefinition([]string{"col"}, "tbl3", []string{"col"}, sqlparser.Restrict, sqlparser.Restrict))
 
 		// FK from tbl4 referencing tbl5 that is shard scoped.
-		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.SetNull))
-		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"t4col4"}, "tbl5", []string{"t5col5"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.Cascade))
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"t4col4"}, "tbl5", []string{"t5col5"}, sqlparser.SetNull, sqlparser.Cascade))
+
+		// FK from tbl5 referencing tbl8 that is shard scoped of SET-NULL types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl5", createFkDefinition([]string{"col5"}, "tbl8", []string{"col8"}, sqlparser.SetNull, sqlparser.SetNull))
+
+		// FK from tbl4 referencing tbl9 that is not shard scoped of SET-NULL types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col_ref"}, "tbl9", []string{"col9"}, sqlparser.SetNull, sqlparser.SetNull))
 
 		// FK from tbl6 referencing tbl7 that is shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"col6"}, "tbl7", []string{"col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col6"}, "tbl7", []string{"t7col7"}, sqlparser.NoAction, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl6", createFkDefinition([]string{"t6col62"}, "tbl7", []string{"t7col72"}, sqlparser.NoAction, sqlparser.NoAction))
+
+		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col2"}, sqlparser.SetDefault, sqlparser.SetDefault))
+
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
-		// u_tbl3(col2)  -> u_tbl2(col2)  Cascade Null.
 		// u_tbl4(col41) -> u_tbl1(col14) Restrict.
+		// u_tbl9(col9)  -> u_tbl1(col1)  Cascade Null.
+		// u_tbl3(col2)  -> u_tbl2(col2)  Cascade Null.
 		// u_tbl4(col4)  -> u_tbl3(col3)  Restrict.
 		// u_tbl6(col6)  -> u_tbl5(col5)  Restrict.
+		// u_tbl8(col8)  -> u_tbl9(col9)  Cascade Null.
 
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl2", createFkDefinition([]string{"col2"}, "u_tbl1", []string{"col1"}, sqlparser.Cascade, sqlparser.Cascade))
-		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl3", createFkDefinition([]string{"col3"}, "u_tbl2", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl1", []string{"col1"}, sqlparser.SetNull, sqlparser.NoAction))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col41"}, "u_tbl1", []string{"col14"}, sqlparser.NoAction, sqlparser.NoAction))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl3", createFkDefinition([]string{"col3"}, "u_tbl2", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl3", []string{"col3"}, sqlparser.Restrict, sqlparser.Restrict))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl6", createFkDefinition([]string{"col6"}, "u_tbl5", []string{"col5"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl9", []string{"col9"}, sqlparser.SetNull, sqlparser.SetNull))
 	}
 }
 
@@ -183,8 +198,10 @@ func TestOne(t *testing.T) {
 	reset := oprewriters.EnableDebugPrinting()
 	defer reset()
 
+	lv := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, lv)
 	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(t, "vschemas/schema.json", true),
+		V: lv,
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
@@ -348,6 +365,8 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
@@ -357,9 +376,9 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
-	ts := memorytopo.NewServer("cell1")
-	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
-	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
+	ts := memorytopo.NewServer(ctx, "cell1")
+	ts.CreateKeyspace(ctx, "main", &topodatapb.Keyspace{})
+	ts.CreateKeyspace(ctx, "user", &topodatapb.Keyspace{})
 	// Create a cache to use for lookups of the sidecar database identifier
 	// in use by each keyspace.
 	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {

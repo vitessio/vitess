@@ -86,7 +86,9 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	}
 	wantKeyRange := &topodatapb.KeyRange{End: []byte{0x80}}
 
-	blp := NewBinlogPlayerKeyRange(dbClient, wantTablet, wantKeyRange, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerKeyRange(dbClient, wantTablet, wantKeyRange, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -117,7 +119,9 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 	}
 	wantTables := []string{"a", "b"}
 
-	blp := NewBinlogPlayerTables(dbClient, wantTablet, wantTables, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, wantTablet, wantTables, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -138,7 +142,9 @@ func TestApplyEventsFail(t *testing.T) {
 
 	_ = newFakeBinlogClient()
 
-	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -188,7 +194,9 @@ func TestStopPosEqual(t *testing.T) {
 
 	_ = newFakeBinlogClient()
 
-	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -225,7 +233,9 @@ func TestStopPosLess(t *testing.T) {
 
 	_ = newFakeBinlogClient()
 
-	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -266,7 +276,9 @@ func TestStopPosGreater(t *testing.T) {
 
 	_ = newFakeBinlogClient()
 
-	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -307,7 +319,9 @@ func TestContextCancel(t *testing.T) {
 
 	_ = newFakeBinlogClient()
 
-	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
 	errfunc := applyEvents(blp)
 
 	dbClient.Wait()
@@ -335,7 +349,9 @@ func TestRetryOnDeadlock(t *testing.T) {
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
 
-	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
 	blp.deadlockRetry = 10 * time.Millisecond
 	errfunc := applyEvents(blp)
 

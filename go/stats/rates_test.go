@@ -44,6 +44,7 @@ func TestRates(t *testing.T) {
 	clearStats()
 	c := NewCountersWithSingleLabel("rcounter1", "rcounter help", "label")
 	r := NewRates("rates1", c, 3, -1*time.Second)
+	defer r.Stop()
 	r.snapshot()
 	now = now.Add(epsilon)
 	c.Add("tag1", 0)
@@ -92,6 +93,7 @@ func TestRatesConsistency(t *testing.T) {
 	clearStats()
 	c := NewCountersWithSingleLabel("rcounter4", "rcounter4 help", "label")
 	r := NewRates("rates4", c, 100, -1*time.Second)
+	defer r.Stop()
 	r.snapshot()
 
 	now = now.Add(epsilon)
@@ -133,6 +135,7 @@ func TestRatesHook(t *testing.T) {
 	})
 
 	v := NewRates("rates2", c, 2, 10*time.Second)
+	defer v.Stop()
 	if gotname != "rates2" {
 		t.Errorf("want rates2, got %s", gotname)
 	}

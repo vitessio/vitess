@@ -179,19 +179,6 @@ func TestCompilerReference(t *testing.T) {
 	t.Logf("\n%s", track.String())
 }
 
-type debugCompiler struct {
-	t testing.TB
-}
-
-func (d *debugCompiler) Instruction(ins string, args ...any) {
-	ins = fmt.Sprintf(ins, args...)
-	d.t.Logf("> %s", ins)
-}
-
-func (d *debugCompiler) Stack(old, new int) {
-	d.t.Logf("\tsp = %d -> %d", old, new)
-}
-
 func TestCompilerSingle(t *testing.T) {
 	var testCases = []struct {
 		expression string

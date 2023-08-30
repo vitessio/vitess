@@ -106,7 +106,7 @@ func (all AllMetadata) get(name string) *CollationMetadata {
 	return nil
 }
 
-const PkgCollations codegen.Package = "vitess.io/vitess/go/mysql/collations"
+const PkgCollationsData codegen.Package = "vitess.io/vitess/go/mysql/collations/colldata"
 const PkgCharset codegen.Package = "vitess.io/vitess/go/mysql/collations/charset"
 
 func main() {
@@ -114,5 +114,5 @@ func main() {
 	metadata := loadMysqlMetadata()
 	maketables(*Embed, ".", metadata)
 	makeversions(".")
-	makemysqldata(".", metadata)
+	makemysqldata("colldata", ".", metadata)
 }

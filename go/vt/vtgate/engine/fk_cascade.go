@@ -39,7 +39,7 @@ type FkCascade struct {
 	// Selection is the Primitive that is used to find the rows that are going to be modified in the child tables.
 	Selection Primitive
 	// Children is a list of child foreign key Primitives that are executed using rows from the Selection Primitive.
-	Children []FkChild
+	Children []*FkChild
 	// Parent is the Primitive that is executed after the children are modified.
 	Parent Primitive
 
@@ -168,17 +168,30 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 
 // Inputs implements the Primitive interface.
 func (fkc *FkCascade) Inputs() []Primitive {
-	inputs := []Primitive{fkc.Selection}
-	for _, child := range fkc.Children {
-		inputs = append(inputs, child.Exec)
-	}
-	inputs = append(inputs, fkc.Parent)
-	return inputs
+	return nil
 }
 
 func (fkc *FkCascade) description() PrimitiveDescription {
+	var childrenDesc []PrimitiveDescription
+	for _, child := range fkc.Children {
+		childrenDesc = append(childrenDesc, PrimitiveDescription{
+			OperatorType: "FkCascadeChild",
+			Inputs: []PrimitiveDescription{
+				PrimitiveToPlanDescription(child.Exec),
+			},
+			Other: map[string]any{
+				"BvName": child.BVName,
+				"Cols":   child.Cols,
+			},
+		})
+	}
 	return PrimitiveDescription{
 		OperatorType: fkc.RouteType(),
+		Other: map[string]any{
+			"Selection": PrimitiveToPlanDescription(fkc.Selection),
+			"Parent":    PrimitiveToPlanDescription(fkc.Parent),
+			"Children":  childrenDesc,
+		},
 	}
 }
 

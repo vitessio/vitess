@@ -29,14 +29,14 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/format"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
@@ -179,7 +179,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
 			} else {
-				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString()).ID()
+				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString())
 			}
 		}
 	}
@@ -250,6 +250,7 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 }
 
 func TestMySQL(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	var conn = mysqlconn(t)
 	defer conn.Close()
 

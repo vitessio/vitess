@@ -19,6 +19,7 @@ package vindexes
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -41,6 +42,18 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 		ChildColumns:  fk.ChildColumns,
 		ParentColumns: fk.ParentColumns,
 	})
+}
+
+func (fk *ParentFKInfo) String() string {
+	var str strings.Builder
+	str.WriteString(fk.Table.Name.String())
+	for _, column := range fk.ChildColumns {
+		str.WriteString(column.String())
+	}
+	for _, column := range fk.ParentColumns {
+		str.WriteString(column.String())
+	}
+	return str.String()
 }
 
 // NewParentFkInfo creates a new ParentFKInfo.
@@ -73,6 +86,18 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 		ChildColumns:  fk.ChildColumns,
 		ParentColumns: fk.ParentColumns,
 	})
+}
+
+func (fk *ChildFKInfo) String() string {
+	var str strings.Builder
+	str.WriteString(fk.Table.Name.String())
+	for _, column := range fk.ChildColumns {
+		str.WriteString(column.String())
+	}
+	for _, column := range fk.ParentColumns {
+		str.WriteString(column.String())
+	}
+	return str.String()
 }
 
 // NewChildFkInfo creates a new ChildFKInfo.

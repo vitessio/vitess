@@ -17,11 +17,10 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
@@ -38,7 +37,9 @@ func TestZk2Topo(t *testing.T) {
 
 	// Run the test suite.
 	testIndex := 0
-	test.TopoServerTestSuite(t, func() *topo.Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		// The directories will be created when used the first time.
 		testRoot := fmt.Sprintf("/test-%v", testIndex)

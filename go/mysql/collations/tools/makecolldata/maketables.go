@@ -39,7 +39,7 @@ func maketable(g *codegen.Generator, table string, collation *CollationMetadata,
 
 func maketables(embed bool, output string, metadata AllMetadata) {
 	var pages = codegen.NewPageGenerator(embed)
-	var g = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations")
+	var g = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations/colldata")
 	var fastg = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations/internal/uca")
 
 	tablegen := maketable(g, "uca900", metadata.get("utf8mb4_0900_ai_ci"), pages, uca.Layout_uca900{})
@@ -53,9 +53,9 @@ func maketables(embed bool, output string, metadata AllMetadata) {
 
 	if pages, ok := pages.(*codegen.EmbedPageGenerator); ok {
 		pages.WriteTrailer(g, "mysqlucadata.bin")
-		pages.WriteToFile(path.Join(output, "mysqlucadata.bin"))
+		pages.WriteToFile(path.Join(output, "colldata/mysqlucadata.bin"))
 	}
 
-	g.WriteToFile(path.Join(output, "mysqlucadata.go"))
+	g.WriteToFile(path.Join(output, "colldata/mysqlucadata.go"))
 	fastg.WriteToFile(path.Join(output, "internal/uca/fasttables.go"))
 }

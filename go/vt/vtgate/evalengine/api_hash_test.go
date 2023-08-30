@@ -75,7 +75,7 @@ func TestHashCodes(t *testing.T) {
 func TestHashCodesRandom(t *testing.T) {
 	tested := 0
 	equal := 0
-	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
+	collation := collations.Local().LookupByName("utf8mb4_general_ci")
 	endTime := time.Now().Add(1 * time.Second)
 	for time.Now().Before(endTime) {
 		tested++
@@ -164,7 +164,7 @@ func TestHashCodes128(t *testing.T) {
 func TestHashCodesRandom128(t *testing.T) {
 	tested := 0
 	equal := 0
-	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
+	collation := collations.Local().LookupByName("utf8mb4_general_ci")
 	endTime := time.Now().Add(1 * time.Second)
 	for time.Now().Before(endTime) {
 		tested++
