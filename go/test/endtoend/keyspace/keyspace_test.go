@@ -120,9 +120,6 @@ func TestMain(m *testing.M) {
 		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false); err != nil {
 			return 1
 		}
-		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", "--", "--force", keyspaceUnshardedName, "keyspace_id", "uint64"); err != nil {
-			return 1
-		}
 		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {
 			return 1
 		}
@@ -226,9 +223,6 @@ func TestGetKeyspace(t *testing.T) {
 
 	err = json.Unmarshal([]byte(output), &keyspace)
 	require.Nil(t, err)
-
-	assert.Equal(t, keyspace.ShardingColumnName, "keyspace_id")
-	assert.Equal(t, keyspace.ShardingColumnType, topodata.KeyspaceIdType(1))
 }
 
 func TestDeleteKeyspace(t *testing.T) {

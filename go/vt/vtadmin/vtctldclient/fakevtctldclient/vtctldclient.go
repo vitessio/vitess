@@ -155,12 +155,10 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}
 
 	ks := &topodatapb.Keyspace{
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-		ServedFroms:        req.ServedFroms,
-		KeyspaceType:       req.Type,
-		BaseKeyspace:       req.BaseKeyspace,
-		SnapshotTime:       req.SnapshotTime,
+		ServedFroms:  req.ServedFroms,
+		KeyspaceType: req.Type,
+		BaseKeyspace: req.BaseKeyspace,
+		SnapshotTime: req.SnapshotTime,
 	}
 
 	return &vtctldatapb.CreateKeyspaceResponse{

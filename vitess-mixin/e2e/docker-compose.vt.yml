@@ -394,19 +394,6 @@ services:
     - "3306"
     volumes:
     - .:/script
-  vtwork:
-    command:
-    - sh
-    - -c
-    - '/vt/bin/vtworker -topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global -cell test -logtostderr=true -service_map ''grpc-vtworker''
-      -port 8080 -grpc_port 15999 -use_v3_resharding_mode=true '
-    depends_on:
-    - vtctld
-    image: vitess/lite:${VITESS_TAG:-latest}
-    ports:
-    - "8080"
-    - "15999"
   prometheus:
     image: prom/prometheus:v2.21.0
     ports:

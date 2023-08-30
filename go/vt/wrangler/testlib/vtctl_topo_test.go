@@ -53,10 +53,10 @@ func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want strin
 // "Topo" group.
 func TestVtctlTopoCommands(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
-	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{ShardingColumnName: "col1"}); err != nil {
+	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
 		t.Fatalf("CreateKeyspace() failed: %v", err)
 	}
-	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{ShardingColumnName: "col2"}); err != nil {
+	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
 		t.Fatalf("CreateKeyspace() failed: %v", err)
 	}
 	vp := NewVtctlPipe(t, ts)
@@ -66,9 +66,8 @@ func TestVtctlTopoCommands(t *testing.T) {
 
 	// Test TopoCat.
 	testVtctlTopoCommand(t, vp, []string{"TopoCat", "-long", "-decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
-sharding_column_name:"col1"
 path=/keyspaces/ks2/Keyspace version=V
-sharding_column_name:"col2"
+keyspace_type:SNAPSHOT
 `)
 
 	// Test TopoCp from topo to disk.
@@ -81,7 +80,7 @@ sharding_column_name:"col2"
 	if err != nil {
 		t.Fatalf("copy failed: %v", err)
 	}
-	expected := &topodatapb.Keyspace{ShardingColumnName: "col1"}
+	expected := &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}
 	got := &topodatapb.Keyspace{}
 	if err = proto.Unmarshal(contents, got); err != nil {
 		t.Fatalf("bad keyspace data %v", err)

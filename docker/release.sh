@@ -56,11 +56,6 @@ do
   docker push vitess/vtctld:$vt_base_version-$debian_version
   if [[ $debian_version == $default_debian_version ]]; then docker push vitess/vtctld:$vt_base_version; fi
 
-  docker build --platform linux/amd64 --build-arg VT_BASE_VER=$vt_base_version --build-arg DEBIAN_VER=$debian_version-slim -t vitess/vtworker:$vt_base_version-$debian_version k8s/vtworker
-  docker tag vitess/vtworker:$vt_base_version-$debian_version vitess/vtworker:$vt_base_version
-  docker push vitess/vtworker:$vt_base_version-$debian_version
-  if [[ $debian_version == $default_debian_version ]]; then docker push vitess/vtworker:$vt_base_version; fi
-
   docker build --platform linux/amd64 --build-arg VT_BASE_VER=$vt_base_version --build-arg DEBIAN_VER=$debian_version-slim -t vitess/logrotate:$vt_base_version-$debian_version k8s/logrotate
   docker tag vitess/logrotate:$vt_base_version-$debian_version vitess/logrotate:$vt_base_version
   docker push vitess/logrotate:$vt_base_version-$debian_version

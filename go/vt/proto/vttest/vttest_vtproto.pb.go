@@ -113,20 +113,6 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x2a
 	}
-	if len(m.ShardingColumnType) > 0 {
-		i -= len(m.ShardingColumnType)
-		copy(dAtA[i:], m.ShardingColumnType)
-		i = encodeVarint(dAtA, i, uint64(len(m.ShardingColumnType)))
-		i--
-		dAtA[i] = 0x22
-	}
-	if len(m.ShardingColumnName) > 0 {
-		i -= len(m.ShardingColumnName)
-		copy(dAtA[i:], m.ShardingColumnName)
-		i = encodeVarint(dAtA, i, uint64(len(m.ShardingColumnName)))
-		i--
-		dAtA[i] = 0x1a
-	}
 	if len(m.Shards) > 0 {
 		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.Shards[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -259,14 +245,6 @@ func (m *Keyspace) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
-	}
-	l = len(m.ShardingColumnName)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	l = len(m.ShardingColumnType)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.ServedFrom)
 	if l > 0 {
@@ -527,70 +505,6 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if err := m.Shards[len(m.Shards)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ShardingColumnName", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ShardingColumnName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ShardingColumnType", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ShardingColumnType = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
