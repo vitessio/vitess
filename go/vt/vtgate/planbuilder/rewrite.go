@@ -34,8 +34,16 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 		semTable:     semTable,
 		reservedVars: reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.rewriteDown, nil)
+	sqlparser.Rewrite(statement, r.rewriteDown, r.rewriteUp)
 	return nil
+}
+
+func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
+	_, ok := cursor.Node().(*sqlparser.Subquery)
+	if ok {
+		r.inSubquery--
+	}
+	return true
 }
 
 func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
@@ -76,6 +84,8 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
+	case *sqlparser.Subquery:
+		r.inSubquery++
 	}
 	return true
 }
