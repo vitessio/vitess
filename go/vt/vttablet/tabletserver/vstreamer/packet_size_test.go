@@ -21,6 +21,8 @@ import (
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type polynomial []float64
@@ -89,9 +91,6 @@ func TestPacketSizeSimulation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			seed := time.Now().UnixNano()
-			rand.Seed(seed)
-
 			// Simulate a replication using the given polynomial and the dynamic packet sizer
 			ps1 := newDynamicPacketSizer(tc.baseSize)
 			elapsed1, sent1 := simulate(t, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
@@ -103,12 +102,8 @@ func TestPacketSizeSimulation(t *testing.T) {
 			// the simulation for dynamic packet sizing should always be faster then the fixed packet,
 			// and should also send fewer packets in total
 			delta := elapsed1 - elapsed2
-			if delta > tc.error {
-				t.Errorf("packet-adjusted simulation is %v slower than fixed approach, seed %d", delta, seed)
-			}
-			if sent1 > sent2 {
-				t.Errorf("packet-adjusted simulation sent more packets (%d) than fixed approach (%d), seed %d", sent1, sent2, seed)
-			}
+			assert.LessOrEqualf(t, tc.error, delta, "packet-adjusted simulation is %v slower than fixed approach", delta)
+			assert.LessOrEqualf(t, sent2, sent1, "packet-adjusted simulation sent more packets (%d) than fixed approach (%d)", sent1, sent2)
 			// t.Logf("dynamic = (%v, %d), fixed = (%v, %d)", elapsed1, sent1, elapsed2, sent2)
 		})
 	}
