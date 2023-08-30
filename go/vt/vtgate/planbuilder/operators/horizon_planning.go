@@ -648,9 +648,10 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	visitor := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		return op, rewrite.SameTree, nil
 	}
+	var result *rewrite.ApplyResult
 	shouldVisit := func(op ops.Operator) rewrite.VisitRule {
 		switch op := op.(type) {
-		case *Join, *ApplyJoin:
+		case *Join, *ApplyJoin, *SubQueryContainer, *SubQueryFilter:
 			// we can't push limits down on either side
 			return rewrite.SkipChildren
 		case *Route:
@@ -660,6 +661,7 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 				Pushed: false,
 			}
 			op.Source = newSrc
+			result = result.Merge(rewrite.NewTree("push limit under route", newSrc))
 			return rewrite.SkipChildren
 		default:
 			return rewrite.VisitChildren
@@ -670,7 +672,7 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return in, rewrite.SameTree, nil
+	return in, result, nil
 }
 
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
