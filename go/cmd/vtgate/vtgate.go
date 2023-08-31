@@ -18,9 +18,7 @@ package main
 
 import (
 	"context"
-	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 
@@ -56,7 +54,6 @@ func registerFlags(fs *pflag.FlagSet) {
 var resilientServer *srvtopo.ResilientServer
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()

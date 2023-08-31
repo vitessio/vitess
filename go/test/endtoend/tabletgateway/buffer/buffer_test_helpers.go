@@ -251,7 +251,6 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	if err := clusterInstance.StartVtgate(); err != nil {
 		return nil, 1
 	}
-	rand.Seed(time.Now().UnixNano())
 	return clusterInstance, 0
 }
 
