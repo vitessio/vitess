@@ -89,7 +89,7 @@ func TestVStreamSkew(t *testing.T) {
 			_ = createSandbox(ks)
 			hc := discovery.NewFakeHealthCheck(nil)
 			st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-			vsm := newTestVStreamManager(hc, st, cell)
+			vsm := newTestVStreamManager(ctx, hc, st, cell)
 			vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{}}
 			want := int64(0)
 			var sbc0, sbc1 *sandboxconn.SandboxConn
@@ -135,7 +135,7 @@ func TestVStreamEvents(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
 
-	vsm := newTestVStreamManager(hc, st, cell)
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 
@@ -212,7 +212,7 @@ func TestVStreamChunks(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-	vsm := newTestVStreamManager(hc, st, cell)
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -280,7 +280,7 @@ func TestVStreamMulti(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-	vsm := newTestVStreamManager(hc, st, "aa")
+	vsm := newTestVStreamManager(ctx, hc, st, "aa")
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -342,7 +342,7 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-	vsm := newTestVStreamManager(hc, st, cell)
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
 	vsm.vstreamsLag.ResetAll()
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -397,7 +397,7 @@ func TestVStreamRetry(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
-	vsm := newTestVStreamManager(hc, st, "aa")
+	vsm := newTestVStreamManager(ctx, hc, st, "aa")
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	commit := []*binlogdatapb.VEvent{
@@ -437,7 +437,7 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
-	vsm := newTestVStreamManager(hc, st, cell)
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 
@@ -487,7 +487,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
-	vsm := newTestVStreamManager(hc, st, "aa")
+	vsm := newTestVStreamManager(ctx, hc, st, "aa")
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -600,7 +600,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
-	vsm := newTestVStreamManager(hc, st, cell)
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -717,7 +717,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
-	vsm := newTestVStreamManager(hc, st, "aa")
+	vsm := newTestVStreamManager(ctx, hc, st, "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 
@@ -846,7 +846,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
-	vsm := newTestVStreamManager(hc, st, "aa")
+	vsm := newTestVStreamManager(ctx, hc, st, "aa")
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-10", sbc1.Tablet())
 	sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, ks, "10-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -929,7 +929,7 @@ func TestResolveVStreamParams(t *testing.T) {
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck(nil)
-	vsm := newTestVStreamManager(hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	vsm := newTestVStreamManager(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	testcases := []struct {
 		input  *binlogdatapb.VGtid
 		output *binlogdatapb.VGtid
@@ -1144,7 +1144,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
-	vsm := newTestVStreamManager(hc, st, cell)
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	vgtid := &binlogdatapb.VGtid{
@@ -1170,7 +1170,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			var mu sync.Mutex
 			var heartbeatCount int
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(ctx)
 			go func() {
 				vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval},
 					func(events []*binlogdatapb.VEvent) error {
@@ -1193,8 +1193,8 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 }
 
-func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
-	gw := NewTabletGateway(context.Background(), hc, serv, cell)
+func newTestVStreamManager(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
+	gw := NewTabletGateway(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
 }
