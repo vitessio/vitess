@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -341,7 +340,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 			return nil, fmt.Errorf("failed parsing primary_term_start_time %s: %w", mtstStr, err)
 		}
 
-		topotablet.PrimaryTermStartTime = logutil.TimeToProto(timeTime)
+		topotablet.PrimaryTermStartTime = protoutil.TimeToProto(timeTime)
 	}
 
 	if c.TabletFQDNTmpl != nil {

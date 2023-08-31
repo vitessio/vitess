@@ -25,11 +25,11 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/protoutil"
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -343,7 +343,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	for _, appRule := range throttlerConfig.ThrottledApps {
-		throttler.ThrottleApp(appRule.Name, logutil.ProtoToTime(appRule.ExpiresAt), appRule.Ratio, appRule.Exempt)
+		throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
 	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
