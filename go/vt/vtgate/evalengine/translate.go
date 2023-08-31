@@ -211,7 +211,7 @@ func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) 
 
 func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, error) {
 	if ast.cfg.ResolveColumn == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column (column access not supported here)")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column '%s' (column access not supported here)", sqlparser.String(colname))
 	}
 	idx, err := ast.cfg.ResolveColumn(colname)
 	if err != nil {
@@ -325,13 +325,13 @@ func (ast *astCompiler) translateCollateExpr(collate *sqlparser.CollateExpr) (Ex
 		return nil, err
 	}
 	coll := collations.Local().LookupByName(collate.Collation)
-	if coll == nil {
+	if coll == collations.Unknown {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown collation: '%s'", collate.Collation)
 	}
 	return &CollateExpr{
 		UnaryExpr: UnaryExpr{expr},
 		TypedCollation: collations.TypedCollation{
-			Collation:    coll.ID(),
+			Collation:    coll,
 			Coercibility: collations.CoerceExplicit,
 			Repertoire:   collations.RepertoireUnicode,
 		},
@@ -349,10 +349,10 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 		collation = collations.CollationBinaryID
 	} else {
 		defaultCollation := collations.Local().DefaultCollationForCharset(introduced.CharacterSet[1:])
-		if defaultCollation == nil {
+		if defaultCollation == collations.Unknown {
 			panic(fmt.Sprintf("unknown character set: %s", introduced.CharacterSet))
 		}
-		collation = defaultCollation.ID()
+		collation = defaultCollation
 	}
 
 	switch lit := expr.(type) {

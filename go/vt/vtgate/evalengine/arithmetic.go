@@ -19,16 +19,13 @@ package evalengine
 import (
 	"math"
 
-	"golang.org/x/exp/constraints"
-
 	"vitess.io/vitess/go/mysql/decimal"
-
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func dataOutOfRangeError[N1, N2 constraints.Integer | constraints.Float](v1 N1, v2 N2, typ, sign string) error {
+func dataOutOfRangeError[N1, N2 int | int64 | uint64 | float64](v1 N1, v2 N2, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
 }
 
@@ -329,12 +326,12 @@ func mathAdd_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
 }
 
 func mathAdd_dd(v1, v2 *evalDecimal) *evalDecimal {
-	return newEvalDecimalWithPrec(v1.dec.Add(v2.dec), maxprec(v1.length, v2.length))
+	return newEvalDecimalWithPrec(v1.dec.Add(v2.dec), max(v1.length, v2.length))
 }
 
 func mathAdd_dd0(v1, v2 *evalDecimal) {
 	v1.dec = v1.dec.Add(v2.dec)
-	v1.length = maxprec(v1.length, v2.length)
+	v1.length = max(v1.length, v2.length)
 }
 
 func mathSub_ii(v1, v2 int64) (*evalInt64, error) {
@@ -420,12 +417,12 @@ func mathSub_xd(v1 evalNumeric, v2 *evalDecimal) *evalDecimal {
 }
 
 func mathSub_dd(v1, v2 *evalDecimal) *evalDecimal {
-	return newEvalDecimalWithPrec(v1.dec.Sub(v2.dec), maxprec(v1.length, v2.length))
+	return newEvalDecimalWithPrec(v1.dec.Sub(v2.dec), max(v1.length, v2.length))
 }
 
 func mathSub_dd0(v1, v2 *evalDecimal) {
 	v1.dec = v1.dec.Sub(v2.dec)
-	v1.length = maxprec(v1.length, v2.length)
+	v1.length = max(v1.length, v2.length)
 }
 
 func mathMul_ii(v1, v2 int64) (*evalInt64, error) {
@@ -482,13 +479,6 @@ func mathMul_fx(v1 float64, v2 evalNumeric) (eval, error) {
 
 func mathMul_ff(v1, v2 float64) *evalFloat {
 	return newEvalFloat(v1 * v2)
-}
-
-func maxprec(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func mathMul_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {

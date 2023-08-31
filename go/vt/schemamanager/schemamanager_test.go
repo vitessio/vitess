@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -92,7 +94,7 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	controller.SetKeyspace("unknown_keyspace")
-	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 	ctx := context.Background()
 
 	_, err := Run(ctx, controller, executor)
@@ -102,51 +104,55 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 }
 
 func TestSchemaManagerRun(t *testing.T) {
-	sql := "create table test_table (pk int)"
-	controller := newFakeController(
-		[]string{sql}, false, false, false)
-	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &tabletmanagerdatapb.SchemaChangeResult{
-		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
-		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
-			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-				{
-					Name:   "test_table",
-					Schema: sql,
-					Type:   tmutils.TableBaseTable,
+	for _, batchSize := range []int{0, 1, 10} {
+		t.Run(fmt.Sprintf("batch-size=%d", batchSize), func(t *testing.T) {
+			sql := "create table test_table (pk int)"
+			controller := newFakeController(
+				[]string{sql}, false, false, false)
+			fakeTmc := newFakeTabletManagerClient()
+			fakeTmc.AddSchemaChange(sql, &tabletmanagerdatapb.SchemaChangeResult{
+				BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
+				AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
+					DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:   "test_table",
+							Schema: sql,
+							Type:   tmutils.TableBaseTable,
+						},
+					},
 				},
-			},
-		},
-	})
+			})
 
-	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
-	executor := NewTabletExecutor("TestSchemaManagerRun", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+			fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
+			executor := NewTabletExecutor("TestSchemaManagerRun", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 
-	ctx := context.Background()
-	resp, err := Run(ctx, controller, executor)
+			ctx := context.Background()
+			resp, err := Run(ctx, controller, executor)
 
-	if len(resp.UUIDs) > 0 {
-		t.Fatalf("response should contain an empty list of UUIDs, found %v", len(resp.UUIDs))
-	}
+			if len(resp.UUIDs) > 0 {
+				t.Fatalf("response should contain an empty list of UUIDs, found %v", len(resp.UUIDs))
+			}
 
-	if err != nil {
-		t.Fatalf("schema change should success but get error: %v", err)
-	}
-	if !controller.onReadSuccessTriggered {
-		t.Fatalf("OnReadSuccess should be called")
-	}
-	if controller.onReadFailTriggered {
-		t.Fatalf("OnReadFail should not be called")
-	}
-	if !controller.onValidationSuccessTriggered {
-		t.Fatalf("OnValidateSuccess should be called")
-	}
-	if controller.onValidationFailTriggered {
-		t.Fatalf("OnValidationFail should not be called")
-	}
-	if !controller.onExecutorCompleteTriggered {
-		t.Fatalf("OnExecutorComplete should be called")
+			if err != nil {
+				t.Fatalf("schema change should success but get error: %v", err)
+			}
+			if !controller.onReadSuccessTriggered {
+				t.Fatalf("OnReadSuccess should be called")
+			}
+			if controller.onReadFailTriggered {
+				t.Fatalf("OnReadFail should not be called")
+			}
+			if !controller.onValidationSuccessTriggered {
+				t.Fatalf("OnValidateSuccess should be called")
+			}
+			if controller.onValidationFailTriggered {
+				t.Fatalf("OnValidationFail should not be called")
+			}
+			if !controller.onExecutorCompleteTriggered {
+				t.Fatalf("OnExecutorComplete should be called")
+			}
+		})
 	}
 }
 
@@ -170,7 +176,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 
 	ctx := context.Background()
 	resp, err := Run(ctx, controller, executor)
@@ -183,13 +189,61 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	}
 }
 
+func TestSchemaManagerExecutorBatchVsStrategyFail(t *testing.T) {
+	sql := "create table test_table (pk int)"
+	controller := newFakeController([]string{sql}, false, false, false)
+	fakeTmc := newFakeTabletManagerClient()
+
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
+	fakeTmc.EnableExecuteFetchAsDbaError = true
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10)
+	executor.SetDDLStrategy("online")
+
+	ctx := context.Background()
+	_, err := Run(ctx, controller, executor)
+
+	assert.ErrorContains(t, err, "--batch-size requires 'direct'")
+}
+
+func TestSchemaManagerExecutorBatchVsQueriesFail(t *testing.T) {
+	sql := "alter table test_table force"
+	controller := newFakeController([]string{sql}, false, false, false)
+	fakeTmc := newFakeTabletManagerClient()
+
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
+	fakeTmc.EnableExecuteFetchAsDbaError = true
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10)
+	executor.SetDDLStrategy("direct")
+
+	ctx := context.Background()
+	_, err := Run(ctx, controller, executor)
+
+	assert.ErrorContains(t, err, "--batch-size only allowed when all queries are CREATE")
+}
+
+func TestSchemaManagerExecutorBatchVsUUIDsFail(t *testing.T) {
+	sql := "create table test_table (pk int)"
+	controller := newFakeController([]string{sql}, false, false, false)
+	fakeTmc := newFakeTabletManagerClient()
+
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
+	fakeTmc.EnableExecuteFetchAsDbaError = true
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10)
+	executor.SetDDLStrategy("direct")
+	executor.SetUUIDList([]string{"4e5dcf80_354b_11eb_82cd_f875a4d24e90"})
+
+	ctx := context.Background()
+	_, err := Run(ctx, controller, executor)
+
+	assert.ErrorContains(t, err, "--batch-size conflicts with --uuid-list")
+}
+
 func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 	sql := "create table test_table (pk int)"
 	RegisterControllerFactory(
 		"test_controller",
 		func(params map[string]string) (Controller, error) {
 			return newFakeController([]string{sql}, false, false, false), nil
-
 		})
 
 	_, err := GetControllerFactory("unknown")
@@ -217,7 +271,7 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 }
 
 func newFakeExecutor(t *testing.T) *TabletExecutor {
-	return NewTabletExecutor("newFakeExecutor", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	return NewTabletExecutor("newFakeExecutor", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 }
 
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
@@ -277,8 +331,9 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 // - 3 shards named '1', '2', '3'.
 // - A primary tablet for each shard.
 func newFakeTopo(t *testing.T) *topo.Server {
-	ts := memorytopo.NewServer("test_cell")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}

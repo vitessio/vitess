@@ -17,7 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -39,6 +39,13 @@ func getPhases() []Phase {
 		// Initial optimization
 		Name: "initial horizon planning optimization phase",
 	}, {
+		Name: "pull distinct from UNION",
+		// to make it easier to compact UNIONs together, we keep the `distinct` flag in the UNION op until this
+		// phase. Here we will place a DISTINCT op on top of the UNION, and turn the UNION into a UNION ALL
+		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			return pullDistinctFromUNION(op)
+		},
+	}, {
 		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
 		// need it their inputs, and then we start splitting the aggregation
 		// so parts run on MySQL and parts run on VTGate
@@ -53,6 +60,18 @@ func getPhases() []Phase {
 		// add the necessary Ordering operators for them
 		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		action: addOrderBysForAggregations,
+	}, {
+		Name: "remove Distinct operator that are not required and still above a route",
+		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+				d, ok := innerOp.(*Distinct)
+				if !ok || d.Required {
+					return innerOp, rewrite.SameTree, nil
+				}
+
+				return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
+			}, stopAtRoute)
+		},
 	}}
 }
 
@@ -70,7 +89,7 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 		if !requireOrdering {
 			return in, rewrite.SameTree, nil
 		}
-		orderBys := slices2.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
+		orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
 			return from.AsOrderBy()
 		})
 		if aggrOp.DistinctExpr != nil {
@@ -92,7 +111,7 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 }
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
-	requiredOrder := slices2.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
+	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
 		return from.SimplifiedExpr
 	})
 	if in.DistinctExpr != nil {

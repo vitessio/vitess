@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -52,8 +54,9 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
-	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
+	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDurationStr,
+		"--buffer_size", "100000", "--buffer_min_time_between_failovers", "0s", "--buffer_max_failover_duration", loadTestBufferingWindowDurationStr}
+	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
 	extraVTTabletArgs = []string{}
 
@@ -320,6 +323,9 @@ func init() {
 func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
 	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
+
+	vc.CleanupDataroot(t, true)
+
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
 	require.NotNil(t, topo)
@@ -355,6 +361,26 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	return vc
 }
 
+// CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
+// we can run out of disk space due to all the leftover artifacts from previous tests.
+func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if !ok || strings.ToLower(ci) != "true" {
+		// Leave the directory in place to support local debugging.
+		return
+	}
+	dir := vc.ClusterConfig.vtdataroot
+	log.Infof("Deleting vtdataroot %s", dir)
+	err := os.RemoveAll(dir)
+	require.NoError(t, err)
+	if recreate {
+		err = os.Mkdir(dir, 0700)
+		require.NoError(t, err)
+	}
+}
+
 // AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
 // You can pass optional key value pairs (opts) if you want conditional behavior.
 func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) (*Keyspace, error) {
@@ -369,7 +395,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	}
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query, nil)
 	require.NoError(t, err, res)
 
 	cellsToWatch := ""
@@ -613,7 +639,7 @@ func (vc *VitessCluster) AddCell(t testing.TB, name string) (*Cell, error) {
 	return cell, nil
 }
 
-func (vc *VitessCluster) teardown(t testing.TB) {
+func (vc *VitessCluster) teardown() {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
@@ -676,13 +702,13 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
-func (vc *VitessCluster) TearDown(t testing.TB) {
+func (vc *VitessCluster) TearDown(t *testing.T) {
 	if debugMode {
 		return
 	}
 	done := make(chan bool)
 	go func() {
-		vc.teardown(t)
+		vc.teardown()
 		done <- true
 	}()
 	select {
@@ -693,6 +719,7 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 	}
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
+	vc.CleanupDataroot(t, false)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
@@ -728,6 +755,10 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 	}
 	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
 	return nil
+}
+
+func (vc *VitessCluster) GetVTGateConn(t *testing.T) *mysql.Conn {
+	return getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 }
 
 func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {

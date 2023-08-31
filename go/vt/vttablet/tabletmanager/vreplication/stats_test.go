@@ -25,7 +25,8 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 
@@ -74,12 +75,13 @@ VReplication state: Open</br>
 `
 
 func TestStatusHtml(t *testing.T) {
-	pos, err := mysql.DecodePosition("MariaDB/1-2-3")
+	pos, err := replication.DecodePosition("MariaDB/1-2-3")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blpStats := binlogplayer.NewStats()
+	defer blpStats.Stop()
 	blpStats.SetLastPosition(pos)
 	blpStats.ReplicationLagSeconds.Store(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
@@ -129,7 +131,7 @@ func TestStatusHtml(t *testing.T) {
 
 func TestVReplicationStats(t *testing.T) {
 	blpStats := binlogplayer.NewStats()
-
+	defer blpStats.Stop()
 	testStats := &vrStats{}
 	testStats.isOpen = true
 	testStats.controllers = map[int32]*controller{

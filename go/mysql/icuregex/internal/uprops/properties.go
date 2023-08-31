@@ -172,7 +172,7 @@ func ApplyIntPropertyValue(u *uset.UnicodeSet, prop Property, value int32) error
 			return err
 		}
 		u.ApplyFilter(inclusions, func(ch rune) bool {
-			return (uMask(uchar.CharType(ch)) & uint32(value)) != 0
+			return (uchar.Mask(uchar.CharType(ch)) & uint32(value)) != 0
 		})
 	case prop == UCharScriptExtensions:
 		inclusions, err := getInclusionsForProperty(prop)

@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -53,22 +54,22 @@ type Collation struct {
 	err  error
 }
 
-var _ collations.Collation = (*Collation)(nil)
+var _ colldata.Collation = (*Collation)(nil)
 
 func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string) *Collation {
-	charset := collname
+	cs := collname
 	if idx := strings.IndexByte(collname, '_'); idx >= 0 {
-		charset = collname[:idx]
+		cs = collname[:idx]
 	}
 
 	coll := &Collation{
 		name:    collname,
 		id:      collid,
 		conn:    conn,
-		charset: charset,
+		charset: cs,
 	}
 
-	coll.prefix = fmt.Sprintf("_%s X'", charset)
+	coll.prefix = fmt.Sprintf("_%s X'", cs)
 	coll.suffix = fmt.Sprintf("' COLLATE %q", collname)
 	coll.hex = hex.NewEncoder(&coll.sql)
 	return coll
@@ -204,7 +205,7 @@ func (rp *remotePattern) Match(in []byte) bool {
 	return match
 }
 
-func (c *Collation) Wildcard(pat []byte, _ rune, _ rune, escape rune) collations.WildcardPattern {
+func (c *Collation) Wildcard(pat []byte, _ rune, _ rune, escape rune) colldata.WildcardPattern {
 	return &remotePattern{
 		pattern: fmt.Sprintf("_%s X'%x'", c.charset, pat),
 		remote:  c,

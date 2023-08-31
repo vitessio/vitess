@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/test/utils"
@@ -126,9 +127,9 @@ func cleanup() {
 	envMu.Unlock()
 }
 
-func setup() (func(), int) {
+func setup(ctx context.Context) (func(), int) {
 	var err error
-	env, err = testenv.Init()
+	env, err = testenv.Init(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
@@ -144,12 +145,12 @@ func setup() (func(), int) {
 	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	streamerEngine.Open()
 
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("create database %s", vrepldb)); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
 
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.innodb_lock_wait_timeout=1"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, "set @@global.innodb_lock_wait_timeout=1"); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
@@ -158,7 +159,7 @@ func setup() (func(), int) {
 		"extb": env.Dbcfgs,
 	}
 	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
-	playerEngine.Open(context.Background())
+	playerEngine.Open(ctx)
 
 	return cleanup, 0
 }
@@ -173,11 +174,13 @@ func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		if err := utils.SetBinlogRowImageMode("full", tempDir); err != nil {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
-		cancel, ret := setup()
+		cancel, ret := setup(ctx)
 		if ret > 0 {
 			return ret
 		}
@@ -192,7 +195,7 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
-		cancel, ret = setup()
+		cancel, ret = setup(ctx)
 		if ret > 0 {
 			return ret
 		}
@@ -212,7 +215,7 @@ func primaryPosition(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mysql.EncodePosition(pos)
+	return replication.EncodePosition(pos)
 }
 
 func execStatements(t *testing.T, queries []string) {

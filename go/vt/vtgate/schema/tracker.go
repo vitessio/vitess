@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -150,6 +151,10 @@ func (t *Tracker) Start() {
 		for {
 			select {
 			case th := <-t.ch:
+				if th == nil {
+					// channel closed
+					return
+				}
 				ksUpdater := t.getKeyspaceUpdateController(th)
 				ksUpdater.add(th)
 			case <-ctx.Done():
@@ -221,7 +226,7 @@ func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 		return map[string]*vindexes.TableInfo{} // we know nothing about this KS, so that is the info we can give out
 	}
 
-	return m
+	return maps.Clone(m)
 }
 
 // Views returns all known views in the keyspace with their definition.
@@ -232,7 +237,9 @@ func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
 	if t.views == nil {
 		return nil
 	}
-	return t.views.m[ks]
+
+	m := t.views.m[ks]
+	return maps.Clone(m)
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {

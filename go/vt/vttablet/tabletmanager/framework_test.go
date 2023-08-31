@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -47,46 +48,58 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	gtidFlavor   = "MySQL56"
+	gtidPosition = "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220"
+)
+
 func init() {
 	tabletconn.RegisterDialer("grpc", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		return &tabletconntest.FakeQueryService{}, nil
+		return &tabletconntest.FakeQueryService{
+			StreamHealthResponse: &querypb.StreamHealthResponse{
+				Serving: true,
+				Target: &querypb.Target{
+					Keyspace:   tablet.Keyspace,
+					Shard:      tablet.Shard,
+					TabletType: tablet.Type,
+					Cell:       tablet.Alias.Cell,
+				},
+				RealtimeStats: &querypb.RealtimeStats{},
+			},
+		}, nil
 	})
 }
 
 type testEnv struct {
-	mu         sync.Mutex
-	ctx        context.Context
-	vrengine   *vreplication.Engine
-	vrdbClient *binlogplayer.MockDBClient
-	ts         *topo.Server
-	cells      []string
-	tablets    map[int]*fakeTabletConn
-	mysqld     *mysqlctl.FakeMysqlDaemon
-	tmc        *fakeTMClient
-	dbName     string
-	protoName  string
+	mu        sync.Mutex
+	ctx       context.Context
+	ts        *topo.Server
+	cells     []string
+	mysqld    *mysqlctl.FakeMysqlDaemon
+	tmc       *fakeTMClient
+	dbName    string
+	protoName string
 }
 
-func newTestEnv(t *testing.T, keyspace string, shards []string) *testEnv {
+func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, sourceShards []string) *testEnv {
 	tenv := &testEnv{
-		ctx:        context.Background(),
-		vrdbClient: binlogplayer.NewMockDBClient(t),
-		tablets:    make(map[int]*fakeTabletConn),
-		tmc:        newFakeTMClient(),
-		cells:      []string{"zone1"},
-		dbName:     "tmtestdb",
-		protoName:  t.Name(),
+		ctx:       context.Background(),
+		tmc:       newFakeTMClient(),
+		cells:     []string{"zone1"},
+		dbName:    "tmtestdb",
+		protoName: t.Name(),
 	}
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
-	tenv.ts = memorytopo.NewServer(tenv.cells...)
-	tenv.tmc.keyspace = keyspace
-	tenv.tmc.shards = shards
+	tenv.ts = memorytopo.NewServer(ctx, tenv.cells...)
+	tenv.tmc.sourceKeyspace = sourceKeyspace
+	tenv.tmc.sourceShards = sourceShards
+	tenv.tmc.schema = defaultSchema
 
 	tabletconn.RegisterDialer(t.Name(), func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tenv.mu.Lock()
 		defer tenv.mu.Unlock()
-		if qs, ok := tenv.tablets[int(tablet.Alias.Uid)]; ok {
+		if qs, ok := tenv.tmc.tablets[int(tablet.Alias.Uid)]; ok {
 			return qs, nil
 		}
 		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
@@ -97,21 +110,10 @@ func newTestEnv(t *testing.T, keyspace string, shards []string) *testEnv {
 	})
 	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
 
-	dbClientFactory := func() binlogplayer.DBClient {
-		return tenv.vrdbClient
-	}
 	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
-	tenv.vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], tenv.mysqld, dbClientFactory, dbClientFactory, tenv.dbName, nil)
-	tenv.vrdbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", tenv.dbName), &sqltypes.Result{}, nil)
-	tenv.vrengine.Open(tenv.ctx)
-	require.True(t, tenv.vrengine.IsOpen(), "vreplication engine was not open")
-
-	tenv.tmc.tm = TabletManager{
-		VREngine: tenv.vrengine,
-		DBConfigs: &dbconfigs.DBConfigs{
-			DBName: tenv.dbName,
-		},
-	}
+	var err error
+	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
 
 	return tenv
 }
@@ -119,14 +121,14 @@ func newTestEnv(t *testing.T, keyspace string, shards []string) *testEnv {
 func (tenv *testEnv) close() {
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
-	tenv.vrengine.Close()
 	tenv.ts.Close()
+	tenv.mysqld.Close()
 }
 
 //--------------------------------------
 // Tablets
 
-func (tenv *testEnv) addTablet(id int, keyspace, shard string) *fakeTabletConn {
+func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fakeTabletConn {
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
 	tablet := &topodatapb.Tablet{
@@ -136,7 +138,6 @@ func (tenv *testEnv) addTablet(id int, keyspace, shard string) *fakeTabletConn {
 		},
 		Keyspace: keyspace,
 		Shard:    shard,
-		KeyRange: &topodatapb.KeyRange{},
 		Type:     topodatapb.TabletType_PRIMARY,
 		PortMap: map[string]int32{
 			tenv.protoName: int32(id),
@@ -156,13 +157,34 @@ func (tenv *testEnv) addTablet(id int, keyspace, shard string) *fakeTabletConn {
 		panic(err)
 	}
 
-	tenv.tablets[id] = &fakeTabletConn{tablet: tablet}
-	return tenv.tablets[id]
+	tenv.tmc.tablets[id] = &fakeTabletConn{
+		tablet:     tablet,
+		vrdbClient: binlogplayer.NewMockDBClient(t),
+	}
+
+	dbClientFactory := func() binlogplayer.DBClient {
+		return tenv.tmc.tablets[id].vrdbClient
+	}
+	tenv.tmc.tablets[id].vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], tenv.mysqld, dbClientFactory, dbClientFactory, tenv.dbName, nil)
+	tenv.tmc.tablets[id].vrdbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", tenv.dbName), &sqltypes.Result{}, nil)
+	tenv.tmc.tablets[id].vrengine.Open(tenv.ctx)
+	require.True(t, tenv.tmc.tablets[id].vrengine.IsOpen(), "vreplication engine was not open")
+
+	tenv.tmc.tablets[id].tm = &TabletManager{
+		VREngine: tenv.tmc.tablets[id].vrengine,
+		DBConfigs: &dbconfigs.DBConfigs{
+			DBName: tenv.dbName,
+		},
+	}
+
+	return tenv.tmc.tablets[id]
 }
 
 func (tenv *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
+	tenv.tmc.tablets[int(tablet.Alias.Uid)].vrdbClient.Close()
+	tenv.tmc.tablets[int(tablet.Alias.Uid)].vrengine.Close()
 	tenv.ts.DeleteTablet(tenv.ctx, tablet.Alias)
 	// This is not automatically removed from shard replication, which results in log spam.
 	topo.DeleteTabletReplicationData(tenv.ctx, tenv.ts, tablet)
@@ -171,7 +193,10 @@ func (tenv *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 // fakeTabletConn implements the TabletConn and QueryService interfaces.
 type fakeTabletConn struct {
 	queryservice.QueryService
-	tablet *topodatapb.Tablet
+	tablet     *topodatapb.Tablet
+	tm         *TabletManager
+	vrdbClient *binlogplayer.MockDBClient
+	vrengine   *vreplication.Engine
 }
 
 // fakeTabletConn implements the QueryService interface.
@@ -281,11 +306,6 @@ func (ftc *fakeTabletConn) VStreamResults(ctx context.Context, target *querypb.T
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return nil
-}
-
-// fakeTabletConn implements the QueryService interface.
 func (ftc *fakeTabletConn) HandlePanic(err *error) {
 }
 
@@ -332,20 +352,34 @@ func (ftc *fakeTabletConn) Close(ctx context.Context) error {
 	return nil
 }
 
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	return callback(&querypb.StreamHealthResponse{
+		Serving: true,
+		Target: &querypb.Target{
+			Keyspace:   ftc.tablet.Keyspace,
+			Shard:      ftc.tablet.Shard,
+			TabletType: ftc.tablet.Type,
+			Cell:       ftc.tablet.Alias.Cell,
+		},
+		RealtimeStats: &querypb.RealtimeStats{},
+	})
+}
+
 //----------------------------------------------
 // fakeTMClient
 
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
-	keyspace   string
-	shards     []string
-	tm         TabletManager
-	schema     *tabletmanagerdatapb.SchemaDefinition
-	vreQueries map[int]map[string]*querypb.QueryResult
+	sourceKeyspace string
+	sourceShards   []string
+	tablets        map[int]*fakeTabletConn
+	schema         *tabletmanagerdatapb.SchemaDefinition
+	vreQueries     map[int]map[string]*querypb.QueryResult
 }
 
 func newFakeTMClient() *fakeTMClient {
 	return &fakeTMClient{
+		tablets:    make(map[int]*fakeTabletConn),
 		vreQueries: make(map[int]map[string]*querypb.QueryResult),
 		schema:     &tabletmanagerdatapb.SchemaDefinition{},
 	}
@@ -359,13 +393,9 @@ func (tmc *fakeTMClient) SetSchema(schema *tabletmanagerdatapb.SchemaDefinition)
 	tmc.schema = schema
 }
 
-// ExecuteFetchAsApp is is needed for the materializer's checkTZConversion function.
 func (tmc *fakeTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
-	return sqltypes.ResultToProto3(
-		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("convert_tz", "varchar"),
-			"2023-07-14 09:05:01",
-		)), nil
+	// Reuse VReplicationExec
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 
 func (tmc *fakeTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
@@ -401,30 +431,50 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 }
 
 func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
-	return tmc.tm.CreateVReplicationWorkflow(ctx, req)
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-		Workflow: req.Workflow,
-		Streams:  make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.shards)),
+		Workflow:        req.Workflow,
+		WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType_None,
+		WorkflowType:    binlogdatapb.VReplicationWorkflowType_MoveTables,
+		TabletTypes:     []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		Streams:         make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.sourceShards)),
 	}
-	for i, shard := range tmc.shards {
+	rules := make([]*binlogdatapb.Rule, len(defaultSchema.TableDefinitions))
+	for i, table := range defaultSchema.TableDefinitions {
+		rules[i] = &binlogdatapb.Rule{
+			Match:  table.Name,
+			Filter: tablet.Shard,
+		}
+	}
+	for i, shard := range tmc.sourceShards {
 		resp.Streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 			Id: int32(i + 1),
 			Bls: &binlogdatapb.BinlogSource{
-				Keyspace: tmc.keyspace,
+				Keyspace: tmc.sourceKeyspace,
 				Shard:    shard,
 				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{
-						{
-							Match: ".*",
-						},
-					},
+					Rules: rules,
 				},
 			},
 		}
 	}
 
 	return resp, nil
+}
+
+func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), nil
+}
+
+func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
+	return nil
+}
+
+func (tmc *fakeTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
+	return &querypb.QueryResult{
+		RowsAffected: 1,
+	}, nil
 }

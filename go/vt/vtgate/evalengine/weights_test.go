@@ -19,11 +19,11 @@ package evalengine
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"

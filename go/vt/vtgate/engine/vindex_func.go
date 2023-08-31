@@ -136,7 +136,7 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 			len(values), len(destinations))
 	}
 	for i, value := range values {
-		vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
+		vkey, err := sqltypes.Cast(value, sqltypes.VarBinary)
 		if err != nil {
 			return nil, err
 		}

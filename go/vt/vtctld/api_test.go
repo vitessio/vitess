@@ -42,9 +42,11 @@ func compactJSON(in []byte) string {
 }
 
 func TestAPI(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cells := []string{"cell1", "cell2"}
-	ts := memorytopo.NewServer(cells...)
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
 	actionRepo := NewActionRepository(ts)
 	server := testutils.HTTPTestServer()
 	defer server.Close()

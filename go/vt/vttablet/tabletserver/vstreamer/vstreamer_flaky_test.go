@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -85,8 +86,17 @@ func (tfe *TestFieldEvent) String() string {
 // TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
 // the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
 func TestNoBlob(t *testing.T) {
-	newEngine(t, "noblob")
-	defer newEngine(t, "full")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "noblob")
+	defer func() {
+		engine = oldEngine
+		env = oldEnv
+	}()
 	execStatements(t, []string{
 		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
 		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
@@ -1927,8 +1937,17 @@ func TestMinimalMode(t *testing.T) {
 		t.Skip()
 	}
 
-	newEngine(t, "minimal")
-	defer newEngine(t, "full")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "minimal")
+	defer func() {
+		engine = oldEngine
+		env = oldEnv
+	}()
 	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
@@ -2361,7 +2380,7 @@ func primaryPosition(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mysql.EncodePosition(pos)
+	return replication.EncodePosition(pos)
 }
 
 func setVSchema(t *testing.T, vschema string) {

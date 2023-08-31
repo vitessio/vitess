@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -655,7 +656,7 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	},
 	Serving: true,
 
-	TabletExternallyReparentedTimestamp: 1234589,
+	PrimaryTermStartTimestamp: 1234589,
 
 	RealtimeStats: &querypb.RealtimeStats{
 		CpuUsage:                      1.0,
@@ -681,7 +682,7 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	if err := callback(shr); err != nil {
+	if err := callback(shr); err != nil && err != io.EOF {
 		f.t.Logf("StreamHealth callback failed: %v", err)
 	}
 	return nil

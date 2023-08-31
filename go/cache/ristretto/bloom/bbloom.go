@@ -132,9 +132,7 @@ func (bl *Bloom) Size(sz uint64) {
 
 // Clear resets the Bloom filter.
 func (bl *Bloom) Clear() {
-	for i := range bl.bitset {
-		bl.bitset[i] = 0
-	}
+	clear(bl.bitset)
 }
 
 // Set sets the bit[idx] of bitset.

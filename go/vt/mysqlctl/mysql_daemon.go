@@ -19,7 +19,7 @@ package mysqlctl
 import (
 	"context"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -52,12 +52,12 @@ type MysqlDaemon interface {
 	// replication related methods
 	StartReplication(hookExtraEnv map[string]string) error
 	RestartReplication(hookExtraEnv map[string]string) error
-	StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error
+	StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error
 	StopReplication(hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
-	ReplicationStatus() (mysql.ReplicationStatus, error)
-	PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error)
-	GetGTIDPurged(ctx context.Context) (mysql.Position, error)
+	ReplicationStatus() (replication.ReplicationStatus, error)
+	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
+	GetGTIDPurged(ctx context.Context) (replication.Position, error)
 	SetSemiSyncEnabled(source, replica bool) error
 	SemiSyncEnabled() (source, replica bool)
 	SemiSyncExtensionLoaded() (bool, error)
@@ -74,20 +74,20 @@ type MysqlDaemon interface {
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
-	PrimaryPosition() (mysql.Position, error)
+	PrimaryPosition() (replication.Position, error)
 	IsReadOnly() (bool, error)
 	IsSuperReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error)
-	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
+	SetReplicationPosition(ctx context.Context, pos replication.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
-	WaitSourcePos(context.Context, mysql.Position) error
+	WaitSourcePos(context.Context, replication.Position) error
 
 	// Promote makes the current server the primary. It will not change
 	// the read_only state of the server.
-	Promote(map[string]string) (mysql.Position, error)
+	Promote(map[string]string) (replication.Position, error)
 
 	// Schema related methods
 	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)

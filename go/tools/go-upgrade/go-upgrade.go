@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -36,6 +37,36 @@ import (
 
 const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
+
+	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
+	// version is composed of either one or two numbers, for instance: 18.1 or 18.
+	// The expected format of the input is BOOTSTRAP_VERSION=18 or BOOTSTRAP_VERSION=18.1
+	regexpFindBootstrapVersion = "(?i).*BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*([0-9.]+).*"
+
+	// regexpFindGolangVersion greps all numbers separated by a . after the goversion_min function call
+	// This is used to understand what is the current version of Golang using either two or three numbers
+	// The major, minor and optional patch number of the Golang version
+	regexpFindGolangVersion = "(?i).*goversion_min[[:space:]]*([0-9.]+).*"
+
+	// regexpReplaceGoModGoVersion replaces the top-level golang version instruction in the go.mod file
+	// Example going from go1.20 to go1.20: `go 1.20` -> `go 1.21`
+	regexpReplaceGoModGoVersion = `go[[:space:]]([0-9.]+)\.([0-9.]+)`
+
+	// The regular expressions below match the entire bootstrap_version declaration in Dockerfiles and Makefile
+	// A bootstrap version declaration is usually: 'ARG bootstrap_version = 18' in Dockerfile, and
+	// 'BOOTSTRAP_VERSION=18' in the Makefile. Note that the value 18 can also be a float.
+	regexpReplaceDockerfileBootstrapVersion = "ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+"
+	regexpReplaceMakefileBootstrapVersion   = "BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+"
+
+	// The regular expression below matches the bootstrap_version we are using in the test.go file.
+	// In test.go, there is a flag named 'bootstrap-version' that has a default value. We are looking
+	// to match the entire flag name + the default value (being the current bootstrap version)
+	// Example input: "flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")"
+	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
+
+	// regexpReplaceGolangVersionInWorkflow matches the golang version increment in the string `go-version: 1.20.5`
+	// which is used to replace the golang version we use inside our workflows
+	regexpReplaceGolangVersionInWorkflow = `go-version:[[:space:]]*([0-9.]+).*`
 )
 
 type (
@@ -186,7 +217,7 @@ func updateWorkflowFilesOnly(goTo string) error {
 
 	for _, fileToChange := range filesToChange {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(`go-version:[[:space:]]*([0-9.]+).*`)},
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangVersionInWorkflow)},
 			[]string{"go-version: " + newV.String()},
 			fileToChange,
 		)
@@ -249,7 +280,7 @@ func currentGolangVersion() (*version.Version, error) {
 	}
 	content := string(contentRaw)
 
-	versre := regexp.MustCompile("(?i).*goversion_min[[:space:]]*([0-9.]+).*")
+	versre := regexp.MustCompile(regexpFindGolangVersion)
 	versionStr := versre.FindStringSubmatch(content)
 	if len(versionStr) != 2 {
 		return nil, fmt.Errorf("malformatted error, got: %v", versionStr)
@@ -264,7 +295,7 @@ func currentBootstrapVersion() (bootstrapVersion, error) {
 	}
 	content := string(contentRaw)
 
-	versre := regexp.MustCompile("(?i).*BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*([0-9.]+).*")
+	versre := regexp.MustCompile(regexpFindBootstrapVersion)
 	versionStr := versre.FindStringSubmatch(content)
 	if len(versionStr) != 2 {
 		return bootstrapVersion{}, fmt.Errorf("malformatted error, got: %v", versionStr)
@@ -372,6 +403,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 	}
 
 	for _, fileToChange := range filesToChange {
+		// The regular expression below simply replace the old version string by the new golang version
 		err = replaceInFile(
 			[]*regexp.Regexp{regexp.MustCompile(fmt.Sprintf(`(%s)`, old.String()))},
 			[]string{new.String()},
@@ -384,7 +416,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 
 	if !isSameMajorMinorVersion(old, new) {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(`go[[:space:]]*([0-9.]+)`)},
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
 			[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
 			"./go.mod",
 		)
@@ -414,8 +446,8 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	for _, file := range files {
 		err = replaceInFile(
 			[]*regexp.Regexp{
-				regexp.MustCompile(`ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+`), // Dockerfile
-				regexp.MustCompile(`BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+`),                // Makefile
+				regexp.MustCompile(regexpReplaceDockerfileBootstrapVersion), // Dockerfile
+				regexp.MustCompile(regexpReplaceMakefileBootstrapVersion),   // Makefile
 			},
 			[]string{
 				fmt.Sprintf("ARG bootstrap_version=%s", new), // Dockerfile
@@ -429,7 +461,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	}
 
 	err = replaceInFile(
-		[]*regexp.Regexp{regexp.MustCompile(`\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`)},
+		[]*regexp.Regexp{regexp.MustCompile(regexpReplaceTestGoBootstrapVersion)},
 		[]string{fmt.Sprintf("\"bootstrap-version\", \"%s\"", new)},
 		"./test.go",
 	)
@@ -510,17 +542,23 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 	}
 	defer f.Close()
 
-	content, err := io.ReadAll(f)
-	if err != nil {
-		return err
+	var res []string
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			panic(err)
+		}
+		for i, oldexp := range oldexps {
+			line = oldexp.ReplaceAllString(line, new[i])
+		}
+		res = append(res, line)
 	}
-	contentStr := string(content)
 
-	for i, oldex := range oldexps {
-		contentStr = oldex.ReplaceAllString(contentStr, new[i])
-	}
-
-	_, err = f.WriteAt([]byte(contentStr), 0)
+	_, err = f.WriteAt([]byte(strings.Join(res, "")), 0)
 	if err != nil {
 		return err
 	}

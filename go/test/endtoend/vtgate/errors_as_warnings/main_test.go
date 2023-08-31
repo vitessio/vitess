@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
@@ -147,8 +148,8 @@ func TestScatterErrsAsWarns(t *testing.T) {
 			// invalid_field should throw error and not warning
 			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ PLANNER=Gen4 SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
 			require.Error(t, err)
-			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			require.Equal(t, mysql.ERBadFieldError, serr.Number(), serr.Error())
+			serr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+			require.Equal(t, sqlerror.ERBadFieldError, serr.Number(), serr.Error())
 		})
 	}
 }

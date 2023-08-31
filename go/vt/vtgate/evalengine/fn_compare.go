@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -215,11 +216,11 @@ func compareAllText(args []eval, cmp int) (eval, error) {
 		if err := ca.add(env, col); err != nil {
 			return nil, err
 		}
-		charsets = append(charsets, col.Collation.Get().Charset())
+		charsets = append(charsets, colldata.Lookup(col.Collation).Charset())
 	}
 
 	tc := ca.result()
-	col := tc.Collation.Get()
+	col := colldata.Lookup(tc.Collation)
 	cs := col.Charset()
 
 	b1, err := charset.Convert(nil, cs, args[0].ToRawBytes(), charsets[0])

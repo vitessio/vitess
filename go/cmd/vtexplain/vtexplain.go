@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -147,7 +148,7 @@ func parseAndRun() error {
 		Target:          dbName,
 	}
 
-	vte, err := vtexplain.Init(vschema, schema, ksShardMap, opts)
+	vte, err := vtexplain.Init(context.Background(), vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}

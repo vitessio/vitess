@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -94,7 +95,7 @@ func TestVStreamSkew(t *testing.T) {
 			var sbc0, sbc1 *sandboxconn.SandboxConn
 			if tcase.shard0idx != 0 {
 				sbc0 = hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-				addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+				addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 				sbc0.VStreamCh = make(chan *binlogdatapb.VEvent)
 				want += 2 * tcase.numEventsPerShard
 				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "-20"})
@@ -102,7 +103,7 @@ func TestVStreamSkew(t *testing.T) {
 			}
 			if tcase.shard1idx != 0 {
 				sbc1 = hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-				addTabletToSandboxTopo(t, st, ks, "20-40", sbc1.Tablet())
+				addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 				sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
 				want += 2 * tcase.numEventsPerShard
 				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "20-40"})
@@ -136,7 +137,7 @@ func TestVStreamEvents(t *testing.T) {
 
 	vsm := newTestVStreamManager(hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 
 	send1 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
@@ -213,9 +214,9 @@ func TestVStreamChunks(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(hc, st, cell)
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "20-40", sbc1.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
 	for i := 0; i < 100; i++ {
 		sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_DDL}}, nil)
@@ -281,9 +282,9 @@ func TestVStreamMulti(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(hc, st, "aa")
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "20-40", sbc1.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
 	send0 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
@@ -345,9 +346,9 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	vsm.vstreamsCreated.ResetAll()
 	vsm.vstreamsLag.ResetAll()
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "20-40", sbc1.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
 	send0 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
@@ -398,7 +399,7 @@ func TestVStreamRetry(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
 	vsm := newTestVStreamManager(hc, st, "aa")
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	commit := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
@@ -438,7 +439,7 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
 	vsm := newTestVStreamManager(hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 
 	send0 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_HEARTBEAT},
@@ -488,11 +489,11 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
 	vsm := newTestVStreamManager(hc, st, "aa")
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-10", sbc1.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-10", sbc1.Tablet())
 	sbc2 := hc.AddTestTablet(cell, "1.1.1.1", 1003, ks, "10-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "10-20", sbc2.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "10-20", sbc2.Tablet())
 
 	send1 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
@@ -601,11 +602,11 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
 	vsm := newTestVStreamManager(hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-10", sbc1.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-10", sbc1.Tablet())
 	sbc2 := hc.AddTestTablet(cell, "1.1.1.1", 1003, ks, "10-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "10-20", sbc2.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "10-20", sbc2.Tablet())
 
 	send3 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid03"},
@@ -718,7 +719,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
 	vsm := newTestVStreamManager(hc, st, "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 
 	send1 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
@@ -847,9 +848,9 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
 	vsm := newTestVStreamManager(hc, st, "aa")
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-10", sbc1.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-10", sbc1.Tablet())
 	sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, ks, "10-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "10-20", sbc2.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "10-20", sbc2.Tablet())
 
 	send := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
@@ -922,10 +923,13 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 }
 
 func TestResolveVStreamParams(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck(nil)
-	vsm := newTestVStreamManager(hc, newSandboxForCells([]string{"aa"}), "aa")
+	vsm := newTestVStreamManager(hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	testcases := []struct {
 		input  *binlogdatapb.VGtid
 		output *binlogdatapb.VGtid
@@ -1133,6 +1137,8 @@ func TestResolveVStreamParams(t *testing.T) {
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
@@ -1140,7 +1146,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
 	vsm := newTestVStreamManager(hc, st, cell)
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -1194,6 +1200,7 @@ func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell s
 }
 
 func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid *binlogdatapb.VGtid, flags *vtgatepb.VStreamFlags) <-chan *binlogdatapb.VStreamResponse {
+	t.Helper()
 	if flags == nil {
 		flags = &vtgatepb.VStreamFlags{}
 	}
@@ -1250,7 +1257,7 @@ func getVEvents(keyspace, shard string, count, idx int64) []*binlogdatapb.VEvent
 }
 
 func getSandboxTopo(ctx context.Context, cell string, keyspace string, shards []string) *sandboxTopo {
-	st := newSandboxForCells([]string{cell})
+	st := newSandboxForCells(ctx, []string{cell})
 	ts := st.topoServer
 	ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
 	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
@@ -1260,7 +1267,7 @@ func getSandboxTopo(ctx context.Context, cell string, keyspace string, shards []
 	return st
 }
 
-func addTabletToSandboxTopo(t *testing.T, st *sandboxTopo, ks, shard string, tablet *topodatapb.Tablet) {
+func addTabletToSandboxTopo(t *testing.T, ctx context.Context, st *sandboxTopo, ks, shard string, tablet *topodatapb.Tablet) {
 	_, err := st.topoServer.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet.Alias
 		return nil

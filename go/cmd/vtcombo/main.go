@@ -30,9 +30,10 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -185,7 +186,7 @@ func main() {
 		ts = topo.Open()
 	} else {
 		// Create topo server. We use a 'memorytopo' implementation.
-		ts = memorytopo.NewServer(tpb.Cells...)
+		ts = memorytopo.NewServer(context.Background(), tpb.Cells...)
 	}
 
 	// attempt to load any routing rules specified by tpb
@@ -278,7 +279,7 @@ func main() {
 	}
 
 	// vtgate configuration and init
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
@@ -342,7 +343,7 @@ func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) 
 }
 
 // StartReplicationUntilAfter implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
+func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
 	return nil
 }
 

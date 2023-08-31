@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 )
 
 func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
@@ -111,6 +111,46 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			},
 			backupPos:   "16b1039f-0000-0000-0000-000000000000:1-63",
 			expectError: "Mismatching GTID entries",
+		},
+		{
+			name: "empty previous GTIDs in first binlog with gap, with good backup pos",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+			expectBinlogs: []string{"vt-bin.000004", "vt-bin.000005"},
+		},
+		{
+			name: "empty previous GTIDs in first binlog with gap, and without gtid_purged",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:   "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			expectError: "Mismatching GTID entries",
+		},
+		{
+			name: "empty previous GTIDs in first binlog but with proper gtid_purged",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			gtidPurged:    "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-40",
+			expectBinlogs: []string{"vt-bin.000004", "vt-bin.000005"},
 		},
 		{
 			name: "empty previous GTIDs in first binlog covering backup pos",
@@ -231,9 +271,9 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			backupPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.backupPos)
+			backupPos, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.backupPos)
 			require.NoError(t, err)
-			gtidPurged, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.gtidPurged)
+			gtidPurged, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.gtidPurged)
 			require.NoError(t, err)
 			binlogsToBackup, fromGTID, toGTID, err := ChooseBinlogsForIncrementalBackup(
 				context.Background(),
@@ -268,8 +308,8 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 func TestIsValidIncrementalBakcup(t *testing.T) {
 	incrementalManifest := func(backupPos string, backupFromPos string) *BackupManifest {
 		return &BackupManifest{
-			Position:     mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
-			FromPosition: mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupFromPos)),
+			Position:     replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
+			FromPosition: replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupFromPos)),
 			Incremental:  true,
 		}
 	}
@@ -345,9 +385,9 @@ func TestIsValidIncrementalBakcup(t *testing.T) {
 	}
 	for i, tc := range tt {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			basePos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.baseGTID)
+			basePos, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.baseGTID)
 			require.NoError(t, err)
-			purgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.purgedGTID)
+			purgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.purgedGTID)
 			require.NoError(t, err)
 			isValid := IsValidIncrementalBakcup(basePos.GTIDSet, purgedPos.GTIDSet, incrementalManifest(tc.backupPos, tc.backupFromPos))
 			assert.Equal(t, tc.expectIsValid, isValid)
@@ -356,8 +396,8 @@ func TestIsValidIncrementalBakcup(t *testing.T) {
 }
 
 func TestFindPITRPath(t *testing.T) {
-	generatePosition := func(posRange string) mysql.Position {
-		return mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
+	generatePosition := func(posRange string) replication.Position {
+		return replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
 	}
 	fullManifest := func(backupPos string) *BackupManifest {
 		return &BackupManifest{
@@ -547,17 +587,17 @@ func TestFindPITRPath(t *testing.T) {
 			for i := range fullBackups {
 				var err error
 				fullBackup := fullBackups[i]
-				fullBackup.PurgedPosition, err = mysql.ParsePosition(mysql.Mysql56FlavorID, tc.purgedGTID)
+				fullBackup.PurgedPosition, err = replication.ParsePosition(replication.Mysql56FlavorID, tc.purgedGTID)
 				require.NoError(t, err)
 				defer func() {
-					fullBackup.PurgedPosition = mysql.Position{}
+					fullBackup.PurgedPosition = replication.Position{}
 				}()
 			}
 			var manifests []*BackupManifest
 			manifests = append(manifests, fullBackups...)
 			manifests = append(manifests, tc.incrementalBackups...)
 
-			restorePos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.restoreGTID)
+			restorePos, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.restoreGTID)
 			require.NoErrorf(t, err, "%v", err)
 			path, err := FindPITRPath(restorePos.GTIDSet, manifests)
 			if tc.expectError != "" {
@@ -585,8 +625,8 @@ func TestFindPITRPath(t *testing.T) {
 }
 
 func TestFindPITRToTimePath(t *testing.T) {
-	generatePosition := func(posRange string) mysql.Position {
-		return mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
+	generatePosition := func(posRange string) replication.Position {
+		return replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
 	}
 	fullManifest := func(backupPos string, timeStr string) *BackupManifest {
 		_, err := ParseRFC3339(timeStr)
@@ -811,10 +851,10 @@ func TestFindPITRToTimePath(t *testing.T) {
 			for i := range fullBackups {
 				var err error
 				fullBackup := fullBackups[i]
-				fullBackup.PurgedPosition, err = mysql.ParsePosition(mysql.Mysql56FlavorID, tc.purgedGTID)
+				fullBackup.PurgedPosition, err = replication.ParsePosition(replication.Mysql56FlavorID, tc.purgedGTID)
 				require.NoError(t, err)
 				defer func() {
-					fullBackup.PurgedPosition = mysql.Position{}
+					fullBackup.PurgedPosition = replication.Position{}
 				}()
 			}
 			var manifests []*BackupManifest

@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -67,7 +68,9 @@ create table t2 (
 		NumShards:       2,
 	}
 
-	vte, err := Init(testVSchema, testSchema, "", opts)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vte, err := Init(ctx, testVSchema, testSchema, "", opts)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -119,12 +122,16 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
 	vte.setGlobalTabletEnv(tabletEnv)
 
-	tablet := vte.newTablet(defaultTestOpts(), &topodatapb.Tablet{
+	tablet := vte.newTablet(ctx, defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
 		Alias:    &topodatapb.TabletAlias{},

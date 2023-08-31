@@ -112,13 +112,6 @@ func NewFromSQL(v sqltypes.Value) (*Value, error) {
 }
 
 func (v *Value) Depth() int {
-	max := func(a, b int) int {
-		if a > b {
-			return a
-		}
-		return b
-	}
-
 	var depth int
 	switch v.t {
 	case TypeObject:

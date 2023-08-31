@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: {{.Name}}
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-4cores-1
 
     steps:
     - name: Skip CI
@@ -62,7 +62,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.21.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -157,7 +157,13 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
-        eatmydata -- NOVTADMINBUILD=1 make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        set -exo pipefail
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
+
+        export NOVTADMINBUILD=1
+        eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()

@@ -45,8 +45,21 @@ type PlanningContext struct {
 	DelegateAggregation bool
 }
 
-func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {
-	ctx := &PlanningContext{
+func CreatePlanningContext(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) (*PlanningContext, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+
+	semTable, err := semantics.Analyze(stmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
+	return &PlanningContext{
 		ReservedVars:      reservedVars,
 		SemTable:          semTable,
 		VSchema:           vschema,
@@ -54,8 +67,7 @@ func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		SkipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
-	}
-	return ctx
+	}, nil
 }
 
 func (c *PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {

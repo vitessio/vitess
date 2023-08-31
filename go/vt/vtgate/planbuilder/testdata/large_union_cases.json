@@ -23,8 +23,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "(select content, user_id, weight_string(content), weight_string(user_id) from music where 1 != 1) union (select content, user_id, weight_string(content), weight_string(user_id) from music where 1 != 1)",
-                "Query": "(select content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270698330 order by created_at asc, id asc limit 11) union (select content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270698330 order by created_at asc, id asc limit 11)",
+                "FieldQuery": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where 1 != 1) union (select content, user_id from music where 1 != 1)) as dt where 1 != 1",
+                "Query": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where user_id = 1270698330 order by created_at asc, id asc limit 11) union (select content, user_id from music where user_id = 1270698330 order by created_at asc, id asc limit 11)) as dt",
                 "Table": "music",
                 "Values": [
                   "INT64(1270698330)"
@@ -38,8 +38,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "(select content, user_id, weight_string(content), weight_string(user_id) from music where 1 != 1) union (select content, user_id, weight_string(content), weight_string(user_id) from music where 1 != 1)",
-                "Query": "(select content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270699497 order by created_at asc, id asc limit 11) union (select content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270699497 order by created_at asc, id asc limit 11)",
+                "FieldQuery": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where 1 != 1) union (select content, user_id from music where 1 != 1)) as dt where 1 != 1",
+                "Query": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where user_id = 1270699497 order by created_at asc, id asc limit 11) union (select content, user_id from music where user_id = 1270699497 order by created_at asc, id asc limit 11)) as dt",
                 "Table": "music",
                 "Values": [
                   "INT64(1270699497)"

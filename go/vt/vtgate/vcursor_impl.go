@@ -27,7 +27,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -37,6 +38,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -902,6 +904,16 @@ func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
 }
 
+// SetMigrationContext implements the SessionActions interface
+func (vc *vcursorImpl) SetMigrationContext(migrationContext string) {
+	vc.safeSession.SetMigrationContext(migrationContext)
+}
+
+// GetMigrationContext implements the SessionActions interface
+func (vc *vcursorImpl) GetMigrationContext() string {
+	return vc.safeSession.GetMigrationContext()
+}
+
 // GetSessionUUID implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionUUID() string {
 	return vc.safeSession.GetSessionUUID()
@@ -991,7 +1003,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-			Code:    uint32(mysql.ERNotSupportedYet),
+			Code:    uint32(sqlerror.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
 		})
 	}
@@ -1003,14 +1015,21 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 		return
 	}
 	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-		Code:    uint32(mysql.ERNotSupportedYet),
+		Code:    uint32(sqlerror.ERNotSupportedYet),
 		Message: message,
 	})
 }
 
 // ForeignKeyMode implements the VCursor interface
-func (vc *vcursorImpl) ForeignKeyMode() string {
-	return strings.ToLower(foreignKeyMode)
+func (vc *vcursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	if strings.ToLower(foreignKeyMode) == "disallow" {
+		return vschemapb.Keyspace_FK_DISALLOW, nil
+	}
+	ks := vc.vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return 0, vterrors.VT14004(keyspace)
+	}
+	return ks.ForeignKeyMode, nil
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
@@ -1029,7 +1048,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vc.keyspace)
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(vc.collation.Get().Name())
+	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
@@ -1135,6 +1154,55 @@ func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
 
 func (vc *vcursorImpl) SetExec(ctx context.Context, name string, value string) error {
 	return vc.executor.setVitessMetadata(ctx, name, value)
+}
+
+func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topodatapb.ThrottledAppRule) (err error) {
+	if throttledAppRule == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ThrottleApp: nil rule")
+	}
+	if throttledAppRule.Name == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ThrottleApp: app name is empty")
+	}
+	// We don't strictly have to construct a UpdateThrottlerConfigRequest here, because we only populate it
+	// with a couple variables; we could do without it. However, constructing the request makes the remaining code
+	// consistent with vtctldclient/command/throttler.go and we prefer this consistency
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:     vc.keyspace,
+		ThrottledApp: throttledAppRule,
+	}
+
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
+		if throttlerConfig == nil {
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
+		}
+		if throttlerConfig.ThrottledApps == nil {
+			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+		}
+		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		return throttlerConfig
+	}
+
+	ctx, unlock, lockErr := vc.topoServer.LockKeyspace(ctx, req.Keyspace, "UpdateThrottlerConfig")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	ki, err := vc.topoServer.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return err
+	}
+
+	ki.ThrottlerConfig = update(ki.ThrottlerConfig)
+
+	err = vc.topoServer.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return err
+	}
+
+	_, err = vc.topoServer.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+
+	return err
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {

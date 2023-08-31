@@ -23,8 +23,7 @@ package uset
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // HIGH_VALUE > all valid values. 110000 for codepoints
@@ -199,13 +198,6 @@ loopEnd:
 	k++
 
 	u.list, u.buffer = u.buffer[:k], u.list
-}
-
-func max(a, b rune) rune {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func pinCodePoint(c *rune) rune {

@@ -89,7 +89,7 @@ func CreateTablet(
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 
-	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
+	controller := tabletserver.NewServer(ctx, topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -394,6 +394,10 @@ func CreateKs(
 				return 0, fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
 			}
 
+			_, err = vindexes.BuildKeyspace(formal)
+			if err != nil {
+				return 0, fmt.Errorf("BuildKeyspace(%v) failed: %v", keyspace, err)
+			}
 			if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}
@@ -926,6 +930,10 @@ func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tab
 }
 
 func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

@@ -97,6 +97,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -119,11 +120,11 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -443,7 +444,7 @@ var commands = []commandGroup{
 			{
 				name:   "MoveTables",
 				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--defer-secondary-keys] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--defer-secondary-keys] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] [--source_time_zone=<mysql_time_zone>] [--initialize-target-sequences] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
@@ -590,7 +591,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplySchema",
 				method: commandApplySchema,
-				params: "[--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
+				params: "[--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} [--batch-size=<n>] <keyspace>",
 				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
 			},
 			{
@@ -705,7 +706,7 @@ var commands = []commandGroup{
 			{
 				name:   "UpdateThrottlerConfig",
 				method: commandUpdateThrottlerConfig,
-				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app|unthrottle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] <keyspace>",
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app|unthrottle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] [--throttle-app-exempt] <keyspace>",
 				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
@@ -1819,7 +1820,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
 	durabilityPolicy := subFlags.String("durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
-	sidecarDBName := subFlags.String("sidecar-db-name", sidecardb.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
+	sidecarDBName := subFlags.String("sidecar-db-name", sidecar.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2107,6 +2108,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	allTables := subFlags.Bool("all", false, "MoveTables only. Move all tables from the source keyspace. Either table_specs or --all needs to be specified.")
 	excludes := subFlags.String("exclude", "", "MoveTables only. Tables to exclude (comma-separated) if --all is specified")
 	sourceKeyspace := subFlags.String("source", "", "MoveTables only. Source keyspace")
+	initializeTargetSequences := subFlags.Bool("initialize-target-sequences", false, "MoveTables only. When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 
 	// if sourceTimeZone is specified, the target needs to have time zones loaded
 	// note we make an opinionated decision to not allow specifying a different target time zone than UTC.
@@ -2288,6 +2290,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
 		vrwp.MaxAllowedTransactionLagSeconds = int64(math.Ceil(maxReplicationLagAllowed.Seconds()))
+		vrwp.InitializeTargetSequences = *initializeTargetSequences
 	case vReplicationWorkflowActionCancel:
 		vrwp.KeepData = *keepData
 		vrwp.KeepRoutingRules = *keepRoutingRules
@@ -2882,8 +2885,9 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	uuidList := subFlags.String("uuid_list", "", "Optional: comma delimited explicit UUIDs for migration. If given, must match number of DDL changes")
 	migrationContext := subFlags.String("migration_context", "", "For Online DDL, optionally supply a custom unique string used as context for the migration(s) in this command. By default a unique context is auto-generated by Vitess")
 	requestContext := subFlags.String("request_context", "", "synonym for --migration_context")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", grpcvtctldserver.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	skipPreflight := subFlags.Bool("skip_preflight", false, "Deprecated. Always assumed to be 'true'")
+	batchSize := subFlags.Int64("batch_size", 0, "How many queries to batch together")
 
 	callerID := subFlags.String("caller_id", "", "This is the effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used)")
 	if err := subFlags.Parse(args); err != nil {
@@ -2930,6 +2934,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		MigrationContext:    *migrationContext,
 		WaitReplicasTimeout: protoutil.DurationToProto(*waitReplicasTimeout),
 		CallerId:            cID,
+		BatchSize:           *batchSize,
 	})
 
 	if err != nil {
@@ -3067,7 +3072,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			Keyspace:            keyspace,
 			Sql:                 []string{applySchemaQuery},
 			SkipPreflight:       true,
-			WaitReplicasTimeout: protoutil.DurationToProto(wrangler.DefaultWaitReplicasTimeout),
+			WaitReplicasTimeout: protoutil.DurationToProto(grpcvtctldserver.DefaultWaitReplicasTimeout),
 		})
 		if err != nil {
 			return err
@@ -3112,7 +3117,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
 	skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
 	// for backwards compatibility
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", grpcvtctldserver.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3418,6 +3423,10 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 
+	if _, err := vindexes.BuildKeyspace(vs); err != nil {
+		return err
+	}
+
 	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
 		return err
 	}
@@ -3571,6 +3580,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	throttledApp := subFlags.String("throttle-app", "", "an app name to throttle")
 	throttledAppRatio := subFlags.Float64("throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
 	throttledAppDuration := subFlags.Duration("throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specified in --throttled-app)")
+	throttledAppExempt := subFlags.Bool("throttle-app-exempt", false, "exempt this app from being at all throttled. WARNING: use with extreme care, as this is likely to push metrics beyond the throttler's threshold, and starve other apps (app specified in --throttled-app)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3594,6 +3604,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	if subFlags.Changed("throttle-app-duration") && *throttledApp == "" {
 		return fmt.Errorf("--throttle-app-duration requires --throttle-app")
 	}
+	if subFlags.Changed("throttle-app-exempt") && *throttledApp == "" {
+		return fmt.Errorf("--throttle-app-exempt requires --throttle-app")
+	}
 
 	keyspace := subFlags.Arg(0)
 
@@ -3611,6 +3624,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{
 			Name:      *throttledApp,
 			Ratio:     *throttledAppRatio,
+			Exempt:    *throttledAppExempt,
 			ExpiresAt: logutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
 		}
 	} else if *unthrottledApp != "" {

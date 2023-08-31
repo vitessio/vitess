@@ -78,7 +78,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		ts                  *topo.Server
 		tmc                 tmclient.TabletManagerClient
 		tablets             []*topodatapb.Tablet
 		lockShardBeforeTest bool
@@ -92,7 +91,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 	}{
 		{
 			name: "success",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -111,6 +109,18 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				},
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": nil,
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -166,7 +176,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		},
 		{
 			name: "success - new primary not provided",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
@@ -221,6 +230,18 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -280,7 +301,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		},
 		{
 			name: "already locked shard",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -299,6 +319,18 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				},
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": nil,
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -359,8 +391,17 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			// fail the preflight checks. Other functions are unit-tested
 			// thoroughly to cover all the cases.
 			name: "reparent fails",
-			ts:   memorytopo.NewServer("zone1"),
-			tmc:  nil,
+			tmc: &testutil.TabletManagerClient{
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -400,7 +441,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -409,15 +449,18 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := ctx
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
 
-			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
 				SkipShardCreation:   false,
 			}, tt.tablets...)
 
 			if tt.lockShardBeforeTest {
-				lctx, unlock, err := tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for test")
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for test")
 				require.NoError(t, err, "could not lock %s/%s for test case", tt.keyspace, tt.shard)
 
 				defer func() {
@@ -428,7 +471,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				ctx = lctx
 			}
 
-			pr := NewPlannedReparenter(tt.ts, tt.tmc, logger)
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 			ev, err := pr.ReparentShard(ctx, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -516,7 +559,6 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 	tests := []struct {
 		name string
 
-		ts      *topo.Server
 		tmc     tmclient.TabletManagerClient
 		tablets []*topodatapb.Tablet
 
@@ -907,7 +949,6 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -915,6 +956,11 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
 
 			defer func() {
 				if tt.expectedEvent != nil {
@@ -926,7 +972,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				}
 			}()
 
-			pr := NewPlannedReparenter(tt.ts, tt.tmc, logger)
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 			if tt.opts.durability == nil {
 				durability, err := GetDurabilityPolicy("none")
 				require.NoError(t, err)
@@ -951,7 +997,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		ts         *topo.Server
 		tmc        tmclient.TabletManagerClient
 		unlockTopo bool
 		ctxTimeout time.Duration
@@ -973,7 +1018,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 	}{
 		{
 			name: "successful promotion",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1030,7 +1074,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "cannot get snapshot of current primary",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -1064,7 +1107,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "primary-elect fails to catch up to current primary snapshot position",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -1101,7 +1143,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "primary-elect times out catching up to current primary snapshot position",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -1143,7 +1184,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "lost topology lock",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -1181,7 +1221,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "failed to demote current primary",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1226,7 +1265,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "primary-elect fails to catch up to current primary demotion position",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1283,7 +1321,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "primary-elect times out catching up to current primary demotion position",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1345,7 +1382,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "demotion succeeds but parent context times out",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1402,7 +1438,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "rollback fails",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1465,7 +1500,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 		{
 			name: "rollback succeeds",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1528,7 +1562,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -1537,15 +1570,18 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := ctx
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
 
-			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
 				Keyspace: tt.keyspace,
 				Name:     tt.shard,
 			})
 
 			if !tt.unlockTopo {
-				lctx, unlock, err := tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
 				require.NoError(t, err, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
 
 				defer func() {
@@ -1556,7 +1592,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 				ctx = lctx
 			}
 
-			pr := NewPlannedReparenter(tt.ts, tt.tmc, logger)
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 
 			if tt.ctxTimeout > 0 {
 				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
@@ -1600,7 +1636,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		ts         *topo.Server
 		tmc        tmclient.TabletManagerClient
 		ctxTimeout time.Duration
 
@@ -1614,7 +1649,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 	}{
 		{
 			name: "successful promotion",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				InitPrimaryResults: map[string]struct {
 					Result string
@@ -1640,7 +1674,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		},
 		{
 			name: "primary-elect fails to promote",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				InitPrimaryResults: map[string]struct {
 					Result string
@@ -1664,7 +1697,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		},
 		{
 			name: "promotion succeeds but parent context times out",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				InitPrimaryPostDelays: map[string]time.Duration{
 					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
@@ -1692,7 +1724,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -1701,14 +1732,17 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := ctx
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
 
-			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
 				Keyspace: tt.keyspace,
 				Name:     tt.shard,
 			})
 
-			pr := NewPlannedReparenter(tt.ts, tt.tmc, logger)
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 
 			if tt.ctxTimeout > 0 {
 				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
@@ -1897,7 +1931,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		ts         *topo.Server
 		tmc        tmclient.TabletManagerClient
 		timeout    time.Duration
 		unlockTopo bool
@@ -1911,7 +1944,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 	}{
 		{
 			name: "success",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -1976,7 +2008,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 		{
 			name: "failed to DemotePrimary on a tablet",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -2011,7 +2042,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 		{
 			name: "timed out during DemotePrimary on a tablet",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
@@ -2052,7 +2082,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 		{
 			name: "failed to DecodePosition on a tablet's demote position",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -2089,7 +2118,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 		{
 			name:       "primary-elect not in tablet map",
-			ts:         memorytopo.NewServer("zone1"),
 			tmc:        &testutil.TabletManagerClient{},
 			unlockTopo: false,
 			keyspace:   "testkeyspace",
@@ -2105,7 +2133,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 		{
 			name: "primary-elect not most at most advanced position",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -2170,7 +2197,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 		{
 			name: "lost topology lock",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -2235,7 +2261,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -2244,16 +2269,20 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := ctx
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
 			pr := NewPlannedReparenter(nil, tt.tmc, logger)
 
-			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
 				Keyspace: tt.keyspace,
 				Name:     tt.shard,
 			})
 
 			if !tt.unlockTopo {
-				lctx, unlock, err := tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
 				require.NoError(t, err, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
 
 				defer func() {
@@ -2290,7 +2319,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		ts         *topo.Server
 		tmc        tmclient.TabletManagerClient
 		tablets    []*topodatapb.Tablet
 		unlockTopo bool
@@ -2305,7 +2333,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 	}{
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -2322,6 +2349,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
+					},
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
 					},
 				},
 				PopulateReparentJournalResults: map[string]error{
@@ -2385,7 +2424,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "success: current primary is desired primary", // "Case (2)"
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -2404,6 +2442,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": nil,
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -2460,7 +2510,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "success: graceful promotion", // "Case (3)"
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -2472,6 +2521,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
+					},
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -2544,7 +2605,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "shard not found",
-			ts:         memorytopo.NewServer("zone1"),
 			tmc:        nil,
 			tablets:    nil,
 			unlockTopo: true,
@@ -2559,7 +2619,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "shard initialization",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
@@ -2575,6 +2634,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -2628,7 +2699,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "shard initialization with no new primary provided",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
@@ -2647,14 +2717,28 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000200": {
-						Error: mysql.ErrNotReplica,
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+						},
 					},
 					"zone1-0000000100": {
-						Error: fmt.Errorf("not providing replication status, so that 200 wins"),
+						Error: mysql.ErrNotReplica,
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -2702,8 +2786,20 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "preflight checks determine PRS is no-op",
-			ts:   memorytopo.NewServer("zone1"),
-			tmc:  nil,
+			tmc: &testutil.TabletManagerClient{
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -2750,10 +2846,21 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "promotion step fails",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -2810,8 +2917,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "lost topology lock",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
 				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -2881,7 +2999,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "failed to reparent tablets",
-			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -2890,6 +3007,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					"zone1-0000000100": {
 						Position: "position1",
 						Error:    nil,
+					},
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
 					},
 				},
 				PopulateReparentJournalResults: map[string]error{
@@ -2953,7 +3082,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -2962,16 +3090,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := ctx
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
 
-			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary:  true,
 				ForceSetShardPrimary: true, // Some of our test cases count on having multiple primaries, so let the last one "win".
 				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			if !tt.unlockTopo {
-				lctx, unlock, err := tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for testing")
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for testing")
 				require.NoError(t, err, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
 
 				defer func() {
@@ -2988,7 +3119,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}()
 			}
 
-			pr := NewPlannedReparenter(tt.ts, tt.tmc, logger)
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
@@ -3637,4 +3768,190 @@ func AssertReparentEventsEqual(t *testing.T, expected *events.Reparent, actual *
 	t.Helper()
 
 	AssertReparentEventsEqualWithMessage(t, expected, actual, "")
+}
+
+// TestPlannedReparenter_verifyAllTabletsReachable tests the functionality of verifyAllTabletsReachable.
+func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
+	tests := []struct {
+		name         string
+		tmc          tmclient.TabletManagerClient
+		tabletMap    map[string]*topo.TabletInfo
+		remoteOpTime time.Duration
+		wantErr      string
+	}{
+		{
+			name: "Success",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000201": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+		}, {
+			name: "Failure",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: fmt.Errorf("primary status failed"),
+					},
+					"zone1-0000000201": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantErr: "primary status failed",
+		}, {
+			name: "Timeout",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryStatusDelays: map[string]time.Duration{
+					"zone1-0000000100": 20 * time.Second,
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000201": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			remoteOpTime: 100 * time.Millisecond,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantErr: "context deadline exceeded",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			pr := &PlannedReparenter{
+				ts:  ts,
+				tmc: tt.tmc,
+			}
+			if tt.remoteOpTime != 0 {
+				oldTime := topo.RemoteOperationTimeout
+				topo.RemoteOperationTimeout = tt.remoteOpTime
+				defer func() {
+					topo.RemoteOperationTimeout = oldTime
+				}()
+			}
+			err := pr.verifyAllTabletsReachable(context.Background(), tt.tabletMap)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }

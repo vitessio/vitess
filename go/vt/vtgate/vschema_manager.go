@@ -71,6 +71,12 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 	}
 
 	ks := vschema.Keyspaces[ksName]
+
+	_, err = vindexes.BuildKeyspace(ks)
+	if err != nil {
+		return err
+	}
+
 	err = topoServer.SaveVSchema(ctx, ksName, ks)
 	if err != nil {
 		return err
@@ -192,9 +198,16 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
 		m := vm.schema.Tables(ksName)
-
+		// Before we add the foreign key definitions in the tables, we need to make sure that all the tables
+		// are created in the Vschema, so that later when we try to find the routed tables, we don't end up
+		// getting dummy tables.
 		for tblName, tblInfo := range m {
-			vTbl := setColumns(ks, tblName, tblInfo.Columns)
+			setColumns(ks, tblName, tblInfo.Columns)
+		}
+
+		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
+		// in the tables.
+		for tblName, tblInfo := range m {
 			for _, fkDef := range tblInfo.ForeignKeys {
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
@@ -206,7 +219,7 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 					log.Errorf("error finding child table %s: %v", tblName, err)
 					continue
 				}
-				vTbl.ParentForeignKeys = append(vTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+				childTbl.ParentForeignKeys = append(childTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
 				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(childTbl, fkDef))
 			}
 		}

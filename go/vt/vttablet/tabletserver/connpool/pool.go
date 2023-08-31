@@ -170,6 +170,7 @@ func (cp *Pool) Close() {
 	log.Infof("connpool - acquiring lock")
 	cp.mu.Lock()
 	log.Infof("connpool - acquired lock")
+	cp.connections.Close()
 	cp.connections = nil
 	cp.mu.Unlock()
 	log.Infof("connpool - closing dbaPool")
