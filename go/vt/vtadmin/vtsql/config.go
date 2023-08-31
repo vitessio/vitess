@@ -109,7 +109,7 @@ func (c *Config) Parse(args []string) error {
 
 	var username, password string
 
-	// If credentials-path-tmpl is provided, use those credentials instead
+	// First load credentials from credentials-path-tmpl, if provided
 	var tmplStrCreds *grpcclient.StaticAuthClientCreds
 	if *credentialsTmplStr != "" {
 		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)

@@ -98,7 +98,7 @@ func TestConfigParse(t *testing.T) {
 		assert.Equal(t, expectedCreds, cfg.Credentials)
 	})
 
-	t.Run("it uses vtsql-credentials-password to override file password, if passed", func(t *testing.T) {
+	t.Run("uses vtsql-credentials-password", func(t *testing.T) {
 		t.Parallel()
 
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
