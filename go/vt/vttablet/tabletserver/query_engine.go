@@ -629,10 +629,6 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		acl.SendError(response, err)
 		return
 	}
-	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
-		acl.SendError(response, err)
-		return
-	}
 	items := qe.consolidator.Items()
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {
