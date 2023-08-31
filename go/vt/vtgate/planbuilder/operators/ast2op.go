@@ -177,7 +177,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 			Distinct:    true,
 			SelectExprs: selExprs,
 			From: []sqlparser.TableExpr{
-				ins.Table,
+				sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), ""),
 			},
 			Where: &sqlparser.Where{
 				Type: sqlparser.WhereClause,
