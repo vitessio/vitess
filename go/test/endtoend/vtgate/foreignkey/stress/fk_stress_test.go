@@ -159,7 +159,7 @@ var (
 		sqlparser.Cascade:  "CASCADE",
 		sqlparser.SetNull:  "SET NULL",
 	}
-	referenceActions = []sqlparser.ReferenceAction{sqlparser.NoAction, sqlparser.Cascade, sqlparser.SetNull}
+	referenceActions = []sqlparser.ReferenceAction{sqlparser.NoAction, sqlparser.SetNull, sqlparser.Cascade}
 	createStatements = []string{
 		`
 		CREATE TABLE stress_parent (
@@ -493,6 +493,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		workloadName = "workload"
 	}
 	testName := fmt.Sprintf("%s/del=%s/upd=%s", workloadName, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction])
+	if tcase.onlineDDLTable != "" {
+		testName = fmt.Sprintf("%s/ddl=%s", testName, tcase.onlineDDLTable)
+	}
 	t.Run(testName, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -516,12 +519,27 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				timer := time.NewTimer(workloadDuration)
 
 				if tcase.onlineDDLTable != "" {
-					t.Run(fmt.Sprintf("online ddl: %s", tcase.onlineDDLTable), func(t *testing.T) {
+					t.Run("migrating", func(t *testing.T) {
 						// This cannot work with Vanilla MySQL. We put the code for testing, but we're not actually going to use it
 						// for now. The test cases all have empty tcase.onlineDDLTable
 						hint := "hint-alter"
 						uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, tcase.onlineDDLTable, hint), onlineDDLStrategy, "vtgate", hint)
-						onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+						ok := onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+						require.True(t, ok) // or else don't attempt to cleanup artifacts
+						t.Run("cleanup artifacts", func(t *testing.T) {
+							rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+							require.NotNil(t, rs)
+							row := rs.Named().Row()
+							require.NotNil(t, row)
+
+							artifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+							for _, artifact := range artifacts {
+								t.Run(artifact, func(t *testing.T) {
+									err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, "drop table if exists "+artifact)
+									require.NoError(t, err)
+								})
+							}
+						})
 					})
 				}
 
@@ -553,6 +571,8 @@ func TestStressFK(t *testing.T) {
 		validateReplicationIsHealthy(t, replica)
 	})
 
+	runOnlineDDL := false
+
 	for _, onUpdateAction := range referenceActions {
 		for _, onDeleteAction := range referenceActions {
 			tcase := &testCase{
@@ -572,6 +592,20 @@ func TestStressFK(t *testing.T) {
 				onUpdateAction: onUpdateAction,
 			}
 			ExecuteFKTest(t, tcase)
+		}
+	}
+
+	if runOnlineDDL {
+		for _, action := range referenceActions {
+			for _, table := range tableNames {
+				tcase := &testCase{
+					workload:       true,
+					onDeleteAction: action,
+					onUpdateAction: action,
+					onlineDDLTable: table,
+				}
+				ExecuteFKTest(t, tcase)
+			}
 		}
 	}
 }
@@ -781,6 +815,10 @@ func isFKError(err error) bool {
 	case sqlerror.ERDupEntry: // happens since we hammer the tables randomly
 		return false
 	case sqlerror.ERTooManyUserConnections: // can happen in Online DDL cut-over
+		return false
+	case sqlerror.ERUnknownError: // happens when query buffering times out
+		return false
+	case sqlerror.ERQueryInterrupted: // cancelled due to context expiration
 		return false
 	case sqlerror.ERNoReferencedRow,
 		sqlerror.ERRowIsReferenced,
