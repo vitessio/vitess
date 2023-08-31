@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -63,8 +62,9 @@ type (
 	// an integral type, the bytes are always stored as a canonical
 	// representation that matches how MySQL returns such values.
 	Value struct {
-		typ querypb.Type
-		val []byte
+		typ    querypb.Type
+		val    []byte
+		values []Value
 	}
 
 	Row = []Value
@@ -109,12 +109,19 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 // comments. Other packages can also use the function to create
 // VarBinary or VarChar values.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
+	return MakeTrustedValues(typ, val, nil)
+}
 
+func MakeTrustedValues(typ querypb.Type, val []byte, values []*querypb.Value) Value {
 	if typ == Null {
 		return NULL
 	}
-
-	return Value{typ: typ, val: val}
+	var sqlValues []Value
+	for _, v := range values {
+		sqlValues = append(sqlValues,
+			MakeTrustedValues(v.Type, v.Value, v.Values))
+	}
+	return Value{typ: typ, val: val, values: sqlValues}
 }
 
 // NewHexNum builds an Hex Value.
@@ -147,6 +154,11 @@ func NewInt32(v int32) Value {
 	return MakeTrusted(Int32, strconv.AppendInt(nil, int64(v), 10))
 }
 
+// NewInt16 builds a Int16 Value.
+func NewInt16(v int16) Value {
+	return MakeTrusted(Int16, strconv.AppendInt(nil, int64(v), 10))
+}
+
 // NewUint64 builds an Uint64 Value.
 func NewUint64(v uint64) Value {
 	return MakeTrusted(Uint64, strconv.AppendUint(nil, v, 10))
@@ -157,9 +169,29 @@ func NewUint32(v uint32) Value {
 	return MakeTrusted(Uint32, strconv.AppendUint(nil, uint64(v), 10))
 }
 
+// NewUint16 builds a Uint16 Value.
+func NewUint16(v uint16) Value {
+	return MakeTrusted(Uint16, strconv.AppendUint(nil, uint64(v), 10))
+}
+
+// NewUint8 builds a Uint8 Value.
+func NewUint8(v uint8) Value {
+	return MakeTrusted(Uint8, strconv.AppendUint(nil, uint64(v), 10))
+}
+
+// NewBoolean builds a Uint8 Value from a boolean.
+func NewBoolean(v bool) Value {
+	return MakeTrusted(Uint8, strconv.AppendBool(nil, v))
+}
+
 // NewFloat64 builds an Float64 Value.
 func NewFloat64(v float64) Value {
 	return MakeTrusted(Float64, strconv.AppendFloat(nil, v, 'g', -1, 64))
+}
+
+// NewFloat32 builds a Float32 Value.
+func NewFloat32(v float32) Value {
+	return MakeTrusted(Float32, strconv.AppendFloat(nil, float64(v), 'g', -1, 64))
 }
 
 // NewVarChar builds a VarChar Value.
@@ -295,6 +327,11 @@ func (v Value) ToInt64() (int64, error) {
 	return fastparse.ParseInt64(v.RawStr(), 10)
 }
 
+// ToCastInt64 returns the best effort value as MySQL would return it as a int64.
+func (v Value) ToCastInt64() (int64, error) {
+	return fastparse.ParseInt64(v.RawStr(), 10)
+}
+
 func (v Value) ToInt32() (int32, error) {
 	if !v.IsIntegral() {
 		return 0, ErrIncompatibleTypeCast
@@ -338,6 +375,11 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
+	return fastparse.ParseUint64(v.RawStr(), 10)
+}
+
+// ToCastUint64 returns the best effort value as MySQL would return it as a uint64.
+func (v Value) ToCastUint64() (uint64, error) {
 	return fastparse.ParseUint64(v.RawStr(), 10)
 }
 
@@ -409,6 +451,15 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 		encodeBytesSQLStringBuilder(v.val, b)
 	case v.typ == Bit:
 		encodeBytesSQLBits(v.val, b)
+	case v.typ == Tuple:
+		b.WriteByte('(')
+		for i, bv := range v.values {
+			if i != 0 {
+				b.WriteString(", ")
+			}
+			bv.EncodeSQLStringBuilder(b)
+		}
+		b.WriteByte(')')
 	default:
 		b.Write(v.val)
 	}
@@ -566,7 +617,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 // an INSERT was performed with x'A1' having been specified as a value
 func (v *Value) decodeHexVal() ([]byte, error) {
 	if len(v.val) < 3 || (v.val[0] != 'x' && v.val[0] != 'X') || v.val[1] != '\'' || v.val[len(v.val)-1] != '\'' {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
 	}
 	hexBytes := v.val[2 : len(v.val)-1]
 	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
@@ -581,7 +632,7 @@ func (v *Value) decodeHexVal() ([]byte, error) {
 // an INSERT was performed with 0xA1 having been specified as a value
 func (v *Value) decodeHexNum() ([]byte, error) {
 	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'x' {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex number: %v", v.val)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid hex number: %v", v.val)
 	}
 	hexBytes := v.val[2:]
 	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
@@ -596,12 +647,12 @@ func (v *Value) decodeHexNum() ([]byte, error) {
 // an INSERT was performed with 0x5 having been specified as a value
 func (v *Value) decodeBitNum() ([]byte, error) {
 	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'b' {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
 	var i big.Int
 	_, ok := i.SetString(string(v.val), 0)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
 	return i.Bytes(), nil
 }

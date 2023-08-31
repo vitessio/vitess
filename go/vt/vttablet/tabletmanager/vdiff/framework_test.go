@@ -174,7 +174,9 @@ func init() {
 func TestMain(m *testing.M) {
 	exitCode := func() int {
 		var err error
-		tstenv, err = testenv.Init()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		tstenv, err = testenv.Init(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

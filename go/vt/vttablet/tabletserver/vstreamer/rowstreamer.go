@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -143,7 +143,7 @@ func (rs *rowStreamer) buildPlan() error {
 		// where it in fact does exist.
 		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
 		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
-		rs.se.ReloadAt(context.Background(), mysql.Position{})
+		rs.se.ReloadAt(context.Background(), replication.Position{})
 		st, err = rs.se.GetTableForPos(fromTable, "")
 	}
 	if err != nil {
@@ -331,7 +331,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
 	go func() {
-		for range heartbeatTicker.C {
+		select {
+		case <-rs.ctx.Done():
+			return
+		case <-heartbeatTicker.C:
 			safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
 		}
 	}()

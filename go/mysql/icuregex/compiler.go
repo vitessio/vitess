@@ -23,10 +23,9 @@ package icuregex
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"unicode/utf8"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/pattern"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"

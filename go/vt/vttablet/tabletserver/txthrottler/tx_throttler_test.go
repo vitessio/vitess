@@ -57,11 +57,13 @@ func TestDisabledThrottler(t *testing.T) {
 }
 
 func TestEnabledThrottler(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	defer resetTxThrottlerFactories()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
 	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
@@ -164,13 +166,15 @@ func TestEnabledThrottler(t *testing.T) {
 }
 
 func TestFetchKnownCells(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	{
-		ts := memorytopo.NewServer("cell1", "cell2")
+		ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
 		assert.Equal(t, []string{"cell1", "cell2"}, cells)
 	}
 	{
-		ts := memorytopo.NewServer()
+		ts := memorytopo.NewServer(ctx)
 		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
 		assert.Equal(t, []string{"cell1"}, cells)
 	}

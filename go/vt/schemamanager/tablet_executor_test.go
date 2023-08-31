@@ -18,6 +18,7 @@ package schemamanager
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -54,8 +55,9 @@ func TestTabletExecutorOpen(t *testing.T) {
 }
 
 func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("test_cell")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
@@ -70,7 +72,7 @@ func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
 	if err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
@@ -103,7 +105,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 	ctx := context.Background()
 
 	sqls := []string{
@@ -177,7 +179,7 @@ func TestTabletExecutorDML(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")
@@ -284,5 +286,125 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			assert.Equal(t, ts.strategy, e.ddlStrategySetting.Strategy)
 			assert.Equal(t, ts.options, e.ddlStrategySetting.Options)
 		}
+	}
+}
+
+func TestBatchSQLs(t *testing.T) {
+	sqls := []string{
+		"create table t1(id int primary key)",
+		"create table t2(id int primary key)",
+		"create table t3(id int primary key)",
+		"create table t4(id int primary key)",
+		"create view v as select id from t",
+	}
+	tcases := []struct {
+		batchSize  int
+		expectSQLs []string
+	}{
+		{
+			batchSize:  0,
+			expectSQLs: sqls,
+		},
+		{
+			batchSize:  1,
+			expectSQLs: sqls,
+		},
+		{
+			batchSize: 2,
+			expectSQLs: []string{
+				"create table t1(id int primary key);create table t2(id int primary key)",
+				"create table t3(id int primary key);create table t4(id int primary key)",
+				"create view v as select id from t",
+			},
+		},
+		{
+			batchSize: 3,
+			expectSQLs: []string{
+				"create table t1(id int primary key);create table t2(id int primary key);create table t3(id int primary key)",
+				"create table t4(id int primary key);create view v as select id from t",
+			},
+		},
+		{
+			batchSize: 4,
+			expectSQLs: []string{
+				"create table t1(id int primary key);create table t2(id int primary key);create table t3(id int primary key);create table t4(id int primary key)",
+				"create view v as select id from t",
+			},
+		},
+		{
+			batchSize: 5,
+			expectSQLs: []string{
+				"create table t1(id int primary key);create table t2(id int primary key);create table t3(id int primary key);create table t4(id int primary key);create view v as select id from t",
+			},
+		},
+		{
+			batchSize: 6,
+			expectSQLs: []string{
+				"create table t1(id int primary key);create table t2(id int primary key);create table t3(id int primary key);create table t4(id int primary key);create view v as select id from t",
+			},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%d", tcase.batchSize), func(t *testing.T) {
+			batchedSQLs := batchSQLs(sqls, tcase.batchSize)
+			assert.Equal(t, tcase.expectSQLs, batchedSQLs)
+		})
+	}
+}
+
+func TestAllSQLsAreCreateQueries(t *testing.T) {
+	tcases := []struct {
+		name   string
+		sqls   []string
+		expect bool
+	}{
+		{
+			name:   "empty",
+			expect: true,
+		},
+		{
+			name:   "single, yes",
+			sqls:   []string{"create table t1 (id int primary key)"},
+			expect: true,
+		},
+		{
+			name:   "single, no",
+			sqls:   []string{"alter table t1 force"},
+			expect: false,
+		},
+		{
+			name: "multi, no",
+			sqls: []string{
+				"create table t1 (id int primary key)",
+				"alter table t1 force",
+			},
+			expect: false,
+		},
+		{
+			name: "multi, no",
+			sqls: []string{
+				"alter table t1 force",
+				"create table t1 (id int primary key)",
+			},
+			expect: false,
+		},
+		{
+			name: "multi, yes",
+			sqls: []string{
+				"create table t1 (id int primary key)",
+				"create table t2 (id int primary key)",
+				"create table t3 (id int primary key)",
+				"create view v1 as select id from t1",
+			},
+			expect: true,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			result, err := allSQLsAreCreateQueries(tcase.sqls)
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.expect, result)
+		})
 	}
 }

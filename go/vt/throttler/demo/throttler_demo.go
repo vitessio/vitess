@@ -231,13 +231,13 @@ type client struct {
 	healthcheckCh chan *discovery.TabletHealth
 }
 
-func newClient(primary *primary, replica *replica, ts *topo.Server) *client {
+func newClient(ctx context.Context, primary *primary, replica *replica, ts *topo.Server) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "")
+	healthCheck := discovery.NewHealthCheck(ctx, 5*time.Second, 1*time.Minute, ts, "cell1", "")
 	c := &client{
 		primary:     primary,
 		healthCheck: healthCheck,
@@ -307,10 +307,10 @@ func main() {
 	})
 
 	log.Infof("start rate set to: %v", rate)
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(context.Background(), "cell1")
 	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts)
 	primary := &primary{replica: replica}
-	client := newClient(primary, replica, ts)
+	client := newClient(context.Background(), primary, replica, ts)
 	client.run()
 
 	time.Sleep(duration)

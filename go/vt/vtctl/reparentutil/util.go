@@ -24,7 +24,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -39,6 +41,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+var reparentShardOpTimings = stats.NewTimings("reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
@@ -72,7 +76,7 @@ func ChooseNewPrimary(
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets         []*topodatapb.Tablet
-		tabletPositions      []mysql.Position
+		tabletPositions      []replication.Position
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
@@ -121,7 +125,7 @@ func ChooseNewPrimary(
 
 // findPositionForTablet processes the replication position for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (mysql.Position, error) {
+func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -129,13 +133,13 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 
 	status, err := tmc.ReplicationStatus(ctx, tablet)
 	if err != nil {
-		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
+		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return mysql.Position{}, nil
+			return replication.Position{}, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 
 	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
@@ -143,10 +147,10 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 	if status.RelayLogPosition != "" {
 		positionString = status.RelayLogPosition
 	}
-	pos, err := mysql.DecodePosition(positionString)
+	pos, err := replication.DecodePosition(positionString)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 
 	return pos, nil
@@ -251,9 +255,9 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 }
 
 // getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
-func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []mysql.Position, error) {
+func getValidCandidatesAndPositionsAsList(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []replication.Position, error) {
 	var validTablets []*topodatapb.Tablet
-	var tabletPositions []mysql.Position
+	var tabletPositions []replication.Position
 	for tabletAlias, position := range validCandidates {
 		tablet, isFound := tabletMap[tabletAlias]
 		if !isFound {
@@ -266,8 +270,8 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 }
 
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
-func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
-	restrictedValidCandidates := make(map[string]mysql.Position)
+func restrictValidCandidates(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) (map[string]replication.Position, error) {
+	restrictedValidCandidates := make(map[string]replication.Position)
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
 		if !ok {

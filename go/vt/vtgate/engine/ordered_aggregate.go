@@ -80,8 +80,7 @@ func (gbp GroupByParams) String() string {
 	}
 
 	if sqltypes.IsText(gbp.Type) && gbp.CollationID != collations.Unknown {
-		collation := gbp.CollationID.Get()
-		out += " COLLATE " + collation.Name()
+		out += " COLLATE " + collations.Local().LookupName(gbp.CollationID)
 	}
 
 	return out
@@ -251,8 +250,8 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 }
 
 // Inputs returns the Primitive input for this aggregation
-func (oa *OrderedAggregate) Inputs() []Primitive {
-	return []Primitive{oa.Input}
+func (oa *OrderedAggregate) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{oa.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface

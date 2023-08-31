@@ -125,6 +125,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -136,6 +137,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -231,26 +233,6 @@
         "user.user"
       ]
     }
-  },
-  {
-    "comment": "ORDER BY on select t.*",
-    "query": "select t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
-    "comment": "ORDER BY on select *",
-    "query": "select *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
-    "comment": "ORDER BY on select multi t.*",
-    "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
-  },
-  {
-    "comment": "ORDER BY on select multi *",
-    "query": "select *, name, *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
     "comment": "ORDER BY works for select * from authoritative table",
@@ -437,6 +419,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -448,6 +431,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -640,6 +624,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -651,6 +636,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -758,6 +744,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -769,6 +756,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -1280,6 +1268,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -1291,6 +1280,7 @@
                 "Table": "`user`"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -1595,33 +1585,42 @@
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,L:0",
-        "TableName": "`user`_music",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select `name`, weight_string(`name`) from `user` order by `name` asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from music where 1 != 1",
-            "Query": "select 1 from music",
-            "Table": "music"
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_music",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `name`, weight_string(`name`) from `user` order by `name` asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music where 1 != 1",
+                "Query": "select 1 from music",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
@@ -1701,9 +1700,10 @@
       "QueryType": "SELECT",
       "Original": "select distinct user.a from user join user_extra",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|1)",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -1719,9 +1719,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
+                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+                "Query": "select distinct `user`.a, weight_string(`user`.a) from `user`",
                 "Table": "`user`"
               },
               {
@@ -1731,8 +1730,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra group by .0",
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select distinct 1 from user_extra",
                 "Table": "user_extra"
               }
             ]
@@ -1752,9 +1751,11 @@
       "QueryType": "SELECT",
       "Original": "select distinct a as c, a from user",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), (1|2)",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "(1:2)"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -1764,9 +1765,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1 group by a, a, weight_string(a)",
-            "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select a as c, a, weight_string(a) from `user` group by a, a, weight_string(a) order by a asc, a asc",
+            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+            "Query": "select distinct a as c, a, weight_string(a) from `user`",
             "Table": "`user`"
           }
         ]
@@ -1783,9 +1783,11 @@
       "QueryType": "SELECT",
       "Original": "select distinct a, a from user",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), (1|2)",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "(1:2)"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -1795,9 +1797,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1 group by a, a, weight_string(a)",
-            "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select a, a, weight_string(a) from `user` group by a, a, weight_string(a) order by a asc, a asc",
+            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1",
+            "Query": "select distinct a, a, weight_string(a) from `user`",
             "Table": "`user`"
           }
         ]

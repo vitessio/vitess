@@ -278,13 +278,6 @@ func (a tabletLagSnapshotList) Len() int           { return len(a) }
 func (a tabletLagSnapshotList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a tabletLagSnapshotList) Less(i, j int) bool { return a[i].replag < a[j].replag }
 
-func min(a, b int) int {
-	if a > b {
-		return b
-	}
-	return a
-}
-
 // mean calculates the mean value over the given list,
 // while excluding the item with the specified index.
 func mean(tabletHealthList []*TabletHealth, idxExclude int) (uint64, error) {

@@ -19,6 +19,8 @@ package mysql
 import (
 	"encoding/binary"
 	"hash/crc32"
+
+	"vitess.io/vitess/go/mysql/replication"
 )
 
 const (
@@ -292,7 +294,7 @@ func NewIntVarEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, value uint64)
 
 // NewMariaDBGTIDEvent returns a MariaDB specific GTID event.
 // It ignores the Server in the gtid, instead uses the FakeBinlogStream.ServerID.
-func NewMariaDBGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid MariadbGTID, hasBegin bool) BinlogEvent {
+func NewMariaDBGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid replication.MariadbGTID, hasBegin bool) BinlogEvent {
 	length := 8 + // sequence
 		4 + // domain
 		1 // flags2

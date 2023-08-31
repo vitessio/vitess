@@ -1897,6 +1897,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -1908,6 +1909,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -1944,6 +1946,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -1955,6 +1958,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -1986,6 +1990,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(1)",
             "Inputs": [
@@ -2003,6 +2008,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2035,6 +2041,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2046,6 +2053,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2082,6 +2090,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Subquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
@@ -2090,6 +2099,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2101,6 +2111,7 @@
                 "Table": "`user`"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2114,6 +2125,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2172,6 +2184,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -2183,6 +2196,7 @@
             "Table": "unsharded"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2449,6 +2463,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2464,6 +2479,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Subquery",
             "Variant": "PulloutNotIn",
             "PulloutVars": [
@@ -2472,6 +2488,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2487,6 +2504,7 @@
                 "Vindex": "user_index"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "IN",
                 "Keyspace": {
@@ -2623,6 +2641,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -2634,6 +2653,7 @@
             "Table": "unsharded"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -2655,11 +2675,6 @@
         "user.user"
       ]
     }
-  },
-  {
-    "comment": "correlated subquery with different keyspace tables involved",
-    "query": "select id from user where id in (select col from unsharded where col = user.id)",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "correlated subquery with same keyspace",
@@ -2817,6 +2832,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2832,6 +2848,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2864,6 +2881,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2879,6 +2897,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2916,6 +2935,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2931,6 +2951,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -3153,47 +3174,40 @@
       "QueryType": "SELECT",
       "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.id is null",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Filter",
+        "Predicate": "user_extra.id is null",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "user_extra.id is null",
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "user_col": 1
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "LeftJoin",
-                "JoinColumnIndexes": "L:0,R:0",
-                "JoinVars": {
-                  "user_col": 1
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.col from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-                    "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-                    "Table": "user_extra"
-                  }
-                ]
+                "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+                "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+                "Table": "user_extra"
               }
             ]
           }
@@ -3226,6 +3240,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3237,6 +3252,7 @@
                 "Table": "music"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -4121,61 +4137,54 @@
       "QueryType": "SELECT",
       "Original": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Filter",
+        "Predicate": "repeat(a.textcol1, sum(a.id)) like 'And%res'",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "repeat(a.textcol1, sum(a.id)) like 'And%res'",
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(1) AS sum(a.id)",
+            "GroupBy": "0 COLLATE latin1_swedish_ci",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Ordered",
-                "Aggregates": "sum(1) AS sum(a.id)",
-                "GroupBy": "0 COLLATE latin1_swedish_ci",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 2] as textcol1",
+                  "[COLUMN 0] * [COLUMN 1] as sum(a.id)"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Projection",
-                    "Expressions": [
-                      "[COLUMN 2] as textcol1",
-                      "[COLUMN 0] * [COLUMN 1] as sum(a.id)"
-                    ],
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,L:1",
+                    "JoinVars": {
+                      "a_textcol1": 1
+                    },
+                    "TableName": "`user`_`user`",
                     "Inputs": [
                       {
-                        "OperatorType": "Join",
-                        "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,R:0,L:1",
-                        "JoinVars": {
-                          "a_textcol1": 1
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
                         },
-                        "TableName": "`user`_`user`",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select sum(a.id), a.textcol1 from `user` as a where 1 != 1 group by a.textcol1",
-                            "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
-                            "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc",
-                            "Table": "`user`"
-                          },
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
-                            "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 group by .0",
-                            "Table": "`user`"
-                          }
-                        ]
+                        "FieldQuery": "select sum(a.id), a.textcol1 from `user` as a where 1 != 1 group by a.textcol1",
+                        "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
+                        "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
+                        "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 group by .0",
+                        "Table": "`user`"
                       }
                     ]
                   }
@@ -4227,6 +4236,7 @@
         "TableName": "unsharded_`user`_unsharded",
         "Inputs": [
           {
+            "InputName": "Outer",
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "R:0,L:0",
@@ -4257,6 +4267,7 @@
             ]
           },
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {

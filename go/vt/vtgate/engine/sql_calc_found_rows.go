@@ -23,7 +23,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var _ Primitive = (*SQLCalcFoundRows)(nil)
@@ -62,7 +61,7 @@ func (s SQLCalcFoundRows) TryExecute(ctx context.Context, vcursor VCursor, bindV
 	if len(countQr.Rows) != 1 || len(countQr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "count query is not a scalar")
 	}
-	fr, err := evalengine.ToUint64(countQr.Rows[0][0])
+	fr, err := countQr.Rows[0][0].ToCastUint64()
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +86,7 @@ func (s SQLCalcFoundRows) TryStreamExecute(ctx context.Context, vcursor VCursor,
 		if len(countQr.Rows) != 1 || len(countQr.Rows[0]) != 1 {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "count query is not a scalar")
 		}
-		toUint64, err := evalengine.ToUint64(countQr.Rows[0][0])
+		toUint64, err := countQr.Rows[0][0].ToCastUint64()
 		if err != nil {
 			return err
 		}
@@ -115,8 +114,8 @@ func (s SQLCalcFoundRows) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (s SQLCalcFoundRows) Inputs() []Primitive {
-	return []Primitive{s.LimitPrimitive, s.CountPrimitive}
+func (s SQLCalcFoundRows) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{s.LimitPrimitive, s.CountPrimitive}, nil
 }
 
 func (s SQLCalcFoundRows) description() PrimitiveDescription {

@@ -791,7 +791,14 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		switchWrites(t, workflowType, ksWorkflow, false)
+
 		checkThatVDiffFails(t, targetKs, workflow)
+
+		// The original unsharded customer data included an insert with the
+		// vindex column (cid) of 999999, so the backing sequence table should
+		// now have a next_id of 1000000 after SwitchTraffic.
+		res := execVtgateQuery(t, vtgateConn, sourceKs, "select next_id from customer_seq where id = 0")
+		require.Equal(t, "1000000", res.Rows[0][0].ToString())
 
 		if withOpenTx && commit != nil {
 			commit(t)
@@ -1358,11 +1365,18 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
 	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, action}
-	if strings.EqualFold(action, strings.ToLower(workflowActionCreate)) {
+	switch strings.ToLower(action) {
+	case strings.ToLower(workflowActionCreate):
 		extraFlags = append(extraFlags, "--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
+	case strings.ToLower(workflowActionSwitchTraffic):
+		extraFlags = append(extraFlags, "--initialize-target-sequences")
 	}
 	args = append(args, extraFlags...)
-	err = vc.VtctldClient.ExecuteCommand(args...)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+	if output != "" {
+		fmt.Printf("Output of vtctldclient MoveTables %s for %s workflow:\n++++++\n%s\n--------\n",
+			action, workflow, output)
+	}
 	if err != nil {
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
@@ -1387,6 +1401,7 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
 			"workflow type specified: %s", workflowType)
 	}
+	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica",
 		"--dry_run", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
@@ -1395,9 +1410,26 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 	}
 }
 
+func ensureCanSwitch(t *testing.T, workflowType, cells, ksWorkflow string) {
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		_, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--dry_run", "SwitchTraffic", ksWorkflow)
+		if err == nil {
+			return
+		}
+		select {
+		case <-timer.C:
+			t.Fatalf("Did not become ready to switch traffic for %s before the timeout of %s", ksWorkflow, defaultTimeout)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
 func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse bool) {
-	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
-		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables.String() &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_Reshard.String() {
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
 			"workflow type specified: %s", workflowType)
 	}
@@ -1407,12 +1439,42 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 	if reverse {
 		command = "ReverseTraffic"
 	}
+	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
 	output, err = vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly",
 		command, ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
 	output, err = vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=replica",
 		command, ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
+}
+
+func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables.String() &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_Reshard.String() {
+		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
+			"workflow type specified: %s", workflowType)
+	}
+	command := "SwitchTraffic"
+	if reverse {
+		command = "ReverseTraffic"
+	}
+	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
+	ensureCanSwitch(t, workflowType, "", ksWorkflow)
+	// Use vtctldclient for MoveTables SwitchTraffic ~ 50% of the time.
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() && time.Now().Second()%2 == 0 {
+		parts := strings.Split(ksWorkflow, ".")
+		require.Equal(t, 2, len(parts))
+		moveTablesAction(t, command, defaultCellName, parts[1], sourceKs, parts[0], "", "--timeout="+SwitchWritesTimeout, "--tablet-types=primary")
+		return
+	}
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
+		"--timeout="+SwitchWritesTimeout, "--initialize-target-sequences", command, ksWorkflow)
+	if output != "" {
+		fmt.Printf("Output of switching writes with vtctlclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+	}
+	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
+	_ = printSwitchWritesExtraDebug
+	require.NoError(t, err, fmt.Sprintf("Switch writes Error: %s: %s", err, output))
 }
 
 func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunResults []string) {
@@ -1457,27 +1519,6 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	}
 }
 
-func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
-	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
-		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
-		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
-			"workflow type specified: %s", workflowType)
-	}
-	command := "SwitchTraffic"
-	if reverse {
-		command = "ReverseTraffic"
-	}
-	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
-		"--timeout="+SwitchWritesTimeout, command, ksWorkflow)
-	if output != "" {
-		fmt.Printf("Output of switching writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
-	}
-	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
-	_ = printSwitchWritesExtraDebug
-	require.NoError(t, err, fmt.Sprintf("Switch writes Error: %s: %s", err, output))
-}
-
 // generateInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
 // This allows us to confirm two behaviors:
 //  1. MoveTables blocks on starting its first copy phase until we rollback
@@ -1514,6 +1555,7 @@ func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory in
 // expected length.
 func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, expectedLength int64) {
 	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	historyLen := int64(0)
 	for {
 		res, err := tablet.QueryTablet(historyLenQuery, tablet.Keyspace, false)

@@ -18,12 +18,12 @@ package aggregation
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -59,16 +59,16 @@ func TestAggregateTypes(t *testing.T) {
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
 	mcmp.AssertMatches("select val1, count(distinct val2), count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
 	mcmp.AssertMatches("select val1, sum(distinct val2), sum(val2) from aggr_test group by val1", `[[VARCHAR("a") DECIMAL(1) DECIMAL(2)] [VARCHAR("b") DECIMAL(1) DECIMAL(1)] [VARCHAR("c") DECIMAL(7) DECIMAL(7)] [VARCHAR("d") NULL NULL] [VARCHAR("e") DECIMAL(1) DECIMAL(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
+	mcmp.AssertMatches("select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
+	mcmp.AssertMatches("select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
 
 	mcmp.AssertMatches("select ascii(val1) as a, count(*) from aggr_test group by a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(100) INT64(1)] [INT32(101) INT64(1)] [INT32(99) INT64(2)]]`)
+	mcmp.AssertMatches("select ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`)
+	mcmp.AssertMatches("select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(100) INT64(1)] [INT32(101) INT64(1)] [INT32(99) INT64(2)]]`)
 
 	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
 	mcmp.AssertMatches("select sum(val1) from aggr_test", `[[FLOAT64(0)]]`)
 }
 
@@ -78,12 +78,12 @@ func TestGroupBy(t *testing.T) {
 	mcmp.Exec("insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
 	// test ordering and group by int column
 	mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
+	mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
 
 	// Test the same queries in streaming mode
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
+	mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
 }
 
 func TestEqualFilterOnScatter(t *testing.T) {
@@ -97,18 +97,18 @@ func TestEqualFilterOnScatter(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 5 = a", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = a", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 3+2", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 1+4 = 3+2", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 1", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = \"1\"", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `[[INT64(1)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 5 = a", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = a", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = 3+2", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 1+4 = 3+2", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = 1", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = \"1\"", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
+			mcmp.AssertMatches("select 1 from aggr_test having count(*) = 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -120,7 +120,7 @@ func TestAggrOnJoin(t *testing.T) {
 	mcmp.Exec("insert into t3(id5, id6, id7) values(1,1,1), (2,2,4), (3,2,4), (4,1,2), (5,1,1), (6,3,6)")
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) from aggr_test a join t3 t on a.val2 = t.id7",
+	mcmp.AssertMatches("select count(*) from aggr_test a join t3 t on a.val2 = t.id7",
 		"[[INT64(8)]]")
 	/*
 		mysql> select count(*) from aggr_test a join t3 t on a.val2 = t.id7;
@@ -131,7 +131,7 @@ func TestAggrOnJoin(t *testing.T) {
 		+----------+
 		1 row in set (0.00 sec)
 	*/
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1",
+	mcmp.AssertMatches("select a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1",
 		`[[VARCHAR("a") INT64(4)] [VARCHAR("b") INT64(2)] [VARCHAR("c") INT64(2)]]`)
 	/*
 		mysql> select a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1;
@@ -145,7 +145,7 @@ func TestAggrOnJoin(t *testing.T) {
 		3 rows in set (0.00 sec)
 	*/
 
-	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ max(a1.val2), max(a2.val2), count(*) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7`,
+	mcmp.AssertMatches(`select max(a1.val2), max(a2.val2), count(*) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7`,
 		"[[INT64(3) INT64(1) INT64(8)]]")
 	/*
 		mysql> select max(a1.val2), max(a2.val2), count(*) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7;
@@ -157,17 +157,17 @@ func TestAggrOnJoin(t *testing.T) {
 		1 row in set (0.00 sec)
 	*/
 
-	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ a1.val1, count(distinct a1.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7 group by a1.val1`,
+	mcmp.AssertMatches(`select a1.val1, count(distinct a1.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7 group by a1.val1`,
 		`[[VARCHAR("a") INT64(1)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(1)]]`)
 
 	// having on aggregation on top of join
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
+	mcmp.AssertMatches("select a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
 		`[[VARCHAR("a") INT64(4)]]`)
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) as leCount from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having leCount = 4",
+	mcmp.AssertMatches("select a.val1, count(*) as leCount from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having leCount = 4",
 		`[[VARCHAR("a") INT64(4)]]`)
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1 from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
+	mcmp.AssertMatches("select a.val1 from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
 		`[[VARCHAR("a")]]`)
 }
 
@@ -182,15 +182,15 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 5", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 5 != a", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != a", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 3+2", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 1", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"1\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"5\"", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 5.00", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != 5", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 5 != a", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != a", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != 3+2", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != 1", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != \"1\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != \"5\"", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a != 5.00", `[]`)
+			mcmp.AssertMatches("select 1 from aggr_test having count(*) != 5", `[]`)
 		})
 	}
 }
@@ -205,15 +205,15 @@ func TestLessFilterOnScatter(t *testing.T) {
 	for _, workload := range workloads {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 10", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 1 < a", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < a", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 3+2", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 1", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"10\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"5\"", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 6.00", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < 10", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 < a", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < a", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < 3+2", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < 1", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < \"10\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < \"5\"", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a < 6.00", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select 1 from aggr_test having count(*) < 5", `[]`)
 		})
 	}
 }
@@ -229,15 +229,15 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 10", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 1 <= a", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= a", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 3+2", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 1", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"10\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"5\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 5.00", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `[[INT64(1)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= 10", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 <= a", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= a", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= 3+2", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= 1", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= \"10\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= \"5\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= 5.00", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select 1 from aggr_test having count(*) <= 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -253,15 +253,15 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 1", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 1 > a", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > a", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 3+1", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 10", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"1\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"5\"", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 4.00", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > 1", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 > a", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > a", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > 3+1", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > 10", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > \"1\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > \"5\"", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a > 4.00", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select 1 from aggr_test having count(*) > 5", `[]`)
 		})
 	}
 }
@@ -277,15 +277,15 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 1", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having 1 >= a", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= a", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 3+2", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 10", `[]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"1\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"5\"", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 5.00", `[[INT64(5)]]`)
-			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `[[INT64(1)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= 1", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 >= a", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= a", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= 3+2", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= 10", `[]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= \"1\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= \"5\"", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= 5.00", `[[INT64(5)]]`)
+			mcmp.AssertMatches("select 1 from aggr_test having count(*) >= 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -299,7 +299,7 @@ func TestGroupByOnlyFullGroupByOff(t *testing.T) {
 	mcmp.Exec("set @@sql_mode = ' '")
 
 	// We do not use AssertMatches here because the results for the second column are random
-	_, err := mcmp.ExecAndIgnore("select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
+	_, err := mcmp.ExecAndIgnore("select id2, id3 from t9 group by id2")
 	require.NoError(t, err)
 }
 
@@ -311,22 +311,22 @@ func TestAggOnTopOfLimit(t *testing.T) {
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x", "[[INT64(2)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(1)]]`)
-			mcmp.AssertMatchesNoOrder(" select /*vt+ PLANNER=gen4 */ val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
+			mcmp.AssertMatches(" select count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x", "[[INT64(2)]]")
+			mcmp.AssertMatches(" select count(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2)]]")
+			mcmp.AssertMatches(" select count(*) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2)]]")
+			mcmp.AssertMatches(" select count(val1) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1)]]")
+			mcmp.AssertMatches(" select count(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(1)]]`)
+			mcmp.AssertMatchesNoOrder(" select val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
 
 			// mysql returns FLOAT64(0), vitess returns DECIMAL(0)
-			mcmp.AssertMatchesNoCompare(" select /*vt+ PLANNER=gen4 */ count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2) DECIMAL(14)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val2), sum(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0) NULL]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ val1, count(*), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1) DECIMAL(7)] [VARCHAR("a") INT64(1) DECIMAL(2)]]`)
-			mcmp.AssertMatchesNoOrder(" select /*vt+ PLANNER=gen4 */ val1, count(val2), sum(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1) DECIMAL(2)] [VARCHAR("a") INT64(2) DECIMAL(7)] [VARCHAR("b") INT64(1) DECIMAL(1)] [VARCHAR("c") INT64(2) DECIMAL(7)]]`)
+			mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
+			mcmp.AssertMatches(" select count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7)]]")
+			mcmp.AssertMatches(" select count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2) DECIMAL(14)]]")
+			mcmp.AssertMatches(" select count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
+			mcmp.AssertMatches(" select count(val2), sum(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0) NULL]]")
+			mcmp.AssertMatches(" select val1, count(*), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1) DECIMAL(7)] [VARCHAR("a") INT64(1) DECIMAL(2)]]`)
+			mcmp.AssertMatchesNoOrder(" select val1, count(val2), sum(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1) DECIMAL(2)] [VARCHAR("a") INT64(2) DECIMAL(7)] [VARCHAR("b") INT64(1) DECIMAL(1)] [VARCHAR("c") INT64(2) DECIMAL(7)]]`)
 		})
 	}
 }
@@ -338,10 +338,10 @@ func TestEmptyTableAggr(t *testing.T) {
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
+			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
+			mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 		})
 	}
 
@@ -350,10 +350,10 @@ func TestEmptyTableAggr(t *testing.T) {
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
-			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
+			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
+			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 		})
 	}
 
@@ -365,7 +365,7 @@ func TestOrderByCount(t *testing.T) {
 
 	mcmp.Exec("insert into t9(id1, id2, id3) values(1, '1', '1'), (2, '2', '2'), (3, '2', '2'), (4, '3', '3'), (5, '3', '3'), (6, '3', '3')")
 
-	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC", `[[VARCHAR("3")] [VARCHAR("2")] [VARCHAR("1")]]`)
+	mcmp.AssertMatches("SELECT t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC", `[[VARCHAR("3")] [VARCHAR("2")] [VARCHAR("1")]]`)
 }
 
 func TestAggregateAnyValue(t *testing.T) {
@@ -375,10 +375,10 @@ func TestAggregateAnyValue(t *testing.T) {
 	mcmp.Exec("insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2)")
 	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
 
-	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
+	mcmp.AssertMatches("SELECT t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
 
 	mcmp.Exec("set sql_mode=''")
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno", `[[NULL INT64(0)]]`)
+	mcmp.AssertMatches("select tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno", `[[NULL INT64(0)]]`)
 }
 
 // TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
@@ -422,7 +422,7 @@ func TestScalarAggregate(t *testing.T) {
 	defer closer()
 
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(distinct val1) from aggr_test", `[[INT64(3)]]`)
+	mcmp.AssertMatches("select count(distinct val1) from aggr_test", `[[INT64(3)]]`)
 }
 
 func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
@@ -431,7 +431,7 @@ func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
 
 	mcmp.Exec("insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20);")
 
-	mcmp.AssertMatchesNoOrder("select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t10 where a = 100) A;",
+	mcmp.AssertMatchesNoOrder("select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t10 where a = 100) A;",
 		`[[DECIMAL(100) DECIMAL(10) DECIMAL(10.0000)]]`)
 }
 
@@ -443,16 +443,16 @@ func TestBuggyQueries(t *testing.T) {
 
 	mcmp.Exec("insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null)")
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ sum(t1.a) from t10 as t1, t10 as t2",
+	mcmp.AssertMatches("select sum(t1.a) from t10 as t1, t10 as t2",
 		`[[DECIMAL(900)]]`)
 
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */t1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a",
+	mcmp.AssertMatches("select t1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a",
 		"[[NULL NULL INT64(3) NULL NULL INT64(3)] "+
 			"[INT32(100) DECIMAL(300) INT64(3) INT32(100) DECIMAL(300) INT64(3)] "+
 			"[INT32(200) DECIMAL(600) INT64(3) INT32(200) DECIMAL(600) INT64(3)]]")
 
-	mcmp.Exec("select /*vt+ PLANNER=gen4 */sum(tbl1.a), min(tbl0.b) from t10 as tbl0, t10 as tbl1 left join t10 as tbl2 on tbl1.a = tbl2.a and tbl1.b = tbl2.k")
-	mcmp.Exec("select /*vt+ PLANNER=gen4 */count(*) from t10 left join t10 as t11 on t10.a = t11.b where t11.a")
+	mcmp.Exec("select sum(tbl1.a), min(tbl0.b) from t10 as tbl0, t10 as tbl1 left join t10 as tbl2 on tbl1.a = tbl2.a and tbl1.b = tbl2.k")
+	mcmp.Exec("select count(*) from t10 left join t10 as t11 on t10.a = t11.b where t11.a")
 }
 
 func TestMinMaxAcrossJoins(t *testing.T) {
@@ -462,7 +462,7 @@ func TestMinMaxAcrossJoins(t *testing.T) {
 	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
 
 	mcmp.AssertMatchesNoOrder(
-		`SELECT /*vt+ PLANNER=gen4 */ t1.name, max(t1.shardKey), t2.shardKey, min(t2.id) FROM t1 JOIN t2 ON t1.t1_id != t2.shardKey GROUP BY t1.name, t2.shardKey`,
+		`SELECT t1.name, max(t1.shardKey), t2.shardKey, min(t2.id) FROM t1 JOIN t2 ON t1.t1_id != t2.shardKey GROUP BY t1.name, t2.shardKey`,
 		`[[VARCHAR("name 2") INT64(2) INT64(10) INT64(1)] [VARCHAR("name 1") INT64(1) INT64(10) INT64(1)] [VARCHAR("name 2") INT64(2) INT64(20) INT64(2)] [VARCHAR("name 1") INT64(1) INT64(20) INT64(2)]]`)
 }
 
@@ -472,13 +472,13 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
 
 	mcmp.Exec("set @@sql_mode = ' '")
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ 1+COUNT(t1_id) FROM t1`)
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ COUNT(t1_id)+1 FROM t1`)
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ COUNT(t1_id)+MAX(shardkey) FROM t1`)
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ shardkey, MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
-	mcmp.Exec(`SELECT /*vt+ PLANNER=gen4 */ COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
+	mcmp.Exec(`SELECT 1+COUNT(t1_id) FROM t1`)
+	mcmp.Exec(`SELECT COUNT(t1_id)+1 FROM t1`)
+	mcmp.Exec(`SELECT COUNT(t1_id)+MAX(shardkey) FROM t1`)
+	mcmp.Exec(`SELECT shardkey, MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
+	mcmp.Exec(`SELECT shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
+	mcmp.Exec(`SELECT name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
+	mcmp.Exec(`SELECT COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
 }
 
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
@@ -488,15 +488,15 @@ func TestGroupConcatAggregation(t *testing.T) {
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493)")
 	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
 
-	mQr, vtQr := mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(name) FROM t1`)
+	mQr, vtQr := mcmp.ExecNoCompare(`SELECT group_concat(name) FROM t1`)
 	compareRow(t, mQr, vtQr, nil, []int{0})
-	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.shardKey = t2.shardKey `)
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(value) FROM t1 join t2 on t1.shardKey = t2.shardKey `)
 	compareRow(t, mQr, vtQr, nil, []int{0})
-	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.t1_id = t2.shardKey `)
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(value) FROM t1 join t2 on t1.t1_id = t2.shardKey `)
 	compareRow(t, mQr, vtQr, nil, []int{0})
-	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value) FROM t1 join t2 on t1.shardKey = t2.id `)
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(value) FROM t1 join t2 on t1.shardKey = t2.id `)
 	compareRow(t, mQr, vtQr, nil, []int{0})
-	mQr, vtQr = mcmp.ExecNoCompare(`SELECT /*vt+ PLANNER=gen4 */ group_concat(value), t1.name FROM t1, t2 group by t1.name`)
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(value), t1.name FROM t1, t2 group by t1.name`)
 	compareRow(t, mQr, vtQr, []int{1}, []int{0})
 }
 
@@ -538,17 +538,19 @@ func TestDistinctAggregation(t *testing.T) {
 		query       string
 		expectedErr string
 	}{{
-		query:       `SELECT /*vt+ PLANNER=gen4 */ COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
+		query:       `SELECT COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
 		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct shardkey) (errno 1235) (sqlstate 42000)",
 	}, {
-		query: `SELECT /*vt+ PLANNER=gen4 */ a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
+		query: `SELECT a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
 	}, {
-		query: `SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.value`,
+		query: `SELECT a.value, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.value`,
 	}, {
-		query:       `SELECT /*vt+ PLANNER=gen4 */ count(distinct a.value), SUM(DISTINCT b.t1_id) FROM t1 a, t1 b`,
+		query:       `SELECT count(distinct a.value), SUM(DISTINCT b.t1_id) FROM t1 a, t1 b`,
 		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct b.t1_id) (errno 1235) (sqlstate 42000)",
 	}, {
-		query: `SELECT /*vt+ PLANNER=gen4 */ a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
+		query: `SELECT a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
+	}, {
+		query: `SELECT distinct count(*) from t1, (select distinct count(*) from t1) as t2`,
 	}}
 
 	for _, tc := range tcases {

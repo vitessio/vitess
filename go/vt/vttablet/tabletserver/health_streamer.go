@@ -27,7 +27,9 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/constants/sidecar"
+
+	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -154,6 +156,10 @@ func (hs *healthStreamer) Close() {
 		hs.se.UnregisterNotifier("healthStreamer")
 		hs.cancel()
 		hs.cancel = nil
+	}
+	if hs.conns != nil {
+		hs.conns.Close()
+		hs.conns = nil
 	}
 }
 
@@ -360,6 +366,9 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	// Range over the tables that are created/altered and split them up based on their type.
 	for _, table := range append(append(dropped, created...), altered...) {
 		tableName := table.Name.String()
+		if vtschema.IsInternalOperationTableName(tableName) {
+			continue
+		}
 		if table.Type == schema.View && hs.viewsEnabled {
 			views = append(views, tableName)
 		} else {
@@ -401,8 +410,8 @@ func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBCon
 	}
 
 	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(escapedTableNames, ", "))
-	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
-	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
+	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
+	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
 
 	// Reload the schema in a transaction.
 	_, err := conn.Exec(ctx, "begin", 1, false)

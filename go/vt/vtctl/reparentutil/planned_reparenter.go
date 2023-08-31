@@ -25,8 +25,10 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -38,6 +40,19 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+// counters for Planned Reparent Shard
+var (
+	prsCounter = stats.NewCountersWithMultiLabels("planned_reparent_shards", "Number of times Planned Reparent Shard has been run",
+		[]string{"Keyspace", "Shard"},
+	)
+	prsFailureCounter = stats.NewCountersWithMultiLabels("planned_reparent_shards_failed", "Number of times Planned Reparent Shard has failed",
+		[]string{"Keyspace", "Shard"},
+	)
+	prsSuccessCounter = stats.NewCountersWithMultiLabels("planned_reparent_shards_succeeded", "Number of times Planned Reparent Shard has succeeded",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -89,11 +104,15 @@ func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, log
 // both the current and desired primary are reachable and in a good state.
 func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts PlannedReparentOptions) (*events.Reparent, error) {
 	var err error
+	statsLabels := []string{keyspace, shard}
+	prsCounter.Add(statsLabels, 1)
+
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		var unlock func(*error)
 		opts.lockAction = pr.getLockAction(opts)
 		ctx, unlock, err = pr.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 		if err != nil {
+			prsFailureCounter.Add(statsLabels, 1)
 			return nil, err
 		}
 		defer unlock(&err)
@@ -102,18 +121,23 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 	if opts.NewPrimaryAlias == nil && opts.AvoidPrimaryAlias == nil {
 		shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
+			prsFailureCounter.Add(statsLabels, 1)
 			return nil, err
 		}
 
 		opts.AvoidPrimaryAlias = shardInfo.PrimaryAlias
 	}
 
+	startTime := time.Now()
 	ev := &events.Reparent{}
 	defer func() {
+		reparentShardOpTimings.Add("PlannedReparentShard", time.Since(startTime))
 		switch err {
 		case nil:
+			prsSuccessCounter.Add(statsLabels, 1)
 			event.DispatchUpdate(ev, "finished PlannedReparentShard")
 		default:
+			prsFailureCounter.Add(statsLabels, 1)
 			event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 		}
 	}()
@@ -376,7 +400,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	type tabletPos struct {
 		alias  string
 		tablet *topodatapb.Tablet
-		pos    mysql.Position
+		pos    replication.Position
 	}
 
 	positions := make(chan tabletPos, len(tabletMap))
@@ -423,7 +447,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 				return
 			}
 
-			pos, err := mysql.DecodePosition(primaryStatus.Position)
+			pos, err := replication.DecodePosition(primaryStatus.Position)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for demoted tablet %v", primaryStatus.Position, alias))
 

@@ -1482,6 +1482,7 @@ column_attribute_list_opt:
 | column_attribute_list_opt DEFAULT now_or_signed_literal
   {
     $1.Default = $3
+    $1.DefaultLiteral = true
     $$ = $1
   }
 | column_attribute_list_opt ON UPDATE function_call_nonkeyword
@@ -2826,7 +2827,7 @@ table_option:
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4)}
+    $$ = &TableOption{Name:string($1), String: ($3.String() + $4), CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
@@ -2991,9 +2992,9 @@ alter_option:
   {
     $$ = &AlterColumn{Column: $3, DropDefault:true}
   }
-| ALTER column_opt column_name SET DEFAULT signed_literal_or_null
+| ALTER column_opt column_name SET DEFAULT now_or_signed_literal
   {
-    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6}
+    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6, DefaultLiteral: true}
   }
 | ALTER column_opt column_name SET DEFAULT openb expression closeb
   {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -18,18 +19,6 @@ const (
 	ViewComplex           string = "Complex select queries are not supported in create or alter view statements"
 	DifferentDestinations string = "Tables or Views specified in the query do not belong to the same destination"
 )
-
-type fkStrategy int
-
-const (
-	fkAllow fkStrategy = iota
-	fkDisallow
-)
-
-var fkStrategyMap = map[string]fkStrategy{
-	"allow":    fkAllow,
-	"disallow": fkDisallow,
-}
 
 type fkContraint struct {
 	found bool
@@ -110,10 +99,6 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 
 	switch ddl := ddlStatement.(type) {
 	case *sqlparser.AlterTable, *sqlparser.CreateTable, *sqlparser.TruncateTable:
-		err = checkFKError(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
 		// For ALTER TABLE and TRUNCATE TABLE, the table must already exist
 		//
 		// For CREATE TABLE, the table may (in the case of --declarative)
@@ -121,6 +106,10 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		//
 		// We should find the target of the query from this tables location.
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
@@ -161,8 +150,12 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		}, nil
 }
 
-func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) error {
-	if fkStrategyMap[vschema.ForeignKeyMode()] == fkDisallow {
+func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement, keyspace *vindexes.Keyspace) error {
+	fkMode, err := vschema.ForeignKeyMode(keyspace.Name)
+	if err != nil {
+		return err
+	}
+	if fkMode == vschemapb.Keyspace_FK_DISALLOW {
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {

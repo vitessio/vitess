@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,9 +37,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -302,7 +301,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
-			return newVPlayer(vr, settings, nil, mysql.Position{}, "replicate").play(ctx)
+			return newVPlayer(vr, settings, nil, replication.Position{}, "replicate").play(ctx)
 		}
 	}
 }
@@ -426,7 +425,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
 		return settings, numTablesToCopy, fmt.Errorf("unexpected result from %s: %v", query, qr)
 	}
-	numTablesToCopy, err = evalengine.ToInt64(qr.Rows[0][0])
+	numTablesToCopy, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
@@ -485,14 +484,14 @@ func encodeString(in string) string {
 }
 
 func (vr *vreplicator) getSettingFKCheck() error {
-	qr, err := vr.dbClient.Execute("select @@foreign_key_checks;")
+	qr, err := vr.dbClient.Execute("select @@foreign_key_checks")
 	if err != nil {
 		return err
 	}
 	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
 		return fmt.Errorf("unable to select @@foreign_key_checks")
 	}
-	vr.originalFKCheckSetting, err = evalengine.ToInt64(qr.Rows[0][0])
+	vr.originalFKCheckSetting, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return err
 	}
@@ -500,7 +499,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 }
 
 func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
-	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d", vr.originalFKCheckSetting))
 	return err
 }
 
@@ -588,7 +587,7 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 }
 
 func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
-	_, err := dbClient.Execute("set foreign_key_checks=0;")
+	_, err := dbClient.Execute("set foreign_key_checks=0")
 	return err
 }
 
@@ -691,7 +690,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {
 			// If they've already been dropped, e.g. by another controller running on the tablet
 			// when doing a shard merge, then we can ignore the error.
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERCantDropFieldOrKey {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.ERCantDropFieldOrKey {
 				secondaryKeys, err := vr.getTableSecondaryKeys(ctx, tableName)
 				if err == nil && len(secondaryKeys) == 0 {
 					return nil
@@ -944,7 +943,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// index definitions that we would have added already exist in
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
-				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERDupKeyName {
+				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
 					stmt, err := sqlparser.ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr

@@ -108,11 +108,11 @@ type (
 	ksID = []byte
 )
 
-func (ins *Insert) Inputs() []Primitive {
+func (ins *Insert) Inputs() ([]Primitive, []map[string]any) {
 	if ins.Input == nil {
-		return nil
+		return nil, nil
 	}
-	return []Primitive{ins.Input}
+	return []Primitive{ins.Input}, nil
 }
 
 // NewQueryInsert creates an Insert with a query string.
@@ -502,7 +502,7 @@ func shouldGenerate(v sqltypes.Value) bool {
 
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
 	// treats 0 as a value that should generate a new sequence.
-	n, err := evalengine.ToUint64(v)
+	n, err := v.ToCastUint64()
 	if err == nil && n == 0 {
 		return true
 	}
@@ -553,7 +553,7 @@ func (ins *Insert) processGenerateFromValues(
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will be caught and reported.
-		insertID, err = evalengine.ToInt64(qr.Rows[0][0])
+		insertID, err = qr.Rows[0][0].ToCastInt64()
 		if err != nil {
 			return 0, err
 		}
@@ -615,7 +615,7 @@ func (ins *Insert) processGenerateFromRows(
 	}
 	// If no rows are returned, it's an internal error, and the code
 	// must panic, which will be caught and reported.
-	insertID, err = evalengine.ToInt64(qr.Rows[0][0])
+	insertID, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return 0, err
 	}

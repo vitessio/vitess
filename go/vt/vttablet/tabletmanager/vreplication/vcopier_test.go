@@ -477,19 +477,19 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"select @@foreign_key_checks;",
+		"select @@foreign_key_checks",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"commit",
-		"set foreign_key_checks=0;",
+		"set foreign_key_checks=0",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
 		if vreplicationParallelInsertWorkers > 1 {
-			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
+			return expect.Then(qh.Eventually("set foreign_key_checks=0"))
 		}
 		return expect
 	}).Then(qh.Eventually(
@@ -500,18 +500,18 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
-		"set foreign_key_checks=0;",
+		"set foreign_key_checks=0",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// The next FF executes and updates the position before copying.
-		"set foreign_key_checks=0;",
+		"set foreign_key_checks=0",
 		"begin",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	)).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
 		if vreplicationParallelInsertWorkers > 1 {
-			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
+			return expect.Then(qh.Eventually("set foreign_key_checks=0"))
 		}
 		return expect
 	}).Then(qh.Eventually(
@@ -521,11 +521,11 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
-		"set foreign_key_checks=0;",
+		"set foreign_key_checks=0",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
 		// All tables copied. Final catch up followed by Running state.
-		"set foreign_key_checks=1;",
+		"set foreign_key_checks=1",
 		"/update _vt.vreplication set state='Running'",
 	)))
 
@@ -545,7 +545,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, qh.Expect(
-		"set foreign_key_checks=1;",
+		"set foreign_key_checks=1",
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",

@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
@@ -11,20 +12,32 @@
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
+    - [Deprecated Stats](#deprecated-stats)
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
-  - **[New stats](#new-stats)**
+  - **[New Stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+    - [VTCtld and VTOrc reparenting stats](#vtctld-and-vtorc-reparenting-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
     - [Debian: Bookworm added and made default](#debian-bookworm)
     - [Debian: Buster removed](#debian-buster)
+  - **[Durability Policies](#durability-policies)**
+    - [New Durability Policies](#new-durability-policies)
 
 ## <a id="major-changes"/>Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="local-examples-etcd-v3"/>Local examples now use etcd v3 storage and API
+In previous releases the [local examples](https://github.com/vitessio/vitess/tree/main/examples/local) were
+explicitly using etcd v2 storage (`etcd --enable-v2=true`) and API (`ETCDCTL_API=2`) mode. We have now
+removed this legacy etcd usage and instead use the new (default) etcd v3 storage and API. Please see
+[PR #13791](https://github.com/vitessio/vitess/pull/13791) for additional info. If you are using the local
+examples in any sort of long-term non-testing capacity, then you will need to explicitly use the v2 storage
+and API mode or [migrate your existing data from v2 to v3](https://etcd.io/docs/v3.5/tutorials/how-to-migrate/).
 
 ### <a id="new-flag"/>New command line flags and behavior
 
@@ -71,6 +84,15 @@ VTGate flag:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
 
+#### <a id="deprecated-stats"/>Deprecated Stats
+
+The following Emergency Reparent Shard stats are deprecated in `v18.0` and will be removed in `v19.0`:
+- `ers_counter`
+- `ers_success_counter`
+- `ers_failure_counter`
+
+These metrics are replaced by [new reparenting stats introduced in `v18.0`](#vtctld-and-vtorc-reparenting-stats).
+
 #### <a id="deleted-v3"/>Deleted `v3` planner
 
 The `Gen4` planner has been the default planner since Vitess 14. The `v3` planner was deprecated in Vitess 15 and has now been removed in this release.
@@ -89,6 +111,18 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 #### <a id="vtgate-vindex-unknown-parameters"/>VTGate Vindex unknown parameters
 
 The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found in the latest VSchema pulled from the topology.
+
+#### <a id="vtctld-and-vtorc-reparenting-stats"/>VTCtld and VTOrc reparenting stats
+
+New VTCtld and VTorc stats were added to measure frequency of reparents by keyspace/shard:
+- `emergency_reparent_shards` - Number of times Emergency Reparent Shard has been run
+- `emergency_reparent_shards_failed` - Number of times Emergency Reparent Shard has failed
+- `emergency_reparent_shards_succeeded` - Number of times Emergency Reparent Shard has succeeded
+- `planned_reparent_shards` - Number of times Planned Reparent Shard has been run
+- `planned_reparent_shards_failed` - Number of times Planned Reparent Shard has failed
+- `planned_reparent_shards_succeeded` - Number of times Planned Reparent Shard has succeeded
+
+Also, the `reparent_shard_operation_timings` stat was added to provide per-operation timings of reparent operations.
 
 ### <a id="vttablet"/>VTTablet
 
@@ -121,3 +155,9 @@ Bullseye images will still be built and available as long as the OS build is cur
 Buster LTS supports will stop in June 2024, and Vitess v18.0 will be supported through October 2024. 
 To prevent supporting a deprecated buster build for several months after June 2024, we are preemptively
 removing Vitess support.
+
+### <a id="durability-policies"/>Durability Policies
+
+#### <a id="new-durability-policies"/>New Durability Policies
+
+2 new inbuilt durability policies have been added to Vitess in this release namely `semi_sync_with_rdonly_ack` and `cross_cell_with_rdonly_ack`. These policies are exactly like `semi_sync` and `cross_cell` respectively, and differ just in the part where the rdonly tablets can also send semi-sync ACKs. 

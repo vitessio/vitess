@@ -19,12 +19,10 @@ package engine
 import (
 	"context"
 
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var _ Primitive = (*Filter)(nil)
@@ -34,6 +32,8 @@ type Filter struct {
 	Predicate    evalengine.Expr
 	ASTPredicate sqlparser.Expr
 	Input        Primitive
+
+	Truncate int
 
 	noTxNeeded
 }
@@ -73,7 +73,7 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 		}
 	}
 	result.Rows = rows
-	return result, nil
+	return result.Truncate(f.Truncate), nil
 }
 
 // TryStreamExecute satisfies the Primitive interface.
@@ -96,7 +96,7 @@ func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 			}
 		}
 		results.Rows = rows
-		return callback(results)
+		return callback(results.Truncate(f.Truncate))
 	}
 
 	return vcursor.StreamExecutePrimitive(ctx, f.Input, bindVars, wantfields, filter)
@@ -108,13 +108,14 @@ func (f *Filter) GetFields(ctx context.Context, vcursor VCursor, bindVars map[st
 }
 
 // Inputs returns the input to limit
-func (f *Filter) Inputs() []Primitive {
-	return []Primitive{f.Input}
+func (f *Filter) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{f.Input}, nil
 }
 
 func (f *Filter) description() PrimitiveDescription {
 	other := map[string]any{
-		"Predicate": sqlparser.String(f.ASTPredicate),
+		"Predicate":     sqlparser.String(f.ASTPredicate),
+		"ResultColumns": f.Truncate,
 	}
 
 	return PrimitiveDescription{
