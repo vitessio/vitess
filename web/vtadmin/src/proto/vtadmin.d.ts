@@ -54349,6 +54349,9 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest auto_start */
         auto_start?: (boolean|null);
+
+        /** MoveTablesCreateRequest no_routing_rules */
+        no_routing_rules?: (boolean|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -54410,6 +54413,9 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest auto_start. */
         public auto_start: boolean;
+
+        /** MoveTablesCreateRequest no_routing_rules. */
+        public no_routing_rules: boolean;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.
