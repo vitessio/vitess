@@ -108,8 +108,8 @@ func (f *Filter) GetFields(ctx context.Context, vcursor VCursor, bindVars map[st
 }
 
 // Inputs returns the input to limit
-func (f *Filter) Inputs() []Primitive {
-	return []Primitive{f.Input}
+func (f *Filter) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{f.Input}, nil
 }
 
 func (f *Filter) description() PrimitiveDescription {

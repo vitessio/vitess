@@ -72,9 +72,34 @@
       "Original": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
+            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 lock in share mode",
+            "Table": "multicol_tbl1",
+            "Values": [
+              "INT64(1)",
+              "INT64(2)",
+              "INT64(3)"
+            ],
+            "Vindex": "multicolIdx"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0,
@@ -83,55 +108,28 @@
               3,
               4
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Delete",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "sharded_fk_allow",
-                  "Sharded": true
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "delete from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
-                "Table": "multicol_tbl2"
-              }
-            ]
+            "Query": "delete from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
+            "Table": "multicol_tbl2"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Delete",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
+            "Table": "multicol_tbl1",
+            "Values": [
+              "INT64(1)",
+              "INT64(2)",
+              "INT64(3)"
+            ],
+            "Vindex": "multicolIdx"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Delete",
-          "Variant": "EqualUnique",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
-          "Table": "multicol_tbl1",
-          "Values": [
-            "INT64(1)",
-            "INT64(2)",
-            "INT64(3)"
-          ],
-          "Vindex": "multicolIdx"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "EqualUnique",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-          "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 lock in share mode",
-          "Table": "multicol_tbl1",
-          "Values": [
-            "INT64(1)",
-            "INT64(2)",
-            "INT64(3)"
-          ],
-          "Vindex": "multicolIdx"
-        }
+        ]
       },
       "TablesUsed": [
         "sharded_fk_allow.multicol_tbl1",
@@ -147,70 +145,64 @@
       "Original": "delete from tbl5",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
+            "Query": "select col5, t5col5 from tbl5 lock in share mode",
+            "Table": "tbl5"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Delete",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "sharded_fk_allow",
-                  "Sharded": true
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "delete from tbl4 where (col4) in ::fkc_vals",
-                "Table": "tbl4"
-              }
-            ]
+            "Query": "delete from tbl4 where (col4) in ::fkc_vals",
+            "Table": "tbl4"
           },
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "CascadeChild-2",
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals1",
             "Cols": [
               1
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Delete",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "sharded_fk_allow",
-                  "Sharded": true
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
-                "Table": "tbl4"
-              }
-            ]
+            "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
+            "Table": "tbl4"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from tbl5",
+            "Table": "tbl5"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Delete",
-          "Variant": "Scatter",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "delete from tbl5",
-          "Table": "tbl5"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "Scatter",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-          "Query": "select col5, t5col5 from tbl5 lock in share mode",
-          "Table": "tbl5"
-        }
+        ]
       },
       "TablesUsed": [
         "sharded_fk_allow.tbl4",
@@ -231,50 +223,48 @@
       "Original": "delete from u_tbl9 where col9 = 5",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
+            "Query": "select col9 from u_tbl9 where col9 = 5 lock in share mode",
+            "Table": "u_tbl9"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
-              }
-            ]
+            "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
+            "Table": "u_tbl8"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from u_tbl9 where col9 = 5",
+            "Table": "u_tbl9"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Delete",
-          "Variant": "Unsharded",
-          "Keyspace": {
-            "Name": "unsharded_fk_allow",
-            "Sharded": false
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "delete from u_tbl9 where col9 = 5",
-          "Table": "u_tbl9"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "Unsharded",
-          "Keyspace": {
-            "Name": "unsharded_fk_allow",
-            "Sharded": false
-          },
-          "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-          "Query": "select col9 from u_tbl9 where col9 = 5 lock in share mode",
-          "Table": "u_tbl9"
-        }
+        ]
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl8",
@@ -312,50 +302,48 @@
       "Original": "update u_tbl2 set col2 = 'bar' where id = 1",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+            "Query": "select col2 from u_tbl2 where id = 1 lock in share mode",
+            "Table": "u_tbl2"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ('bar')",
-                "Table": "u_tbl3"
-              }
-            ]
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ('bar')",
+            "Table": "u_tbl3"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update u_tbl2 set col2 = 'bar' where id = 1",
+            "Table": "u_tbl2"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Update",
-          "Variant": "Unsharded",
-          "Keyspace": {
-            "Name": "unsharded_fk_allow",
-            "Sharded": false
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "update u_tbl2 set col2 = 'bar' where id = 1",
-          "Table": "u_tbl2"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "Unsharded",
-          "Keyspace": {
-            "Name": "unsharded_fk_allow",
-            "Sharded": false
-          },
-          "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-          "Query": "select col2 from u_tbl2 where id = 1 lock in share mode",
-          "Table": "u_tbl2"
-        }
+        ]
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl2",
@@ -425,50 +413,48 @@
       "Original": "update tbl5 set t5col5 = 'foo'",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
+            "Query": "select t5col5 from tbl5 lock in share mode",
+            "Table": "tbl5"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Update",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "sharded_fk_allow",
-                  "Sharded": true
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in ('foo')",
-                "Table": "tbl4"
-              }
-            ]
+            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in ('foo')",
+            "Table": "tbl4"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update tbl5 set t5col5 = 'foo'",
+            "Table": "tbl5"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Update",
-          "Variant": "Scatter",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "update tbl5 set t5col5 = 'foo'",
-          "Table": "tbl5"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "Scatter",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-          "Query": "select t5col5 from tbl5 lock in share mode",
-          "Table": "tbl5"
-        }
+        ]
       },
       "TablesUsed": [
         "sharded_fk_allow.tbl4",
@@ -521,58 +507,56 @@
       "Original": "delete from tbl9 where col9 = 34",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select col9 from tbl9 where 1 != 1",
+            "Query": "select col9 from tbl9 where col9 = 34 lock in share mode",
+            "Table": "tbl9",
+            "Values": [
+              "INT64(34)"
+            ],
+            "Vindex": "hash_vin"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
             ],
-            "Inputs": [
-              {
-                "OperatorType": "Update",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "sharded_fk_allow",
-                  "Sharded": true
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
-                "Table": "tbl4"
-              }
-            ]
+            "Query": "update tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
+            "Table": "tbl4"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Delete",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from tbl9 where col9 = 34",
+            "Table": "tbl9",
+            "Values": [
+              "INT64(34)"
+            ],
+            "Vindex": "hash_vin"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Delete",
-          "Variant": "EqualUnique",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "delete from tbl9 where col9 = 34",
-          "Table": "tbl9",
-          "Values": [
-            "INT64(34)"
-          ],
-          "Vindex": "hash_vin"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "EqualUnique",
-          "Keyspace": {
-            "Name": "sharded_fk_allow",
-            "Sharded": true
-          },
-          "FieldQuery": "select col9 from tbl9 where 1 != 1",
-          "Query": "select col9 from tbl9 where col9 = 34 lock in share mode",
-          "Table": "tbl9",
-          "Values": [
-            "INT64(34)"
-          ],
-          "Vindex": "hash_vin"
-        }
+        ]
       },
       "TablesUsed": [
         "sharded_fk_allow.tbl4",
@@ -588,142 +572,132 @@
       "Original": "update u_tbl1 set col1 = 'foo'",
       "Instructions": {
         "OperatorType": "FkCascade",
-        "Children": [
+        "Inputs": [
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col1, col1 from u_tbl1 where 1 != 1",
+            "Query": "select col1, col1 from u_tbl1 lock in share mode",
+            "Table": "u_tbl1"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "FkCascade",
             "BvName": "fkc_vals",
             "Cols": [
               0
             ],
             "Inputs": [
               {
-                "OperatorType": "FkCascade",
-                "Children": [
-                  {
-                    "OperatorType": "FkCascadeChild",
-                    "BvName": "fkc_vals1",
-                    "Cols": [
-                      0
-                    ],
-                    "Inputs": [
-                      {
-                        "OperatorType": "Update",
-                        "Variant": "Unsharded",
-                        "Keyspace": {
-                          "Name": "unsharded_fk_allow",
-                          "Sharded": false
-                        },
-                        "TargetTabletType": "PRIMARY",
-                        "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ('foo')",
-                        "Table": "u_tbl3"
-                      }
-                    ]
-                  }
-                ],
-                "Parent": {
-                  "OperatorType": "Update",
-                  "Variant": "Unsharded",
-                  "Keyspace": {
-                    "Name": "unsharded_fk_allow",
-                    "Sharded": false
-                  },
-                  "TargetTabletType": "PRIMARY",
-                  "Query": "update u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
-                  "Table": "u_tbl2"
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
                 },
-                "Selection": {
-                  "OperatorType": "Route",
-                  "Variant": "Unsharded",
-                  "Keyspace": {
-                    "Name": "unsharded_fk_allow",
-                    "Sharded": false
-                  },
-                  "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                  "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals",
-                  "Table": "u_tbl2"
-                }
+                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals1",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ('foo')",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
+                "Table": "u_tbl2"
               }
             ]
           },
           {
-            "OperatorType": "FkCascadeChild",
+            "InputName": "CascadeChild-2",
+            "OperatorType": "FkCascade",
             "BvName": "fkc_vals2",
             "Cols": [
               1
             ],
             "Inputs": [
               {
-                "OperatorType": "FkCascade",
-                "Children": [
-                  {
-                    "OperatorType": "FkCascadeChild",
-                    "BvName": "fkc_vals3",
-                    "Cols": [
-                      0
-                    ],
-                    "Inputs": [
-                      {
-                        "OperatorType": "Update",
-                        "Variant": "Unsharded",
-                        "Keyspace": {
-                          "Name": "unsharded_fk_allow",
-                          "Sharded": false
-                        },
-                        "TargetTabletType": "PRIMARY",
-                        "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                        "Table": "u_tbl8"
-                      }
-                    ]
-                  }
-                ],
-                "Parent": {
-                  "OperatorType": "Update",
-                  "Variant": "Unsharded",
-                  "Keyspace": {
-                    "Name": "unsharded_fk_allow",
-                    "Sharded": false
-                  },
-                  "TargetTabletType": "PRIMARY",
-                  "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
-                  "Table": "u_tbl9"
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
                 },
-                "Selection": {
-                  "OperatorType": "Route",
-                  "Variant": "Unsharded",
-                  "Keyspace": {
-                    "Name": "unsharded_fk_allow",
-                    "Sharded": false
-                  },
-                  "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                  "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
-                  "Table": "u_tbl9"
-                }
+                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
+                "Table": "u_tbl9"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals3",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
+                "Table": "u_tbl9"
               }
             ]
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update u_tbl1 set col1 = 'foo'",
+            "Table": "u_tbl1"
           }
-        ],
-        "Parent": {
-          "OperatorType": "Update",
-          "Variant": "Unsharded",
-          "Keyspace": {
-            "Name": "unsharded_fk_allow",
-            "Sharded": false
-          },
-          "TargetTabletType": "PRIMARY",
-          "Query": "update u_tbl1 set col1 = 'foo'",
-          "Table": "u_tbl1"
-        },
-        "Selection": {
-          "OperatorType": "Route",
-          "Variant": "Unsharded",
-          "Keyspace": {
-            "Name": "unsharded_fk_allow",
-            "Sharded": false
-          },
-          "FieldQuery": "select col1, col1 from u_tbl1 where 1 != 1",
-          "Query": "select col1, col1 from u_tbl1 lock in share mode",
-          "Table": "u_tbl1"
-        }
+        ]
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl1",

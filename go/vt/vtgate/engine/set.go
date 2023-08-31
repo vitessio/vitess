@@ -153,8 +153,8 @@ func (s *Set) GetFields(context.Context, VCursor, map[string]*querypb.BindVariab
 }
 
 // Inputs implements the Primitive interface
-func (s *Set) Inputs() []Primitive {
-	return []Primitive{s.Input}
+func (s *Set) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{s.Input}, nil
 }
 
 func (s *Set) description() PrimitiveDescription {
