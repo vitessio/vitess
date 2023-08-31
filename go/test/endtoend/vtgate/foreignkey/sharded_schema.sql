@@ -73,6 +73,33 @@ create table t6
     foreign key (sk, col1) references t5 (sk, col1) on delete restrict on update restrict
 ) Engine = InnoDB;
 
+/*
+ *                    fk_t1
+ *                        │
+ *                        │ On Delete Restrict
+ *                        │ On Update Restrict
+ *                        ▼
+ *   ┌────────────────fk_t2────────────────┐
+ *   │                                     │
+ *   │On Delete Set Null                   │ On Delete Set Null
+ *   │On Update Set Null                   │ On Update Set Null
+ *   ▼                                     ▼
+ * fk_t7                                fk_t3───────────────────┐
+ *                                         │                    │
+ *                                         │                    │ On Delete Set Null
+ *                      On Delete Set Null │                    │ On Update Set Null
+ *                      On Update Set Null │                    │
+ *                                         ▼                    ▼
+ *                                      fk_t4                fk_t6
+ *                                         │
+ *                                         │
+ *                      On Delete Restrict │
+ *                      On Update Restrict │
+ *                                         │
+ *                                         ▼
+ *                                      fk_t5
+ */
+
 create table fk_t1
 (
     id bigint,
@@ -135,6 +162,23 @@ create table fk_t7
     foreign key (col) references fk_t2(col) on delete set null on update set null
 ) Engine = InnoDB;
 
+/*
+ *                fk_t10
+ *                   │
+ * On Delete Cascade │
+ * On Update Cascade │
+ *                   │
+ *                   ▼
+ *                fk_t11──────────────────┐
+ *                   │                    │
+ *                   │                    │ On Delete Restrict
+ * On Delete Cascade │                    │ On Update Restrict
+ * On Update Cascade │                    │
+ *                   │                    │
+ *                   ▼                    ▼
+ *                fk_t12               fk_t13
+ */
+
 create table fk_t10
 (
     id bigint,
@@ -170,6 +214,29 @@ create table fk_t13
     foreign key (col) references fk_t11(col) on delete restrict on update restrict
 ) Engine = InnoDB;
 
+/*
+ *                 fk_t15
+ *                    │
+ *                    │
+ *  On Delete Cascade │
+ *  On Update Cascade │
+ *                    │
+ *                    ▼
+ *                 fk_t16
+ *                    │
+ * On Delete Set Null │
+ * On Update Set Null │
+ *                    │
+ *                    ▼
+ *                 fk_t17──────────────────┐
+ *                    │                    │
+ *                    │                    │ On Delete Set Null
+ *  On Delete Cascade │                    │ On Update Set Null
+ *  On Update Cascade │                    │
+ *                    │                    │
+ *                    ▼                    ▼
+ *                 fk_t18               fk_t19
+ */
 
 create table fk_t15
 (
