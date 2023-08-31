@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 
+	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -365,6 +366,9 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	// Range over the tables that are created/altered and split them up based on their type.
 	for _, table := range append(append(dropped, created...), altered...) {
 		tableName := table.Name.String()
+		if vtschema.IsInternalOperationTableName(tableName) {
+			continue
+		}
 		if table.Type == schema.View && hs.viewsEnabled {
 			views = append(views, tableName)
 		} else {

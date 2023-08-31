@@ -314,7 +314,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess_healthstream",
-      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2"],
+      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2", "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
