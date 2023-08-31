@@ -281,3 +281,17 @@ create table fk_t19
     index(col),
     foreign key (col) references fk_t17(col) on delete set null on update set null
 ) Engine = InnoDB;
+
+/*
+    Self referenced foreign key from col2 to col in fk_t20
+*/
+
+create table fk_t20
+(
+    id bigint,
+    col varchar(10),
+    col2 varchar(10),
+    primary key (id),
+    index(col),
+    foreign key (col2) references fk_t20(col) on delete restrict on update restrict
+) Engine = InnoDB;

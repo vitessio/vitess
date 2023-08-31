@@ -164,7 +164,7 @@ func TestUpdateWithFK(t *testing.T) {
 // TestFkScenarios tests the various foreign key scenarios with different constraints
 // and makes sure that Vitess works with them as expected. All the tables are present in both sharded and unsharded keyspace
 // and all the foreign key constraints are cross-shard ones for the sharded keyspace.
-// The test has 3 independent Schemas that are used for testing -
+// The test has 4 independent Schemas that are used for testing -
 /*
  *                    fk_t1
  *                        │
@@ -230,6 +230,9 @@ func TestUpdateWithFK(t *testing.T) {
  *                    ▼                    ▼
  *                 fk_t18               fk_t19
  */
+/*
+	Self referenced foreign key from col2 to col in fk_t20
+*/
 func TestFkScenarios(t *testing.T) {
 	// Wait for schema-tracking to be complete.
 	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t1", "col")
@@ -532,6 +535,24 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_t17 order by id",
 				"select * from fk_t18 order by id",
 			},
+		}, {
+			name: "Insert success for self-referenced foreign key",
+			dataQueries: []string{
+				"insert into fk_t20(id, col, col2) values (1, 7, NULL)",
+			},
+			dmlQuery: "insert into fk_t20(id, col, col2) values (2, 9, 7), (3, 10, 9)",
+			assertionQueries: []string{
+				"select * from fk_t20 order by id",
+			},
+		}, {
+			name: "Insert failure for self-referenced foreign key",
+			dataQueries: []string{
+				"insert into fk_t20(id, col, col2) values (5, 7, NULL)",
+			},
+			dmlQuery: "insert into fk_t20(id, col, col2) values (6, 9, 6)",
+			assertionQueries: []string{
+				"select * from fk_t20 order by id",
+			},
 		},
 	}
 
@@ -540,8 +561,10 @@ func TestFkScenarios(t *testing.T) {
 			t.Run(getTestName(tt.name, testSharded), func(t *testing.T) {
 				mcmp, closer := start(t)
 				defer closer()
-				// To test unsharded case in vtgate, we just change the keyspace we use for the test.
-				if !testSharded {
+				// Set the correct keyspace to use from VtGates.
+				if testSharded {
+					_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
+				} else {
 					_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 				}
 
@@ -565,8 +588,10 @@ func TestFkScenarios(t *testing.T) {
 		t.Run(getTestName("Transactions with intermediate failure", testSharded), func(t *testing.T) {
 			mcmp, closer := start(t)
 			defer closer()
-			// To test unsharded case in vtgate, we just change the keyspace we use for the test.
-			if !testSharded {
+			// Set the correct keyspace to use from VtGates.
+			if testSharded {
+				_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
+			} else {
 				_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 			}
 
