@@ -110,10 +110,6 @@ const (
 	ThrottleCheckSelf
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {

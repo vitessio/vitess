@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -82,10 +81,6 @@ type transitionRequest struct {
 	isBaseTable   bool
 	toGCState     schema.TableGCState
 	uuid          string
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 // TableGC is the main entity in the table garbage collection mechanism.

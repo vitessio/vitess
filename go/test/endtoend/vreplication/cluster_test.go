@@ -307,7 +307,6 @@ func init() {
 	if os.Getenv("VREPLICATION_E2E_DEBUG") != "" {
 		debugMode = true
 	}
-	rand.Seed(time.Now().UTC().UnixNano())
 	originalVtdataroot = os.Getenv("VTDATAROOT")
 	var mainVtDataRoot string
 	if debugMode {
