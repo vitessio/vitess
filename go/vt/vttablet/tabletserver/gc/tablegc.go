@@ -119,8 +119,7 @@ type Status struct {
 	Keyspace string
 	Shard    string
 
-	isPrimary bool
-	IsOpen    bool
+	IsOpen bool
 
 	purgingTables []string
 }

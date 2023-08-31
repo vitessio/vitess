@@ -6195,7 +6195,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
+			fmt.Printf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations\n", tempDir)
 		}
 	})
 }
