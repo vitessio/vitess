@@ -222,7 +222,8 @@ type (
 		TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 		TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
-		// Inputs is a slice containing the inputs to this Primitive
+		// Inputs is a slice containing the inputs to this Primitive.
+		// The returned map has additional information about the inputs, that is used in the description.
 		Inputs() ([]Primitive, []map[string]any)
 
 		// description is the description, sans the inputs, of this Primitive.
