@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -98,7 +99,7 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
-	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, e.col.Collation.Get().Charset())
+	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, colldata.Lookup(e.col.Collation).Charset())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
 }
 
 func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {
-	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, e.col.Collation.Get().Charset())
+	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, colldata.Lookup(e.col.Collation).Charset())
 	if err != nil {
 		return nil, err
 	}

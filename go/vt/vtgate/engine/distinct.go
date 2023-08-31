@@ -246,8 +246,8 @@ func (d *Distinct) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (d *Distinct) Inputs() []Primitive {
-	return []Primitive{d.Source}
+func (d *Distinct) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{d.Source}, nil
 }
 
 func (d *Distinct) description() PrimitiveDescription {
@@ -283,7 +283,7 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 func (cc CheckCol) String() string {
 	var collation string
 	if sqltypes.IsText(cc.Type) && cc.Collation != collations.Unknown {
-		collation = ": " + cc.Collation.Get().Name()
+		collation = ": " + collations.Local().LookupName(cc.Collation)
 	}
 
 	var column string

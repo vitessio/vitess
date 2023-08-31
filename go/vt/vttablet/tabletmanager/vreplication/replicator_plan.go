@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"google.golang.org/protobuf/proto"
@@ -318,10 +319,10 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
 		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
-		if fromCollation == nil {
+		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
-		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), fromCollation.Charset())
+		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), colldata.Lookup(fromCollation).Charset())
 		if err != nil {
 			return nil, err
 		}

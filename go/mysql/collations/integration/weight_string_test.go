@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 	"vitess.io/vitess/go/mysql/collations/remote"
 )
@@ -46,7 +47,7 @@ func TestFastIterators(t *testing.T) {
 func TestWeightStringsComprehensive(t *testing.T) {
 	type collationsForCharset struct {
 		charset charset.Charset
-		locals  []collations.Collation
+		locals  []colldata.Collation
 		remotes []*remote.Collation
 	}
 	var charsetMap = make(map[string]*collationsForCharset)
@@ -59,7 +60,7 @@ func TestWeightStringsComprehensive(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	allCollations := collations.Local().AllCollations()
+	allCollations := colldata.All(collations.Local())
 	sort.Slice(allCollations, func(i, j int) bool {
 		return allCollations[i].ID() < allCollations[j].ID()
 	})
@@ -103,16 +104,16 @@ func TestCJKWeightStrings(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	allCollations := collations.Local().AllCollations()
+	allCollations := colldata.All(collations.Local())
 	testdata, _ := filepath.Glob("../internal/charset/testdata/*.txt")
 	for _, testfile := range testdata {
-		charset := filepath.Base(testfile)
-		charset = strings.TrimSuffix(charset, ".txt")
-		charset = charset[strings.LastIndexByte(charset, '-')+1:]
+		cs := filepath.Base(testfile)
+		cs = strings.TrimSuffix(cs, ".txt")
+		cs = cs[strings.LastIndexByte(cs, '-')+1:]
 
-		var valid []collations.Collation
+		var valid []colldata.Collation
 		for _, coll := range allCollations {
-			if coll.Charset().Name() == charset {
+			if coll.Charset().Name() == cs {
 				valid = append(valid, coll)
 				t.Logf("%s -> %s", testfile, coll.Name())
 			}

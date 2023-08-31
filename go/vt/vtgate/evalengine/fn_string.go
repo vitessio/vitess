@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -117,8 +118,8 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return evalToVarchar(e, call.collate, false)
 
 	case *evalBytes:
-		coll := e.col.Collation.Get()
-		csa, ok := coll.(collations.CaseAwareCollation)
+		coll := colldata.Lookup(e.col.Collation)
+		csa, ok := coll.(colldata.CaseAwareCollation)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
 		}
@@ -172,7 +173,7 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 		if sqltypes.IsBinary(e.SQLType()) {
 			return newEvalInt64(int64(len(e.bytes))), nil
 		}
-		coll := e.col.Collation.Get()
+		coll := colldata.Lookup(e.col.Collation)
 		count := charset.Length(coll.Charset(), e.bytes)
 		return newEvalInt64(int64(count)), nil
 	default:
@@ -277,7 +278,7 @@ func charOrd(b []byte, coll collations.ID) int64 {
 	if len(b) == 0 {
 		return 0
 	}
-	cs := coll.Get().Charset()
+	cs := colldata.Lookup(coll).Charset()
 	_, l := cs.DecodeRune(b)
 	var r int64
 	for i := 0; i < l; i++ {
@@ -429,11 +430,11 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	col := evalCollation(arg).Collation.Get()
+	col := evalCollation(arg)
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8mb3_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
-	return newEvalText([]byte(col.Name()), collationUtf8mb3), nil
+	return newEvalText([]byte(collations.Local().LookupName(col.Collation)), collationUtf8mb3), nil
 }
 
 func (*builtinCollation) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -612,7 +613,7 @@ func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	// LEFT / RIGHT operates on characters, not bytes
-	cs := text.col.Collation.Get().Charset()
+	cs := colldata.Lookup(text.col.Collation).Charset()
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen <= int(length) {
@@ -682,9 +683,9 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	cs := text.col.Collation.Get().Charset()
+	cs := colldata.Lookup(text.col.Collation).Charset()
 	pad, ok := p.(*evalBytes)
-	if !ok || pad.col.Collation.Get().Charset() != cs {
+	if !ok || colldata.Lookup(pad.col.Collation).Charset() != cs {
 		pad, err = evalToVarchar(p, text.col.Collation, true)
 		if err != nil {
 			return nil, err
@@ -768,8 +769,8 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 
 	switch {
 	case pad.isTextual():
-		fromCharset := pad.Col.Collation.Get().Charset()
-		toCharset := col.Collation.Get().Charset()
+		fromCharset := colldata.Lookup(pad.Col.Collation).Charset()
+		toCharset := colldata.Lookup(col.Collation).Charset()
 		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
 			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 		}
@@ -787,7 +788,7 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 }
 
 func strcmpCollate(left, right []byte, col collations.ID) int64 {
-	cmp := col.Get().Collate(left, right, false)
+	cmp := colldata.Lookup(col).Collate(left, right, false)
 	switch {
 	case cmp == 0:
 		return 0
@@ -819,7 +820,7 @@ func (l *builtinStrcmp) eval(env *ExpressionEnv) (eval, error) {
 	col1 := evalCollation(left)
 	col2 := evalCollation(right)
 
-	mcol, _, _, err := collations.Local().MergeCollations(col1, col2, collations.CoercionOptions{
+	mcol, _, _, err := colldata.Merge(collations.Local(), col1, col2, colldata.CoercionOptions{
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
@@ -866,7 +867,7 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 	if sqltypes.IsNumber(lt.Type) || sqltypes.IsNumber(rt.Type) {
 		mcol = collationNumeric
 	} else {
-		mcol, _, _, err = collations.Local().MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
+		mcol, _, _, err = colldata.Merge(collations.Local(), lt.Col, rt.Col, colldata.CoercionOptions{
 			ConvertToSuperset:   true,
 			ConvertWithCoercion: true,
 		})
@@ -926,7 +927,7 @@ func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	pat, ok := p.(*evalBytes)
-	if !ok || pat.col.Collation.Get().Charset() != text.col.Collation.Get().Charset() {
+	if !ok || colldata.Lookup(pat.col.Collation).Charset() != colldata.Lookup(text.col.Collation).Charset() {
 		pat, err = evalToVarchar(p, text.col.Collation, true)
 		if err != nil {
 			return nil, err
@@ -986,8 +987,8 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	switch {
 	case pat.isTextual():
-		fromCharset := pat.Col.Collation.Get().Charset()
-		toCharset := col.Collation.Get().Charset()
+		fromCharset := colldata.Lookup(pat.Col.Collation).Charset()
+		toCharset := colldata.Lookup(col.Collation).Charset()
 		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
 			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 		}
@@ -1033,8 +1034,8 @@ func concatConvert(buf []byte, str *evalBytes, tc collations.TypedCollation) ([]
 	if tc.Collation == collations.CollationBinaryID {
 		return append(buf, str.bytes...), nil
 	}
-	fromCharset := str.col.Collation.Get().Charset()
-	toCharset := tc.Collation.Get().Charset()
+	fromCharset := colldata.Lookup(str.col.Collation).Charset()
+	toCharset := colldata.Lookup(tc.Collation).Charset()
 	if fromCharset != toCharset {
 		return charset.Convert(buf, toCharset, str.bytes, fromCharset)
 	}
@@ -1138,8 +1139,8 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 				c.asm.Convert_xce(len(args)-i, arg.Type, tc.Collation)
 			}
 		case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
-			fromCharset := arg.Col.Collation.Get().Charset()
-			toCharset := tc.Collation.Get().Charset()
+			fromCharset := colldata.Lookup(arg.Col.Collation).Charset()
+			toCharset := colldata.Lookup(tc.Collation).Charset()
 			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
 				c.asm.Convert_xce(len(args)-i, arg.Type, tc.Collation)
 			}
@@ -1286,8 +1287,8 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
 			}
 		case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
-			fromCharset := arg.Col.Collation.Get().Charset()
-			toCharset := tc.Collation.Get().Charset()
+			fromCharset := colldata.Lookup(arg.Col.Collation).Charset()
+			toCharset := colldata.Lookup(tc.Collation).Charset()
 			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
 				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
 			}

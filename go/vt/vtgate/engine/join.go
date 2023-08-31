@@ -189,8 +189,8 @@ func (jn *Join) GetFields(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 // Inputs returns the input primitives for this join
-func (jn *Join) Inputs() []Primitive {
-	return []Primitive{jn.Left, jn.Right}
+func (jn *Join) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{jn.Left, jn.Right}, nil
 }
 
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {

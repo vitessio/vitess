@@ -2058,6 +2058,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2069,6 +2070,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -2102,6 +2104,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2113,6 +2116,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -2147,6 +2151,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2158,6 +2163,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -2192,6 +2198,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2203,6 +2210,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0",
@@ -2255,6 +2263,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2266,6 +2275,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Join",
             "Variant": "LeftJoin",
             "JoinColumnIndexes": "L:0",
@@ -2318,6 +2328,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -2329,6 +2340,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "R:0",
@@ -3155,6 +3167,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(1)",
             "Inputs": [
@@ -3172,6 +3185,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Subquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
@@ -3180,6 +3194,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3191,6 +3206,7 @@
                 "Table": "user_extra"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "IN",
                 "Keyspace": {
