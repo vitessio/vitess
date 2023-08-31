@@ -39,7 +39,7 @@ var (
 	getSchemaT1Results8030 = "CREATE TABLE `t1` (\n  `id` bigint NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3"
 	getSchemaT1Results80   = "CREATE TABLE `t1` (\n  `id` bigint NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
 	getSchemaT1Results57   = "CREATE TABLE `t1` (\n  `id` bigint(20) NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	getSchemaV1Results     = fmt.Sprintf("create algorithm = UNDEFINED definer = %s@%s sql security DEFINER view {{.DatabaseName}}.`v1` as select {{.DatabaseName}}.t1.id as id, {{.DatabaseName}}.t1.value as value from {{.DatabaseName}}.t1", username, hostname)
+	getSchemaV1Results     = fmt.Sprintf("create algorithm = UNDEFINED definer = %s@%s sql security DEFINER view {{.DatabaseName}}.v1 as select {{.DatabaseName}}.t1.id as id, {{.DatabaseName}}.t1.value as value from {{.DatabaseName}}.t1", username, hostname)
 )
 
 // TabletCommands tests the basic tablet commands
