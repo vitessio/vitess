@@ -261,7 +261,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -286,7 +286,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -313,7 +313,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -338,7 +338,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:

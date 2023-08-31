@@ -638,17 +638,3 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 
 	return nil
 }
-
-func (tm *TabletManager) getLocalMetadataValues(tabletType topodatapb.TabletType) map[string]string {
-	tablet := tm.Tablet()
-	values := map[string]string{
-		"Alias":         topoproto.TabletAliasString(tablet.Alias),
-		"ClusterAlias":  fmt.Sprintf("%s.%s", tablet.Keyspace, tablet.Shard),
-		"DataCenter":    tablet.Alias.Cell,
-		"PromotionRule": "must_not",
-	}
-	if isPrimaryEligible(tabletType) {
-		values["PromotionRule"] = "neutral"
-	}
-	return values
-}

@@ -247,15 +247,6 @@ func (flv *filePosFlavor) status(c *Conn) (replication.ReplicationStatus, error)
 	return replication.ParseFilePosReplicationStatus(resultMap)
 }
 
-func parseFilePosReplicationStatus(resultMap map[string]string) (replication.ReplicationStatus, error) {
-	status := replication.ParseReplicationStatus(resultMap)
-
-	status.Position = status.FilePosition
-	status.RelayLogPosition = status.RelayLogSourceBinlogEquivalentPosition
-
-	return status, nil
-}
-
 // primaryStatus is part of the Flavor interface.
 func (flv *filePosFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)

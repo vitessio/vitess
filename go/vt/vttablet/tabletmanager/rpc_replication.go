@@ -625,22 +625,6 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction)
 }
 
-func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
-	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
-	if err != nil {
-		return err
-	}
-
-	ctx, unlock, lockErr := tm.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
-	if lockErr != nil {
-		return lockErr
-	}
-
-	defer unlock(&err)
-
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone)
-}
-
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	log.Infof("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication)
 	if err := tm.lock(ctx); err != nil {
@@ -990,27 +974,4 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 		return nil
 	}
 	return err
-}
-
-// repairReplication tries to connect this server to whoever is
-// the current primary of the shard, and start replicating.
-func (tm *TabletManager) repairReplication(ctx context.Context) error {
-	tablet := tm.Tablet()
-
-	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		return err
-	}
-	if !si.HasPrimary() {
-		return fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
-	}
-
-	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
-		// The shard record says we are primary, but we disagree; we wouldn't
-		// reach this point unless we were told to check replication.
-		// Hopefully someone is working on fixing that, but in any case,
-		// we should not try to reparent to ourselves.
-		return fmt.Errorf("shard %v/%v record claims tablet %v is primary, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
-	}
-	return tm.setReplicationSourceRepairReplication(ctx, si.PrimaryAlias, 0, "", true)
 }

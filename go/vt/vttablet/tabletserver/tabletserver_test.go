@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -266,9 +265,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	want = []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
-	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
-		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
-	}
+	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
 	// Verify last id got adjusted.
 	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
 	turnOffTxEngine()

@@ -965,12 +965,6 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 	return qr, err
 }
 
-func (mm *messageManager) getReceiverCount() int {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-	return len(mm.receivers)
-}
-
 func (mm *messageManager) getLastPollPosition() *replication.Position {
 	mm.cacheManagementMu.Lock()
 	defer mm.cacheManagementMu.Unlock()
