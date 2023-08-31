@@ -55,7 +55,7 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShar
 	vte.explainTopo.TopoServer = memorytopo.NewServer(ctx, vtexplainCell)
 	vte.healthCheck = discovery.NewFakeHealthCheck(nil)
 
-	resolver := vte.newFakeResolver(opts, vte.explainTopo, vtexplainCell)
+	resolver := vte.newFakeResolver(ctx, opts, vte.explainTopo, vtexplainCell)
 
 	err := vte.buildTopology(ctx, opts, vSchemaStr, ksShardMapStr, opts.NumShards)
 	if err != nil {
@@ -80,10 +80,9 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShar
 	return nil
 }
 
-func (vte *VTExplain) newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
-	ctx := context.Background()
+func (vte *VTExplain) newFakeResolver(ctx context.Context, opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	gw := vtgate.NewTabletGateway(ctx, vte.healthCheck, serv, cell)
-	_ = gw.WaitForTablets([]topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
