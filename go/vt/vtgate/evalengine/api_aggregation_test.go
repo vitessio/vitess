@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"reflect"
 	"strconv"
 	"testing"
 
@@ -25,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -67,6 +67,12 @@ func TestMinMax(t *testing.T) {
 			err:    vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 		},
 		{
+			type_:  sqltypes.VarBinary,
+			values: []sqltypes.Value{sqltypes.NewVarBinary("a"), sqltypes.NewVarBinary("b")},
+			min:    sqltypes.NewVarBinary("a"),
+			max:    sqltypes.NewVarBinary("b"),
+		},
+		{
 			// accent insensitive
 			type_: sqltypes.VarChar,
 			coll:  getCollationID("utf8mb4_0900_as_ci"),
@@ -74,8 +80,8 @@ func TestMinMax(t *testing.T) {
 				sqltypes.NewVarChar("ǍḄÇ"),
 				sqltypes.NewVarChar("ÁḆĈ"),
 			},
-			min: sqltypes.NewVarChar("ǍḄÇ"),
-			max: sqltypes.NewVarChar("ÁḆĈ"),
+			min: sqltypes.NewVarChar("ÁḆĈ"),
+			max: sqltypes.NewVarChar("ǍḄÇ"),
 		},
 		{
 			// kana sensitive
@@ -85,8 +91,8 @@ func TestMinMax(t *testing.T) {
 				sqltypes.NewVarChar("\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94"),
 				sqltypes.NewVarChar("\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4"),
 			},
-			min: sqltypes.NewVarChar("\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4"),
-			max: sqltypes.NewVarChar("\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94"),
+			min: sqltypes.NewVarChar("\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94"),
+			max: sqltypes.NewVarChar("\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4"),
 		},
 		{
 			// non breaking space
@@ -96,8 +102,8 @@ func TestMinMax(t *testing.T) {
 				sqltypes.NewVarChar("abc "),
 				sqltypes.NewVarChar("abc\u00a0"),
 			},
-			min: sqltypes.NewVarChar("abc\u00a0"),
-			max: sqltypes.NewVarChar("abc "),
+			min: sqltypes.NewVarChar("abc "),
+			max: sqltypes.NewVarChar("abc\u00a0"),
 		},
 		{
 			type_: sqltypes.VarChar,
@@ -107,8 +113,8 @@ func TestMinMax(t *testing.T) {
 				sqltypes.NewVarChar("c"),
 				sqltypes.NewVarChar("cs"),
 			},
-			min: sqltypes.NewVarChar("cs"),
-			max: sqltypes.NewVarChar("c"),
+			min: sqltypes.NewVarChar("c"),
+			max: sqltypes.NewVarChar("cs"),
 		},
 		{
 			type_: sqltypes.VarChar,
@@ -118,8 +124,8 @@ func TestMinMax(t *testing.T) {
 				sqltypes.NewVarChar("cukor"),
 				sqltypes.NewVarChar("csak"),
 			},
-			min: sqltypes.NewVarChar("csak"),
-			max: sqltypes.NewVarChar("cukor"),
+			min: sqltypes.NewVarChar("cukor"),
+			max: sqltypes.NewVarChar("csak"),
 		},
 	}
 	for i, tcase := range tcases {
@@ -137,10 +143,7 @@ func TestMinMax(t *testing.T) {
 					}
 				}
 
-				v := agg.Result()
-				if !reflect.DeepEqual(v, tcase.min) {
-					t.Errorf("Min(%v, %v): %v, want %v", tcase.values[0], tcase.values[1], v, tcase.min)
-				}
+				utils.MustMatch(t, agg.Result(), tcase.min)
 			})
 
 			t.Run("Max", func(t *testing.T) {
@@ -156,10 +159,7 @@ func TestMinMax(t *testing.T) {
 					}
 				}
 
-				v := agg.Result()
-				if !reflect.DeepEqual(v, tcase.max) {
-					t.Errorf("Max(%v, %v): %v, want %v", tcase.values[0], tcase.values[1], v, tcase.max)
-				}
+				utils.MustMatch(t, agg.Result(), tcase.max)
 			})
 		})
 	}

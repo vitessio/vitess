@@ -447,7 +447,7 @@ type aggregationMinMax struct {
 	collation collations.ID
 }
 
-func (a *aggregationMinMax) minmax(value sqltypes.Value, min bool) (err error) {
+func (a *aggregationMinMax) minmax(value sqltypes.Value, max bool) (err error) {
 	if value.IsNull() {
 		return nil
 	}
@@ -459,18 +459,18 @@ func (a *aggregationMinMax) minmax(value sqltypes.Value, min bool) (err error) {
 	if err != nil {
 		return err
 	}
-	if (n < 0) == min {
+	if (n < 0) == max {
 		a.current = value
 	}
 	return nil
 }
 
 func (a *aggregationMinMax) Min(value sqltypes.Value) (err error) {
-	return a.minmax(value, true)
+	return a.minmax(value, false)
 }
 
 func (a *aggregationMinMax) Max(value sqltypes.Value) error {
-	return a.minmax(value, false)
+	return a.minmax(value, true)
 }
 
 func (a *aggregationMinMax) Result() sqltypes.Value {
