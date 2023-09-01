@@ -197,7 +197,6 @@ func run() (*results, error) {
 	if maxSeqID > minSeqID {
 		go func() {
 			if useRandom {
-				rand.Seed(time.Now().UnixNano())
 				for {
 					seqChan <- rand.Intn(maxSeqID-minSeqID) + minSeqID
 				}

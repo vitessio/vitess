@@ -26,9 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -222,30 +220,6 @@ func encodeString(in string) string {
 	var buf strings.Builder
 	sqltypes.NewVarChar(in).EncodeSQL(&buf)
 	return buf.String()
-}
-
-// updateTableStats runs ANALYZE TABLE on each table involved in the workflow.
-// You should execute this if you leverage table information from e.g.
-// information_schema.tables in your test.
-func updateTableStats(t *testing.T, tablet *cluster.VttabletProcess, tables string) {
-	dbName := "vt_" + tablet.Keyspace
-	tableList := strings.Split(strings.TrimSpace(tables), ",")
-	if len(tableList) == 0 {
-		// we need to get all of the tables in the keyspace
-		res, err := tablet.QueryTabletWithDB("show tables", dbName)
-		require.NoError(t, err)
-		for _, row := range res.Rows {
-			tableList = append(tableList, row[0].String())
-		}
-	}
-	for _, table := range tableList {
-		table = strings.TrimSpace(table)
-		if table != "" {
-			res, err := tablet.QueryTabletWithDB(fmt.Sprintf(sqlAnalyzeTable, sqlescape.EscapeID(table)), dbName)
-			require.NoError(t, err)
-			require.Equal(t, 1, len(res.Rows))
-		}
-	}
 }
 
 // generateMoreCustomers creates additional test data for better tests

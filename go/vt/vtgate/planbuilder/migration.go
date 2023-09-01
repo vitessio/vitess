@@ -20,8 +20,8 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -70,7 +70,7 @@ func buildAlterMigrationThrottleAppPlan(query string, alterMigration *sqlparser.
 	}
 	throttledAppRule := &topodatapb.ThrottledAppRule{
 		Name:      appName,
-		ExpiresAt: logutil.TimeToProto(expireAt),
+		ExpiresAt: protoutil.TimeToProto(expireAt),
 		Ratio:     ratio,
 	}
 	return newPlanResult(&engine.ThrottleApp{

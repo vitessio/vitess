@@ -25,11 +25,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -178,7 +178,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("--snapshot-time cannot be in the future; snapshot = %v, now = %v", t, now)
 		}
 
-		snapshotTime = logutil.TimeToProto(t)
+		snapshotTime = protoutil.TimeToProto(t)
 	}
 
 	createKeyspaceOptions.SidecarDBName = strings.TrimSpace(createKeyspaceOptions.SidecarDBName)

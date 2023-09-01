@@ -234,6 +234,7 @@ var (
 		DeferSecondaryKeys           bool
 		AutoStart                    bool
 		StopAfterCopy                bool
+		NoRoutingRules               bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
 		Cells                     []string
@@ -283,6 +284,7 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		DeferSecondaryKeys:        moveTablesCreateOptions.DeferSecondaryKeys,
 		AutoStart:                 moveTablesCreateOptions.AutoStart,
 		StopAfterCopy:             moveTablesCreateOptions.StopAfterCopy,
+		NoRoutingRules:            moveTablesCreateOptions.NoRoutingRules,
 	}
 
 	resp, err := client.MoveTablesCreate(commandCtx, req)
@@ -524,6 +526,7 @@ func init() {
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
+	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	MoveTables.AddCommand(MoveTablesCreate)
 
 	MoveTables.AddCommand(MoveTablesShow)

@@ -43,6 +43,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
@@ -51,7 +52,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -1197,7 +1197,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 				gtids,
 			)
 		}
-		if restoreToTimestamp := logutil.ProtoToTime(req.BinlogRestoreDatetime); !restoreToTimestamp.IsZero() {
+		if restoreToTimestamp := protoutil.TimeFromProto(req.BinlogRestoreDatetime).UTC(); !restoreToTimestamp.IsZero() {
 			args = append(args,
 				"--stop-datetime",
 				restoreToTimestamp.Format(sqltypes.TimestampFormat),
@@ -1410,7 +1410,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			return nil, err
 		}
 		if found {
-			resp.FirstTimestamp = logutil.TimeToProto(t)
+			resp.FirstTimestamp = protoutil.TimeToProto(t)
 			resp.FirstTimestampBinlog = binlogFile
 			break
 		}
@@ -1423,7 +1423,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			return nil, err
 		}
 		if found {
-			resp.LastTimestamp = logutil.TimeToProto(t)
+			resp.LastTimestamp = protoutil.TimeToProto(t)
 			resp.LastTimestampBinlog = binlogFile
 			break
 		}

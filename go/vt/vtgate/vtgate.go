@@ -253,7 +253,7 @@ func Init(
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
-	if err := gw.WaitForTablets(tabletTypesToWait); err != nil {
+	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
 		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
 	}
 

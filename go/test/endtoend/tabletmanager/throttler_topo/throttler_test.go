@@ -27,10 +27,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
@@ -397,7 +397,7 @@ func TestLag(t *testing.T) {
 	t.Run("exempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
 			Name:      testAppName,
-			ExpiresAt: logutil.TimeToProto(time.Now().Add(time.Hour)),
+			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 			Exempt:    true,
 		}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
@@ -407,7 +407,7 @@ func TestLag(t *testing.T) {
 	t.Run("unexempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
 			Name:      testAppName,
-			ExpiresAt: logutil.TimeToProto(time.Now()),
+			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
