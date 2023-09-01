@@ -161,9 +161,24 @@ func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatap
 	return stream, nil
 }
 
+// CancelSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldatapb.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	return client.s.CancelSchemaMigration(ctx, in)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	return client.s.ChangeTabletType(ctx, in)
+}
+
+// CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	return client.s.CleanupSchemaMigration(ctx, in)
+}
+
+// CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	return client.s.CompleteSchemaMigration(ctx, in)
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
@@ -281,6 +296,11 @@ func (client *localVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.
 	return client.s.GetSchema(ctx, in)
 }
 
+// GetSchemaMigrations is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	return client.s.GetSchemaMigrations(ctx, in)
+}
+
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	return client.s.GetShard(ctx, in)
@@ -344,6 +364,11 @@ func (client *localVtctldClient) GetWorkflows(ctx context.Context, in *vtctldata
 // InitShardPrimary is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) InitShardPrimary(ctx context.Context, in *vtctldatapb.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	return client.s.InitShardPrimary(ctx, in)
+}
+
+// LaunchSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldatapb.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	return client.s.LaunchSchemaMigration(ctx, in)
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
@@ -470,6 +495,11 @@ func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtct
 	}()
 
 	return stream, nil
+}
+
+// RetrySchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RetrySchemaMigration(ctx context.Context, in *vtctldatapb.RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	return client.s.RetrySchemaMigration(ctx, in)
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.

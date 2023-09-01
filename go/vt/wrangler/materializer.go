@@ -129,11 +129,11 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
+	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
+	sourceShards []string, noRoutingRules bool) (err error) {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
-	var err error
 
 	if externalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
 		externalTopo, err = wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
@@ -145,6 +145,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 
 	var vschema *vschemapb.Keyspace
+	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -207,43 +208,13 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 		if !vschema.Sharded {
+			// Save the original in case we need to restore it for a late failure
+			// in the defer().
+			origVSchema = proto.Clone(vschema).(*vschemapb.Keyspace)
 			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 				return err
 			}
 		}
-	}
-	if externalTopo == nil {
-		// Save routing rules before vschema. If we save vschema first, and routing rules
-		// fails to save, we may generate duplicate table errors.
-		rules, err := topotools.GetRoutingRules(ctx, wr.ts)
-		if err != nil {
-			return err
-		}
-		for _, table := range tables {
-			toSource := []string{sourceKeyspace + "." + table}
-			rules[table] = toSource
-			rules[table+"@replica"] = toSource
-			rules[table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[targetKeyspace+"."+table+"@replica"] = toSource
-			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[sourceKeyspace+"."+table+"@replica"] = toSource
-			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-		}
-		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
-			return err
-		}
-
-		if vschema != nil {
-			// We added to the vschema.
-			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-				return err
-			}
-		}
-	}
-	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		return err
 	}
 	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
 	if err != nil {
@@ -287,6 +258,71 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 	mz, err := wr.prepareMaterializerStreams(ctx, ms)
 	if err != nil {
+		return err
+	}
+
+	// If we get an error after this point, where the vreplication streams/records
+	// have been created, then we clean up the workflow's artifacts.
+	defer func() {
+		if err != nil {
+			ts, cerr := wr.buildTrafficSwitcher(ctx, ms.TargetKeyspace, ms.Workflow)
+			if cerr != nil {
+				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
+			}
+			if cerr := wr.dropArtifacts(ctx, false, &switcher{ts: ts, wr: wr}); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
+			}
+			if origVSchema == nil { // There's no previous version to restore
+				return
+			}
+			if cerr := wr.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
+			}
+		}
+	}()
+
+	// Now that the streams have been successfully created, let's put the associated
+	// routing rules in place.
+	if externalTopo == nil {
+		if noRoutingRules {
+			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow)
+		} else {
+			// Save routing rules before vschema. If we save vschema first, and routing rules
+			// fails to save, we may generate duplicate table errors.
+			if mz.isPartial {
+				if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
+					return err
+				}
+			}
+			rules, err := topotools.GetRoutingRules(ctx, wr.ts)
+			if err != nil {
+				return err
+			}
+			for _, table := range tables {
+				toSource := []string{sourceKeyspace + "." + table}
+				rules[table] = toSource
+				rules[table+"@replica"] = toSource
+				rules[table+"@rdonly"] = toSource
+				rules[targetKeyspace+"."+table] = toSource
+				rules[targetKeyspace+"."+table+"@replica"] = toSource
+				rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+				rules[targetKeyspace+"."+table] = toSource
+				rules[sourceKeyspace+"."+table+"@replica"] = toSource
+				rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+			}
+			if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
+				return err
+			}
+		}
+		if vschema != nil {
+			// We added to the vschema.
+			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return err
+			}
+		}
+
+	}
+	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
 	}
 
@@ -960,11 +996,6 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	mz, err := wr.buildMaterializer(ctx, ms)
 	if err != nil {
 		return nil, err
-	}
-	if mz.isPartial {
-		if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
-			return nil, err
-		}
 	}
 	if err := mz.deploySchema(ctx); err != nil {
 		return nil, err

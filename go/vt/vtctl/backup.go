@@ -244,7 +244,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	req := &vtctldatapb.RestoreFromBackupRequest{
 		TabletAlias:        tabletAlias,
 		RestoreToPos:       *restoreToPos,
-		RestoreToTimestamp: logutil.TimeToProto(restoreToTimestamp),
+		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimestamp),
 		DryRun:             *dryRun,
 	}
 

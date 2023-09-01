@@ -18,9 +18,7 @@ package main
 
 import (
 	"context"
-	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 
@@ -56,7 +54,6 @@ func registerFlags(fs *pflag.FlagSet) {
 var resilientServer *srvtopo.ResilientServer
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
@@ -130,7 +127,7 @@ func main() {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(tabletTypesToWait) != 0 {

@@ -250,3 +250,7 @@ func (lru *LRUCache) checkCapacity() {
 		lru.evictions++
 	}
 }
+
+func (lru *LRUCache) Close() {
+	lru.Clear()
+}

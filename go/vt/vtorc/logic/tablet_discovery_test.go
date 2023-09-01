@@ -111,7 +111,10 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	}()
 
 	// Create a memory topo-server and create the keyspace and shard records
-	ts = memorytopo.NewServer(cell1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1)
 	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
@@ -243,7 +246,9 @@ func TestShardPrimary(t *testing.T) {
 			}()
 
 			// Create a memory topo-server and create the keyspace and shard records
-			ts = memorytopo.NewServer(cell1)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts = memorytopo.NewServer(ctx, cell1)
 			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 			require.NoError(t, err)
 

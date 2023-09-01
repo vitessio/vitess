@@ -49,6 +49,35 @@ const mzCheckJournal = "/select val from _vt.resharding_journal where id="
 
 var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
+// TestMoveTablesNoRoutingRules confirms that MoveTables does not create routing rules if --no-routing-rules is specified.
+func TestMoveTablesNoRoutingRules(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, true)
+	require.NoError(t, err)
+	rr, err := env.wr.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(rr.Rules))
+}
+
 func TestMigrateTables(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
@@ -59,7 +88,9 @@ func TestMigrateTables(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -68,8 +99,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -100,7 +130,10 @@ func TestMissingTables(t *testing.T) {
 			SourceExpression: "select * from t3",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -109,12 +142,11 @@ func TestMissingTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
 	require.NoError(t, err)
 }
 
@@ -135,10 +167,9 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 		}},
 	}
 
-	ctx := context.Background()
 	var err error
 
-	var targetTables = func(env *testMaterializerEnv) []string {
+	var targetTables = func(ctx context.Context, env *testMaterializerEnv) []string {
 		vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 		require.NoError(t, err)
 		var targetTables []string
@@ -163,16 +194,19 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 	}
 	for _, tcase := range testCases {
 		t.Run("", func(t *testing.T) {
-			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil)
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil, false)
 			require.NoError(t, err)
-			require.EqualValues(t, tcase.want, targetTables(env))
+			require.EqualValues(t, tcase.want, targetTables(ctx, env))
 		})
 
 	}
@@ -190,10 +224,12 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		}},
 	}
 
-	ctx := context.Background()
 	var err error
 	t.Run("StopStartedAndStopAfterCopyFlags", func(t *testing.T) {
-		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 		defer env.close()
 		env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 		env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -204,7 +240,7 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 		// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, false, "", defaultOnDDL, nil)
+			"", false, "", false, true, "", false, false, "", defaultOnDDL, nil, false)
 		require.NoError(t, err)
 		env.tmc.verifyQueries(t)
 	})
@@ -220,7 +256,10 @@ func TestMigrateVSchema(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -229,8 +268,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -251,7 +289,10 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -323,7 +364,6 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='lkp_vdx'", &sqltypes.Result{})
 
-	ctx := context.Background()
 	err := env.wr.CreateLookupVindex(ctx, ms.SourceKeyspace, specs, "cell", "PRIMARY", false)
 	require.NoError(t, err)
 
@@ -375,7 +415,10 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -592,7 +635,10 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -828,7 +874,10 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	sourcevs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -1065,7 +1114,10 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -1174,7 +1226,10 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -1284,7 +1339,10 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -1356,7 +1414,10 @@ func TestStopAfterCopyFlag(t *testing.T) {
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {
-	topoServ := memorytopo.NewServer("cell")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	topoServ := memorytopo.NewServer(ctx, "cell")
 	wr := New(logutil.NewConsoleLogger(), topoServ, nil)
 
 	unique := map[string]*vschemapb.Vindex{
@@ -1631,7 +1692,10 @@ func TestExternalizeVindex(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	sourceVSchema := &vschemapb.Keyspace{
@@ -1779,7 +1843,10 @@ func TestMaterializerOneToOne(t *testing.T) {
 			topodatapb.TabletType_RDONLY,
 		}),
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -1800,7 +1867,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -1820,7 +1887,10 @@ func TestMaterializerManyToOne(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"-80", "80-"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -1835,7 +1905,7 @@ func TestMaterializerManyToOne(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -1851,7 +1921,10 @@ func TestMaterializerOneToMany(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -1892,7 +1965,7 @@ func TestMaterializerOneToMany(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -1908,7 +1981,10 @@ func TestMaterializerManyToMany(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"-40", "40-"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -1950,7 +2026,7 @@ func TestMaterializerManyToMany(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -1966,7 +2042,10 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2010,7 +2089,7 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -2030,7 +2109,10 @@ func TestMaterializerDeploySchema(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	delete(env.tmc.schema, "targetks.t2")
@@ -2046,7 +2128,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
@@ -2068,7 +2150,10 @@ func TestMaterializerCopySchema(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	delete(env.tmc.schema, "targetks.t1")
@@ -2084,7 +2169,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
@@ -2103,7 +2188,10 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2147,7 +2235,7 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -2163,7 +2251,10 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2207,7 +2298,7 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -2228,14 +2319,17 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix+`.*stop_after_copy:true`, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -2251,7 +2345,10 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2263,7 +2360,7 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 	}
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "table t1 not found in vschema for keyspace targetks")
 }
 
@@ -2278,13 +2375,16 @@ func TestMaterializerNoDDL(t *testing.T) {
 			CreateDdl:        "",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	delete(env.tmc.schema, "targetks.t1")
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
@@ -2305,13 +2405,16 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 	sources := []string{"0"}
 	targets := []string{"0"}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Copied from newTestMaterializerEnv
 	env := &testMaterializerEnv{
 		ms:       ms,
 		sources:  sources,
 		targets:  targets,
 		tablets:  make(map[int]*topodatapb.Tablet),
-		topoServ: memorytopo.NewServer("cell"),
+		topoServ: memorytopo.NewServer(ctx, "cell"),
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
@@ -2334,7 +2437,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 	env.expectValidation()
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "source shard must have a primary for copying schema: 0")
 }
 
@@ -2349,13 +2452,16 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 			CreateDdl:        "",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	delete(env.tmc.schema, "targetks.t1")
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 }
 
@@ -2370,13 +2476,16 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 			CreateDdl:        "copy",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	delete(env.tmc.schema, "targetks.t1")
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
 }
 
@@ -2391,14 +2500,17 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 			CreateDdl:        "copy",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	delete(env.tmc.schema, "targetks.t1")
 	delete(env.tmc.schema, "sourceks.t1")
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "source table t1 does not exist")
 }
 
@@ -2413,11 +2525,14 @@ func TestMaterializerSyntaxError(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "syntax error at position 4 near 'bad'")
 }
 
@@ -2432,11 +2547,14 @@ func TestMaterializerNotASelect(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "unrecognized statement: update t1 set val=1")
 }
 
@@ -2451,7 +2569,10 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2482,7 +2603,7 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "could not find a vindex to compute keyspace id for table t1")
 }
 
@@ -2497,7 +2618,9 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2523,7 +2646,7 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "vindex column cannot be a complex expression: a + b as c1")
 }
 
@@ -2538,7 +2661,9 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	vs := &vschemapb.Keyspace{
@@ -2564,7 +2689,7 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Materialize(context.Background(), ms)
+	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "could not find vindex column c1")
 }
 
@@ -2778,7 +2903,9 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run("", func(t *testing.T) {
-			env := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			env := newTestMaterializerEnv(t, ctx, ms, tcase.sourceShards, tcase.targetShards)
 			if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 				t.Fatal(err)
 			}
@@ -2799,7 +2926,7 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 				)
 				env.tmc.expectVRQuery(tabletID, mzUpdateQuery, &sqltypes.Result{})
 			}
-			err := env.wr.Materialize(context.Background(), ms)
+			err := env.wr.Materialize(ctx, ms)
 			require.NoError(t, err)
 			env.tmc.verifyQueries(t)
 		})
@@ -2825,7 +2952,9 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -2842,15 +2971,16 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 			err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-				"", false, "", false, true, "", false, false, "", onDDLAction, nil)
+				"", false, "", false, true, "", false, false, "", onDDLAction, nil, false)
 			require.NoError(t, err)
 		})
 	}
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
 	srcks := "source"
 	wr := &Wrangler{
 		logger:   logutil.NewMemoryLogger(),

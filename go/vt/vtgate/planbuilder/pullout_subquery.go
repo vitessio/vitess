@@ -31,7 +31,6 @@ var _ logicalPlan = (*pulloutSubquery)(nil)
 // This gets built if a subquery is not correlated and can
 // therefore can be pulled out and executed upfront.
 type pulloutSubquery struct {
-	order      int
 	subquery   logicalPlan
 	underlying logicalPlan
 	eSubquery  *engine.PulloutSubquery

@@ -52,7 +52,6 @@ var _ logicalPlan = (*orderedAggregate)(nil)
 //	}
 type orderedAggregate struct {
 	resultsBuilder
-	extraDistinct *sqlparser.ColName
 
 	// aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.

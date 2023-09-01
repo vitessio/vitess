@@ -29,7 +29,7 @@ import (
 )
 
 func TestFilterPass(t *testing.T) {
-	utf8mb4Bin := collationEnv.LookupByName("utf8mb4_bin").ID()
+	utf8mb4Bin := collationEnv.LookupByName("utf8mb4_bin")
 	predicate := &sqlparser.ComparisonExpr{
 		Operator: sqlparser.GreaterThanOp,
 		Left:     sqlparser.NewColName("left"),

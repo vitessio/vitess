@@ -25,6 +25,8 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -392,7 +394,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
+	collation := colldata.Lookup(collations.ID(collationEnv.DefaultConnectionCharset()))
 	if collation == nil {
 		return ""
 	}
@@ -401,10 +403,10 @@ func defaultCharset() string {
 
 func defaultCharsetCollation(charset string) string {
 	collation := collationEnv.DefaultCollationForCharset(charset)
-	if collation == nil {
+	if collation == collations.Unknown {
 		return ""
 	}
-	return collation.Name()
+	return collationEnv.LookupName(collation)
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {

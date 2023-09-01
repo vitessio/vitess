@@ -19,6 +19,7 @@ package vindexes
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -41,6 +42,18 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 		ChildColumns:  fk.ChildColumns,
 		ParentColumns: fk.ParentColumns,
 	})
+}
+
+func (fk *ParentFKInfo) String() string {
+	var str strings.Builder
+	str.WriteString(fk.Table.Name.String())
+	for _, column := range fk.ChildColumns {
+		str.WriteString(column.String())
+	}
+	for _, column := range fk.ParentColumns {
+		str.WriteString(column.String())
+	}
+	return str.String()
 }
 
 // NewParentFkInfo creates a new ParentFKInfo.
@@ -75,6 +88,18 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (fk *ChildFKInfo) String() string {
+	var str strings.Builder
+	str.WriteString(fk.Table.Name.String())
+	for _, column := range fk.ChildColumns {
+		str.WriteString(column.String())
+	}
+	for _, column := range fk.ParentColumns {
+		str.WriteString(column.String())
+	}
+	return str.String()
+}
+
 // NewChildFkInfo creates a new ChildFKInfo.
 func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
 	return ChildFKInfo{
@@ -107,16 +132,13 @@ func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstrain
 	return nil
 }
 
-// CrossShardParentFKs returns all the parent fk constraints on this table that are not shard scoped.
-func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
-	if len(t.ParentForeignKeys) == 0 {
-		return
-	}
+// ParentFKsNeedsHandling returns all the parent fk constraints on this table that are not shard scoped.
+func (t *Table) ParentFKsNeedsHandling() (fks []ParentFKInfo) {
 	for _, fk := range t.ParentForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
 		if fk.Table.Keyspace.Name != t.Keyspace.Name {
-			crossShardFKs = append(crossShardFKs, fk)
+			fks = append(fks, fk)
 			continue
 		}
 		// If the keyspaces match and they are unsharded, then the fk defintion
@@ -126,7 +148,7 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 		}
 
 		if !isShardScoped(fk.Table, t, fk.ParentColumns, fk.ChildColumns) {
-			crossShardFKs = append(crossShardFKs, fk)
+			fks = append(fks, fk)
 		}
 	}
 	return
@@ -134,7 +156,7 @@ func (t *Table) CrossShardParentFKs() (crossShardFKs []ParentFKInfo) {
 
 // ChildFKsNeedsHandling retuns the child foreign keys that needs to be handled by the vtgate.
 // This can be either the foreign key is not shard scoped or the child tables needs cascading.
-func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
+func (t *Table) ChildFKsNeedsHandling(getAction func(fk ChildFKInfo) sqlparser.ReferenceAction) (fks []ChildFKInfo) {
 	for _, fk := range t.ChildForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
@@ -143,7 +165,7 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 			continue
 		}
 		// If the action is not Restrict, then it needs a cascade.
-		switch fk.OnDelete {
+		switch getAction(fk) {
 		case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
 			fks = append(fks, fk)
 			continue
@@ -158,6 +180,9 @@ func (t *Table) ChildFKsNeedsHandling() (fks []ChildFKInfo) {
 	}
 	return
 }
+
+func UpdateAction(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnUpdate }
+func DeleteAction(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnDelete }
 
 func isShardScoped(pTable *Table, cTable *Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
 	if !pTable.Keyspace.Sharded {

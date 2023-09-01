@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/vschemawrapper"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -31,8 +33,8 @@ import (
 )
 
 func TestBuildDBPlan(t *testing.T) {
-	vschema := &vschemaWrapper{
-		keyspace: &vindexes.Keyspace{Name: "main"},
+	vschema := &vschemawrapper.VSchemaWrapper{
+		Keyspace: &vindexes.Keyspace{Name: "main"},
 	}
 
 	testCases := []struct {
@@ -74,7 +76,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 		append(buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
-			collations.Default().Get().Name()),
+			collations.Local().LookupName(collations.Default())),
 			sqltypes.NewUint32(4)),
 	}
 	rows2 := [][]sqltypes.Value{
@@ -86,7 +88,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 		append(buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
-			collations.Default().Get().Name()),
+			collations.Local().LookupName(collations.Default())),
 			sqltypes.NewUint32(4)),
 	}
 

@@ -214,6 +214,13 @@ type TabletManagerClient struct {
 		Response *hk.HookResult
 		Error    error
 	}
+	// keyed by tablet alias.
+	ExecuteQueryDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteQueryResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
 	// FullStatus result
 	FullStatusResult *replicationdatapb.FullStatus
 	// keyed by tablet alias.
@@ -566,6 +573,30 @@ func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topoda
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteQuery is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
+	if fake.ExecuteQueryResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteQuery results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteQueryDelays != nil {
+		if delay, ok := fake.ExecuteQueryDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteQueryResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteQuery result set for tablet %s", assert.AnError, key)
 }
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.

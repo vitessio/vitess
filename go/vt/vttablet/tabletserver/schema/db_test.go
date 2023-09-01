@@ -23,9 +23,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/maps2"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -145,7 +145,7 @@ func TestGetChangedViewNames(t *testing.T) {
 	got, err := getChangedViewNames(context.Background(), conn, true)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
-	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "v2", "lead"})
+	require.ElementsMatch(t, maps2.Keys(got), []string{"v1", "v2", "lead"})
 	require.NoError(t, db.LastError())
 
 	// Not serving primary
@@ -181,7 +181,7 @@ func TestGetViewDefinition(t *testing.T) {
 	got, err := collectGetViewDefinitions(conn, bv)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
-	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "lead"})
+	require.ElementsMatch(t, maps2.Keys(got), []string{"v1", "lead"})
 	require.Equal(t, "create_view_v1", got["v1"])
 	require.Equal(t, "create_view_lead", got["lead"])
 	require.NoError(t, db.LastError())
@@ -351,7 +351,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 			} else {
-				require.ElementsMatch(t, maps.Keys(mismatchedTableNames), tc.expectedTableNames)
+				require.ElementsMatch(t, maps2.Keys(mismatchedTableNames), tc.expectedTableNames)
 				require.NoError(t, db.LastError())
 			}
 		})

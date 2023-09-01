@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -499,12 +500,12 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
 			fromCollation := collations.Local().DefaultCollationForCharset(sourceCol.Charset)
-			if fromCollation == nil {
+			if fromCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
 			toCollation := collations.Local().DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
-			if targetCol.Type == vrepl.StringColumnType && toCollation == nil {
+			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
 
@@ -533,12 +534,12 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	return nil
 }
 
-func trivialCharset(c collations.Collation) bool {
-	if c == nil {
+func trivialCharset(c collations.ID) bool {
+	if c == collations.Unknown {
 		return true
 	}
 	utf8mb4Charset := charset.Charset_utf8mb4{}
-	return utf8mb4Charset.IsSuperset(c.Charset()) || c.ID() == collations.CollationBinaryID
+	return utf8mb4Charset.IsSuperset(colldata.Lookup(c).Charset()) || c == collations.CollationBinaryID
 }
 
 func (v *VRepl) analyzeBinlogSource(ctx context.Context) {

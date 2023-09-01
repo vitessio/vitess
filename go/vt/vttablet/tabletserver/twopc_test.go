@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -24,20 +25,19 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestReadAllRedo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t)
+	_, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 	tpc := tsv.te.twoPC
-	ctx := context.Background()
 
 	conn, err := tsv.qe.conns.Get(ctx, nil)
 	if err != nil {
@@ -237,11 +237,12 @@ func TestReadAllRedo(t *testing.T) {
 }
 
 func TestReadAllTransactions(t *testing.T) {
-	_, tsv, db := newTestTxExecutor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
 	tpc := tsv.te.twoPC
-	ctx := context.Background()
 
 	conn, err := tsv.qe.conns.Get(ctx, nil)
 	if err != nil {

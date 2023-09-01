@@ -47,6 +47,22 @@
         }
       ]
     },
+    "t5": {
+      "column_vindexes": [
+        {
+          "column": "sk",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "t6": {
+      "column_vindexes": [
+        {
+          "column": "sk",
+          "name": "xxhash"
+        }
+      ]
+    },
     "multicol_tbl1": {
       "column_vindexes": [
         {

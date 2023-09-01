@@ -30,10 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -79,7 +79,7 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 	}
 	if appRule != nil {
 		args = append(args, "--throttle-app", appRule.Name)
-		args = append(args, "--throttle-app-duration", logutil.ProtoToTime(appRule.ExpiresAt).Sub(time.Now()).String())
+		args = append(args, "--throttle-app-duration", protoutil.TimeFromProto(appRule.ExpiresAt).UTC().Sub(time.Now()).String())
 		args = append(args, "--throttle-app-ratio", fmt.Sprintf("%f", appRule.Ratio))
 		if appRule.Exempt {
 			args = append(args, "--throttle-app-exempt")

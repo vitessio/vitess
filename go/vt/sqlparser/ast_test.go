@@ -261,7 +261,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -286,7 +286,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -313,7 +313,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -338,7 +338,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -359,23 +359,6 @@ func TestWhere(t *testing.T) {
 	w.Format(buf)
 	if buf.String() != "" {
 		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String())
-	}
-}
-
-func TestIsAggregate(t *testing.T) {
-	f := FuncExpr{Name: NewIdentifierCI("avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("Avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("foo")}
-	if f.IsAggregate() {
-		t.Error("IsAggregate: true, want false")
 	}
 }
 

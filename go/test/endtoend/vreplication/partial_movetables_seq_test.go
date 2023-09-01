@@ -59,7 +59,6 @@ type workflow struct {
 	fromKeyspace string
 	toKeyspace   string
 	typ          string
-	tables       []string
 	tc           *vrepTestCase
 	options      *workflowOptions
 }
@@ -67,7 +66,6 @@ type workflow struct {
 type vrepTestCase struct {
 	testName        string
 	t               *testing.T
-	cellNames       []string
 	defaultCellName string
 	vtgateConn      *mysql.Conn
 	keyspaces       map[string]*keyspace

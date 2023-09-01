@@ -17,10 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 
 	"context"
 
@@ -30,42 +27,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
-
-var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
-	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var vars struct {
-		BuildHost      string
-		BuildUser      string
-		BuildTimestamp int64
-		BuildGitRev    string
-	}
-	err = json.Unmarshal(body, &vars)
-	if err != nil {
-		return "", err
-	}
-
-	version := fmt.Sprintf("%v", vars)
-	return version, nil
-}
-
-var getVersionFromTablet = getVersionFromTabletDebugVars
-
-// ResetDebugVarsGetVersion is used by tests to reset the
-// getVersionFromTablet variable to the default one. That way we can
-// run the unit tests in testlib/ even when another implementation of
-// getVersionFromTablet is used.
-func ResetDebugVarsGetVersion() {
-	getVersionFromTablet = getVersionFromTabletDebugVars
-}
 
 // GetVersion returns the version string from a tablet
 func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (string, error) {

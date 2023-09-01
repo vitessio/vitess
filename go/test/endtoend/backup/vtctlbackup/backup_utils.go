@@ -18,6 +18,7 @@ package vtctlbackup
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -52,7 +53,8 @@ const (
 	XtraBackup = iota
 	BuiltinBackup
 	Mysqlctld
-	timeout = time.Duration(60 * time.Second)
+	timeout                = time.Duration(60 * time.Second)
+	topoConsistencyTimeout = 20 * time.Second
 )
 
 var (
@@ -155,7 +157,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
 		if streamMode == "xbstream" {
-			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M")) //nolint
+			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup_prepare_flags", "--use-memory=100M")
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
@@ -1077,12 +1079,13 @@ func terminateRestore(t *testing.T) {
 
 func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
 	replica := getReplica(t, replicaIndex)
+	numBackups := len(waitForNumBackups(t, -1))
 
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica.Alias)
 	require.Nil(t, err)
 
-	backups, err = localCluster.ListBackups(shardKsName)
-	require.Nil(t, err)
+	backups = waitForNumBackups(t, numBackups+1)
+	require.NotEmpty(t, backups)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 
@@ -1203,7 +1206,38 @@ func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.B
 	return readManifestFile(t, backupLocation)
 }
 
+// waitForNumBackups waits for GetBackups to list exactly the given expected number.
+// If expectNumBackups < 0 then any response is considered valid
+func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), topoConsistencyTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		backups, err := localCluster.ListBackups(shardKsName)
+		require.NoError(t, err)
+		if expectNumBackups < 0 {
+			// any result is valid
+			return backups
+		}
+		if len(backups) == expectNumBackups {
+			// what we waited for
+			return backups
+		}
+		assert.Less(t, len(backups), expectNumBackups)
+		select {
+		case <-ctx.Done():
+			assert.Failf(t, ctx.Err().Error(), "expected %d backups, got %d", expectNumBackups, len(backups))
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
 func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+	numBackups := len(waitForNumBackups(t, -1))
 	incrementalFromPosArg := "auto"
 	if !incrementalFromPos.IsZero() {
 		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
@@ -1216,8 +1250,9 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
-	backups, err := localCluster.ListBackups(shardKsName)
-	require.NoError(t, err)
+	backups := waitForNumBackups(t, numBackups+1)
+	require.NotEmptyf(t, backups, "output: %v", output)
+
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName

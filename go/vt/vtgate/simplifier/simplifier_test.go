@@ -55,11 +55,11 @@ limit 123 offset 456
 	require.NoError(t, err)
 	visitAllExpressionsInAST(ast.(sqlparser.SelectStatement), func(cursor expressionCursor) bool {
 		fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
-		cursor.replace(sqlparser.NewIntLiteral("1"))
+		cursor.remove()
 		fmt.Printf("remove: %s\n", sqlparser.String(ast))
 		cursor.restore()
 		fmt.Printf("restore: %s\n", sqlparser.String(ast))
-		cursor.remove()
+		cursor.replace(sqlparser.NewIntLiteral("1"))
 		fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
 		cursor.restore()
 		fmt.Printf("restore: %s\n", sqlparser.String(ast))

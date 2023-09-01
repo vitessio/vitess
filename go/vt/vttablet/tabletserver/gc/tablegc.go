@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -84,10 +83,6 @@ type transitionRequest struct {
 	uuid          string
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // TableGC is the main entity in the table garbage collection mechanism.
 // This service "garbage collects" tables:
 // - it checks for magically-named tables (e.g. _vt_EVAC_f6338b2af8af11eaa210f875a4d24e90_20200920063522)
@@ -124,8 +119,7 @@ type Status struct {
 	Keyspace string
 	Shard    string
 
-	isPrimary bool
-	IsOpen    bool
+	IsOpen bool
 
 	purgingTables []string
 }

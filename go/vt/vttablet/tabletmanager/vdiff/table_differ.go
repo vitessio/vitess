@@ -54,9 +54,9 @@ var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int                  // index of the column in the filter's select
-	collation collations.Collation // is the collation of the column, if any
-	isPK      bool                 // is this column part of the primary key
+	colIndex  int           // index of the column in the filter's select
+	collation collations.ID // is the collation of the column, if any
+	isPK      bool          // is this column part of the primary key
 	colName   string
 }
 
@@ -637,10 +637,9 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 			collationID collations.ID
 		)
 		// If the collation is nil or unknown, use binary collation to compare as bytes.
-		if col.collation == nil {
+		collationID = col.collation
+		if collationID == collations.Unknown {
 			collationID = collations.CollationBinaryID
-		} else {
-			collationID = col.collation.ID()
 		}
 		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
 		if err != nil {
@@ -816,58 +815,6 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 		return newSelectExprs
 	}
 	return targetSelectExprs
-}
-
-// updateTableStats runs ANALYZE TABLE on the table in order to update the
-// statistics, then it reads those updated stats (specifically the number of
-// rows in the table) and saves them in the vdiff_table record.
-func (td *tableDiffer) updateTableStats(dbClient binlogplayer.DBClient) error {
-	// First update the stats.
-	stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable,
-		td.wd.ct.vde.dbName,
-		td.table.Name,
-	)
-	if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
-		return err
-	}
-	// Now read the updated stats.
-	query, err := sqlparser.ParseAndBind(sqlGetTableRows,
-		sqltypes.StringBindVariable(td.wd.ct.vde.dbName),
-		sqltypes.StringBindVariable(td.table.Name),
-	)
-	if err != nil {
-		return err
-	}
-	isqr, err := dbClient.ExecuteFetch(query, 1)
-	if err != nil {
-		return err
-	}
-	if isqr == nil || len(isqr.Rows) != 1 {
-		rows := 0
-		if isqr != nil {
-			rows = len(isqr.Rows)
-		}
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of rows returned from %s: %d", query, rows)
-	}
-	// And finally save the updated stats.
-	row := isqr.Named().Row()
-	tableRows, err := row.ToInt64("table_rows")
-	if err != nil {
-		strVal, _ := row.ToString("table_rows")
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid value (%s) returned from %s: %v", strVal, query, err)
-	}
-	query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
-		sqltypes.Int64BindVariable(tableRows),
-		sqltypes.Int64BindVariable(td.wd.ct.id),
-		sqltypes.StringBindVariable(td.table.Name),
-	)
-	if err != nil {
-		return err
-	}
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
-	}
-	return nil
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

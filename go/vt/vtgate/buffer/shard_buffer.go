@@ -95,14 +95,6 @@ type shardBuffer struct {
 	state bufferState
 	// queue is the list of buffered requests (ordered by arrival).
 	queue []*entry
-	// externallyReparented is the maximum value of all seen
-	// "StreamHealthResponse.TabletexternallyReparentedTimestamp" values across
-	// all PRIMARY tablets of this shard.
-	// In practice, it is a) the last time the shard was reparented or b) the last
-	// time the TabletExternallyReparented RPC was called on the tablet to confirm
-	// that the tablet is the current PRIMARY.
-	// We assume the value is a Unix timestamp in seconds.
-	externallyReparented int64
 	// lastStart is the last time we saw the start of a failover.
 	lastStart time.Time
 	// lastEnd is the last time we saw the end of a failover.
@@ -511,37 +503,6 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 		msg = stopShardMissingMessage
 	}
 	sb.stopBufferingLocked(reason, msg)
-}
-
-func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias) {
-	// Fast path (read lock): Check if new timestamp is higher.
-	sb.mu.RLock()
-	if timestamp <= sb.externallyReparented {
-		// Do nothing. Equal values are reported if the primary has not changed.
-		// Smaller values can be reported during the failover by the old primary
-		// after the new primary already took over.
-		sb.mu.RUnlock()
-		return
-	}
-	sb.mu.RUnlock()
-
-	// New timestamp is higher. Stop buffering if running.
-	sb.mu.Lock()
-	defer sb.mu.Unlock()
-
-	// Re-check value after acquiring write lock.
-	if timestamp <= sb.externallyReparented {
-		return
-	}
-
-	sb.externallyReparented = timestamp
-	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
-		if sb.currentPrimary != nil {
-			sb.lastReparent = sb.timeNow()
-		}
-		sb.currentPrimary = alias
-	}
-	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
 }
 
 func (sb *shardBuffer) stopBufferingDueToMaxDuration() {

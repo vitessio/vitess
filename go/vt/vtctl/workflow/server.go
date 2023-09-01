@@ -27,10 +27,11 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
+
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
@@ -947,7 +948,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that will be executing the workflow.
-func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (res *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -963,8 +964,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	var (
 		tables       = req.IncludeTables
 		externalTopo *topo.Server
-		sourceTopo   *topo.Server = s.ts
-		err          error
+		sourceTopo   = s.ts
 	)
 
 	// When the source is an external cluster mounted using the Mount command.
@@ -978,6 +978,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	var vschema *vschemapb.Keyspace
+	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
 	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
@@ -1020,43 +1021,14 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 	if !vschema.Sharded {
+		// Save the original in case we need to restore it for a late failure
+		// in the defer().
+		origVSchema = proto.Clone(vschema).(*vschemapb.Keyspace)
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
 	}
-	if externalTopo == nil {
-		// Save routing rules before vschema. If we save vschema first, and routing rules
-		// fails to save, we may generate duplicate table errors.
-		rules, err := topotools.GetRoutingRules(ctx, s.ts)
-		if err != nil {
-			return nil, err
-		}
-		for _, table := range tables {
-			toSource := []string{sourceKeyspace + "." + table}
-			rules[table] = toSource
-			rules[table+"@replica"] = toSource
-			rules[table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[targetKeyspace+"."+table+"@replica"] = toSource
-			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[sourceKeyspace+"."+table+"@replica"] = toSource
-			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-		}
-		if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
-			return nil, err
-		}
 
-		if vschema != nil {
-			// We added to the vschema.
-			if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		return nil, err
-	}
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  req.Workflow,
 		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
@@ -1098,6 +1070,72 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 	err = mz.prepareMaterializerStreams(req)
 	if err != nil {
+		return nil, err
+	}
+
+	// If we get an error after this point, where the vreplication streams/records
+	// have been created, then we clean up the workflow's artifacts.
+	defer func() {
+		if err != nil {
+			ts, cerr := s.buildTrafficSwitcher(ctx, ms.TargetKeyspace, ms.Workflow)
+			if cerr != nil {
+				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
+			}
+			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
+			}
+			if origVSchema == nil { // There's no previous version to restore
+				return
+			}
+			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
+			}
+		}
+	}()
+
+	// Now that the streams have been successfully created, let's put the associated
+	// routing rules in place.
+	if externalTopo == nil {
+		if req.NoRoutingRules {
+			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
+		} else {
+			// Save routing rules before vschema. If we save vschema first, and routing
+			// rules fails to save, we may generate duplicate table errors.
+			if mz.isPartial {
+				if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+					return nil, err
+				}
+			}
+
+			rules, err := topotools.GetRoutingRules(ctx, s.ts)
+			if err != nil {
+				return nil, err
+			}
+			for _, table := range tables {
+				toSource := []string{sourceKeyspace + "." + table}
+				rules[table] = toSource
+				rules[table+"@replica"] = toSource
+				rules[table+"@rdonly"] = toSource
+				rules[targetKeyspace+"."+table] = toSource
+				rules[targetKeyspace+"."+table+"@replica"] = toSource
+				rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+				rules[targetKeyspace+"."+table] = toSource
+				rules[sourceKeyspace+"."+table+"@replica"] = toSource
+				rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+			}
+			if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
+				return nil, err
+			}
+		}
+		if vschema != nil {
+			// We added to the vschema.
+			if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return nil, err
+			}
+		}
+
+	}
+	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
 
@@ -2342,7 +2380,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return handleError("invalid request", fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
-	var cells []string = req.Cells
+	var cells = req.Cells
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")

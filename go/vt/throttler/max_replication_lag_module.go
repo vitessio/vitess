@@ -599,7 +599,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 
 	if replicationLagChange == equal {
 		// The replication lag did not change. Keep going at the current rate.
-		r.Reason = fmt.Sprintf("did not decrease the rate because the lag did not change (assuming a 1s error margin)") // nolint
+		r.Reason = "did not decrease the rate because the lag did not change (assuming a 1s error margin)"
 		return
 	}
 

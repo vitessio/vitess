@@ -128,7 +128,6 @@ var (
 	migrationFailureFileName = "migration-failure.log"
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
-	throttleCheckFlags       = &throttle.CheckFlags{}
 )
 
 type ConstraintType int
@@ -2803,32 +2802,6 @@ func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, 
 	return parsed.Query, swapTableName, nil
 }
 
-// renameTableIfApplicable renames a table, assuming it exists and that the target does not exist.
-func (e *Executor) renameTableIfApplicable(ctx context.Context, fromTableName, toTableName string) (attemptMade bool, err error) {
-	if fromTableName == "" {
-		return false, nil
-	}
-	exists, err := e.tableExists(ctx, fromTableName)
-	if err != nil {
-		return false, err
-	}
-	if !exists {
-		// can't rename from table when it does not exist
-		return false, nil
-	}
-	exists, err = e.tableExists(ctx, toTableName)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		// target table exists, abort.
-		return false, nil
-	}
-	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, fromTableName, toTableName)
-	_, err = e.execQuery(ctx, parsed.Query)
-	return true, err
-}
-
 func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 	artifactViewName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
@@ -3441,27 +3414,6 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, onlineDDL
 	}
 
 	return true, nil
-}
-
-// isVReplMigrationRunning sees if there is a VReplication migration actively running
-func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, s *VReplStream, err error) {
-	s, err = e.readVReplStream(ctx, uuid, true)
-	if err != nil {
-		return false, s, err
-	}
-	if s == nil {
-		return false, s, nil
-	}
-	switch s.state {
-	case binlogdatapb.VReplicationWorkflowState_Error:
-		return false, s, nil
-	case binlogdatapb.VReplicationWorkflowState_Init, binlogdatapb.VReplicationWorkflowState_Copying, binlogdatapb.VReplicationWorkflowState_Running:
-		return true, s, nil
-	}
-	if strings.Contains(strings.ToLower(s.message), "error") {
-		return false, s, nil
-	}
-	return false, s, nil
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was

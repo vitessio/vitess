@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -91,7 +92,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col coll
 		return append(dst, b...), false, nil
 
 	case sqltypes.IsText(coerceTo):
-		coll := col.Get()
+		coll := colldata.Lookup(col)
 		if coll == nil {
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
@@ -158,7 +159,7 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 			}
 			return append(dst, b...), false, nil
 		}
-		coll := e.col.Collation.Get()
+		coll := colldata.Lookup(e.col.Collation)
 		if coll == nil {
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
