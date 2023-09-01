@@ -800,7 +800,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	mtst := "<null>"
 	// special case for old primary that hasn't updated topo yet
 	if ti.PrimaryTermStartTime != nil && ti.PrimaryTermStartTime.Seconds > 0 {
-		mtst = logutil.ProtoToTime(ti.PrimaryTermStartTime).Format(time.RFC3339)
+		mtst = protoutil.TimeFromProto(ti.PrimaryTermStartTime).UTC().Format(time.RFC3339)
 	}
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
 }
@@ -1861,7 +1861,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		if timeTime.After(time.Now()) {
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "snapshot_time can not be more than current time")
 		}
-		snapshotTime = logutil.TimeToProto(timeTime)
+		snapshotTime = protoutil.TimeToProto(timeTime)
 	}
 	ki := &topodatapb.Keyspace{
 		KeyspaceType:     ktype,
@@ -3627,13 +3627,13 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 			Name:      *throttledApp,
 			Ratio:     *throttledAppRatio,
 			Exempt:    *throttledAppExempt,
-			ExpiresAt: logutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
+			ExpiresAt: protoutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
 		}
 	} else if *unthrottledApp != "" {
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{
 			Name:      *unthrottledApp,
 			Ratio:     0,
-			ExpiresAt: logutil.TimeToProto(time.Now()),
+			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 	}
 	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)

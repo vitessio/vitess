@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -246,7 +245,7 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.RestoreFromBackupRequest{
 		TabletAlias:        alias,
 		RestoreToPos:       restoreFromBackupOptions.RestoreToPos,
-		RestoreToTimestamp: logutil.TimeToProto(restoreToTimestamp),
+		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimestamp),
 		DryRun:             restoreFromBackupOptions.DryRun,
 	}
 
