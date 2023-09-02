@@ -26,15 +26,15 @@ import (
 )
 
 func TestStaticSetContents(t *testing.T) {
-	// These are the number of codepoints contained in each of the static sets as of ICU69-1,
+	// These are the number of codepoints contained in each of the static sets as of ICU73-2,
 	// as to sanity check that we're re-creating the sets properly.
 	// This table must be re-created when updating Unicode versions.
 	var ExpectedSetSizes = map[int]int{
-		1:  134564,
+		1:  139612,
 		4:  25,
-		5:  1102451,
-		6:  1979,
-		7:  131,
+		5:  1102442,
+		6:  2125,
+		7:  140,
 		8:  125,
 		9:  399,
 		10: 10773,
