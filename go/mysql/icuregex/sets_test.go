@@ -23,6 +23,8 @@ package icuregex
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStaticSetContents(t *testing.T) {
@@ -43,9 +45,7 @@ func TestStaticSetContents(t *testing.T) {
 	}
 
 	for setid, expected := range ExpectedSetSizes {
-		if got := staticPropertySets[setid].Len(); got != expected {
-			t.Fatalf("static set [%d] has wrong size: got %d, expected %d", setid, got, expected)
-		}
+		assert.Equalf(t, expected, staticPropertySets[setid].Len(), "static set [%d] has wrong size", setid)
 	}
 }
 

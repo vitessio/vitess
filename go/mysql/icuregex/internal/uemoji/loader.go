@@ -1,7 +1,27 @@
+/*
+© 2016 and later: Unicode, Inc. and others.
+Copyright (C) 2004-2015, International Business Machines Corporation and others.
+Copyright 2023 The Vitess Authors.
+
+This file contains code derived from the Unicode Project's ICU library.
+License & terms of use for the original code: http://www.unicode.org/copyright.html
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package uemoji
 
 import (
-	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
@@ -11,8 +31,7 @@ import (
 
 var uemojiOnce sync.Once
 var uemoji struct {
-	trie        *utrie.UcpTrie
-	stringTries []string
+	trie *utrie.UcpTrie
 }
 
 func loadUEmoji() {
@@ -24,24 +43,9 @@ func loadUEmoji() {
 	})
 }
 
-func stringTries() []string {
-	loadUEmoji()
-	return uemoji.stringTries
-}
-
 func trie() *utrie.UcpTrie {
 	loadUEmoji()
 	return uemoji.trie
-}
-
-const (
-	ixCpTrieOffset                  = 0
-	ixBasicEmojiTrieOffset          = 4
-	ixRgiEmojiZwjSequenceTrieOffset = 9
-)
-
-func getStringTrieIndex(i int) int {
-	return i - ixBasicEmojiTrieOffset
 }
 
 func readData(bytes *udata.Bytes) error {
@@ -56,36 +60,10 @@ func readData(bytes *udata.Bytes) error {
 		return err
 	}
 
-	startPos := bytes.Position()
-	cpTrieOffset := bytes.Int32()
-	indexesLength := cpTrieOffset / 4
-	if indexesLength <= ixRgiEmojiZwjSequenceTrieOffset {
-		return errors.New("not enough indexes")
-	}
-	inIndexes := make([]int32, indexesLength)
-	inIndexes[0] = cpTrieOffset
-	for i := 1; i < int(indexesLength); i++ {
-		inIndexes[i] = bytes.Int32()
-	}
-
-	i := ixCpTrieOffset + 1
-	nextOffset := inIndexes[i]
+	bytes.Skip(bytes.Int32() - 4)
 	uemoji.trie, err = utrie.UcpTrieFromBytes(bytes)
 	if err != nil {
 		return err
-	}
-	pos := bytes.Position() - startPos
-	bytes.Skip(nextOffset - pos)
-	offset := nextOffset
-	nextOffset = inIndexes[ixBasicEmojiTrieOffset]
-	bytes.Skip(nextOffset - offset)
-	uemoji.stringTries = make([]string, getStringTrieIndex(ixRgiEmojiZwjSequenceTrieOffset)+1)
-	for i = ixBasicEmojiTrieOffset; i <= ixRgiEmojiZwjSequenceTrieOffset; i++ {
-		offset = inIndexes[i]
-		nextOffset = inIndexes[i+1]
-		if nextOffset > offset {
-			uemoji.stringTries[getStringTrieIndex(i)] = string(bytes.Uint8Slice((nextOffset - offset) / 2))
-		}
 	}
 	return nil
 }
