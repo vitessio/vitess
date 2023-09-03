@@ -79,6 +79,8 @@ const (
 	GreaterThanEqual
 	// NotEqual is used to filter a comparable column if != specific value
 	NotEqual
+	// IsNotNull is used to filter a column if it is NULL
+	IsNotNull
 )
 
 // Filter contains opcodes for filtering.
@@ -222,6 +224,10 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				return false, err
 			}
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
+				return false, nil
+			}
+		case IsNotNull:
+			if values[filter.ColNum].IsNull() {
 				return false, nil
 			}
 		default:
@@ -550,6 +556,25 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
 				return err
 			}
+		case *sqlparser.IsExpr: // Needed for CreateLookupVindex with ignore_nulls
+			if expr.Right != sqlparser.IsNotNullOp {
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			plan.Filters = append(plan.Filters, Filter{
+				Opcode: IsNotNull,
+				ColNum: colnum,
+			})
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 		}
