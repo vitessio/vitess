@@ -23,23 +23,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-// FkParent is a primitive that represents a parent table foreign key constraint to verify against.
-type FkParent struct {
-	Values []sqlparser.Exprs
-	Cols   []CheckCol
-	BvName string
-
-	Exec Primitive
-}
 
 // FkVerify is a primitive that verifies that the foreign key constraints in parent tables are satisfied.
 // It does this by executing a select distinct query on the parent table with the values that are being inserted/updated.
 type FkVerify struct {
-	Verify []*FkParent
+	Verify []Primitive
 	Exec   Primitive
 
 	txNeeded
@@ -67,34 +57,12 @@ func (f *FkVerify) GetFields(ctx context.Context, vcursor VCursor, bindVars map[
 
 // TryExecute implements the Primitive interface
 func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	for _, fk := range f.Verify {
-		pt := newProbeTable(fk.Cols)
-		newBv := &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-		}
-		for _, exprs := range fk.Values {
-			var row sqltypes.Row
-			var values []*querypb.Value
-			for _, expr := range exprs {
-				val, err := getValue(expr, bindVars)
-				if err != nil {
-					return nil, vterrors.Wrapf(err, "unable to get value for the expression %v", expr)
-				}
-				row = append(row, val)
-				values = append(values, sqltypes.ValueToProto(val))
-			}
-			if exists, err := pt.exists(row); err != nil {
-				return nil, err
-			} else if !exists {
-				newBv.Values = append(newBv.Values, &querypb.Value{Type: querypb.Type_TUPLE, Values: values})
-			}
-		}
-		distinctValues := len(newBv.Values)
-		qr, err := vcursor.ExecutePrimitive(ctx, fk.Exec, map[string]*querypb.BindVariable{fk.BvName: newBv}, wantfields)
+	for _, prim := range f.Verify {
+		qr, err := vcursor.ExecutePrimitive(ctx, prim, bindVars, wantfields)
 		if err != nil {
 			return nil, err
 		}
-		if distinctValues != len(qr.Rows) {
+		if len(qr.Rows) > 0 {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
 		}
 	}
@@ -103,41 +71,15 @@ func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute implements the Primitive interface
 func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	for _, fk := range f.Verify {
-		pt := newProbeTable(fk.Cols)
-		newBv := &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-		}
-		for _, exprs := range fk.Values {
-			var row sqltypes.Row
-			var values []*querypb.Value
-			for _, expr := range exprs {
-				val, err := getValue(expr, bindVars)
-				if err != nil {
-					return vterrors.Wrapf(err, "unable to get value for the expression %v", expr)
-				}
-				row = append(row, val)
-				values = append(values, sqltypes.ValueToProto(val))
+	for _, prim := range f.Verify {
+		err := vcursor.StreamExecutePrimitive(ctx, prim, bindVars, wantfields, func(qr *sqltypes.Result) error {
+			if len(qr.Rows) > 0 {
+				return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
 			}
-			if exists, err := pt.exists(row); err != nil {
-				return err
-			} else if !exists {
-				newBv.Values = append(newBv.Values, &querypb.Value{Type: querypb.Type_TUPLE, Values: values})
-			}
-		}
-		distinctValues := len(newBv.Values)
-
-		seenRows := 0
-		err := vcursor.StreamExecutePrimitive(ctx, fk.Exec, map[string]*querypb.BindVariable{fk.BvName: newBv}, wantfields, func(qr *sqltypes.Result) error {
-			seenRows += len(qr.Rows)
 			return nil
 		})
 		if err != nil {
 			return err
-		}
-
-		if distinctValues != seenRows {
-			return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
 		}
 	}
 	return vcursor.StreamExecutePrimitive(ctx, f.Exec, bindVars, wantfields, callback)
@@ -150,10 +92,8 @@ func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
 	for idx, parent := range f.Verify {
 		inputsMap = append(inputsMap, map[string]any{
 			inputName: fmt.Sprintf("VerifyParent-%d", idx+1),
-			"BvName":  parent.BvName,
-			"Cols":    parent.Cols,
 		})
-		inputs = append(inputs, parent.Exec)
+		inputs = append(inputs, parent)
 	}
 	inputs = append(inputs, f.Exec)
 	inputsMap = append(inputsMap, map[string]any{
@@ -168,25 +108,3 @@ func (f *FkVerify) description() PrimitiveDescription {
 }
 
 var _ Primitive = (*FkVerify)(nil)
-
-func getValue(expr sqlparser.Expr, bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
-	switch e := expr.(type) {
-	case *sqlparser.Literal:
-		return sqlparser.LiteralToValue(e)
-	case sqlparser.BoolVal:
-		b := int32(0)
-		if e {
-			b = 1
-		}
-		return sqltypes.NewInt32(b), nil
-	case *sqlparser.NullVal:
-		return sqltypes.NULL, nil
-	case *sqlparser.Argument:
-		bv, exists := bindVars[e.Name]
-		if !exists {
-			return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] bind variable %s missing", e.Name)
-		}
-		return sqltypes.BindVariableToValue(bv)
-	}
-	return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected expression type: %T", expr)
-}

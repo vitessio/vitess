@@ -294,43 +294,6 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *FkParent) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(80)
-	}
-	// field Values []vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(24))
-		for _, elem := range cached.Values {
-			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
-				for _, elem := range elem {
-					if cc, ok := elem.(cachedObject); ok {
-						size += cc.CachedSize(true)
-					}
-				}
-			}
-		}
-	}
-	// field Cols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(22))
-		for _, elem := range cached.Cols {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field BvName string
-	size += hack.RuntimeAllocSize(int64(len(cached.BvName)))
-	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Exec.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *FkVerify) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -339,11 +302,13 @@ func (cached *FkVerify) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Verify []*vitess.io/vitess/go/vt/vtgate/engine.FkParent
+	// field Verify []vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Verify)) * int64(8))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Verify)) * int64(16))
 		for _, elem := range cached.Verify {
-			size += elem.CachedSize(true)
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
 		}
 	}
 	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive

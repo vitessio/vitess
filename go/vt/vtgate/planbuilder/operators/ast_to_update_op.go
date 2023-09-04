@@ -17,10 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"fmt"
-	"strings"
-
-	"vitess.io/vitess/go/mysql/collations"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -339,67 +335,88 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 		return childOp, nil
 	}
 
-	collEnv := collations.NewEnvironment("8.0")
-
-	var FkParents []*FkParent
+	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	childTbl, err := childTblExpr.TableName()
+	if err != nil {
+		return nil, err
+	}
+	var FkParents []ops.Operator
 	for _, fk := range parentFks {
-		// SELECT distinct <parent cols in foreign keys> from parent where (<parent cols>) = :fkv_vals
-		var selExprs sqlparser.SelectExprs
-		var valTuple sqlparser.ValTuple
-		var values []sqlparser.Exprs
-		var checkCols []engine.CheckCol
+		// SELECT 1 from child left join parent on <parent_child_columns with new value expressions> where <child_columns_not_null> and <parent_columns_are_null> limit 1
+		var whereExpr sqlparser.Expr
+		var joinCond sqlparser.Expr
+		found := false
 		for idx, column := range fk.ChildColumns {
-			found := false
-			var exprs sqlparser.Exprs
+			added := false
+			var cmpExpr sqlparser.Expr
 			for _, updateExpr := range updStmt.Exprs {
 				if column.Equal(updateExpr.Name.Name) {
+					added = true
 					found = true
-					exprs = append(exprs, updateExpr.Expr)
+					cmpExpr = &sqlparser.ComparisonExpr{
+						Operator: sqlparser.EqualOp,
+						Left:     sqlparser.NewColNameWithQualifier(fk.ParentColumns[idx].String(), fk.Table.GetTableName()),
+						Right:    updateExpr.Expr, // TODO: rewrite with table qualifier
+					}
 				}
 			}
-			if !found {
-				return nil, vterrors.VT12001("foreign keys management at vitess with partial foreign key columns update")
+			pwExpr := &sqlparser.IsExpr{
+				Left:  sqlparser.NewColNameWithQualifier(fk.ParentColumns[idx].String(), fk.Table.GetTableName()),
+				Right: sqlparser.IsNullOp,
 			}
-			col := sqlparser.NewColName(fk.ParentColumns[idx].String())
-			selExprs = append(selExprs, aeWrap(col))
-			valTuple = append(valTuple, col)
-			values = append(values, exprs)
-			tblCol := fk.Table.FindColumn(column)
-			if tblCol == nil {
-				return nil, vterrors.VT13001(fmt.Sprintf("column '%s' in parent foreign key table not found in the vindex table '%s'", sqlparser.String(column), fk.Table.String()))
+			var rightExpr sqlparser.Expr = pwExpr
+			if !added {
+				rightExpr = &sqlparser.AndExpr{
+					Left: pwExpr,
+					Right: &sqlparser.IsExpr{
+						Left:  sqlparser.NewColNameWithQualifier(fk.ChildColumns[idx].String(), childTbl),
+						Right: sqlparser.IsNotNullOp,
+					},
+				}
+				cmpExpr = &sqlparser.ComparisonExpr{
+					Operator: sqlparser.EqualOp,
+					Left:     sqlparser.NewColNameWithQualifier(fk.ParentColumns[idx].String(), fk.Table.GetTableName()),
+					Right:    sqlparser.NewColNameWithQualifier(fk.ChildColumns[idx].String(), childTbl),
+				}
 			}
-			checkCols = append(checkCols, engine.CheckCol{
-				Col:       idx,
-				Type:      tblCol.Type,
-				Collation: collEnv.LookupByName(strings.ToLower(tblCol.CollationName)),
-			})
+			if joinCond == nil {
+				joinCond = cmpExpr
+			} else {
+				joinCond = &sqlparser.AndExpr{
+					Left:  joinCond,
+					Right: cmpExpr,
+				}
+			}
+
+			if whereExpr == nil {
+				whereExpr = rightExpr
+			} else {
+				whereExpr = &sqlparser.AndExpr{
+					Left:  whereExpr,
+					Right: rightExpr,
+				}
+			}
 		}
-		bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+		if !found {
+			return nil, vterrors.VT12001("foreign keys management at vitess with partial foreign key columns update")
+		}
 		selStmt := &sqlparser.Select{
-			Distinct:    true,
-			SelectExprs: selExprs,
+			SelectExprs: sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
 			From: []sqlparser.TableExpr{
-				sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), ""),
+				sqlparser.NewJoinTableExpr(
+					updStmt.TableExprs[0],
+					sqlparser.LeftJoinType,
+					sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), ""),
+					sqlparser.NewJoinCondition(joinCond, nil)),
 			},
-			Where: &sqlparser.Where{
-				Type: sqlparser.WhereClause,
-				Expr: &sqlparser.ComparisonExpr{
-					Operator: sqlparser.InOp,
-					Left:     valTuple,
-					Right:    sqlparser.NewListArg(bvName),
-				},
-			},
+			Where: sqlparser.NewWhere(sqlparser.WhereClause, whereExpr),
+			Limit: sqlparser.NewLimitWithoutOffset(1),
 		}
 		selOp, err := createOpFromStmt(ctx, selStmt)
 		if err != nil {
 			return nil, err
 		}
-		FkParents = append(FkParents, &FkParent{
-			Op:     selOp,
-			BvName: bvName,
-			Values: values,
-			Cols:   checkCols,
-		})
+		FkParents = append(FkParents, selOp)
 	}
 
 	return &FkVerify{
