@@ -19,10 +19,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ucase
+package uemoji
 
 import (
-	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
@@ -30,72 +29,41 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var ucaseOnce sync.Once
-var ucase struct {
-	trie       *utrie.UTrie2
-	exceptions []uint16
+var uemojiOnce sync.Once
+var uemoji struct {
+	trie *utrie.UcpTrie
 }
 
-func trie() *utrie.UTrie2 {
-	loadUCase()
-	return ucase.trie
-}
-
-func exceptions() []uint16 {
-	loadUCase()
-	return ucase.exceptions
-}
-
-func loadUCase() {
-	ucaseOnce.Do(func() {
-		b := udata.NewBytes(icudata.UCase)
+func loadUEmoji() {
+	uemojiOnce.Do(func() {
+		b := udata.NewBytes(icudata.UEmoji)
 		if err := readData(b); err != nil {
 			panic(err)
 		}
 	})
 }
 
+func trie() *utrie.UcpTrie {
+	loadUEmoji()
+	return uemoji.trie
+}
+
 func readData(bytes *udata.Bytes) error {
 	err := bytes.ReadHeader(func(info *udata.DataInfo) bool {
-		return info.DataFormat[0] == 0x63 &&
-			info.DataFormat[1] == 0x41 &&
-			info.DataFormat[2] == 0x53 &&
-			info.DataFormat[3] == 0x45 &&
-			info.FormatVersion[0] == 4
+		return info.DataFormat[0] == 0x45 &&
+			info.DataFormat[1] == 0x6d &&
+			info.DataFormat[2] == 0x6f &&
+			info.DataFormat[3] == 0x6a &&
+			info.FormatVersion[0] == 1
 	})
 	if err != nil {
 		return err
 	}
 
-	count := int32(bytes.Uint32())
-	if count < ixTop {
-		return errors.New("indexes[0] too small in ucase.icu")
-	}
-
-	indexes := make([]int32, count)
-	indexes[0] = count
-
-	for i := int32(1); i < count; i++ {
-		indexes[i] = int32(bytes.Uint32())
-	}
-
-	ucase.trie, err = utrie.UTrie2FromBytes(bytes)
+	bytes.Skip(bytes.Int32() - 4)
+	uemoji.trie, err = utrie.UcpTrieFromBytes(bytes)
 	if err != nil {
 		return err
 	}
-
-	expectedTrieLength := indexes[ixTrieSize]
-	trieLength := ucase.trie.SerializedLength()
-
-	if trieLength > expectedTrieLength {
-		return errors.New("ucase.icu: not enough bytes for the trie")
-	}
-
-	bytes.Skip(expectedTrieLength - trieLength)
-
-	if n := indexes[ixExcLength]; n > 0 {
-		ucase.exceptions = bytes.Uint16Slice(n)
-	}
-
 	return nil
 }
