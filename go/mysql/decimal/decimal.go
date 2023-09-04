@@ -677,6 +677,10 @@ func (d *Decimal) ensureInitialized() {
 	}
 }
 
+func (d Decimal) IsInitialized() bool {
+	return d.value != nil
+}
+
 // RescalePair rescales two decimals to common exponential value (minimal exp of both decimals)
 func RescalePair(d1 Decimal, d2 Decimal) (Decimal, Decimal) {
 	d1.ensureInitialized()

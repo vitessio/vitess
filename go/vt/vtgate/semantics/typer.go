@@ -55,15 +55,15 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		if !ok {
 			return nil
 		}
-		var inputType *sqltypes.Type
+		var inputType sqltypes.Type
 		if arg := node.GetArg(); arg != nil {
 			t, ok := t.exprTypes[arg]
 			if ok {
-				inputType = &t.Type
+				inputType = t.Type
 			}
 		}
-		typ, _ := code.Type(inputType)
-		t.exprTypes[node] = Type{Type: typ, Collation: collations.DefaultCollationForType(typ)}
+		type_ := code.Type(inputType)
+		t.exprTypes[node] = Type{Type: type_, Collation: collations.DefaultCollationForType(type_)}
 	}
 	return nil
 }
