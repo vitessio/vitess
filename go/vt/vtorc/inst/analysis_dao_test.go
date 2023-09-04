@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
 )
@@ -52,12 +53,13 @@ var (
 // rows that are specified in the test.
 func TestGetReplicationAnalysisDecision(t *testing.T) {
 	tests := []struct {
-		name           string
-		info           []*test.InfoForRecoveryAnalysis
-		codeWanted     AnalysisCode
-		shardWanted    string
-		keyspaceWanted string
-		wantErr        string
+		name                         string
+		info                         []*test.InfoForRecoveryAnalysis
+		codeWanted                   AnalysisCode
+		shardWanted                  string
+		keyspaceWanted               string
+		wantErr                      string
+		convertTabletWithErrantGTIDs bool
 	}{
 		{
 			name: "ClusterHasNoPrimary",
@@ -684,9 +686,52 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				LastCheckValid: 1,
 				ReadOnly:       1,
 			}},
-			keyspaceWanted: "ks",
-			shardWanted:    "0",
-			codeWanted:     ErrantGTIDDetected,
+			keyspaceWanted:               "ks",
+			shardWanted:                  "0",
+			codeWanted:                   ErrantGTIDDetected,
+			convertTabletWithErrantGTIDs: true,
+		}, {
+			name: "ErrantGTID - Config disallows",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy: "none",
+				ErrantGTID:       "some errant GTID",
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				},
+				LastCheckValid: 1,
+				ReadOnly:       1,
+			}},
+			keyspaceWanted:               "ks",
+			shardWanted:                  "0",
+			codeWanted:                   NoProblem,
+			convertTabletWithErrantGTIDs: false,
 		}, {
 			name: "ErrantGTID on a non-replica",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -725,9 +770,10 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				LastCheckValid: 1,
 				ReadOnly:       1,
 			}},
-			keyspaceWanted: "ks",
-			shardWanted:    "0",
-			codeWanted:     NoProblem,
+			keyspaceWanted:               "ks",
+			shardWanted:                  "0",
+			codeWanted:                   NoProblem,
+			convertTabletWithErrantGTIDs: false,
 		},
 	}
 	for _, tt := range tests {
@@ -737,6 +783,11 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				db.Db = oldDB
 			}()
 
+			originalConvertTabletWithErrantGTIDs := config.ConvertTabletWithErrantGTIDs()
+			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
+			defer func() {
+				config.SetConvertTabletWithErrantGTIDs(originalConvertTabletWithErrantGTIDs)
+			}()
 			var rowMaps []sqlutils.RowMap
 			for _, analysis := range tt.info {
 				analysis.SetValuesFromTabletInfo()

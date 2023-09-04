@@ -477,7 +477,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {
+		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" && config.ConvertTabletWithErrantGTIDs() {
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
 		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == "" {
