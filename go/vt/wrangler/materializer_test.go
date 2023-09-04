@@ -1348,11 +1348,11 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
 			"v": {
-				Type: "lookup_unique",
+				Type: "consistent_lookup",
 				Params: map[string]string{
 					"table":        "ks.lkp",
-					"from":         "c1",
-					"to":           "col2",
+					"from":         "col2,col1",
+					"to":           "keyspace_id",
 					"ignore_nulls": "true",
 				},
 				Owner: "t1",
@@ -1361,8 +1361,8 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "v",
-					Column: "col2",
+					Name:    "v",
+					Columns: []string{"col2", "col1"},
 				}},
 			},
 		},
@@ -1398,11 +1398,11 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 				Type: "hash",
 			},
 			"v": {
-				Type: "lookup_unique",
+				Type: "consistent_lookup",
 				Params: map[string]string{
 					"table":        "ks.lkp",
-					"from":         "c1",
-					"to":           "col2",
+					"from":         "col2,col1",
+					"to":           "keyspace_id",
 					"write_only":   "true",
 					"ignore_nulls": "true",
 				},
@@ -1415,19 +1415,19 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 					Name:   "hash",
 					Column: "col1",
 				}, {
-					Name:   "v",
-					Column: "col2",
+					Name:    "v",
+					Columns: []string{"col2", "col1"},
 				}},
 			},
 			"lkp": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
+					Column: "col2",
 					Name:   "hash",
 				}},
 			},
 		},
 	}
-	wantQuery := "select col2 as c1, col2 as col2 from t1 where c1 is not null group by c1, col2"
+	wantQuery := "select col2 as col2, col1 as col1, keyspace_id() as keyspace_id from t1 where col2 is not null and col1 is not null group by col2, col1, keyspace_id"
 
 	env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
@@ -1447,12 +1447,12 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 
 	ms, ks, _, err := env.wr.prepareCreateLookup(context.Background(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(ks, wantKs) {
+	if !proto.Equal(wantKs, ks) {
 		t.Errorf("unexpected keyspace value: got:\n%v, want\n%v", ks, wantKs)
 	}
 	require.NotNil(t, ms)
 	require.GreaterOrEqual(t, len(ms.TableSettings), 1)
-	require.Equal(t, ms.TableSettings[0].SourceExpression, wantQuery, "unexpected query")
+	require.Equal(t, wantQuery, ms.TableSettings[0].SourceExpression, "unexpected query")
 }
 
 func TestStopAfterCopyFlag(t *testing.T) {

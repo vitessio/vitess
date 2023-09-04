@@ -367,6 +367,28 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 			verifyCopyStateIsOptimized(t, tablet)
 		}
 	})
+
+	t.Run("Test CreateLookupVindex", func(t *testing.T) {
+		// CreateLookupVindex does not support noblob images.
+		if strings.ToLower(binlogRowImage) == "noblob" {
+			return
+		}
+		_, err = vtgateConn.ExecuteFetch("use customer", 1, false)
+		require.NoError(t, err, "error using customer keyspace: %v", err)
+		res, err := vtgateConn.ExecuteFetch("select count(*) from customer where name is not null", 1, false)
+		require.NoError(t, err, "error getting current row count in customer: %v", err)
+		require.Equal(t, 1, len(res.Rows), "expected 1 row in count(*) query, got %d", len(res.Rows))
+		rows, _ := res.Rows[0][0].ToInt32()
+		// Insert a couple of rows with a NULL name to confirm that they
+		// are ignored.
+		insert := "insert into customer (cid, name, typ, sport, meta) values (100, NULL, 'soho', 'football','{}'), (101, NULL, 'enterprise','baseball','{}')"
+		_, err = vtgateConn.ExecuteFetch(insert, -1, false)
+		require.NoError(t, err, "error executing %q: %v", insert, err)
+		err = vc.VtctlClient.ExecuteCommand("CreateLookupVindex", "--", "--tablet_types=PRIMARY", "customer", createLookupVindexVSchema)
+		require.NoError(t, err, "error executing CreateLookupVindex: %v", err)
+		waitForWorkflowState(t, vc, "product.customer_name_keyspace_id_vdx", binlogdatapb.VReplicationWorkflowState_Stopped.String())
+		waitForRowCount(t, vtgateConn, "product", "customer_name_keyspace_id", int(rows))
+	})
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
