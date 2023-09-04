@@ -25,6 +25,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -45,7 +47,7 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	_flag.Parse()
+	_flag.Parse(pflag.NewFlagSet("zkctld", pflag.ExitOnError))
 
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
 	zkd := zkctl.NewZkd(zkConfig)

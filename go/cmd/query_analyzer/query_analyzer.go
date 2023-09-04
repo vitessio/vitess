@@ -24,6 +24,8 @@ import (
 	"os"
 	"sort"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -59,7 +61,7 @@ func (a stats) Less(i, j int) bool { return a[i].Count > a[j].Count }
 
 func main() {
 	defer exit.Recover()
-	_flag.Parse()
+	_flag.Parse(pflag.NewFlagSet("query_analyzer", pflag.ExitOnError))
 	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {

@@ -229,10 +229,10 @@ func TestAPI(t *testing.T) {
 		statusCode               int
 	}{
 		// Create snapshot keyspace with durability policy specified
-		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "-durability-policy=semi_sync", "ks3"]`, `{
+		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "--durability-policy=semi_sync", "ks3"]`, `{
   "Error": "durability-policy cannot be specified while creating a snapshot keyspace"`, http.StatusOK},
 		// Create snapshot keyspace using API
-		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
+		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
 		   "Error": "",
 		   "Output": ""
 		}`, http.StatusOK},

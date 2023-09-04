@@ -43,6 +43,8 @@ import (
 	// register the HTTP handlers for profiling
 	_ "net/http/pprof"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
@@ -237,10 +239,59 @@ func RunDefault() {
 	Run(*Port)
 }
 
+var (
+	flagHooksM       sync.Mutex
+	globalFlagHooks  []func(*pflag.FlagSet)
+	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
+)
+
+// OnParse registers a callback function to register flags on the flagset that
+// used by any caller of servenv.Parse or servenv.ParseWithArgs.
+func OnParse(f func(fs *pflag.FlagSet)) {
+	flagHooksM.Lock()
+	defer flagHooksM.Unlock()
+
+	globalFlagHooks = append(globalFlagHooks, f)
+}
+
+// OnParseFor registers a callback function to register flags on the flagset
+// used by servenv.Parse or servenv.ParseWithArgs. The provided callback will
+// only be called if the `cmd` argument passed to either Parse or ParseWithArgs
+// exactly matches the `cmd` argument passed to OnParseFor.
+//
+// To register for flags for multiple commands, for example if a package's flags
+// should be used for only vtgate and vttablet but no other binaries, call this
+// multiple times with the same callback function. To register flags for all
+// commands globally, use OnParse instead.
+func OnParseFor(cmd string, f func(fs *pflag.FlagSet)) {
+	flagHooksM.Lock()
+	defer flagHooksM.Unlock()
+
+	commandFlagHooks[cmd] = append(commandFlagHooks[cmd], f)
+}
+
+func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
+	flagHooksM.Lock()
+	defer flagHooksM.Unlock()
+
+	hooks = append(hooks, globalFlagHooks...) // done deliberately to copy the slice
+
+	if commandHooks, ok := commandFlagHooks[cmd]; ok {
+		hooks = append(hooks, commandHooks...)
+	}
+
+	return hooks
+}
+
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	_flag.Parse()
+	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
+	for _, hook := range getFlagHooksFor(cmd) {
+		hook(fs)
+	}
+
+	_flag.Parse(fs)
 
 	if *Version {
 		AppVersion.Print()
@@ -255,7 +306,7 @@ func ParseFlags(cmd string) {
 		}
 	}
 
-	args := _flag.Args()
+	args := fs.Args()
 	if len(args) > 0 {
 		flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
@@ -264,14 +315,19 @@ func ParseFlags(cmd string) {
 
 // ParseFlagsWithArgs initializes flags and returns the positional arguments
 func ParseFlagsWithArgs(cmd string) []string {
-	_flag.Parse()
+	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
+	for _, hook := range getFlagHooksFor(cmd) {
+		hook(fs)
+	}
+
+	_flag.Parse(fs)
 
 	if *Version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
-	args := _flag.Args()
+	args := fs.Args()
 	if len(args) == 0 {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
