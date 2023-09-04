@@ -409,6 +409,10 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 		}
 		return recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
+		if !config.ConvertTabletWithErrantGTIDs() {
+			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
+			return noRecoveryFunc
+		}
 		return recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
 		return recoverPrimaryHasPrimaryFunc

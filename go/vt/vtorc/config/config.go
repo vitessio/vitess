@@ -147,12 +147,12 @@ func SetERSEnabled(val bool) {
 
 // ConvertTabletWithErrantGTIDs reports whether VTOrc is allowed to change the tablet type of tablets with errant GTIDs to DRAINED.
 func ConvertTabletWithErrantGTIDs() bool {
-	return ersEnabled
+	return convertTabletWithErrantGTIDs
 }
 
 // SetConvertTabletWithErrantGTIDs sets the value for the convertTabletWithErrantGTIDs variable. This should only be used from tests.
 func SetConvertTabletWithErrantGTIDs(val bool) {
-	ersEnabled = val
+	convertTabletWithErrantGTIDs = val
 }
 
 // LogConfigValues is used to log the config values.
