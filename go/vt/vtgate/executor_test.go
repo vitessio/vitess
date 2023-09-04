@@ -1897,7 +1897,7 @@ func TestPassthroughDDL(t *testing.T) {
 		TargetString: "TestExecutor",
 	}
 
-	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
+	alterDDL := "/* leading */ alter table passthrough_ddl add column col bigint default 123 /* trailing */"
 	_, err := executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
