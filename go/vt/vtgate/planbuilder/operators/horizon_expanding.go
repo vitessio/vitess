@@ -239,17 +239,6 @@ func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projec
 			return nil, err
 		}
 		expr := ae.Expr
-		if sqlparser.ContainsAggregation(expr) {
-			aggr, ok := expr.(sqlparser.AggrFunc)
-			if !ok {
-				// need to add logic to extract aggregations and pushed them to the top level
-				return nil, vterrors.VT12001(fmt.Sprintf("unsupported aggregation expression: %s", sqlparser.String(expr)))
-			}
-			expr = aggr.GetArg()
-			if expr == nil {
-				expr = sqlparser.NewIntLiteral("1")
-			}
-		}
 
 		proj.addUnexploredExpr(ae, expr)
 	}

@@ -107,7 +107,7 @@ func (sq *SubQueryContainer) handleSubquery(
 		return nil, nil
 	}
 
-	sqInner, err := createSubquery(ctx, expr, subq, outerID)
+	sqInner, err := createSubqueryOp(ctx, expr, subq, outerID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func getSubQuery(expr sqlparser.Expr) *sqlparser.Subquery {
 	return subqueryExprExists
 }
 
-func createSubquery(
+func createSubqueryOp(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	subq *sqlparser.Subquery,
@@ -147,23 +147,18 @@ func createSubquery(
 	case *sqlparser.NotExpr:
 		switch inner := expr.Expr.(type) {
 		case *sqlparser.ExistsExpr:
-			return createExistsSubquery(ctx, expr, subq, outerID, opcode.PulloutNotExists)
+			return createSubquery(ctx, expr, subq, outerID, nil, opcode.PulloutNotExists)
 		case *sqlparser.ComparisonExpr:
 			cmp := *inner
 			cmp.Operator = sqlparser.Inverse(cmp.Operator)
 			return createComparisonSubQuery(ctx, &cmp, subq, outerID)
-		default:
-			return createValueSubquery(ctx, expr, subq, outerID)
 		}
 	case *sqlparser.ExistsExpr:
-		return createExistsSubquery(ctx, expr, subq, outerID, opcode.PulloutExists)
+		return createSubquery(ctx, expr, subq, outerID, nil, opcode.PulloutExists)
 	case *sqlparser.ComparisonExpr:
 		return createComparisonSubQuery(ctx, expr, subq, outerID)
-	case *sqlparser.Subquery:
-		return createValueSubquery(ctx, expr, subq, outerID)
-	default:
-		return nil, vterrors.VT12001("subquery: " + sqlparser.String(expr))
 	}
+	return createSubquery(ctx, expr, subq, outerID, nil, opcode.PulloutValue)
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -178,7 +173,7 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(T)
 }
 
-func createSubqueryFilter(
+func createSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
 	subq *sqlparser.Subquery,
@@ -186,6 +181,8 @@ func createSubqueryFilter(
 	predicate sqlparser.Expr,
 	filterType opcode.PulloutOpcode,
 ) (*SubQuery, error) {
+	original = cloneASTAndSemState(ctx, original)
+
 	innerSel, ok := subq.Select.(*sqlparser.Select)
 	if !ok {
 		return nil, vterrors.VT13001("yucki unions")
@@ -271,29 +268,7 @@ func createComparisonSubQuery(
 		filterType = opcode.PulloutNotIn
 	}
 
-	return createSubqueryFilter(ctx, original, subq, outerID, predicate, filterType)
-}
-
-func createExistsSubquery(
-	ctx *plancontext.PlanningContext,
-	org sqlparser.Expr,
-	sq *sqlparser.Subquery,
-	outerID semantics.TableSet,
-	filterType opcode.PulloutOpcode,
-) (*SubQuery, error) {
-	org = cloneASTAndSemState(ctx, org)
-	return createSubqueryFilter(ctx, org, sq, outerID, nil, filterType)
-}
-
-func createValueSubquery(
-	ctx *plancontext.PlanningContext,
-	org sqlparser.Expr,
-	sq *sqlparser.Subquery,
-	outerID semantics.TableSet,
-) (*SubQuery, error) {
-	org = cloneASTAndSemState(ctx, org)
-
-	return createSubqueryFilter(ctx, org, sq, outerID, nil, opcode.PulloutValue)
+	return createSubquery(ctx, original, subq, outerID, predicate, filterType)
 }
 
 type joinPredicateCollector struct {
