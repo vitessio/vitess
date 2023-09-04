@@ -490,7 +490,7 @@
     }
   },
   {
-    "comment": "update table with column's parent foreign key cross shard - disallowed",
+    "comment": "update table with column's parent foreign key cross shard",
     "query": "update tbl10 set col = 'foo'",
     "plan": {
       "QueryType": "UPDATE",
@@ -807,5 +807,90 @@
     "comment": "delete in a table with limit - disallowed",
     "query": "delete from u_tbl2 limit 2",
     "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
+  },
+  {
+    "comment": "update with fk on cross-shard with a where condition on non-literal value - disallowed",
+    "query": "update tbl3 set coly = colx + 10 where coly = 10",
+    "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
+  },
+  {
+    "comment": "update with fk on cross-shard with a where condition",
+    "query": "update tbl3 set coly = 20 where coly = 10",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl3 set coly = 20 where coly = 10",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyParent-1",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "tbl1.t1col1 is null",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "LeftJoin",
+                        "JoinColumnIndexes": "R:0,R:0",
+                        "TableName": "tbl3_tbl1",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "sharded_fk_allow",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select 1 from tbl3 where 1 != 1",
+                            "Query": "select 1 from tbl3 where tbl3.coly = 10 lock in share mode",
+                            "Table": "tbl3"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "sharded_fk_allow",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
+                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = 20 lock in share mode",
+                            "Table": "tbl1"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "Child",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update tbl3 set coly = 20 where tbl3.coly = 10",
+            "Table": "tbl3"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl1",
+        "sharded_fk_allow.tbl3"
+      ]
+    }
   }
 ]

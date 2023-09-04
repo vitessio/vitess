@@ -592,11 +592,12 @@ func isRestrict(onDelete sqlparser.ReferenceAction) bool {
 // createSelectionOp creates the selection operator to select the parent columns for the foreign key constraints.
 // The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_update>`
 // TODO (@Harshit, @GuptaManan100): Compress the columns in the SELECT statement, if there are multiple foreign key constraints using the same columns.
-func createSelectionOp(ctx *plancontext.PlanningContext, selectExprs []sqlparser.SelectExpr, tableExprs sqlparser.TableExprs, where *sqlparser.Where) (ops.Operator, error) {
+func createSelectionOp(ctx *plancontext.PlanningContext, selectExprs []sqlparser.SelectExpr, tableExprs sqlparser.TableExprs, where *sqlparser.Where, limit *sqlparser.Limit) (ops.Operator, error) {
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,
 		Where:       where,
+		Limit:       limit,
 	}
 	return createOpFromStmt(ctx, selectionStmt)
 }

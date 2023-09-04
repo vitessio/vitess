@@ -192,12 +192,8 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 	}
 
 	// We only support simple expressions in update queries with cascade.
-	for _, updateExpr := range updStmt.Exprs {
-		switch updateExpr.Expr.(type) {
-		case *sqlparser.Argument, *sqlparser.NullVal, sqlparser.BoolVal, *sqlparser.Literal:
-		default:
-			return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
-		}
+	if isNonLiteral(updStmt.Exprs) {
+		return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
 	}
 
 	var fkChildren []*FkChild
@@ -221,7 +217,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +227,17 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		Children:  fkChildren,
 		Parent:    parentOp,
 	}, nil
+}
+
+func isNonLiteral(updExprs sqlparser.UpdateExprs) bool {
+	for _, updateExpr := range updExprs {
+		switch updateExpr.Expr.(type) {
+		case *sqlparser.Argument, *sqlparser.NullVal, sqlparser.BoolVal, *sqlparser.Literal:
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
@@ -330,97 +337,106 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	}, nil
 }
 
+// createFKVerifyOp creates the verify operator for the parent foreign key constraints.
 func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, updStmt *sqlparser.Update, parentFks []vindexes.ParentFKInfo) (ops.Operator, error) {
 	if len(parentFks) == 0 {
 		return childOp, nil
 	}
 
-	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	childTbl, err := childTblExpr.TableName()
-	if err != nil {
-		return nil, err
+	if isNonLiteral(updStmt.Exprs) {
+		return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
 	}
+
 	var FkParents []ops.Operator
 	for _, fk := range parentFks {
-		// SELECT 1 from child left join parent on <parent_child_columns with new value expressions> where <child_columns_not_null> and <parent_columns_are_null> limit 1
-		var whereExpr sqlparser.Expr
-		var joinCond sqlparser.Expr
-		found := false
-		for idx, column := range fk.ChildColumns {
-			added := false
-			var cmpExpr sqlparser.Expr
-			for _, updateExpr := range updStmt.Exprs {
-				if column.Equal(updateExpr.Name.Name) {
-					added = true
-					found = true
-					cmpExpr = &sqlparser.ComparisonExpr{
-						Operator: sqlparser.EqualOp,
-						Left:     sqlparser.NewColNameWithQualifier(fk.ParentColumns[idx].String(), fk.Table.GetTableName()),
-						Right:    updateExpr.Expr, // TODO: rewrite with table qualifier
-					}
-				}
-			}
-			pwExpr := &sqlparser.IsExpr{
-				Left:  sqlparser.NewColNameWithQualifier(fk.ParentColumns[idx].String(), fk.Table.GetTableName()),
-				Right: sqlparser.IsNullOp,
-			}
-			var rightExpr sqlparser.Expr = pwExpr
-			if !added {
-				rightExpr = &sqlparser.AndExpr{
-					Left: pwExpr,
-					Right: &sqlparser.IsExpr{
-						Left:  sqlparser.NewColNameWithQualifier(fk.ChildColumns[idx].String(), childTbl),
-						Right: sqlparser.IsNotNullOp,
-					},
-				}
-				cmpExpr = &sqlparser.ComparisonExpr{
-					Operator: sqlparser.EqualOp,
-					Left:     sqlparser.NewColNameWithQualifier(fk.ParentColumns[idx].String(), fk.Table.GetTableName()),
-					Right:    sqlparser.NewColNameWithQualifier(fk.ChildColumns[idx].String(), childTbl),
-				}
-			}
-			if joinCond == nil {
-				joinCond = cmpExpr
-			} else {
-				joinCond = &sqlparser.AndExpr{
-					Left:  joinCond,
-					Right: cmpExpr,
-				}
-			}
-
-			if whereExpr == nil {
-				whereExpr = rightExpr
-			} else {
-				whereExpr = &sqlparser.AndExpr{
-					Left:  whereExpr,
-					Right: rightExpr,
-				}
-			}
-		}
-		if !found {
-			return nil, vterrors.VT12001("foreign keys management at vitess with partial foreign key columns update")
-		}
-		selStmt := &sqlparser.Select{
-			SelectExprs: sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
-			From: []sqlparser.TableExpr{
-				sqlparser.NewJoinTableExpr(
-					updStmt.TableExprs[0],
-					sqlparser.LeftJoinType,
-					sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), ""),
-					sqlparser.NewJoinCondition(joinCond, nil)),
-			},
-			Where: sqlparser.NewWhere(sqlparser.WhereClause, whereExpr),
-			Limit: sqlparser.NewLimitWithoutOffset(1),
-		}
-		selOp, err := createOpFromStmt(ctx, selStmt)
+		op, err := createFkVerifyForUpdate(ctx, updStmt, fk)
 		if err != nil {
 			return nil, err
 		}
-		FkParents = append(FkParents, selOp)
+		FkParents = append(FkParents, op)
 	}
 
 	return &FkVerify{
 		Verify: FkParents,
 		Input:  childOp,
 	}, nil
+}
+
+// Each foreign key constraint is verified by an anti join query of the form:
+// select 1 from child_tbl left join parent_tbl on <parent_child_columns with new value expressions, remaining fk columns join>
+// where <parent columns are null> and <unchanged child columns not null> limit 1
+// E.g:
+// Child (c1, c2) references Parent (p1, p2)
+// update Child set c1 = 1 where id = 1
+// verify query:
+// select 1 from Child left join Parent on Parent.p1 = 1 and Parent.p2 = Child.c2
+// where Parent.p1 is null and Parent.p2 is null
+// and Child.c2 is not null
+// limit 1
+func createFkVerifyForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (ops.Operator, error) {
+	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	childTbl, err := childTblExpr.TableName()
+	if err != nil {
+		return nil, err
+	}
+	parentTbl := pFK.Table.GetTableName()
+	var whereCond sqlparser.Expr
+	var joinCond sqlparser.Expr
+	for idx, column := range pFK.ChildColumns {
+		var matchedExpr *sqlparser.UpdateExpr
+		for _, updateExpr := range updStmt.Exprs {
+			if column.Equal(updateExpr.Name.Name) {
+				matchedExpr = updateExpr
+				break
+			}
+		}
+		parentIsNullExpr := &sqlparser.IsExpr{
+			Left:  sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
+			Right: sqlparser.IsNullOp,
+		}
+		var predicate sqlparser.Expr = parentIsNullExpr
+		var joinExpr sqlparser.Expr
+		if matchedExpr == nil {
+			predicate = &sqlparser.AndExpr{
+				Left: parentIsNullExpr,
+				Right: &sqlparser.IsExpr{
+					Left:  sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
+					Right: sqlparser.IsNotNullOp,
+				},
+			}
+			joinExpr = &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
+				Right:    sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
+			}
+		} else {
+			joinExpr = &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
+				Right:    prefixColNames(childTbl, matchedExpr.Expr),
+			}
+		}
+
+		if idx == 0 {
+			joinCond, whereCond = joinExpr, predicate
+			continue
+		}
+		joinCond = &sqlparser.AndExpr{Left: joinCond, Right: joinExpr}
+		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: predicate}
+	}
+	// add existing where condition on the update statement
+	if updStmt.Where != nil {
+		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: prefixColNames(childTbl, updStmt.Where.Expr)}
+	}
+	return createSelectionOp(ctx,
+		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
+		[]sqlparser.TableExpr{
+			sqlparser.NewJoinTableExpr(
+				childTblExpr,
+				sqlparser.LeftJoinType,
+				sqlparser.NewAliasedTableExpr(parentTbl, ""),
+				sqlparser.NewJoinCondition(joinCond, nil)),
+		},
+		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
+		sqlparser.NewLimitWithoutOffset(1))
 }
