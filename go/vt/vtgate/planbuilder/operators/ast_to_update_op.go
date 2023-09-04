@@ -230,7 +230,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
 func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, cols []int) (*FkChild, error) {
 	// Reserve a bind variable name
-	bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
 
 	// Create child update operator
 	// Create a ValTuple of child column names
