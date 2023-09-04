@@ -96,8 +96,7 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
     "datze": {},
     "reftable": {
       "type": "reference"
-    },
-    "customer_cid_keyspace_id": {}
+    }
   }
 }
 `
@@ -120,8 +119,8 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
   "tables": {
     "customer": {
       "column_vindexes": [{
-          "columns": ["name", "cid"],
-          "name": "customer_name_keyspace_id"
+        "columns": ["name", "cid"],
+        "name": "customer_name_keyspace_id"
       }]
     }
   }
