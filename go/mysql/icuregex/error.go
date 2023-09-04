@@ -90,6 +90,8 @@ func (e *MatchError) Error() string {
 		out.WriteString("Stack overflow")
 	case TimeOut:
 		out.WriteString("Timeout")
+	case InternalMatchError:
+		out.WriteString("Internal error")
 	}
 
 	input := e.Input
@@ -144,6 +146,7 @@ const (
 type MatchErrorCode int32
 
 const (
-	StackOverflow MatchErrorCode = iota /**< Regular expression backtrack stack overflow.       */
-	TimeOut                             /**< Maximum allowed match time exceeded                */
+	StackOverflow      MatchErrorCode = iota /**< Regular expression backtrack stack overflow.       */
+	TimeOut                                  /**< Maximum allowed match time exceeded                */
+	InternalMatchError                       /**< Internal error (bug) was detected.                 */
 )

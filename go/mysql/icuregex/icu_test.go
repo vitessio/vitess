@@ -181,9 +181,7 @@ func (tp *TestPattern) parseMatch(orig string) error {
 
 func ParseTestFile(t testing.TB, filename string) []TestPattern {
 	f, err := os.Open(filename)
-	if err != nil {
-		t.Fatalf("failed to open test data: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
@@ -229,9 +227,8 @@ func ParseTestFile(t testing.TB, filename string) []TestPattern {
 		patterns = append(patterns, tp)
 	}
 
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
-	}
+	err = scanner.Err()
+	require.NoError(t, err)
 	return patterns
 }
 
@@ -394,9 +391,7 @@ func TestCornerCases(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.Pattern, func(t *testing.T) {
 			_, err := icuregex.CompileString(tc.Pattern, tc.Flags)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -407,9 +402,7 @@ func TestOne(t *testing.T) {
 	const Flags = 0
 
 	re, err := icuregex.CompileString(Pattern, Flags)
-	if err != nil {
-		t.Fatalf("compilation failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	re.Dump(os.Stderr)
 

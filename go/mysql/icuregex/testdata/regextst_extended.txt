@@ -124,3 +124,5 @@
 # significant additional code to support.
 "\p{Changes_When_NFKC_Casefolded}" E "foo<0>\uFB03</0>bar"
 "\p{Segment_Starter}" E "<0>\uFB03</0>Goodbye"
+
+"\p{Emoji}" "foo<0>😀</0>bar"

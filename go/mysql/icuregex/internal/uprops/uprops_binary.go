@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/ubidi"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
+	"vitess.io/vitess/go/mysql/icuregex/internal/uemoji"
 )
 
 type binaryProperty struct {
@@ -108,14 +109,21 @@ var binProps = [uCharBinaryLimit]*binaryProperty{
 	{srcCaseAndNorm, 0, changesWhenCasefolded},
 	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_CASEMAPPED
 	{srcNfkcCf, 0, nil},                      // Changes_When_NFKC_Casefolded is currently unsupported
-	{2, uchar.Mask(p2Emoji), defaultContains},
-	{2, uchar.Mask(p2EmojiPresentation), defaultContains},
-	{2, uchar.Mask(p2EmojiModifier), defaultContains},
-	{2, uchar.Mask(p2EmojiModifierBase), defaultContains},
-	{2, uchar.Mask(p2EmojiComponent), defaultContains},
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_PRESENTATION
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_MODIFIER
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_MODIFIER_BASE
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_COMPONENT
 	{2, 0, isRegionalIndicator},
 	{1, uchar.Mask(pPrependedConcatenationMark), defaultContains},
-	{2, uchar.Mask(p2ExtendedPictographic), defaultContains},
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_EXTENDED_PICTOGRAPHIC
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_BASIC_EMOJI
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_EMOJI_KEYCAP_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_MODIFIER_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_FLAG_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_TAG_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_ZWJ_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI
 }
 
 func isBidiControl(_ *binaryProperty, c rune, _ Property) bool {
@@ -231,4 +239,11 @@ func HasBinaryProperty(c rune, which Property) bool {
 		return false
 	}
 	return prop.contains(prop, c, which)
+}
+
+func hasEmojiProperty(_ *binaryProperty, c rune, which Property) bool {
+	if which < UCharEmoji || UCharRgiEmoji < which {
+		return false
+	}
+	return uemoji.HasBinaryProperty(c, int(which-UCharEmoji))
 }

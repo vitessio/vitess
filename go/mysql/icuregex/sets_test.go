@@ -23,18 +23,20 @@ package icuregex
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStaticSetContents(t *testing.T) {
-	// These are the number of codepoints contained in each of the static sets as of ICU69-1,
+	// These are the number of codepoints contained in each of the static sets as of ICU73-2,
 	// as to sanity check that we're re-creating the sets properly.
 	// This table must be re-created when updating Unicode versions.
 	var ExpectedSetSizes = map[int]int{
-		1:  134564,
+		1:  139612,
 		4:  25,
-		5:  1102451,
-		6:  1979,
-		7:  131,
+		5:  1102442,
+		6:  2125,
+		7:  140,
 		8:  125,
 		9:  399,
 		10: 10773,
@@ -43,9 +45,7 @@ func TestStaticSetContents(t *testing.T) {
 	}
 
 	for setid, expected := range ExpectedSetSizes {
-		if got := staticPropertySets[setid].Len(); got != expected {
-			t.Fatalf("static set [%d] has wrong size: got %d, expected %d", setid, got, expected)
-		}
+		assert.Equalf(t, expected, staticPropertySets[setid].Len(), "static set [%d] has wrong size", setid)
 	}
 }
 

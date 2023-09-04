@@ -59,14 +59,6 @@ func NewPattern(flags RegexpFlag) *Pattern {
 	}
 }
 
-func MustCompileString(in string, flags RegexpFlag) *Pattern {
-	pat, err := CompileString(in, flags)
-	if err != nil {
-		panic(err)
-	}
-	return pat
-}
-
 func Compile(in []rune, flags RegexpFlag) (*Pattern, error) {
 	pat := NewPattern(flags)
 	cmp := newCompiler(pat)
@@ -77,12 +69,7 @@ func Compile(in []rune, flags RegexpFlag) (*Pattern, error) {
 }
 
 func CompileString(in string, flags RegexpFlag) (*Pattern, error) {
-	pat := NewPattern(flags)
-	cmp := newCompiler(pat)
-	if err := cmp.compile([]rune(in)); err != nil {
-		return nil, err
-	}
-	return pat, nil
+	return Compile([]rune(in), flags)
 }
 
 func (p *Pattern) Match(input string) *Matcher {
