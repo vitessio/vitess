@@ -123,23 +123,13 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 	ctx.SemTable = nil
 
 	// Go over the children and convert them to Primitives too.
-	var parents []*engine.FkParent
-	for _, verify := range fkv.Verify {
-		verifyLP, err := transformToLogicalPlan(ctx, verify.Op)
+	var parents []logicalPlan
+	for _, op := range fkv.Verify {
+		verifyLP, err := transformToLogicalPlan(ctx, op)
 		if err != nil {
 			return nil, err
 		}
-		err = verifyLP.Wireup(ctx)
-		if err != nil {
-			return nil, err
-		}
-		verifyEngine := verifyLP.Primitive()
-		parents = append(parents, &engine.FkParent{
-			BvName: verify.BvName,
-			Values: verify.Values,
-			Cols:   verify.Cols,
-			Exec:   verifyEngine,
-		})
+		parents = append(parents, verifyLP)
 	}
 
 	return newFkVerify(inputLP, parents), nil

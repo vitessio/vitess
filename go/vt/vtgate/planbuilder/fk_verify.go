@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -29,11 +28,11 @@ var _ logicalPlan = (*fkVerify)(nil)
 // fkVerify is the logicalPlan for engine.FkVerify.
 type fkVerify struct {
 	input  logicalPlan
-	verify []*engine.FkParent
+	verify []logicalPlan
 }
 
 // newFkVerify builds a new fkVerify.
-func newFkVerify(input logicalPlan, verify []*engine.FkParent) *fkVerify {
+func newFkVerify(input logicalPlan, verify []logicalPlan) *fkVerify {
 	return &fkVerify{
 		input:  input,
 		verify: verify,
@@ -42,23 +41,34 @@ func newFkVerify(input logicalPlan, verify []*engine.FkParent) *fkVerify {
 
 // Primitive implements the logicalPlan interface
 func (fkc *fkVerify) Primitive() engine.Primitive {
+	var verify []engine.Primitive
+	for _, v := range fkc.verify {
+		verify = append(verify, v.Primitive())
+	}
 	return &engine.FkVerify{
 		Exec:   fkc.input.Primitive(),
-		Verify: fkc.verify,
+		Verify: verify,
 	}
 }
 
 // Wireup implements the logicalPlan interface
 func (fkc *fkVerify) Wireup(ctx *plancontext.PlanningContext) error {
+	for _, v := range fkc.verify {
+		err := v.Wireup(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return fkc.input.Wireup(ctx)
 }
 
 // Rewrite implements the logicalPlan interface
 func (fkc *fkVerify) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 1 {
-		return vterrors.VT13001("fkVerify: wrong number of inputs")
-	}
 	fkc.input = inputs[0]
+	fkc.verify = nil
+	if len(inputs) > 1 {
+		fkc.verify = inputs[1:]
+	}
 	return nil
 }
 
@@ -69,7 +79,9 @@ func (fkc *fkVerify) ContainsTables() semantics.TableSet {
 
 // Inputs implements the logicalPlan interface
 func (fkc *fkVerify) Inputs() []logicalPlan {
-	return []logicalPlan{fkc.input}
+	inputs := []logicalPlan{fkc.input}
+	inputs = append(inputs, fkc.verify...)
+	return inputs
 }
 
 // OutputColumns implements the logicalPlan interface
