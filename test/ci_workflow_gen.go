@@ -72,15 +72,13 @@ var (
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
-		"shardedrecovery_stress_verticalsplit_heavy",
 		"vtgate_general_heavy",
-		"18",
-		"19",
+		"vtbackup_transform",
 		"xb_backup",
 		"21",
 		"22",
-		"worker_vault_heavy",
-		"24",
+		"mysql_server_vault",
+		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
@@ -117,8 +115,6 @@ var (
 		"vtgate_queries",
 		"vtgate_schema_tracker",
 		"xb_recovery",
-		"resharding",
-		"resharding_bytes",
 		"mysql57",
 		"mysql80",
 		"vreplication_across_db_versions",
@@ -140,7 +136,7 @@ var (
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
-		"24",
+		"mysql_server_vault",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
@@ -175,6 +171,18 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "mysql57":
 		return []mysqlVersion{mysql57}
+	case clusterName == "mysql80":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vtorc_8.0":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vreplication_across_db_versions":
+		return []mysqlVersion{mysql80}
+	case clusterName == "xb_backup":
+		return allMySQLVersions
+	case clusterName == "vtctlbackup_sharded_clustertest_heavy":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vtbackup_transform":
+		return []mysqlVersion{mysql80}
 	default:
 		return defaultMySQLVersions
 	}

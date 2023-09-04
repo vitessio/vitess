@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/workflow"
-	"vitess.io/vitess/go/vt/workflow/resharding"
-	"vitess.io/vitess/go/vt/workflow/reshardingworkflowgen"
 	"vitess.io/vitess/go/vt/workflow/topovalidator"
 )
 
@@ -53,12 +51,6 @@ func initWorkflowManager(ts *topo.Server) {
 		topovalidator.RegisterKeyspaceValidator()
 		topovalidator.RegisterShardValidator()
 		topovalidator.Register()
-
-		// Register the Horizontal Resharding workflow.
-		resharding.Register()
-
-		// Register workflow that generates Horizontal Resharding workflows.
-		reshardingworkflowgen.Register()
 
 		// Unregister the disabled workflows.
 		for _, name := range workflowManagerDisable {

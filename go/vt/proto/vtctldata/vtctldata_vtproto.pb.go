@@ -1816,18 +1816,6 @@ func (m *CreateKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 			dAtA[i] = 0x32
 		}
 	}
-	if m.ShardingColumnType != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.ShardingColumnType))
-		i--
-		dAtA[i] = 0x28
-	}
-	if len(m.ShardingColumnName) > 0 {
-		i -= len(m.ShardingColumnName)
-		copy(dAtA[i:], m.ShardingColumnName)
-		i = encodeVarint(dAtA, i, uint64(len(m.ShardingColumnName)))
-		i--
-		dAtA[i] = 0x22
-	}
 	if m.AllowEmptyVSchema {
 		i--
 		if m.AllowEmptyVSchema {
@@ -6751,18 +6739,6 @@ func (m *SetKeyspaceShardingInfoRequest) MarshalToSizedBufferVT(dAtA []byte) (in
 		i--
 		dAtA[i] = 0x20
 	}
-	if m.ColumnType != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.ColumnType))
-		i--
-		dAtA[i] = 0x18
-	}
-	if len(m.ColumnName) > 0 {
-		i -= len(m.ColumnName)
-		copy(dAtA[i:], m.ColumnName)
-		i = encodeVarint(dAtA, i, uint64(len(m.ColumnName)))
-		i--
-		dAtA[i] = 0x12
-	}
 	if len(m.Keyspace) > 0 {
 		i -= len(m.Keyspace)
 		copy(dAtA[i:], m.Keyspace)
@@ -9765,13 +9741,6 @@ func (m *CreateKeyspaceRequest) SizeVT() (n int) {
 	if m.AllowEmptyVSchema {
 		n += 2
 	}
-	l = len(m.ShardingColumnName)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	if m.ShardingColumnType != 0 {
-		n += 1 + sov(uint64(m.ShardingColumnType))
-	}
 	if len(m.ServedFroms) > 0 {
 		for _, e := range m.ServedFroms {
 			l = e.SizeVT()
@@ -11741,13 +11710,6 @@ func (m *SetKeyspaceShardingInfoRequest) SizeVT() (n int) {
 	l = len(m.Keyspace)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
-	}
-	l = len(m.ColumnName)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	if m.ColumnType != 0 {
-		n += 1 + sov(uint64(m.ColumnType))
 	}
 	if m.Force {
 		n += 2
@@ -17244,57 +17206,6 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.AllowEmptyVSchema = bool(v != 0)
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ShardingColumnName", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ShardingColumnName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 5:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ShardingColumnType", wireType)
-			}
-			m.ShardingColumnType = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ShardingColumnType |= topodata.KeyspaceIdType(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ServedFroms", wireType)
@@ -28262,57 +28173,6 @@ func (m *SetKeyspaceShardingInfoRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Keyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ColumnName", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ColumnName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ColumnType", wireType)
-			}
-			m.ColumnType = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ColumnType |= topodata.KeyspaceIdType(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)

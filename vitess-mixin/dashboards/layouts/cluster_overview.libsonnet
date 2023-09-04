@@ -29,7 +29,6 @@ local config = import '../../config.libsonnet';
         singlestats.vtgateUp { gridPos: { h: 2, w: 2, x: 20, y: 3 } },
         singlestats.vtctldUp { gridPos: { h: 2, w: 2, x: 20, y: 5 } },
         singlestats.vttabletUp { gridPos: { h: 2, w: 2, x: 22, y: 3 } },
-        singlestats.vtworkerUp { gridPos: { h: 2, w: 2, x: 22, y: 5 } },
 
         helpers.vtgate.getPanel(config.vtgate.panels.vtgateRequests) { gridPos: { h: 6, w: 8, x: 0, y: 7 } },
         helpers.vtgate.getPanel(config.vtgate.panels.vtgateErrorRate) { gridPos: { h: 6, w: 8, x: 8, y: 7 } },

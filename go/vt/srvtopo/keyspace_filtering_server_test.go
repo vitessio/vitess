@@ -35,9 +35,9 @@ var (
 	stockCtx       = context.Background()
 	stockFilters   = []string{"bar", "baz"}
 	stockKeyspaces = map[string]*topodatapb.SrvKeyspace{
-		"foo": {ShardingColumnName: "foo"},
-		"bar": {ShardingColumnName: "bar"},
-		"baz": {ShardingColumnName: "baz"},
+		"foo": {},
+		"bar": {},
+		"baz": {},
 	}
 	stockVSchema = &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -53,7 +53,7 @@ func newFiltering(filter []string) (*topo.Server, *srvtopotest.PassthroughSrvTop
 
 	testServer.TopoServer = memorytopo.NewServer(stockCell)
 	testServer.SrvKeyspaceNames = []string{"foo", "bar", "baz"}
-	testServer.SrvKeyspace = &topodatapb.SrvKeyspace{ShardingColumnName: "test-column"}
+	testServer.SrvKeyspace = &topodatapb.SrvKeyspace{}
 	testServer.WatchedSrvVSchema = stockVSchema
 
 	filtering, _ := NewKeyspaceFilteringServer(testServer, filter)
@@ -132,22 +132,7 @@ func doTestGetSrvKeyspace(
 	want *topodatapb.SrvKeyspace,
 	wantErr error,
 ) {
-	got, gotErr := f.GetSrvKeyspace(stockCtx, cell, ksName)
-
-	gotColumnName := ""
-	wantColumnName := ""
-	if got != nil {
-		gotColumnName = got.ShardingColumnName
-	}
-	if want != nil {
-		wantColumnName = want.ShardingColumnName
-	}
-
-	// a different pointer comes back so compare the expected return by proxy
-	// of a field we know the value of
-	if gotColumnName != wantColumnName {
-		t.Errorf("keyspace incorrect: got %v, want %v", got, want)
-	}
+	_, gotErr := f.GetSrvKeyspace(stockCtx, cell, ksName)
 
 	if wantErr != gotErr {
 		t.Errorf("returned error incorrect: got %v, want %v", gotErr, wantErr)
