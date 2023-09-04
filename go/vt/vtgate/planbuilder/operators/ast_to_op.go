@@ -81,11 +81,11 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
 		sqlparser.RemoveKeyspaceFromColName(expr)
-		isSubq, err := sqc.handleSubquery(ctx, expr, outerID)
+		subq, err := sqc.handleSubquery(ctx, expr, outerID)
 		if err != nil {
 			return nil, err
 		}
-		if isSubq {
+		if subq != nil {
 			continue
 		}
 		op, err = op.AddPredicate(ctx, expr)
@@ -101,19 +101,19 @@ func (sq *SubQueryContainer) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
-) (bool, error) {
+) (*SubQuery, error) {
 	subq := getSubQuery(expr)
 	if subq == nil {
-		return false, nil
+		return nil, nil
 	}
 
 	sqInner, err := createSubquery(ctx, expr, subq, outerID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	sq.Inner = append(sq.Inner, sqInner)
 
-	return true, nil
+	return sqInner, nil
 }
 
 func (sq *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
@@ -199,17 +199,17 @@ func createSubqueryFilter(
 		outerID: outerID,
 	}
 
-	sqL := &SubQueryContainer{}
+	sqc := &SubQueryContainer{}
 
 	// we can have connecting predicates both on the inside of the subquery, and in the comparison to the outer query
 	if innerSel.Where != nil {
 		for _, predicate := range sqlparser.SplitAndExpression(nil, innerSel.Where.Expr) {
 			sqlparser.RemoveKeyspaceFromColName(predicate)
-			isSubq, err := sqL.handleSubquery(ctx, predicate, totalID)
+			subq, err := sqc.handleSubquery(ctx, predicate, totalID)
 			if err != nil {
 				return nil, err
 			}
-			if isSubq {
+			if subq != nil {
 				continue
 			}
 			jpc.inspectPredicate(ctx, predicate)
@@ -227,7 +227,7 @@ func createSubqueryFilter(
 		return nil, err
 	}
 
-	opInner = sqL.getRootOperator(opInner)
+	opInner = sqc.getRootOperator(opInner)
 
 	return &SubQuery{
 		FilterType:     filterType,

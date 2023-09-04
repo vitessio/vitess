@@ -102,11 +102,11 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	outerID := TableID(r)
-	sqL := &SubQueryContainer{}
+	sqc := &SubQueryContainer{}
 	for _, predicate := range qt.Predicates {
-		if isSubq, err := sqL.handleSubquery(ctx, predicate, outerID); err != nil {
+		if subq, err := sqc.handleSubquery(ctx, predicate, outerID); err != nil {
 			return nil, err
-		} else if isSubq {
+		} else if subq != nil {
 			continue
 		}
 		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
@@ -120,7 +120,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
-	return sqL.getRootOperator(r), nil
+	return sqc.getRootOperator(r), nil
 }
 
 // getFKRequirementsForUpdate analyzes update expressions to determine which foreign key constraints needs management at the VTGate.

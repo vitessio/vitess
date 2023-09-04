@@ -98,11 +98,11 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, deleteStmt *sqlparse
 	}
 
 	outerID := TableID(route)
-	sqL := &SubQueryContainer{}
+	sqc := &SubQueryContainer{}
 	for _, predicate := range qt.Predicates {
-		if isSubQ, err := sqL.handleSubquery(ctx, predicate, outerID); err != nil {
+		if subq, err := sqc.handleSubquery(ctx, predicate, outerID); err != nil {
 			return nil, err
-		} else if isSubQ {
+		} else if subq != nil {
 			continue
 		}
 		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
@@ -116,7 +116,7 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, deleteStmt *sqlparse
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	return sqL.getRootOperator(route), nil
+	return sqc.getRootOperator(route), nil
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {

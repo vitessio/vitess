@@ -120,11 +120,11 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	sqlparser.RemoveKeyspaceFromColName(joinPredicate)
 	exprs := sqlparser.SplitAndExpression(nil, joinPredicate)
 	for _, pred := range exprs {
-		isSubq, err := sqc.handleSubquery(ctx, pred, outerID)
+		subq, err := sqc.handleSubquery(ctx, pred, outerID)
 		if err != nil {
 			return nil, err
 		}
-		if isSubq {
+		if subq != nil {
 			continue
 		}
 		op, err = op.AddPredicate(ctx, pred)
