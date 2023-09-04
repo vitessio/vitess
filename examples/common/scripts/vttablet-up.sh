@@ -69,3 +69,5 @@ done
 
 # check one last time
 curl -I "http://$hostname:$port/debug/status" || fail "tablet could not be started!"
+
+echo -e "vttablet for $alias is running!"

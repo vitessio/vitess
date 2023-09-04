@@ -43,8 +43,12 @@ type UncorrelatedSubquery struct {
 }
 
 // Inputs returns the input primitives for this join
-func (ps *UncorrelatedSubquery) Inputs() []Primitive {
-	return []Primitive{ps.Subquery, ps.Outer}
+func (ps *UncorrelatedSubquery) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{ps.Subquery, ps.Outer}, []map[string]any{{
+		inputName: "SubQuery",
+	}, {
+		inputName: "Outer",
+	}}
 }
 
 // RouteType returns a description of the query routing type used by the primitive

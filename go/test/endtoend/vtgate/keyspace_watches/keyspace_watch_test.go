@@ -23,10 +23,8 @@ package keyspacewatches
 import (
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"os"
 	"testing"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
@@ -115,7 +113,6 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,
 	}
-	rand.Seed(time.Now().UnixNano())
 	return clusterInstance, 0
 }
 

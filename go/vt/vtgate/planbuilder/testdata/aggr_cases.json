@@ -1690,6 +1690,7 @@
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -1703,6 +1704,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -2551,7 +2553,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+                    "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2562,6 +2565,7 @@
                 "Table": "`user`"
               },
               {
+                    "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3252,6 +3256,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "SimpleProjection",
             "Columns": [
               0
@@ -3284,6 +3289,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {

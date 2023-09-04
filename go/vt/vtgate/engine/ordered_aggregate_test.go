@@ -598,34 +598,6 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMerge(t *testing.T) {
-	oa := &OrderedAggregate{
-		Aggregates: []*AggregateParams{
-			NewAggregateParam(AggregateSum, 1, ""),
-			NewAggregateParam(AggregateSum, 2, ""),
-			NewAggregateParam(AggregateMin, 3, ""),
-			NewAggregateParam(AggregateMax, 4, ""),
-		}}
-	fields := sqltypes.MakeTestFields(
-		"a|b|c|d|e",
-		"int64|int64|decimal|in32|varbinary",
-	)
-	r := sqltypes.MakeTestResult(fields,
-		"1|2|3.2|3|ab",
-		"1|3|2.8|2|bc",
-	)
-
-	merged, _, err := merge(fields, r.Rows[0], r.Rows[1], nil, oa.Aggregates)
-	assert.NoError(t, err)
-	want := sqltypes.MakeTestResult(fields, "1|5|6.0|2|bc").Rows[0]
-	assert.Equal(t, want, merged)
-
-	// swap and retry
-	merged, _, err = merge(fields, r.Rows[1], r.Rows[0], nil, oa.Aggregates)
-	assert.NoError(t, err)
-	assert.Equal(t, want, merged)
-}
-
 func TestOrderedAggregateExecuteGtid(t *testing.T) {
 	vgtid := binlogdatapb.VGtid{}
 	vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{

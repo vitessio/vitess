@@ -3056,7 +3056,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			if mysqlctl.DisableActiveReparents {
 				return nil
 			}
-			if (req.RestoreToPos != "" || !logutil.ProtoToTime(req.RestoreToTimestamp).IsZero()) && !req.DryRun {
+			if (req.RestoreToPos != "" || !protoutil.TimeFromProto(req.RestoreToTimestamp).UTC().IsZero()) && !req.DryRun {
 				// point in time recovery. Do not restore replication
 				return nil
 			}

@@ -945,6 +945,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Concatenate",
             "Inputs": [
               {
@@ -974,6 +975,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "DBA",
             "Keyspace": {
@@ -1048,6 +1050,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Concatenate",
             "Inputs": [
               {
@@ -1076,6 +1079,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "DBA",
             "Keyspace": {

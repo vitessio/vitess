@@ -19,16 +19,13 @@ package onlineddl
 import (
 	"context"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -370,22 +367,6 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	}
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
-}
-
-func getHTTPBody(url string) string {
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Infof("http Get returns %+v", err)
-		return ""
-	}
-	if resp.StatusCode != 200 {
-		log.Infof("http Get returns status %d", resp.StatusCode)
-		return ""
-	}
-	respByte, _ := io.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	body := string(respByte)
-	return body
 }
 
 // ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does

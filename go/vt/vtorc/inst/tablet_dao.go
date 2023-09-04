@@ -22,9 +22,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
-	"vitess.io/vitess/go/vt/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -108,7 +108,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		tablet.Keyspace,
 		tablet.Shard,
 		int(tablet.Type),
-		logutil.ProtoToTime(tablet.PrimaryTermStartTime),
+		protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(),
 		tabletp,
 	)
 	return err

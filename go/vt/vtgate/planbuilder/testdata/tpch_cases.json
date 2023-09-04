@@ -161,7 +161,8 @@
             "TableName": "orders_lineitem",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+                    "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "main",
@@ -173,6 +174,7 @@
                 "Table": "orders"
               },
               {
+                    "InputName": "SubQuery",
                 "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -1134,6 +1136,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0) AS max(total_revenue)",
@@ -1152,6 +1155,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {

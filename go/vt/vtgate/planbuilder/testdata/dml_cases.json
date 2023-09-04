@@ -4160,6 +4160,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -4171,6 +4172,7 @@
             "Table": "unsharded"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Update",
             "Variant": "Scatter",
             "Keyspace": {
@@ -4203,6 +4205,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -4214,6 +4217,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Update",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -4246,6 +4250,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "R:0",
@@ -4283,6 +4288,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Update",
             "Variant": "Unsharded",
             "Keyspace": {

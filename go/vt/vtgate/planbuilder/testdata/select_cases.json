@@ -2146,7 +2146,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2157,6 +2158,7 @@
                 "Table": "`user`"
               },
               {
+            "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2201,7 +2203,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2213,6 +2216,7 @@
                 "Table": "`user`"
               },
               {
+            "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2282,7 +2286,8 @@
                 "Table": "`user`"
               },
               {
-                "OperatorType": "Route",
+                "InputName": "SubQuery",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2322,7 +2327,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2333,6 +2339,7 @@
                 "Table": "`user`"
               },
               {
+            "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3344,6 +3351,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
@@ -3364,6 +3372,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3400,6 +3409,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [
@@ -3417,6 +3427,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3504,6 +3515,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(music.id)",
@@ -3526,6 +3538,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3562,6 +3575,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -3577,6 +3591,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3613,6 +3628,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -3628,6 +3644,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3737,6 +3754,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3790,6 +3808,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {

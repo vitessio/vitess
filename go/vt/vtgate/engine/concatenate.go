@@ -340,8 +340,8 @@ func (c *Concatenate) NeedsTransaction() bool {
 }
 
 // Inputs returns the input primitives for this
-func (c *Concatenate) Inputs() []Primitive {
-	return c.Sources
+func (c *Concatenate) Inputs() ([]Primitive, []map[string]any) {
+	return c.Sources, nil
 }
 
 func (c *Concatenate) description() PrimitiveDescription {

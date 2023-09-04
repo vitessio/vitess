@@ -25,7 +25,6 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -348,8 +347,4 @@ func (f *Factory) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		f.recursiveDelete(parent)
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
