@@ -79,7 +79,7 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
     "orders": {},
     "loadtest": {},
     "customer": {},
-	  "customer_seq": {
+    "customer_seq": {
       "type": "sequence"
     },
     "customer2": {},
