@@ -22,7 +22,6 @@ import (
 	"hash/fnv"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -55,6 +54,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type materializer struct {
@@ -563,7 +563,16 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		return nil, nil, nil, err
 	}
 	if ignoreNullsStr, ok := vindex.Params["ignore_nulls"]; ok {
-		vindexIgnoreNulls, _ = strconv.ParseBool(ignoreNullsStr)
+		// This mirrors the behavior of vindexes.boolFromMap().
+		switch ignoreNullsStr {
+		case "true":
+			vindexIgnoreNulls = true
+		case "false":
+			vindexIgnoreNulls = false
+		default:
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls value must be 'true' or 'false': '%s'",
+				ignoreNullsStr)
+		}
 	}
 
 	// Validate input table
