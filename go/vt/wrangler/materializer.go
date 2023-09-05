@@ -54,6 +54,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type materializer struct {
@@ -504,12 +505,13 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	// Important variables are pulled out here.
 	var (
 		// lookup vindex info
-		vindexName      string
-		vindex          *vschemapb.Vindex
-		targetKeyspace  string
-		targetTableName string
-		vindexFromCols  []string
-		vindexToCol     string
+		vindexName        string
+		vindex            *vschemapb.Vindex
+		targetKeyspace    string
+		targetTableName   string
+		vindexFromCols    []string
+		vindexToCol       string
+		vindexIgnoreNulls bool
 
 		// source table info
 		sourceTableName string
@@ -559,6 +561,18 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	// See if we can create the vindex without errors.
 	if _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
 		return nil, nil, nil, err
+	}
+	if ignoreNullsStr, ok := vindex.Params["ignore_nulls"]; ok {
+		// This mirrors the behavior of vindexes.boolFromMap().
+		switch ignoreNullsStr {
+		case "true":
+			vindexIgnoreNulls = true
+		case "false":
+			vindexIgnoreNulls = false
+		default:
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls value must be 'true' or 'false': '%s'",
+				ignoreNullsStr)
+		}
 	}
 
 	// Validate input table
@@ -696,21 +710,31 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	buf = sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select ")
 	for i := range vindexFromCols {
-		buf.Myprintf("%v as %v, ", sqlparser.NewIdentifierCI(sourceVindexColumns[i]), sqlparser.NewIdentifierCI(vindexFromCols[i]))
+		buf.Myprintf("%s as %s, ", sqlparser.String(sqlparser.NewIdentifierCI(sourceVindexColumns[i])), sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
 	}
 	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewIdentifierCI(vindexToCol))
+		buf.Myprintf("keyspace_id() as %s ", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
 	} else {
-		buf.Myprintf("%v as %v ", sqlparser.NewIdentifierCI(vindexToCol), sqlparser.NewIdentifierCI(vindexToCol))
+		buf.Myprintf("%s as %s ", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)), sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
 	}
-	buf.Myprintf("from %v", sqlparser.NewIdentifierCS(sourceTableName))
+	buf.Myprintf("from %s", sqlparser.String(sqlparser.NewIdentifierCS(sourceTableName)))
+	if vindexIgnoreNulls {
+		buf.Myprintf(" where ")
+		lastValIdx := len(vindexFromCols) - 1
+		for i := range vindexFromCols {
+			buf.Myprintf("%s is not null", sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
+			if i != lastValIdx {
+				buf.Myprintf(" and ")
+			}
+		}
+	}
 	if vindex.Owner != "" {
 		// Only backfill
 		buf.Myprintf(" group by ")
 		for i := range vindexFromCols {
-			buf.Myprintf("%v, ", sqlparser.NewIdentifierCI(vindexFromCols[i]))
+			buf.Myprintf("%s, ", sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
 		}
-		buf.Myprintf("%v", sqlparser.NewIdentifierCI(vindexToCol))
+		buf.Myprintf("%s", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
 	}
 	materializeQuery = buf.String()
 
