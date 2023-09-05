@@ -499,7 +499,7 @@
         "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "VerifyParent-1",
+            "InputName": "Verify-1",
             "OperatorType": "Projection",
             "Expressions": [
               "INT64(1) as 1"
@@ -550,7 +550,7 @@
             ]
           },
           {
-            "InputName": "Child",
+            "InputName": "PostVerify",
             "OperatorType": "Update",
             "Variant": "Scatter",
             "Keyspace": {
@@ -823,7 +823,7 @@
         "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "VerifyParent-1",
+            "InputName": "Verify-1",
             "OperatorType": "Projection",
             "Expressions": [
               "INT64(1) as 1"
@@ -874,7 +874,7 @@
             ]
           },
           {
-            "InputName": "Child",
+            "InputName": "PostVerify",
             "OperatorType": "Update",
             "Variant": "Scatter",
             "Keyspace": {
@@ -923,7 +923,7 @@
             ],
             "Inputs": [
               {
-                "InputName": "VerifyParent-1",
+                "InputName": "Verify-1",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
@@ -935,7 +935,7 @@
                 "Table": "u_tbl8, u_tbl9"
               },
               {
-                "InputName": "Child",
+                "InputName": "PostVerify",
                 "OperatorType": "Update",
                 "Variant": "Unsharded",
                 "Keyspace": {
@@ -999,7 +999,7 @@
             ],
             "Inputs": [
               {
-                "InputName": "VerifyParent-1",
+                "InputName": "Verify-1",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
@@ -1011,7 +1011,7 @@
                 "Table": "u_tbl3, u_tbl4"
               },
               {
-                "InputName": "VerifyParent-2",
+                "InputName": "Verify-2",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
@@ -1023,7 +1023,7 @@
                 "Table": "u_tbl4, u_tbl9"
               },
               {
-                "InputName": "Child",
+                "InputName": "PostVerify",
                 "OperatorType": "Update",
                 "Variant": "Unsharded",
                 "Keyspace": {
