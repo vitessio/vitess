@@ -690,7 +690,7 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, want, results)
+	utils.MustMatch(t, want, results)
 }
 
 func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
@@ -752,7 +752,7 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, want, results)
+	utils.MustMatch(t, want, results)
 }
 
 func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
@@ -814,7 +814,7 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, want, results)
+	utils.MustMatch(t, want, results)
 }
 
 func TestMultiDistinct(t *testing.T) {
@@ -879,7 +879,7 @@ func TestMultiDistinct(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, want, results)
+	utils.MustMatch(t, want, results)
 }
 
 func TestOrderedAggregateCollate(t *testing.T) {
@@ -1086,7 +1086,7 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
-			assert.Equal(t, tcase.expResult, results)
+			utils.MustMatch(t, tcase.expResult, results)
 		})
 	}
 }
