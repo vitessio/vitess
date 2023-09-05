@@ -278,9 +278,10 @@ func commandOnlineDDLThrottle(cmd *cobra.Command, args []string) error {
 		throttledAppRule.Name = uuid
 	}
 
-	updateThrottlerConfigOptions.Keyspace = keyspace
-	updateThrottlerConfigOptions.ThrottledApp = &throttledAppRule
-
+	updateThrottlerConfigOptions := vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:     keyspace,
+		ThrottledApp: &throttledAppRule,
+	}
 	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
 	if err != nil {
 		return err
@@ -315,9 +316,10 @@ func commandOnlineDDLUnthrottle(cmd *cobra.Command, args []string) error {
 		unthrottledAppRule.Name = uuid
 	}
 
-	updateThrottlerConfigOptions.Keyspace = keyspace
-	updateThrottlerConfigOptions.ThrottledApp = &unthrottledAppRule
-
+	updateThrottlerConfigOptions := vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:     keyspace,
+		ThrottledApp: &unthrottledAppRule,
+	}
 	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
 	if err != nil {
 		return err
