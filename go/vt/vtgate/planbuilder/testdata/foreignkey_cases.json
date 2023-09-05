@@ -968,5 +968,94 @@
         "unsharded_fk_allow.u_tbl9"
       ]
     }
+  },
+  {
+    "comment": "Update that cascades and requires parent fk and restrict child fk verification",
+    "query": "update u_tbl7 set col7 = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl7 set col7 = 'foo'",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
+            "Query": "select col7 from u_tbl7 lock in share mode",
+            "Table": "u_tbl7"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "FKVerify",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Inputs": [
+              {
+                "InputName": "VerifyParent-1",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where 1 != 1",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1",
+                "Table": "u_tbl3, u_tbl4"
+              },
+              {
+                "InputName": "VerifyParent-2",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and u_tbl4.col4 = u_tbl9.col9 limit 1",
+                "Table": "u_tbl4, u_tbl9"
+              },
+              {
+                "InputName": "Child",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = 'foo' where (u_tbl4.col4) in ::fkc_vals",
+                "Table": "u_tbl4"
+              }
+            ]
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update u_tbl7 set col7 = 'foo'",
+            "Table": "u_tbl7"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl3",
+        "unsharded_fk_allow.u_tbl4",
+        "unsharded_fk_allow.u_tbl7",
+        "unsharded_fk_allow.u_tbl9"
+      ]
+    }
   }
 ]

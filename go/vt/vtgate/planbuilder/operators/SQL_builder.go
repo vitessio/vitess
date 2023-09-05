@@ -47,7 +47,9 @@ func ToSQL(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.Stateme
 	if err != nil {
 		return nil, nil, err
 	}
-	q.sortTables()
+	if ctx.SemTable != nil {
+		q.sortTables()
+	}
 	return q.stmt, q.dmlOperator, nil
 }
 

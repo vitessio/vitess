@@ -35,8 +35,7 @@ var _ ops.Operator = (*FkVerify)(nil)
 
 // Inputs implements the Operator interface
 func (fkv *FkVerify) Inputs() []ops.Operator {
-	var inputs []ops.Operator
-	inputs = append(inputs, fkv.Input)
+	inputs := []ops.Operator{fkv.Input}
 	inputs = append(inputs, fkv.Verify...)
 	return inputs
 }
