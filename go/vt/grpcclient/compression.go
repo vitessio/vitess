@@ -18,11 +18,10 @@ package grpcclient
 
 import (
 	"fmt"
+	"slices"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
-
-	"golang.org/x/exp/slices"
 )
 
 type compressionValue string
@@ -44,8 +43,10 @@ func (c *compressionValue) Type() string {
 	return "string"
 }
 
-var compression compressionValue
-var compressionTypes []string
+var (
+	compression      compressionValue
+	compressionTypes []string
+)
 
 func appendCompression(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 	if compression != "" {
@@ -59,9 +60,9 @@ func appendCompression(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 func init() {
 	compressors := []encoding.Compressor{SnappyCompressor{}, ZstdCompressor{}}
 
-	for _, compressor := range compressors {
-		compressionTypes = append(compressionTypes, compressor.Name())
-		encoding.RegisterCompressor(compressor)
+	for i := range compressors {
+		compressionTypes = append(compressionTypes, compressors[i].Name())
+		encoding.RegisterCompressor(compressors[i])
 	}
 
 	RegisterGRPCDialOptions(appendCompression)

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -29,27 +30,28 @@ import (
 )
 
 // TestGRPCVTGateConnAuth makes sure gRPC compression works
+// with the supported compression types.
 func TestGRPCCompression(t *testing.T) {
 	testGRPCCompression(t, "snappy")
 	testGRPCCompression(t, "zstd")
 }
 
 func testGRPCCompression(t *testing.T, compressionType string) {
-	// fake service
+	// Fake service.
 	service := CreateFakeServer(t)
 
-	// listen on a random port
+	// Listen on a random port.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
+	defer listener.Close()
 
-	// Create a gRPC server and listen on the port
+	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
+	defer server.Stop()
 	grpcvtgateservice.RegisterForTest(server, service)
 	go server.Serve(listener)
 
-	// Create a Go RPC client connecting to the server
+	// Create a Go RPC client connecting to the server.
 	ctx := context.Background()
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
@@ -59,20 +61,17 @@ func testGRPCCompression(t *testing.T, compressionType string) {
 		compressionType,
 	})
 	client, err := dial(ctx, listener.Addr().String())
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
-	}
+	require.NoError(t, err)
+	defer client.Close()
 	RegisterTestDialProtocol(client)
 
-	// run the test suite
+	// Run the test suite.
 	RunTests(t, client, service)
 	RunErrorTests(t, service)
-
-	// and clean up
-	client.Close()
 }
 
-// TestUnsupportedCompression ensures specifying an unsupported compression type errors
+// TestUnsupportedCompression ensures specifying an unsupported
+// compression type errors.
 func TestUnsupportedCompression(t *testing.T) {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
@@ -83,7 +82,5 @@ func TestUnsupportedCompression(t *testing.T) {
 		"--grpc_compression",
 		bogusCompressionType,
 	})
-	if err == nil {
-		t.Fatalf("expected error setting bogus compression type: %s", bogusCompressionType)
-	}
+	require.Error(t, err, "expected error setting bogus compression type: %s", bogusCompressionType)
 }
