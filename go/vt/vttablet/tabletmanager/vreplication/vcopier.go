@@ -481,12 +481,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 			}
-			fieldEvent.Fields = append(fieldEvent.Fields, rows.Fields...)
+			for _, f := range rows.Fields {
+				fieldEvent.Fields = append(fieldEvent.Fields, f.CloneVT())
+			}
 			tablePlan, err := plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
 			}
-			pkfields = append(pkfields, rows.Pkfields...)
+			for _, f := range rows.Pkfields {
+				pkfields = append(pkfields, f.CloneVT())
+			}
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",

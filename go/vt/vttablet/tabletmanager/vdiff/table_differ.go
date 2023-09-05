@@ -393,7 +393,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			result := sqltypes.Proto3ToResult(p3qr)
 
 			// Fields should be received only once, and sent only once.
-			if vsr.Fields == nil {
+			if len(vsr.Fields) == 0 {
 				result.Fields = nil
 			}
 			select {
