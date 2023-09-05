@@ -79,7 +79,7 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 	}
 	if appRule != nil {
 		args = append(args, "--throttle-app", appRule.Name)
-		args = append(args, "--throttle-app-duration", protoutil.TimeFromProto(appRule.ExpiresAt).UTC().Sub(time.Now()).String())
+		args = append(args, "--throttle-app-duration", time.Until(protoutil.TimeFromProto(appRule.ExpiresAt).UTC()).String())
 		args = append(args, "--throttle-app-ratio", fmt.Sprintf("%f", appRule.Ratio))
 		if appRule.Exempt {
 			args = append(args, "--throttle-app-exempt")
