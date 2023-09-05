@@ -183,10 +183,19 @@ func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updCl
 		return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
 	}
 
-	var restrictChildFks []vindexes.ChildFKInfo
-	var cascadeChildFks []vindexes.ChildFKInfo
+	restrictChildFks, cascadeChildFks := splitChildFks(childFks)
 
-	for _, fk := range childFks {
+	op, err := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks)
+}
+
+// splitChildFks splits the child foreign keys into restrict and cascade list as restrict is handled through Verify operator and cascade is handled through Cascade operator.
+func splitChildFks(fks []vindexes.ChildFKInfo) (restrictChildFks, cascadeChildFks []vindexes.ChildFKInfo) {
+	for _, fk := range fks {
 		// Any RESTRICT type foreign keys that arrive here for 2 reasons—
 		//	1. cross-shard/cross-keyspace RESTRICT cases.
 		//	2. shard-scoped/unsharded RESTRICT cases arising because we have to validate all the foreign keys on VTGate.
@@ -200,13 +209,7 @@ func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updCl
 			cascadeChildFks = append(cascadeChildFks, fk)
 		}
 	}
-
-	op, err := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
-	if err != nil {
-		return nil, err
-	}
-
-	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks)
+	return
 }
 
 func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
@@ -374,6 +377,7 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 	}
 
 	var Verify []ops.Operator
+	// This validates that new values exists on the parent table.
 	for _, fk := range parentFks {
 		op, err := createFkVerifyOpForParentFKForUpdate(ctx, updStmt, fk)
 		if err != nil {
@@ -381,6 +385,7 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 		}
 		Verify = append(Verify, op)
 	}
+	// This validates that the old values don't exist on the child table.
 	for _, fk := range restrictChildFks {
 		op, err := createFkVerifyOpForChildFKForUpdate(ctx, updStmt, fk)
 		if err != nil {
@@ -495,10 +500,10 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 	}
 	childTbl := cFk.Table.GetTableName()
 	var joinCond sqlparser.Expr
-	for idx, column := range cFk.ParentColumns {
+	for idx := range cFk.ParentColumns {
 		joinExpr := &sqlparser.ComparisonExpr{
 			Operator: sqlparser.EqualOp,
-			Left:     sqlparser.NewColNameWithQualifier(column.String(), parentTbl),
+			Left:     sqlparser.NewColNameWithQualifier(cFk.ParentColumns[idx].String(), parentTbl),
 			Right:    sqlparser.NewColNameWithQualifier(cFk.ChildColumns[idx].String(), childTbl),
 		}
 
