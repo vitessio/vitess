@@ -17,13 +17,19 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/acl"
+	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/viperutil"
+	viperdebug "vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -89,21 +95,30 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 	return result
 }
 
-// main is the application's entry point. It will spawn an HTTP interface.
-func main() {
-	servenv.RegisterDefaultFlags()
-	servenv.RegisterFlags()
+var (
+	configFile string
+	vtorc      = &cobra.Command{
+		Use:     "vtorc",
+		Short:   "", // TODO
+		Args:    cobra.NoArgs,
+		Version: servenv.AppVersion.String(),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			_flag.TrickGlog()
 
-	var configFile string
-	servenv.OnParseFor("vtorc", func(fs *pflag.FlagSet) {
-		logic.RegisterFlags(fs)
-		server.RegisterFlags(fs)
-		config.RegisterFlags(fs)
-		acl.RegisterFlags(fs)
+			watchCancel, err := viperutil.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("%s: failed to read in config: %s", cmd.Name(), err)
+			}
 
-		fs.StringVar(&configFile, "config", "", "config file name")
-	})
-	servenv.ParseFlags("vtorc")
+			servenv.OnTerm(watchCancel)
+			servenv.HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+			return nil
+		},
+		Run: run,
+	}
+)
+
+func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
 	config.UpdateConfigValuesFromFlags()
 	inst.RegisterStats()
@@ -133,4 +148,32 @@ func main() {
 	// Therefore, currently we don't check for the --port flag to be necessary, but release 16+ that check
 	// can be added to always have the serenv page running in VTOrc.
 	servenv.RunDefault()
+}
+
+// main is the application's entry point. It will spawn an HTTP interface.
+func main() {
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+
+	vtorc.Flags().AddFlagSet(servenv.GetFlagSetFor("vtorc"))
+
+	logic.RegisterFlags(vtorc.Flags())
+	server.RegisterFlags(vtorc.Flags())
+	config.RegisterFlags(vtorc.Flags())
+	acl.RegisterFlags(vtorc.Flags())
+
+	vtorc.Flags().StringVar(&configFile, "config", "", "config file name")
+
+	// glog flags, no better way to do this
+	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(vtorc.Flags())
+	vtorc.Flags().AddGoFlag(flag.Lookup("logtostderr"))
+	vtorc.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
+	vtorc.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
+	vtorc.Flags().AddGoFlag(flag.Lookup("log_dir"))
+
+	// TODO: viperutil.BindFlags()
+
+	if err := vtorc.Execute(); err != nil {
+		log.Exit(err)
+	}
 }
