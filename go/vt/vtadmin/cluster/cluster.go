@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -231,12 +230,13 @@ func (c *Cluster) Close() error {
 			rec.RecordError(closer.Close())
 		}(closer)
 	}
+	wg.Wait()
 
 	if rec.HasErrors() {
 		return fmt.Errorf("failed to cleanly close cluster (id=%s): %w", c.ID, rec.Error())
 	}
 
-	return nil
+	return c.schemaCache.Close()
 }
 
 // ToProto returns a value-copy protobuf equivalent of the cluster.
@@ -340,7 +340,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 			return nil, fmt.Errorf("failed parsing primary_term_start_time %s: %w", mtstStr, err)
 		}
 
-		topotablet.PrimaryTermStartTime = logutil.TimeToProto(timeTime)
+		topotablet.PrimaryTermStartTime = protoutil.TimeToProto(timeTime)
 	}
 
 	if c.TabletFQDNTmpl != nil {
@@ -507,6 +507,7 @@ func (c *Cluster) EmergencyFailoverShard(ctx context.Context, req *vtctldatapb.E
 	span.Annotate("new_primary", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("ignore_replicas", strings.Join(topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice(), ","))
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
+	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
 
 	if d, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout); ok && err == nil {
 		span.Annotate("wait_replicas_timeout", d.String())

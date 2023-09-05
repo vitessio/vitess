@@ -788,6 +788,8 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 }
 
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
@@ -817,7 +819,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	callerID := &querypb.VTGateCallerID{
 		Username: "u1",
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx = callerid.NewContext(ctx, nil, callerID)
 	qre := &QueryExecutor{
 		ctx:      ctx,
 		query:    "stream from msg",
@@ -1484,7 +1486,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	dbconfigs := newDBConfigs(db)
 	config.DB = dbconfigs
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if config.TwoPCEnable {
@@ -1806,6 +1808,6 @@ func (m mockTxThrottler) Open() (err error) {
 func (m mockTxThrottler) Close() {
 }
 
-func (m mockTxThrottler) Throttle(priority int) (result bool) {
+func (m mockTxThrottler) Throttle(priority int, workload string) (result bool) {
 	return m.throttle
 }

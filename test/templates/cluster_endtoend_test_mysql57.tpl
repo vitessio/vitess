@@ -19,7 +19,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-22.04
+    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
 
     steps:
     - name: Skip CI
@@ -38,6 +38,13 @@ jobs:
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+
+        PR_DATA=$(curl \
+          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
+        draft=$(echo "$PR_DATA" | jq .draft -r)
+        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -70,7 +77,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.4
+        go-version: 1.21.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -146,7 +153,7 @@ jobs:
     {{end}}
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -155,7 +162,7 @@ jobs:
         launchable verify || true
 
         # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
+        launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -166,7 +173,7 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         {{if .LimitResourceUsage}}
         # Increase our local ephemeral port range as we could exhaust this
@@ -192,11 +199,13 @@ jobs:
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Print test output and Record test result in launchable
+    - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
       run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        if [[ "{{"${{steps.skip-workflow.outputs.is_draft}}"}}" ==  "false" ]]; then
+          # send recorded tests to launchable
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        fi
 
         # print test output
         cat output.txt

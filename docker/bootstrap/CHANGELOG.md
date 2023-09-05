@@ -69,3 +69,15 @@ List of changes between bootstrap image versions.
 ## [18] - 2023-05-09
 ### Changes
 - Update build to golang 1.20.4
+
+## [19] - 2023-06-07
+### Changes
+- Update build to golang 1.20.5
+
+## [20] - 2023-08-03
+### Changes
+- Bump all images to bullseye base image
+
+## [21] - 2023-08-25
+### Changes
+- Update build to golang 1.21.0

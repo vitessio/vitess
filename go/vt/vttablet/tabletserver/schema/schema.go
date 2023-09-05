@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -30,6 +32,7 @@ const (
 	NoType = iota
 	Sequence
 	Message
+	View
 )
 
 // TypeNames allows to fetch a the type name for a table.
@@ -38,6 +41,7 @@ var TypeNames = []string{
 	"none",
 	"sequence",
 	"message",
+	"view",
 }
 
 // Table contains info about a table.
@@ -67,6 +71,23 @@ type SequenceInfo struct {
 	sync.Mutex
 	NextVal int64
 	LastVal int64
+}
+
+// Reset clears the cache for the sequence. This is called to ensure that we always start with a fresh cache,
+// when a new primary is elected, and, when a table is moved into a new keyspace.
+// When we first need a new value from a sequence, i.e. when the schema engine sees a uninitialized sequence, it will
+// get the next set of values from the backing sequence table and cache them.
+func (seq *SequenceInfo) Reset() {
+	seq.Lock()
+	defer seq.Unlock()
+	seq.NextVal = 0
+	seq.LastVal = 0
+}
+
+func (seq *SequenceInfo) String() {
+	seq.Lock()
+	defer seq.Unlock()
+	log.Infof("SequenceInfo: NextVal: %d, LastVal: %d", seq.NextVal, seq.LastVal)
 }
 
 // MessageInfo contains info specific to message tables.
@@ -107,9 +128,10 @@ type MessageInfo struct {
 }
 
 // NewTable creates a new Table.
-func NewTable(name string) *Table {
+func NewTable(name string, tableType int) *Table {
 	return &Table{
 		Name: sqlparser.NewIdentifierCS(name),
+		Type: tableType,
 	}
 }
 

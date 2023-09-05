@@ -36,8 +36,10 @@ import (
 
 func TestCellInfo(t *testing.T) {
 	cell := "cell1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// Check GetCellInfo returns what memorytopo created.
 	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
@@ -135,7 +137,8 @@ func TestCellInfo(t *testing.T) {
 }
 
 func TestExpandCells(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var cells []string
 	var err error
 	var allCells = "cell1,cell2,cell3"
@@ -162,10 +165,12 @@ func TestExpandCells(t *testing.T) {
 			topoCells := strings.Split(cellsIn, ",")
 			var ts *topo.Server
 			if tCase.name == "bad" {
-				ts = memorytopo.NewServer()
+				ts = memorytopo.NewServer(ctx)
 			} else {
-				ts = memorytopo.NewServer(topoCells...)
+				ts = memorytopo.NewServer(ctx, topoCells...)
 			}
+			defer ts.Close()
+
 			cells, err = ts.ExpandCells(ctx, cellsIn)
 			if tCase.errString != "" {
 				require.Error(t, err)
@@ -179,7 +184,7 @@ func TestExpandCells(t *testing.T) {
 
 	t.Run("aliases", func(t *testing.T) {
 		cells := []string{"cell1", "cell2", "cell3"}
-		ts := memorytopo.NewServer(cells...)
+		ts := memorytopo.NewServer(ctx, cells...)
 		err := ts.CreateCellsAlias(ctx, "alias", &topodatapb.CellsAlias{Cells: cells})
 		require.NoError(t, err)
 
@@ -228,8 +233,10 @@ func TestExpandCells(t *testing.T) {
 }
 
 func TestDeleteCellInfo(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1", "unreachable")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1", "unreachable")
+	defer ts.Close()
 
 	err := ts.UpdateCellInfoFields(ctx, "unreachable", func(ci *topodatapb.CellInfo) error {
 		ci.ServerAddress = memorytopo.UnreachableServerAddr
@@ -254,11 +261,11 @@ func TestDeleteCellInfo(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		func() {
-			ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
-			defer cancel()
+		t.Run(fmt.Sprintf("force:%t", tt.force), func(t *testing.T) {
+			requestCtx, requestCancel := context.WithTimeout(ctx, 10*time.Millisecond)
+			defer requestCancel()
 
-			err := ts.DeleteCellInfo(ctx, "unreachable", tt.force)
+			err := ts.DeleteCellInfo(requestCtx, "unreachable", tt.force)
 			if tt.shouldErr {
 				assert.Error(t, err, "force=%t", tt.force)
 			} else {
@@ -272,6 +279,6 @@ func TestDeleteCellInfo(t *testing.T) {
 			} else {
 				assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %q to not exist", "unreachable")
 			}
-		}()
+		})
 	}
 }

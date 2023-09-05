@@ -77,8 +77,8 @@ func (r *ReplaceVariables) GetFields(ctx context.Context, vcursor VCursor, bindV
 }
 
 // Inputs implements the Primitive interface
-func (r *ReplaceVariables) Inputs() []Primitive {
-	return []Primitive{r.Input}
+func (r *ReplaceVariables) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{r.Input}, nil
 }
 
 // description implements the Primitive interface

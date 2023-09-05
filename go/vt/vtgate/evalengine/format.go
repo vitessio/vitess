@@ -117,9 +117,14 @@ func (t TupleExpr) format(w *formatter, depth int) {
 
 func (c *CollateExpr) format(w *formatter, depth int) {
 	c.Inner.format(w, depth)
-	coll := c.TypedCollation.Collation.Get()
 	w.WriteString(" COLLATE ")
-	w.WriteString(coll.Name())
+	w.WriteString(collations.Local().LookupName(c.TypedCollation.Collation))
+}
+
+func (i *IntroducerExpr) format(w *formatter, depth int) {
+	w.WriteString("_")
+	w.WriteString(collations.Local().LookupName(i.TypedCollation.Collation))
+	i.Inner.format(w, depth)
 }
 
 func (n *NotExpr) format(w *formatter, depth int) {
@@ -163,7 +168,7 @@ func (c *CallExpr) format(w *formatter, depth int) {
 
 func (c *builtinWeightString) format(w *formatter, depth int) {
 	w.WriteString("WEIGHT_STRING(")
-	c.String.format(w, depth)
+	c.Expr.format(w, depth)
 
 	if c.Cast != "" {
 		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)
@@ -199,7 +204,7 @@ func (c *ConvertExpr) format(buf *formatter, depth int) {
 	}
 	if c.Collation != collations.Unknown {
 		buf.WriteString(" CHARACTER SET ")
-		buf.WriteString(c.Collation.Get().Name())
+		buf.WriteString(collations.Local().LookupName(c.Collation))
 	}
 	buf.WriteByte(')')
 }
@@ -208,6 +213,6 @@ func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
 	buf.WriteString("CONVERT(")
 	c.Inner.format(buf, depth)
 	buf.WriteString(" USING ")
-	buf.WriteString(c.Collation.Get().Name())
+	buf.WriteString(collations.Local().LookupName(c.Collation))
 	buf.WriteByte(')')
 }

@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -173,7 +174,9 @@ func init() {
 func TestMain(m *testing.M) {
 	exitCode := func() int {
 		var err error
-		tstenv, err = testenv.Init()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		tstenv, err = testenv.Init(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -235,7 +238,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -475,6 +478,10 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 		return "", fmt.Errorf("no primary position for %d", tablet.Alias.Uid)
 	}
 	return pos, nil
+}
+
+func (tmc *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
 }
 
 // ----------------------------------------------

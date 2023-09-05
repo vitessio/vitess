@@ -18,19 +18,14 @@ package schema
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -50,8 +45,10 @@ var (
 
 func TestMain(m *testing.M) {
 	exitCode := func() int {
-		ts := memorytopo.NewServer(cell)
-		ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{})
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ts := memorytopo.NewServer(ctx, cell)
+		ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
 		_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 			ki, err := ts.GetKeyspace(ctx, keyspace)
 			if err != nil {
@@ -68,163 +65,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestTracking(t *testing.T) {
-	target := &querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      "-80",
-		TabletType: topodatapb.TabletType_PRIMARY,
-		Cell:       cell,
-	}
-	tablet := &topodatapb.Tablet{
-		Keyspace: target.Keyspace,
-		Shard:    target.Shard,
-		Type:     target.TabletType,
-	}
-	fields := sqltypes.MakeTestFields(
-		"table_name|col_name|col_type|collation_name",
-		"varchar|varchar|varchar|varchar",
-	)
-
-	type delta struct {
-		result *sqltypes.Result
-		updTbl []string
-	}
-	var (
-		d0 = delta{
-			result: sqltypes.MakeTestResult(
-				fields,
-				"prior|id|int|",
-			),
-			updTbl: []string{"prior"},
-		}
-
-		d1 = delta{
-			result: sqltypes.MakeTestResult(
-				fields,
-				"t1|id|int|",
-				"t1|name|varchar|utf8_bin",
-				"t2|id|varchar|utf8_bin",
-			),
-			updTbl: []string{"t1", "t2"},
-		}
-
-		d2 = delta{
-			result: sqltypes.MakeTestResult(
-				fields,
-				"t2|id|varchar|utf8_bin",
-				"t2|name|varchar|utf8_bin",
-				"t3|id|datetime|",
-			),
-			updTbl: []string{"prior", "t1", "t2", "t3"},
-		}
-
-		d3 = delta{
-			result: sqltypes.MakeTestResult(
-				fields,
-				"t4|name|varchar|utf8_bin",
-			),
-			updTbl: []string{"t4"},
-		}
-	)
-
-	testcases := []struct {
-		tName  string
-		deltas []delta
-		exp    map[string][]vindexes.Column
-	}{{
-		tName:  "new tables",
-		deltas: []delta{d0, d1},
-		exp: map[string][]vindexes.Column{
-			"t1": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
-			"t2": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
-			"prior": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32}},
-		},
-	}, {
-		tName:  "delete t1 and prior, updated t2 and new t3",
-		deltas: []delta{d0, d1, d2},
-		exp: map[string][]vindexes.Column{
-			"t2": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
-			"t3": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
-		},
-	}, {
-		tName:  "new t4",
-		deltas: []delta{d0, d1, d2, d3},
-		exp: map[string][]vindexes.Column{
-			"t2": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
-			"t3": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
-			"t4": {
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
-		},
-	},
-	}
-	for i, tcase := range testcases {
-		t.Run(fmt.Sprintf("%d - %s", i, tcase.tName), func(t *testing.T) {
-			sbc := sandboxconn.NewSandboxConn(tablet)
-			ch := make(chan *discovery.TabletHealth)
-			tracker := NewTracker(ch, "", false)
-			tracker.consumeDelay = 1 * time.Millisecond
-			tracker.Start()
-			defer tracker.Stop()
-
-			results := []*sqltypes.Result{{}}
-			for _, d := range tcase.deltas {
-				for _, deltaRow := range d.result.Rows {
-					same := false
-					for _, row := range results[0].Rows {
-						if row[0].String() == deltaRow[0].String() && row[1].String() == deltaRow[1].String() {
-							same = true
-							break
-						}
-					}
-					if same == false {
-						results[0].Rows = append(results[0].Rows, deltaRow)
-					}
-				}
-			}
-
-			sbc.SetResults(results)
-			sbc.Queries = nil
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			tracker.RegisterSignalReceiver(func() {
-				wg.Done()
-			})
-
-			for _, d := range tcase.deltas {
-				ch <- &discovery.TabletHealth{
-					Conn:    sbc,
-					Tablet:  tablet,
-					Target:  target,
-					Serving: true,
-					Stats:   &querypb.RealtimeStats{TableSchemaChanged: d.updTbl},
-				}
-			}
-
-			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-
-			require.Equal(t, 1, len(sbc.StringQueries()))
-
-			_, keyspacePresent := tracker.tracked[target.Keyspace]
-			require.Equal(t, true, keyspacePresent)
-
-			for k, v := range tcase.exp {
-				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
-			}
-		})
-	}
-}
-
+// TestTrackingUnHealthyTablet tests that the tracker is sending GetSchema calls only when the tablet is healthy.
 func TestTrackingUnHealthyTablet(t *testing.T) {
 	target := &querypb.Target{
 		Keyspace:   keyspace,
@@ -240,7 +81,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, "", false)
+	tracker := NewTracker(ch, false)
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -277,7 +118,6 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 		},
 	}
 
-	sbc.SetResults([]*sqltypes.Result{{}, {}, {}})
 	for _, tcase := range tcases {
 		ch <- &discovery.TabletHealth{
 			Conn:    sbc,
@@ -290,25 +130,10 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	}
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
-	require.Equal(t, []string{sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query,
-		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecardb.DefaultName).Query,
-		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query}, sbc.StringQueries())
+	require.EqualValues(t, 3, sbc.GetSchemaCount.Load())
 }
 
-func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	select {
-	case <-c:
-		return false // completed normally
-	case <-time.After(timeout):
-		return true // timed out
-	}
-}
-
+// TestTrackerGetKeyspaceUpdateController tests table update controller initialization.
 func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	ks3 := &updateController{}
 	tracker := Tracker{
@@ -341,15 +166,66 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
 
+// TestTableTracking tests that the tracker is able to track table schema changes.
+func TestTableTracking(t *testing.T) {
+	schemaDefResult := []map[string]string{{
+		"prior": "create table prior(id int primary key)",
+	}, {
+		// initial load of view - kept empty
+	}, {
+		"t1": "create table t1(id bigint primary key, name varchar(50))",
+		"t2": "create table t2(id varchar(50) primary key)",
+	}, {
+		"t2": "create table t2(id varchar(50) primary key, name varchar(50))",
+		"t3": "create table t3(id datetime primary key)",
+	}, {
+		"t4": "create table t4(name varchar(50) primary key)",
+	}}
+
+	testcases := []testCases{{
+		testName: "initial table load",
+		expTbl: map[string][]vindexes.Column{
+			"prior": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32}},
+		},
+	}, {
+		testName: "new tables",
+		updTbl:   []string{"t1", "t2"},
+		expTbl: map[string][]vindexes.Column{
+			"prior": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32}},
+			"t1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR}},
+			"t2":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR}},
+		},
+	}, {
+		testName: "delete prior, updated t2 and new t3",
+		updTbl:   []string{"prior", "t2", "t3"},
+		expTbl: map[string][]vindexes.Column{
+			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR}},
+			"t2": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR}},
+			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
+		},
+	}, {
+		testName: "new t4",
+		updTbl:   []string{"t4"},
+		expTbl: map[string][]vindexes.Column{
+			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR}},
+			"t2": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR}},
+			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
+			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR}},
+		},
+	}}
+
+	testTracker(t, schemaDefResult, testcases)
+}
+
 // TestViewsTracking tests that the tracker is able to track views.
 func TestViewsTracking(t *testing.T) {
-	target := &querypb.Target{Cell: cell, Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
-	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
-
 	schemaDefResult := []map[string]string{{
+		// initial load of table - kept empty
+	}, {
 		"prior": "create view prior as select 1 from tbl",
-		"t1":    "create view t1 as select 1 from tbl1",
-		"t2":    "create view t2 as select 1 from tbl2",
+	}, {
+		"t1": "create view t1 as select 1 from tbl1",
+		"t2": "create view t2 as select 1 from tbl2",
 	}, {
 		"t2": "create view t2 as select 1,2 from tbl2",
 		"t3": "create view t3 as select 1 from tbl3",
@@ -357,37 +233,109 @@ func TestViewsTracking(t *testing.T) {
 		"t4": "create view t4 as select 1 from tbl4",
 	}}
 
-	testcases := []struct {
-		testName string
-		updView  []string
-		exp      map[string]string
-	}{{
-		testName: "new views",
-		updView:  []string{"prior", "t1", "t2"},
-		exp: map[string]string{
+	testcases := []testCases{{
+		testName: "initial view load",
+		expView: map[string]string{
+			"prior": "select 1 from tbl"},
+	}, {
+		testName: "new view t1, t2",
+		updView:  []string{"t1", "t2"},
+		expView: map[string]string{
 			"t1":    "select 1 from tbl1",
 			"t2":    "select 1 from tbl2",
 			"prior": "select 1 from tbl"},
 	}, {
 		testName: "delete prior, updated t2 and new t3",
 		updView:  []string{"prior", "t2", "t3"},
-		exp: map[string]string{
+		expView: map[string]string{
 			"t1": "select 1 from tbl1",
 			"t2": "select 1, 2 from tbl2",
 			"t3": "select 1 from tbl3"},
 	}, {
 		testName: "new t4",
 		updView:  []string{"t4"},
-		exp: map[string]string{
+		expView: map[string]string{
 			"t1": "select 1 from tbl1",
 			"t2": "select 1, 2 from tbl2",
 			"t3": "select 1 from tbl3",
 			"t4": "select 1 from tbl4"},
 	}}
 
+	testTracker(t, schemaDefResult, testcases)
+}
+
+// TestTableInfoRetrieval tests that the tracker is able to retrieve required information from ddl statement.
+func TestTableInfoRetrieval(t *testing.T) {
+	schemaDefResult := []map[string]string{{
+		"my_tbl": "CREATE TABLE `my_tbl` (" +
+			"`id` bigint NOT NULL AUTO_INCREMENT," +
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
+			"`email` varbinary(100) DEFAULT NULL," +
+			"PRIMARY KEY (`id`)," +
+			"KEY `id` (`id`,`name`)) " +
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+	}, {
+		// initial load of view - kept empty
+	}, {
+		"my_child_tbl": "CREATE TABLE `my_child_tbl` (" +
+			"`id` bigint NOT NULL AUTO_INCREMENT," +
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
+			"`code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL," +
+			"`my_id` bigint DEFAULT NULL," +
+			"PRIMARY KEY (`id`)," +
+			"KEY `my_id` (`my_id`,`name`)," +
+			"CONSTRAINT `my_child_tbl_ibfk_1` FOREIGN KEY (`my_id`, `name`) REFERENCES `my_tbl` (`id`, `name`) ON DELETE CASCADE) " +
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+	}}
+
+	testcases := []testCases{{
+		testName: "initial table load",
+		expTbl: map[string][]vindexes.Column{
+			"my_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+			},
+		},
+	}, {
+		testName: "new tables",
+		updTbl:   []string{"my_child_tbl"},
+		expTbl: map[string][]vindexes.Column{
+			"my_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+			},
+			"my_child_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
+				{Name: sqlparser.NewIdentifierCI("code"), Type: querypb.Type_VARCHAR, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("my_id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+			},
+		},
+		expFk: map[string]string{
+			"my_tbl":       "",
+			"my_child_tbl": "foreign key (my_id, `name`) references my_tbl (id, `name`) on delete cascade",
+		},
+	}}
+
+	testTracker(t, schemaDefResult, testcases)
+}
+
+type testCases struct {
+	testName string
+
+	updTbl []string
+	expTbl map[string][]vindexes.Column
+	expFk  map[string]string
+
+	updView []string
+	expView map[string]string
+}
+
+func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []testCases) {
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, "", true)
-	tracker.tables = nil // making tables map nil - so load keyspace does not try to load the tables information.
+	tracker := NewTracker(ch, true)
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -397,10 +345,13 @@ func TestViewsTracking(t *testing.T) {
 		wg.Done()
 	})
 
+	target := &querypb.Target{Cell: cell, Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	sbc.SetSchemaResult(schemaDefResult)
 
-	for count, tcase := range testcases {
+	for count, tcase := range tcases {
 		t.Run(tcase.testName, func(t *testing.T) {
 			wg.Add(1)
 			ch <- &discovery.TabletHealth{
@@ -408,18 +359,42 @@ func TestViewsTracking(t *testing.T) {
 				Tablet:  tablet,
 				Target:  target,
 				Serving: true,
-				Stats:   &querypb.RealtimeStats{ViewSchemaChanged: tcase.updView},
+				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updTbl, ViewSchemaChanged: tcase.updView},
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-			require.EqualValues(t, count+1, sbc.GetSchemaCount.Load())
+			require.EqualValues(t, count+2, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
 
-			for k, v := range tcase.exp {
-				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for table: ", k)
+			for k, v := range tcase.expTbl {
+				utils.MustMatch(t, v, tracker.GetColumns(keyspace, k), "mismatch columns for table: ", k)
+				if len(tcase.expFk[k]) > 0 {
+					fks := tracker.GetForeignKeys(keyspace, k)
+					for _, fk := range fks {
+						utils.MustMatch(t, tcase.expFk[k], sqlparser.String(fk), "mismatch foreign keys for table: ", k)
+					}
+				}
+			}
+
+			for k, v := range tcase.expView {
+				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
 			}
 		})
+	}
+}
+
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return false // completed normally
+	case <-time.After(timeout):
+		return true // timed out
 	}
 }

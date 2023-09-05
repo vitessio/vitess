@@ -20,23 +20,14 @@ import (
 	"context"
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 var _ Primitive = (*ScalarAggregate)(nil)
 
 // ScalarAggregate is a primitive used to do aggregations without grouping keys
 type ScalarAggregate struct {
-	// PreProcess is true if one of the aggregates needs preprocessing.
-	PreProcess bool `json:",omitempty"`
-
-	AggrOnEngine bool
-
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
@@ -45,10 +36,6 @@ type ScalarAggregate struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
-
-	// Collations stores the collation ID per column offset.
-	// It is used for grouping keys and distinct aggregate functions
-	Collations map[int]collations.ID
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
@@ -76,7 +63,13 @@ func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindV
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)}
+
+	_, fields, err := newAggregation(qr.Fields, sa.Aggregates)
+	if err != nil {
+		return nil, err
+	}
+
+	qr = &sqltypes.Result{Fields: fields}
 	return qr.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -91,38 +84,22 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
-	out := &sqltypes.Result{
-		Fields: convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine),
+
+	agg, fields, err := newAggregation(result.Fields, sa.Aggregates)
+	if err != nil {
+		return nil, err
 	}
 
-	var resultRow []sqltypes.Value
-	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
-		if resultRow == nil {
-			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
-			continue
-		}
-		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Collations, sa.Aggregates)
-		if err != nil {
+		if err := agg.add(row); err != nil {
 			return nil, err
 		}
 	}
 
-	if resultRow == nil {
-		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
-		// different aggregation functions
-		resultRow, err = sa.createEmptyRow()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		resultRow, err = convertFinal(resultRow, sa.Aggregates)
-		if err != nil {
-			return nil, err
-		}
+	out := &sqltypes.Result{
+		Fields: fields,
+		Rows:   [][]sqltypes.Value{agg.finish()},
 	}
-
-	out.Rows = [][]sqltypes.Value{resultRow}
 	return out.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -131,11 +108,11 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(sa.TruncateColumnCount))
 	}
-	var current []sqltypes.Value
-	var curDistincts []sqltypes.Value
-	var fields []*querypb.Field
-	fieldsSent := false
+
 	var mu sync.Mutex
+	var agg aggregationState
+	var fields []*querypb.Field
+	var fieldsSent bool
 
 	err := vcursor.StreamExecutePrimitive(ctx, sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
 		// as the underlying primitive call is not sync
@@ -143,23 +120,23 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		// for correct aggregation.
 		mu.Lock()
 		defer mu.Unlock()
-		if len(result.Fields) != 0 && !fieldsSent {
-			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
+
+		if agg == nil {
+			var err error
+			agg, fields, err = newAggregation(result.Fields, sa.Aggregates)
+			if err != nil {
+				return err
+			}
+		}
+		if !fieldsSent {
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
 			fieldsSent = true
 		}
 
-		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
-			if current == nil {
-				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
-				continue
-			}
-			var err error
-			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Collations, sa.Aggregates)
-			if err != nil {
+			if err := agg.add(row); err != nil {
 				return err
 			}
 		}
@@ -169,61 +146,12 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		return err
 	}
 
-	if current == nil {
-		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
-		// different aggregation functions
-		current, err = sa.createEmptyRow()
-		if err != nil {
-			return err
-		}
-	} else {
-		current, err = convertFinal(current, sa.Aggregates)
-		if err != nil {
-			return err
-		}
-	}
-
-	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}})
-}
-
-// creates the empty row for the case when we are missing grouping keys and have empty input table
-func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
-	out := make([]sqltypes.Value, len(sa.Aggregates))
-	for i, aggr := range sa.Aggregates {
-		op := aggr.Opcode
-		if aggr.OrigOpcode != AggregateUnassigned {
-			op = aggr.OrigOpcode
-		}
-		value, err := createEmptyValueFor(op)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = value
-	}
-	return out, nil
-}
-
-func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
-	switch opcode {
-	case
-		AggregateCountDistinct,
-		AggregateCount,
-		AggregateCountStar:
-		return countZero, nil
-	case
-		AggregateSumDistinct,
-		AggregateSum,
-		AggregateMin,
-		AggregateMax:
-		return sqltypes.NULL, nil
-
-	}
-	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
+	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}})
 }
 
 // Inputs implements the Primitive interface
-func (sa *ScalarAggregate) Inputs() []Primitive {
-	return []Primitive{sa.Input}
+func (sa *ScalarAggregate) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{sa.Input}, nil
 }
 
 // description implements the Primitive interface

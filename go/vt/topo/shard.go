@@ -29,9 +29,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -189,12 +189,12 @@ func (si *ShardInfo) HasPrimary() bool {
 
 // GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
 func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
-	return logutil.ProtoToTime(si.Shard.PrimaryTermStartTime)
+	return protoutil.TimeFromProto(si.Shard.PrimaryTermStartTime).UTC()
 }
 
 // SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
-	si.Shard.PrimaryTermStartTime = logutil.TimeToProto(t)
+	si.Shard.PrimaryTermStartTime = protoutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -365,7 +365,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	// fully initialize and perform certain operations (e.g.
 	// OnlineDDL or VReplication workflows) if they are using a
 	// different sidecar database name.
-	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
+	ksi := topodatapb.Keyspace{SidecarDbName: sidecar.GetName()}
 	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}

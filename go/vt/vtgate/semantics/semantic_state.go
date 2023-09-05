@@ -17,15 +17,16 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -112,6 +113,8 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
+		columns map[*sqlparser.Union]sqlparser.SelectExprs
+
 		comparator *sqlparser.Comparator
 	}
 
@@ -136,6 +139,35 @@ var (
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Recursive[to] = st.RecursiveDeps(from)
 	st.Direct[to] = st.DirectDeps(from)
+}
+
+func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectExprs {
+	switch sel := sel.(type) {
+	case *sqlparser.Select:
+		return sel.SelectExprs
+	case *sqlparser.Union:
+		exprs, found := st.columns[sel]
+		if found {
+			return exprs
+		}
+		panic("BUG: union not found in semantic table for select expressions")
+	}
+	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
+}
+
+func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sqlparser.SelectExprs) {
+	expanded = true
+	for _, col := range exprs {
+		switch col := col.(type) {
+		case *sqlparser.AliasedExpr:
+			expr := sqlparser.NewColName(col.ColumnName())
+			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		default:
+			selectExprs = append(selectExprs, col)
+			expanded = false
+		}
+	}
+	return
 }
 
 // CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
@@ -167,6 +199,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+		columns:          map[*sqlparser.Union]sqlparser.SelectExprs{},
 	}
 }
 
@@ -182,6 +215,9 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 
 // ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
 func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) {
+	if st == nil {
+		return
+	}
 	if id.NumberOfTables() != 1 {
 		// This is probably a derived table
 		return
@@ -261,25 +297,30 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID,
 	if typ, found := st.ExprTypes[e]; found {
 		return typ.Type, typ.Collation, true
 	}
-	return -1, collations.Unknown, false
-}
 
-// CollationForExpr returns the collation name of expressions in the query
-func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
-	typ, found := st.ExprTypes[e]
-	if found {
-		return typ.Collation
+	// We add a lot of WeightString() expressions to queries at late stages of the planning,
+	// which means that they don't have any type information. We can safely assume that they
+	// are VarBinary, since that's the only type that WeightString() can return.
+	_, isWS := e.(*sqlparser.WeightStringFuncExpr)
+	if isWS {
+		return sqltypes.VarBinary, collations.CollationBinaryID, true
 	}
-	return collations.Unknown
+
+	return sqltypes.Unknown, collations.Unknown, false
 }
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
 func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
-	typ, found := st.ExprTypes[e]
-	if !found {
-		return true
+	switch e := e.(type) {
+	case *sqlparser.WeightStringFuncExpr, *sqlparser.Literal:
+		return false
+	default:
+		typ, found := st.ExprTypes[e]
+		if !found {
+			return true
+		}
+		return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
 	}
-	return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
 }
 
 func (st *SemTable) DefaultCollation() collations.ID {
@@ -364,6 +405,9 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 
 // GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
+	if st == nil {
+		return nil
+	}
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {
 		if extractedSubquery.Merged {
@@ -408,6 +452,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		if vindexTable.Type != "" {
 			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
 			if vindexTable.Type == vindexes.TypeReference {
+				tables = append(tables, vindexTable)
 				continue
 			}
 			return nil, nil
@@ -444,6 +489,24 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	return st.ASTEquals().Expr(a, b)
+}
+
+// EqualsExprWithDeps compares two expressions taking into account their semantic
+// information. Dependency data typically pertains only to column expressions,
+// this method considers them for all expression types. The method checks
+// if dependency information exists for both expressions. If it does, the dependencies
+// must match. If we are missing dependency information for either
+func (st *SemTable) EqualsExprWithDeps(a, b sqlparser.Expr) bool {
+	eq := st.ASTEquals().Expr(a, b)
+	if !eq {
+		return false
+	}
+	adeps := st.RecursiveDeps(a)
+	bdeps := st.RecursiveDeps(b)
+	if adeps.IsEmpty() || bdeps.IsEmpty() || adeps == bdeps {
+		return true
+	}
+	return false
 }
 
 func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool {

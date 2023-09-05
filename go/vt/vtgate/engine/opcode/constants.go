@@ -65,8 +65,10 @@ const (
 	AggregateCountDistinct
 	AggregateSumDistinct
 	AggregateGtid
-	AggregateRandom
+	AggregateAnyValue
 	AggregateCountStar
+	AggregateGroupConcat
+	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
 var (
@@ -94,20 +96,77 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum_distinct":   AggregateSumDistinct,
 	"vgtid":          AggregateGtid,
 	"count_star":     AggregateCountStar,
-	"random":         AggregateRandom,
+	"any_value":      AggregateAnyValue,
+	"group_concat":   AggregateGroupConcat,
+}
+
+var AggregateName = map[AggregateOpcode]string{
+	AggregateCount:         "count",
+	AggregateSum:           "sum",
+	AggregateMin:           "min",
+	AggregateMax:           "max",
+	AggregateCountDistinct: "count_distinct",
+	AggregateSumDistinct:   "sum_distinct",
+	AggregateGtid:          "vgtid",
+	AggregateCountStar:     "count_star",
+	AggregateGroupConcat:   "group_concat",
+	AggregateAnyValue:      "any_value",
 }
 
 func (code AggregateOpcode) String() string {
-	for k, v := range SupportedAggregates {
-		if v == code {
-			return k
-		}
+	name := AggregateName[code]
+	if name == "" {
+		name = "ERROR"
 	}
-	return "ERROR"
+	return name
 }
 
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+}
+
+// Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
+func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
+	switch code {
+	case AggregateUnassigned:
+		return sqltypes.Null
+	case AggregateGroupConcat:
+		if sqltypes.IsBinary(typ) {
+			return sqltypes.Blob
+		}
+		return sqltypes.Text
+	case AggregateMax, AggregateMin, AggregateAnyValue:
+		return typ
+	case AggregateSumDistinct, AggregateSum:
+		if sqltypes.IsIntegral(typ) || sqltypes.IsDecimal(typ) {
+			return sqltypes.Decimal
+		}
+		return sqltypes.Float64
+	case AggregateCount, AggregateCountStar, AggregateCountDistinct:
+		return sqltypes.Int64
+	case AggregateGtid:
+		return sqltypes.VarChar
+	default:
+		panic(code.String()) // we have a unit test checking we never reach here
+	}
+}
+
+func (code AggregateOpcode) NeedsComparableValues() bool {
+	switch code {
+	case AggregateCountDistinct, AggregateSumDistinct, AggregateMin, AggregateMax:
+		return true
+	default:
+		return false
+	}
+}
+
+func (code AggregateOpcode) IsDistinct() bool {
+	switch code {
+	case AggregateCountDistinct, AggregateSumDistinct:
+		return true
+	default:
+		return false
+	}
 }

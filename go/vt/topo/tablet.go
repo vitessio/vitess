@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -35,7 +36,6 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"
@@ -215,7 +215,7 @@ func (ti *TabletInfo) IsReplicaType() bool {
 
 // GetPrimaryTermStartTime returns the tablet's primary term start time as a Time value.
 func (ti *TabletInfo) GetPrimaryTermStartTime() time.Time {
-	return logutil.ProtoToTime(ti.Tablet.PrimaryTermStartTime)
+	return protoutil.TimeFromProto(ti.Tablet.PrimaryTermStartTime).UTC()
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the
@@ -586,7 +586,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		// we update primary_term_start_time even if the primary hasn't changed
 		// because that means a new primary term with the same primary
-		tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
 	}
 
 	err = ts.CreateTablet(ctx, tablet)

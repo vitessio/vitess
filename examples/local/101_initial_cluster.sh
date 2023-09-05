@@ -31,8 +31,6 @@ SIDECAR_DB_NAME=${SIDECAR_DB_NAME:-"_vt"}
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ../common/scripts/zk-up.sh
-elif [ "${TOPO}" = "k8s" ]; then
-	CELL=zone1 ../common/scripts/k3s-up.sh
 elif [ "${TOPO}" = "consul" ]; then
 	CELL=zone1 ../common/scripts/consul-up.sh
 else
@@ -42,15 +40,31 @@ fi
 # start vtctld
 CELL=zone1 ../common/scripts/vtctld-up.sh
 
-# Create the keyspace with the sidecar database name and set the
-# correct durability policy. Please see the comment above for
-# more context on using a custom sidecar database name in your
-# Vitess clusters.
-vtctldclient --server localhost:15999 CreateKeyspace --sidecar-db-name="${SIDECAR_DB_NAME}" --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
+if vtctldclient GetKeyspace commerce > /dev/null 2>&1 ; then
+	# Keyspace already exists: we could be running this 101 example on an non-empty VTDATAROOT
+	vtctldclient SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce || fail "Failed to set keyspace durability policy on the commerce keyspace"
+else
+	# Create the keyspace with the sidecar database name and set the
+	# correct durability policy. Please see the comment above for
+	# more context on using a custom sidecar database name in your
+	# Vitess clusters.
+	vtctldclient CreateKeyspace --sidecar-db-name="${SIDECAR_DB_NAME}" --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
+fi
+
+# start mysqlctls for keyspace commerce
+# because MySQL takes time to start, we do this in parallel
+for i in 100 101 102; do
+	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh &
+done
+
+# without a sleep, we can have below echo happen before the echo of mysqlctl-up.sh
+sleep 2
+echo "Waiting for mysqlctls to start..."
+wait
+echo "mysqlctls are running!"
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
-	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 

@@ -110,8 +110,8 @@ func (r *RenameFields) GetFields(ctx context.Context, vcursor VCursor, bindVars 
 }
 
 // Inputs implements the primitive interface
-func (r *RenameFields) Inputs() []Primitive {
-	return []Primitive{r.Input}
+func (r *RenameFields) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{r.Input}, nil
 }
 
 // description implements the primitive interface

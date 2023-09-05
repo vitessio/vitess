@@ -45,8 +45,11 @@ type DML struct {
 	// KsidLength is number of columns that represents KsidVindex
 	KsidLength int
 
-	// Table specifies the table for the update.
-	Table []*vindexes.Table
+	// TableNames are the name of the tables involved in the query.
+	TableNames []string
+
+	// Vindexes are the column vindexes modified by this DML.
+	Vindexes []*vindexes.ColumnVindex
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
 	OwnedVindexQuery string
@@ -103,29 +106,16 @@ func (dml *DML) GetKeyspaceName() string {
 
 // GetTableName specifies the table that this primitive routes to.
 func (dml *DML) GetTableName() string {
-	if dml.Table != nil {
-		tableNameMap := map[string]any{}
-		for _, table := range dml.Table {
-			tableNameMap[table.Name.String()] = nil
-		}
-
-		var tableNames []string
-		for name := range tableNameMap {
+	sort.Strings(dml.TableNames)
+	var tableNames []string
+	var previousTbl string
+	for _, name := range dml.TableNames {
+		if name != previousTbl {
 			tableNames = append(tableNames, name)
+			previousTbl = name
 		}
-		sort.Strings(tableNames)
-
-		return strings.Join(tableNames, ", ")
 	}
-	return ""
-}
-
-// GetSingleTable returns single table used in dml.
-func (dml *DML) GetSingleTable() (*vindexes.Table, error) {
-	if len(dml.Table) > 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported dml on complex table expression")
-	}
-	return dml.Table[0], nil
+	return strings.Join(tableNames, ", ")
 }
 
 func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {

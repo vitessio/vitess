@@ -29,9 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -87,7 +85,7 @@ func (mysqld *Mysqld) StartReplication(hookExtraEnv map[string]string) error {
 }
 
 // StartReplicationUntilAfter starts replication until replication has come to `targetPos`, then it stops replication
-func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos replication.Position) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -100,7 +98,7 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 }
 
 // StartSQLThreadUntilAfter starts replication's SQL thread(s) until replication has come to `targetPos`, then it stops it
-func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos replication.Position) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -183,7 +181,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	if len(qr.Rows) != 1 {
 		return 0, errors.New("no port variable in mysql")
 	}
-	utemp, err := evalengine.ToUint64(qr.Rows[0][1])
+	utemp, err := qr.Rows[0][1].ToCastUint64()
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +197,7 @@ func (mysqld *Mysqld) GetServerID(ctx context.Context) (uint32, error) {
 	if len(qr.Rows) != 1 {
 		return 0, errors.New("no server_id in mysql")
 	}
-	utemp, err := evalengine.ToUint64(qr.Rows[0][0])
+	utemp, err := qr.Rows[0][0].ToCastUint64()
 	if err != nil {
 		return 0, err
 	}
@@ -258,8 +256,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	case true:
 		newState = "ReadOnly"
 	}
-	log.Infof("SetReadOnly setting connection setting of %s:%d to : %s",
-		mysqld.dbcfgs.Host, mysqld.dbcfgs.Port, newState)
+	log.Infof("SetReadOnly setting to : %s", newState)
 
 	query := "SET GLOBAL read_only = "
 	if on {
@@ -319,7 +316,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 }
 
 // WaitSourcePos lets replicas wait to given replication position
-func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Position) error {
+func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.Position) error {
 	// Get a connection.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -331,7 +328,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 	// unless that flavor is also filePos.
 	waitCommandName := "WaitUntilPositionCommand"
 	var query string
-	if targetPos.MatchesFlavor(mysql.FilePosFlavorID) {
+	if targetPos.MatchesFlavor(replication.FilePosFlavorID) {
 		// If we are the primary, WaitUntilFilePositionCommand will fail.
 		// But position is most likely reached. So, check the position
 		// first.
@@ -387,10 +384,10 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 }
 
 // ReplicationStatus returns the server replication status
-func (mysqld *Mysqld) ReplicationStatus() (mysql.ReplicationStatus, error) {
+func (mysqld *Mysqld) ReplicationStatus() (replication.ReplicationStatus, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return mysql.ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	defer conn.Recycle()
 
@@ -398,10 +395,10 @@ func (mysqld *Mysqld) ReplicationStatus() (mysql.ReplicationStatus, error) {
 }
 
 // PrimaryStatus returns the primary replication statuses
-func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error) {
+func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return mysql.PrimaryStatus{}, err
+		return replication.PrimaryStatus{}, err
 	}
 	defer conn.Recycle()
 
@@ -409,10 +406,10 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, e
 }
 
 // GetGTIDPurged returns the gtid purged statuses
-func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (mysql.Position, error) {
+func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	defer conn.Recycle()
 
@@ -420,10 +417,10 @@ func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (mysql.Position, error)
 }
 
 // PrimaryPosition returns the primary replication position.
-func (mysqld *Mysqld) PrimaryPosition() (mysql.Position, error) {
+func (mysqld *Mysqld) PrimaryPosition() (replication.Position, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	defer conn.Recycle()
 
@@ -432,7 +429,7 @@ func (mysqld *Mysqld) PrimaryPosition() (mysql.Position, error) {
 
 // SetReplicationPosition sets the replication position at which the replica will resume
 // when its replication is started.
-func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos mysql.Position) error {
+func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replication.Position) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -457,18 +454,10 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	}
 	defer conn.Recycle()
 
-	cmds := []string{}
+	var cmds []string
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
-	// Reset replication parameters commands makes the instance forget the source host port
-	// This is required because sometimes MySQL gets stuck due to improper initialization of
-	// master info structure or related failures and throws errors like
-	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
-	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails.
-	// Therefore, we have elected to always reset the replication parameters whenever we try to set the source host port
-	// Since there is no real overhead, but it makes this function robust enough to also handle failures like these.
-	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
 	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
@@ -554,54 +543,6 @@ func FindReplicas(mysqld MysqlDaemon) ([]string, error) {
 	}
 
 	return addrs, nil
-}
-
-// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.EnableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("EnableBinlogPlayback: successfully ran %v", cmd)
-	return nil
-}
-
-// DisableBinlogPlayback returns the server to the normal state after streaming.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.DisableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("DisableBinlogPlayback: successfully ran '%v'", cmd)
-	return nil
 }
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
@@ -712,8 +653,8 @@ func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	if err != nil {
 		return false, false
 	}
-	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
-	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
+	primary = vars["rpl_semi_sync_master_enabled"] == "ON"
+	replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
 	return primary, replica
 }
 

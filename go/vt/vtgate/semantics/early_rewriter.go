@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -310,7 +311,7 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 			return false
 		}
 
-		boolValue, err := res.Value().ToBool()
+		boolValue, err := res.Value(collations.Default()).ToBool()
 		if err != nil {
 			return false
 		}
@@ -584,28 +585,4 @@ func (e *expanderState) storeExpandInfo(tbl TableInfo, tblName sqlparser.TableNa
 		Qualifier: ks,
 	}
 	e.expandedColumns[tblName] = append(e.expandedColumns[tblName], colName)
-}
-
-// createAliasedExpr creates an AliasedExpr with a ColName and an optional alias based on the given ColumnInfo.
-// We need table qualifiers if there are more than one table in the FROM clause.
-// If we are adding qualifiers, we also add an alias so the qualifiers do not show
-// up in the result. For example, SELECT * FROM t1, t2 -> SELECT t1.col AS col, t2.col AS col ...
-func (e *expanderState) createAliasedExpr(
-	col ColumnInfo,
-	tbl TableInfo,
-	tblName sqlparser.TableName,
-) *sqlparser.AliasedExpr {
-	tableAliased := !tbl.GetExpr().As.IsEmpty()
-	withQualifier := e.needsQualifier || tableAliased
-	var colName *sqlparser.ColName
-	var alias sqlparser.IdentifierCI
-	if withQualifier {
-		colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
-	} else {
-		colName = sqlparser.NewColName(col.Name)
-	}
-	if e.needsQualifier {
-		alias = sqlparser.NewIdentifierCI(col.Name)
-	}
-	return &sqlparser.AliasedExpr{Expr: colName, As: alias}
 }

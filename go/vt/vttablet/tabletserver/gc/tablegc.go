@@ -20,13 +20,14 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
@@ -39,12 +40,12 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
-	evacHours        = 72
-	throttlerAppName = "tablegc"
+	evacHours = 72
 )
 
 var (
@@ -80,10 +81,6 @@ type transitionRequest struct {
 	isBaseTable   bool
 	toGCState     schema.TableGCState
 	uuid          string
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 // TableGC is the main entity in the table garbage collection mechanism.
@@ -122,8 +119,7 @@ type Status struct {
 	Keyspace string
 	Shard    string
 
-	isPrimary bool
-	IsOpen    bool
+	IsOpen bool
 
 	purgingTables []string
 }
@@ -131,7 +127,7 @@ type Status struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, throttle.ThrottleCheckPrimaryWrite),
 		isOpen:          0,
 
 		env: env,
@@ -474,8 +470,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 		if err == nil {
 			return true, nil
 		}
-		if merr, ok := err.(*mysql.SQLError); ok {
-			if merr.Num == mysql.ERSpecifiedAccessDenied {
+		if merr, ok := err.(*sqlerror.SQLError); ok {
+			if merr.Num == sqlerror.ERSpecifiedAccessDenied {
 				// We do not have privileges to disable binary logging. That's fine, we're on best effort,
 				// so we're going to silently ignore this error.
 				return false, nil

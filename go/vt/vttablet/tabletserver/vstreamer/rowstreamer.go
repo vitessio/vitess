@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -142,16 +143,21 @@ func (rs *rowStreamer) buildPlan() error {
 		// where it in fact does exist.
 		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
 		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
-		rs.se.ReloadAt(context.Background(), mysql.Position{})
+		rs.se.ReloadAt(context.Background(), replication.Position{})
 		st, err = rs.se.GetTableForPos(fromTable, "")
 	}
 	if err != nil {
 		return err
 	}
 	ti := &Table{
-		Name:   st.Name,
-		Fields: st.Fields,
+		Name: st.Name,
 	}
+
+	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
+	if err != nil {
+		return err
+	}
+
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
@@ -297,21 +303,18 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		return err
 	}
 
-	// first call the callback with the fields
-	flds, err := conn.Fields()
-	if err != nil {
-		return err
-	}
 	pkfields := make([]*querypb.Field, len(rs.pkColumns))
 	for i, pk := range rs.pkColumns {
 		pkfields[i] = &querypb.Field{
-			Name: flds[pk].Name,
-			Type: flds[pk].Type,
+			Name:    rs.plan.Table.Fields[pk].Name,
+			Type:    rs.plan.Table.Fields[pk].Type,
+			Charset: rs.plan.Table.Fields[pk].Charset,
+			Flags:   rs.plan.Table.Fields[pk].Flags,
 		}
 	}
 
-	charsets := make([]collations.ID, len(flds))
-	for i, fld := range flds {
+	charsets := make([]collations.ID, len(rs.plan.Table.Fields))
+	for i, fld := range rs.plan.Table.Fields {
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
@@ -328,7 +331,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
 	go func() {
-		for range heartbeatTicker.C {
+		select {
+		case <-rs.ctx.Done():
+			return
+		case <-heartbeatTicker.C:
 			safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
 		}
 	}()
@@ -348,7 +354,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 
 		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName) {
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
 			})

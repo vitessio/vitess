@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 
@@ -27,11 +28,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -105,18 +105,17 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_tablet table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
+		db.ClearVTOrcDatabase()
 	}()
 
 	// Create a memory topo-server and create the keyspace and shard records
-	ts = memorytopo.NewServer(cell1)
-	_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Add tablets to the topo-server
@@ -147,22 +146,28 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	})
 
 	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
+		startPort := tab100.MysqlPort
+		startHostname := tab100.MysqlHostname
 		defer func() {
+			tab100.MysqlPort = startPort
+			tab100.MysqlHostname = startHostname
 			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
-				tablet.MysqlHostname = hostname
-				tablet.MysqlPort = 100
+				tablet.MysqlHostname = startHostname
+				tablet.MysqlPort = startPort
 				return nil
 			})
 		}()
-		// Let's assume tab100 shutdown. This would clear its tablet hostname and port
+		// Let's assume tab100 shutdown. This would clear its tablet hostname and port.
+		tab100.MysqlPort = 0
+		tab100.MysqlHostname = ""
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.MysqlHostname = ""
 			tablet.MysqlPort = 0
 			return nil
 		})
 		require.NoError(t, err)
-		// We expect no tablets to be refreshed. Also, tab100 shouldn't be forgotten
-		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets, nil)
+		// tab100 shouldn't be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
 	})
 
 	t.Run("change a tablet and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
@@ -233,22 +238,18 @@ func TestShardPrimary(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_tablet table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
-	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
-	}()
-
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			_, err = orcDb.Exec("delete from vitess_tablet")
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
 
 			// Create a memory topo-server and create the keyspace and shard records
-			ts = memorytopo.NewServer(cell1)
-			_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts = memorytopo.NewServer(ctx, cell1)
+			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 			require.NoError(t, err)
 
 			// Add tablets to the topo-server
@@ -279,7 +280,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	var instancesRefreshed atomic.Int32
 	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
-	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
+	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(string) {
 		instancesRefreshed.Add(1)
 	}, forceRefresh, tabletsToIgnore)
 	// Verify that all the tablets are present in the database
@@ -295,16 +296,13 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 // is the same as the one provided or reading it gives the same error as expected
 func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString string) {
 	t.Helper()
-	tabletKey := inst.InstanceKey{
-		Hostname: hostname,
-		Port:     int(tabletWanted.MysqlPort),
-	}
-	tablet, err := inst.ReadTablet(tabletKey)
+	tabletAlias := topoproto.TabletAliasString(tabletWanted.Alias)
+	tablet, err := inst.ReadTablet(tabletAlias)
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
 		assert.NoError(t, err)
-		assert.EqualValues(t, tabletKey.Port, tablet.MysqlPort)
+		assert.EqualValues(t, tabletAlias, topoproto.TabletAliasString(tablet.Alias))
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
 		assert.Empty(t, diff)
 	}
@@ -320,4 +318,27 @@ func verifyTabletCount(t *testing.T, countWanted int) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, countWanted, totalTablets)
+}
+
+func TestGetLockAction(t *testing.T) {
+	tests := []struct {
+		analysedInstance string
+		code             inst.AnalysisCode
+		want             string
+	}{
+		{
+			analysedInstance: "zone1-100",
+			code:             inst.DeadPrimary,
+			want:             "VTOrc Recovery for DeadPrimary on zone1-100",
+		}, {
+			analysedInstance: "zone1-200",
+			code:             inst.ReplicationStopped,
+			want:             "VTOrc Recovery for ReplicationStopped on zone1-200",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%v-%v", tt.analysedInstance, tt.code), func(t *testing.T) {
+			require.Equal(t, tt.want, getLockAction(tt.analysedInstance, tt.code))
+		})
+	}
 }

@@ -57,7 +57,9 @@ create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not nu
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
 create table json_tbl (id int, j1 json, j2 json, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
-create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), blb2 longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
+create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
+create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
+create table loadtest (id int, name varchar(256), primary key(id), key(name));
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -72,28 +74,59 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
 	initialProductVSchema = `
 {
   "tables": {
-	"product": {},
-	"merchant": {},
-	"orders": {},
-	"customer": {},
-	"customer_seq": {
-		"type": "sequence"
-	},
-	"customer2": {},
-	"customer_seq2": {
-		"type": "sequence"
-	},
-	"order_seq": {
-		"type": "sequence"
-	},
-	"Lead": {},
-	"Lead-1": {},
-	"db_order_test": {},
-	"vdiff_order": {},
-	"datze": {}
+    "product": {},
+    "merchant": {},
+    "orders": {},
+    "loadtest": {},
+    "customer": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "customer2": {},
+    "customer_seq2": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    },
+    "Lead": {},
+    "Lead-1": {},
+    "db_order_test": {},
+    "vdiff_order": {},
+    "datze": {},
+    "reftable": {
+      "type": "reference"
+    }
   }
 }
 `
+
+	createLookupVindexVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "customer_name_keyspace_id": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "product.customer_name_keyspace_id",
+        "from": "name,cid",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "customer"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [{
+        "columns": ["name", "cid"],
+        "name": "customer_name_keyspace_id"
+      }]
+    }
+  }
+}
+`
+
 	customerSchema  = ""
 	customerVSchema = `
 {
@@ -113,6 +146,14 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
     }
   },
   "tables": {
+    "loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
     "customer": {
       "column_vindexes": [
         {
@@ -185,7 +226,7 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
         }
       ]
     },
-    "blob_tbl": {
+    "blüb_tbl": {
       "column_vindexes": [
         {
           "column": "id",
@@ -200,6 +241,9 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
           "name": "reverse_bits"
         }
       ]
+    },
+    "reftable": {
+      "type": "reference"
     }
   }
 }
@@ -276,7 +320,15 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
     }
   },
   "tables": {
-	"customer": {
+	"loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "customer": {
 	      "column_vindexes": [
 	        {
 	          "column": "cid",
@@ -332,7 +384,7 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
         }
       ]
     },
-    "blob_tbl": {
+    "blüb_tbl": {
       "column_vindexes": [
         {
           "column": "id",
@@ -345,7 +397,10 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
 	},
 	"vproduct": {
 		"type": "reference"
-	}
+	},
+  "reftable": {
+    "type": "reference"
+  }
   }
 }
 `

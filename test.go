@@ -77,7 +77,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "18", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "21", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -95,8 +95,9 @@ var (
 	skipBuild        = flag.Bool("skip-build", false, "skip running 'make build'. Assumes pre-existing binaries exist")
 	partialKeyspace  = flag.Bool("partial-keyspace", false, "add a second keyspace for sharded tests and mark first shard as moved to this keyspace in the shard routing rules")
 	// `go run test.go --dry-run --skip-build` to quickly test this file and see what tests will run
-	dryRun      = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
-	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
+	dryRun       = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
+	remoteStats  = flag.String("remote-stats", "", "url to send remote stats")
+	buildVTAdmin = flag.Bool("build-vtadmin", false, "Enable or disable VTAdmin build during 'make build'")
 )
 
 var (
@@ -188,11 +189,6 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			testCmd = append(testCmd, "--partial-keyspace")
 		}
 		testCmd = append(testCmd, extraArgs...)
-		if *docker {
-			// Teardown is unnecessary since Docker kills everything.
-			// Go cluster doesn't recognize 'skip-teardown' flag so commenting it out for now.
-			// testCmd = append(testCmd, "--skip-teardown")
-		}
 	}
 
 	var cmd *exec.Cmd
@@ -205,6 +201,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		} else {
 			// If there is no cache, we have to call 'make build' before each test.
 			args = []string{t.flavor, t.bootstrapVersion, "make build && " + testArgs}
+			if !*buildVTAdmin {
+				args[len(args)-1] = "NOVTADMINBUILD=1 " + args[len(args)-1]
+			}
 		}
 
 		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), args...)
@@ -430,8 +429,13 @@ func main() {
 	} else {
 		// Since we're sharing the working dir, do the build once for all tests.
 		log.Printf("Running make build...")
-		if out, err := exec.Command("make", "build").CombinedOutput(); err != nil {
-			log.Fatalf("make build failed: %v\n%s", err, out)
+		command := exec.Command("make", "build")
+		if !*buildVTAdmin {
+			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
+		}
+		if out, err := command.CombinedOutput(); err != nil {
+			log.Fatalf("make build failed; exit code: %d, error: %v\n%s",
+				command.ProcessState.ExitCode(), err, out)
 		}
 	}
 

@@ -39,6 +39,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -47,14 +52,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 var (
@@ -100,8 +99,8 @@ var (
 
 	// vtgate schema tracking flags
 	enableSchemaChangeSignal = true
-	schemaChangeUser         string
-	queryTimeout             int
+
+	queryTimeout int
 
 	// vtgate views flags
 	enableViews bool
@@ -112,6 +111,9 @@ var (
 	queryLogBufferSize = 10
 
 	messageStreamGracePeriod = 30 * time.Second
+
+	// allowKillStmt to allow execution of kill statement.
+	allowKillStmt bool
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -141,12 +143,15 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableOnlineDDL, "enable_online_ddl", enableOnlineDDL, "Allow users to submit, review and control Online DDL")
 	fs.BoolVar(&enableDirectDDL, "enable_direct_ddl", enableDirectDDL, "Allow users to submit direct DDL statements")
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
-	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
 	fs.StringVar(&queryLogToFile, "log_queries_to_file", queryLogToFile, "Enable query logging to the specified file")
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
+	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
+
+	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
+	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
@@ -173,8 +178,6 @@ func getTxMode() vtgatepb.TransactionMode {
 }
 
 var (
-	rpcVTGate *VTGate
-
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
@@ -186,6 +189,23 @@ var (
 
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")
+
+	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameterss unrecognized by Vindexes")
+
+	timings = stats.NewMultiTimings(
+		"VtgateApi",
+		"VtgateApi timings",
+		[]string{"Operation", "Keyspace", "DbType"})
+
+	rowsReturned = stats.NewCountersWithMultiLabels(
+		"VtgateApiRowsReturned",
+		"Rows returned through the VTgate API",
+		[]string{"Operation", "Keyspace", "DbType"})
+
+	rowsAffected = stats.NewCountersWithMultiLabels(
+		"VtgateApiRowsAffected",
+		"Rows affected by a write (DML) operation through the VTgate API",
+		[]string{"Operation", "Keyspace", "DbType"})
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -227,17 +247,13 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
-	if rpcVTGate != nil {
-		log.Fatalf("VTGate already initialized")
-	}
-
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
-	if err := gw.WaitForTablets(tabletTypesToWait); err != nil {
+	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
 		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
 	}
 
@@ -283,7 +299,7 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser, enableViews)
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews)
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -294,6 +310,12 @@ func Init(
 		LFU:            queryPlanCacheLFU,
 	}
 
+	plans := cache.NewDefaultCacheImpl(cacheCfg)
+	queryLogger, err := initQueryLogger(plans)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
+
 	executor := NewExecutor(
 		ctx,
 		serv,
@@ -302,10 +324,11 @@ func Init(
 		normalizeQueries,
 		warnShardedOnly,
 		streamBufferSize,
-		cacheCfg,
+		plans,
 		si,
 		noScatter,
 		pv,
+		queryLogger,
 	)
 
 	// connect the schema tracker with the vschema manager
@@ -315,33 +338,10 @@ func Init(
 
 	// TODO: call serv.WatchSrvVSchema here
 
-	rpcVTGate = &VTGate{
-		executor: executor,
-		resolver: resolver,
-		vsm:      vsm,
-		txConn:   tc,
-		gw:       gw,
-		timings: stats.NewMultiTimings(
-			"VtgateApi",
-			"VtgateApi timings",
-			[]string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewCountersWithMultiLabels(
-			"VtgateApiRowsReturned",
-			"Rows returned through the VTgate API",
-			[]string{"Operation", "Keyspace", "DbType"}),
-		rowsAffected: stats.NewCountersWithMultiLabels(
-			"VtgateApiRowsAffected",
-			"Rows affected by a write (DML) operation through the VTgate API",
-			[]string{"Operation", "Keyspace", "DbType"}),
-
-		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
-		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
-		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
-	}
-
-	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
-	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
-	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
+	vtgateInst := newVTGate(executor, resolver, vsm, tc, gw)
+	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(vtgateInst.timings, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(vtgateInst.timings, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(vtgateInst.timings, "DbType"), 15*60/5, 5*time.Second)
 
 	_ = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
@@ -350,26 +350,25 @@ func Init(
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
-			f(rpcVTGate)
+			f(vtgateInst)
 		}
 		if st != nil && enableSchemaChangeSignal {
 			st.Start()
 		}
+		srv := initMySQLProtocol(vtgateInst)
+		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+		servenv.OnClose(srv.rollbackAtShutdown)
 	})
 	servenv.OnTerm(func() {
 		if st != nil && enableSchemaChangeSignal {
 			st.Stop()
 		}
 	})
-	rpcVTGate.registerDebugHealthHandler()
-	rpcVTGate.registerDebugEnvHandler()
-	err = initQueryLogger(rpcVTGate)
-	if err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
-	}
+	vtgateInst.registerDebugHealthHandler()
+	vtgateInst.registerDebugEnvHandler()
 
 	initAPI(gw.hc)
-	return rpcVTGate
+	return vtgateInst
 }
 
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
@@ -442,8 +441,8 @@ func (vtg *VTGate) Gateway() *TabletGateway {
 	return vtg.gw
 }
 
-// Execute executes a non-streaming query. This is a V3 function.
-func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+// Execute executes a non-streaming query.
+func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -453,7 +452,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
 		safeSession := NewSafeSession(session)
-		qr, err = vtg.executor.Execute(ctx, "Execute", safeSession, sql, bindVariables)
+		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables)
 		safeSession.RemoveInternalSavepoint()
 	}
 	if err == nil {
@@ -471,7 +470,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	return session, nil, err
 }
 
-// ExecuteBatch executes a batch of queries. This is a V3 function.
+// ExecuteBatch executes a batch of queries.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
@@ -490,7 +489,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, session, sql, bv)
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, nil, session, sql, bv)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 			vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
@@ -499,23 +498,23 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 	return session, qrl, nil
 }
 
-// StreamExecute executes a streaming query. This is a V3 function.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines.
-func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+// StreamExecute executes a streaming query.
+// Note we guarantee the callback will not be called concurrently by multiple go routines.
+func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
 
+	safeSession := NewSafeSession(session)
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
-		safeSession := NewSafeSession(session)
 		err = vtg.executor.StreamExecute(
 			ctx,
+			mysqlCtx,
 			"StreamExecute",
 			safeSession,
 			sql,
@@ -533,9 +532,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			"BindVariables": bindVariables,
 			"Session":       session,
 		}
-		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
+		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
 	}
-	return nil
+	return safeSession.Session, nil
 }
 
 // CloseSession closes the session, rolling back any implicit transactions. This has the
@@ -664,5 +663,22 @@ func (vtg *VTGate) HandlePanic(err *error) {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
+	}
+}
+
+func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *TxConn, gw *TabletGateway) *VTGate {
+	return &VTGate{
+		executor:     executor,
+		resolver:     resolver,
+		vsm:          vsm,
+		txConn:       tc,
+		gw:           gw,
+		timings:      timings,
+		rowsReturned: rowsReturned,
+		rowsAffected: rowsAffected,
+
+		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
+		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
 }

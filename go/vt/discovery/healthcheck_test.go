@@ -64,10 +64,12 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	// reset error counters
 	hcErrorCounters.ResetAll()
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	// close healthcheck
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
@@ -97,8 +99,8 @@ func TestHealthCheck(t *testing.T) {
 		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:     true,
 
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 	}
 	input <- shr
 	result = <-resultChan
@@ -130,11 +132,11 @@ func TestHealthCheck(t *testing.T) {
 
 	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 10,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet: tablet,
@@ -159,11 +161,11 @@ func TestHealthCheck(t *testing.T) {
 
 	// Serving & RealtimeStats changed
 	shr = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             false,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   false,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -179,11 +181,11 @@ func TestHealthCheck(t *testing.T) {
 
 	// HealthError
 	shr = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -206,8 +208,11 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -229,11 +234,11 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -267,8 +272,11 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
 func TestHealthCheckErrorOnPrimary(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -290,11 +298,11 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 10,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -327,8 +335,11 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 }
 
 func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	resultChan := hc.Subscribe()
@@ -348,20 +359,20 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	<-resultChan
 
 	shr2 := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet2.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		TabletAlias:               tablet2.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	<-resultChan
 	shr1 := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet1.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		TabletAlias:               tablet1.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 10,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input1 <- shr1
 	<-resultChan
@@ -377,11 +388,11 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	mustMatch(t, health, a, "unexpected result")
 
 	shr2 = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet2.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 20,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		TabletAlias:               tablet2.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 20,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	<-resultChan
@@ -405,8 +416,11 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 }
 
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -427,11 +441,11 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	input <- &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		TabletAlias:                         &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		TabletAlias:               &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 10,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -448,8 +462,12 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 // TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
 func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	createFakeConn(tablet, input)
@@ -469,11 +487,11 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:  tablet,
@@ -488,7 +506,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// Change input to distinguish between stats sent before and after Close().
-	shr.TabletExternallyReparentedTimestamp = 11
+	shr.PrimaryTermStartTimestamp = 11
 	// Close the healthcheck. Tablet connections are closed asynchronously and
 	// Close() will block until all Go routines (one per connection) are done.
 	assert.Nil(t, hc.Close(), "Close returned error")
@@ -508,10 +526,13 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// reset counters
 	hcErrorCounters.ResetAll()
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	hc.healthCheckTimeout = 500 * time.Millisecond
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
@@ -531,11 +552,11 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -580,8 +601,11 @@ func TestHealthCheckTimeout(t *testing.T) {
 }
 
 func TestWaitForAllServingTablets(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.Type = topodatapb.TabletType_REPLICA
@@ -601,18 +625,19 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	// there will be a first result, get and discard it
 	<-resultChan
 	// empty
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	err := hc.WaitForAllServingTablets(ctx, targets)
 	assert.NotNil(t, err, "error should not be nil")
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	input <- shr
@@ -672,8 +697,11 @@ func TestWaitForAllServingTablets(t *testing.T) {
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
 func TestRemoveTablet(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.Type = topodatapb.TabletType_REPLICA
@@ -687,11 +715,11 @@ func TestRemoveTablet(t *testing.T) {
 	<-resultChan
 
 	shrReplica := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
 		Tablet:               tablet,
@@ -736,11 +764,11 @@ func TestRemoveTablet(t *testing.T) {
 	// Change the tablet type to RDONLY.
 	tablet.Type = topodatapb.TabletType_RDONLY
 	shrRdonly := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.4},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.4},
 	}
 
 	// Now Replace it, which does a Remove and Add. The tablet should be removed
@@ -779,8 +807,11 @@ func TestRemoveTablet(t *testing.T) {
 
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.Type = topodatapb.TabletType_REPLICA
@@ -797,11 +828,11 @@ func TestGetHealthyTablets(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
 		Tablet:               tablet,
@@ -818,11 +849,11 @@ func TestGetHealthyTablets(t *testing.T) {
 
 	// update health with a change that won't change health array
 	shr = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.2},
 	}
 	input <- shr
 	// wait for result before checking
@@ -833,11 +864,11 @@ func TestGetHealthyTablets(t *testing.T) {
 
 	// update stats with a change that will change health array
 	shr = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
 	}
 	want = []*TabletHealth{{
 		Tablet:               tablet,
@@ -863,11 +894,11 @@ func TestGetHealthyTablets(t *testing.T) {
 	<-resultChan
 
 	shr2 := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet2.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		TabletAlias:               tablet2.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want2 := []*TabletHealth{{
 		Tablet:               tablet,
@@ -893,11 +924,11 @@ func TestGetHealthyTablets(t *testing.T) {
 	mustMatch(t, want2, a, "unexpected result")
 
 	shr2 = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet2.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             false,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		TabletAlias:               tablet2.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   false,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	// wait for result
@@ -911,7 +942,7 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:     true,
 
-		TabletExternallyReparentedTimestamp: 10,
+		PrimaryTermStartTimestamp: 10,
 
 		RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
@@ -935,11 +966,11 @@ func TestGetHealthyTablets(t *testing.T) {
 
 	// reparent: old replica goes into primary
 	shr = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 20,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 20,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input <- shr
 	<-resultChan
@@ -965,8 +996,11 @@ func TestGetHealthyTablets(t *testing.T) {
 }
 
 func TestPrimaryInOtherCell(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
 	// add a tablet as primary in different cell
@@ -989,11 +1023,11 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	}
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 20,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 20,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
 		Tablet:               tablet,
@@ -1022,8 +1056,11 @@ func TestPrimaryInOtherCell(t *testing.T) {
 }
 
 func TestReplicaInOtherCell(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
 	// add a tablet as replica
@@ -1045,11 +1082,11 @@ func TestReplicaInOtherCell(t *testing.T) {
 	}
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         local.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		TabletAlias:               local.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
 		Tablet:               local,
@@ -1091,11 +1128,11 @@ func TestReplicaInOtherCell(t *testing.T) {
 	}
 
 	shr2 := &querypb.StreamHealthResponse{
-		TabletAlias:                         remote.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		TabletAlias:               remote.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want2 := &TabletHealth{
 		Tablet:               remote,
@@ -1124,8 +1161,11 @@ func TestReplicaInOtherCell(t *testing.T) {
 }
 
 func TestCellAliases(t *testing.T) {
-	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	defer ts.Close()
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
 	cellsAlias := &topodatapb.CellsAlias{
@@ -1154,11 +1194,11 @@ func TestCellAliases(t *testing.T) {
 	}
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
 		Tablet:               tablet,
@@ -1184,8 +1224,11 @@ func TestCellAliases(t *testing.T) {
 }
 
 func TestHealthCheckChecksGrpcPort(t *testing.T) {
-	ts := memorytopo.NewServer("cell")
-	hc := createTestHc(ts)
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
@@ -1204,6 +1247,7 @@ func TestHealthCheckChecksGrpcPort(t *testing.T) {
 }
 
 func TestTemplate(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
 	ParseTabletURLTemplateFromFlag()
 
@@ -1231,6 +1275,7 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestDebugURLFormatting(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	TabletURLTemplateString = "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"
 	ParseTabletURLTemplateFromFlag()
 
@@ -1270,8 +1315,8 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 	return nil, fmt.Errorf("tablet %v not found", key)
 }
 
-func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", "")
+func createTestHc(ctx context.Context, ts *topo.Server) *HealthCheckImpl {
+	return NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "")
 }
 
 type fakeConn struct {

@@ -31,18 +31,20 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // VReplStream represents a row in _vt.vreplication table
@@ -56,7 +58,7 @@ type VReplStream struct {
 	timeThrottled        int64
 	componentThrottled   string
 	transactionTimestamp int64
-	state                string
+	state                binlogdatapb.VReplicationWorkflowState
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
@@ -75,7 +77,7 @@ func (v *VReplStream) livenessTimeIndicator() int64 {
 // isRunning() returns true when the workflow is actively running
 func (v *VReplStream) isRunning() bool {
 	switch v.state {
-	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+	case binlogdatapb.VReplicationWorkflowState_Init, binlogdatapb.VReplicationWorkflowState_Copying, binlogdatapb.VReplicationWorkflowState_Running:
 		return true
 	}
 	return false
@@ -84,7 +86,7 @@ func (v *VReplStream) isRunning() bool {
 // hasError() returns true when the workflow has failed and will not retry
 func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
-	case v.state == binlogplayer.BlpError:
+	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
 		return true, errors.New(v.message)
 	case strings.Contains(strings.ToLower(v.message), "error"):
 		return false, errors.New(v.message)
@@ -103,6 +105,8 @@ type VRepl struct {
 	pos         string
 	alterQuery  string
 	tableRows   int64
+
+	analyzeTable bool
 
 	sourceSharedColumns              *vrepl.ColumnList
 	targetSharedColumns              *vrepl.ColumnList
@@ -130,7 +134,7 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string, analyzeTable bool) *VRepl {
 	return &VRepl{
 		workflow:       workflow,
 		keyspace:       keyspace,
@@ -139,6 +143,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		sourceTable:    sourceTable,
 		targetTable:    targetTable,
 		alterQuery:     alterQuery,
+		analyzeTable:   analyzeTable,
 		parser:         vrepl.NewAlterTableParser(),
 		enumToTextMap:  map[string]string{},
 		intToEnumMap:   map[string]bool{},
@@ -224,6 +229,13 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		uniqueKeys = append(uniqueKeys, uniqueKey)
 	}
 	return uniqueKeys, nil
+}
+
+// executeAnalyzeTable runs an ANALYZE TABLE command
+func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, tableName)
+	_, err := conn.ExecuteFetch(parsed.Query, 1, false)
+	return err
 }
 
 // readTableStatus reads table status information
@@ -335,6 +347,11 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 }
 
 func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	if v.analyzeTable {
+		if err := v.executeAnalyzeTable(ctx, conn, v.sourceTable); err != nil {
+			return err
+		}
+	}
 	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTable)
 	if err != nil {
 		return err
@@ -482,20 +499,19 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
-			if !ok {
+			fromCollation := collations.Local().DefaultCollationForCharset(sourceCol.Charset)
+			if fromCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
+			toCollation := collations.Local().DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
-			if targetCol.Type == vrepl.StringColumnType && !ok {
+			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
-			if fromEncoding == nil && toEncoding == nil && targetCol.Type != vrepl.JSONColumnType {
-				// Both source and target have trivial charsets
+
+			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type != vrepl.JSONColumnType {
 				sb.WriteString(escapeName(name))
 			} else {
-				// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
 					FromCharset: sourceCol.Charset,
 					ToCharset:   targetCol.Charset,
@@ -516,6 +532,14 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 
 	v.filterQuery = sb.String()
 	return nil
+}
+
+func trivialCharset(c collations.ID) bool {
+	if c == collations.Unknown {
+		return true
+	}
+	utf8mb4Charset := charset.Charset_utf8mb4{}
+	return utf8mb4Charset.IsSuperset(colldata.Lookup(c).Charset()) || c == collations.CollationBinaryID
 }
 
 func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
@@ -566,7 +590,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
-	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
+	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
 		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
 

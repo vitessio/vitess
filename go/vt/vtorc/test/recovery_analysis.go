@@ -33,6 +33,7 @@ type InfoForRecoveryAnalysis struct {
 	PrimaryTimestamp                          *time.Time
 	Keyspace                                  string
 	Shard                                     string
+	ShardPrimaryTermTimestamp                 string
 	KeyspaceType                              int
 	DurabilityPolicy                          string
 	IsInvalid                                 int
@@ -40,8 +41,6 @@ type InfoForRecoveryAnalysis struct {
 	IsCoPrimary                               int
 	Hostname                                  string
 	Port                                      int
-	SourceHost                                string
-	SourcePort                                int
 	DataCenter                                string
 	Region                                    string
 	PhysicalEnvironment                       string
@@ -126,6 +125,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["keyspace_type"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.KeyspaceType), Valid: true}
 	rowMap["keyspace"] = sqlutils.CellData{String: info.Keyspace, Valid: true}
 	rowMap["shard"] = sqlutils.CellData{String: info.Shard, Valid: true}
+	rowMap["shard_primary_term_timestamp"] = sqlutils.CellData{String: info.ShardPrimaryTermTimestamp, Valid: true}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckPartialSuccess), Valid: true}
 	rowMap["max_replica_gtid_errant"] = sqlutils.CellData{String: info.MaxReplicaGTIDErrant, Valid: true}
 	rowMap["max_replica_gtid_mode"] = sqlutils.CellData{String: info.MaxReplicaGTIDMode, Valid: true}
@@ -148,8 +148,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["semi_sync_primary_status"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryStatus), Valid: true}
 	rowMap["semi_sync_primary_wait_for_replica_count"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryWaitForReplicaCount), Valid: true}
 	rowMap["semi_sync_replica_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncReplicaEnabled), Valid: true}
-	rowMap["source_host"] = sqlutils.CellData{String: info.SourceHost, Valid: true}
-	rowMap["source_port"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SourcePort), Valid: true}
 	res, _ := prototext.Marshal(info.TabletInfo)
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	return rowMap

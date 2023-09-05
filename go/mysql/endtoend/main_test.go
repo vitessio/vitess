@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,11 +43,11 @@ var (
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code mysql.ErrorCode, sqlState string, subtext string, query string) {
+func assertSQLError(t *testing.T, err error, code sqlerror.ErrorCode, sqlState string, subtext string, query string) {
 	t.Helper()
 	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 
-	serr, ok := err.(*mysql.SQLError)
+	serr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
 	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
 	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
@@ -66,27 +68,13 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
 
-	version, getErr := mysqlctl.GetVersionString()
+	version, err := mysqlctl.GetVersionString()
+	if err != nil {
+		failVersionDetection(err)
+	}
 	f, v, err := mysqlctl.ParseVersionString(version)
-
-	if getErr != nil || err != nil {
-		f, v, err = mysqlctl.GetVersionFromEnv()
-		if err != nil {
-			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
-			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set your PATH so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
-	PATH: %s
-	VT_MYSQL_ROOT: %s
-	VTROOT: %s
-	vtenv.VtMysqlRoot(): %s
-	MYSQL_FLAVOR: %s
-	`,
-				os.Getenv("PATH"),
-				os.Getenv("VT_MYSQL_ROOT"),
-				os.Getenv("VTROOT"),
-				vtenvMysqlRoot,
-				os.Getenv("MYSQL_FLAVOR"))
-			panic(message)
-		}
+	if err != nil {
+		failVersionDetection(err)
 	}
 
 	t.Logf("Using flavor: %v, version: %v", f, v)
@@ -236,4 +224,21 @@ ssl-key=%v/server-key.pem
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func failVersionDetection(err error) {
+	vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
+	message := fmt.Sprintf(`could not auto-detect MySQL version: %v
+You may need to set your PATH so a mysqld binary can be found:
+	PATH: %s
+	VT_MYSQL_ROOT: %s
+	VTROOT: %s
+	vtenv.VtMysqlRoot(): %s
+	`,
+		err,
+		os.Getenv("PATH"),
+		os.Getenv("VT_MYSQL_ROOT"),
+		os.Getenv("VTROOT"),
+		vtenvMysqlRoot)
+	panic(message)
 }

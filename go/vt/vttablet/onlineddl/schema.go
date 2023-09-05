@@ -213,6 +213,7 @@ const (
 	`
 	sqlUpdateMigrationProgressByRowsCopied = `UPDATE _vt.schema_migrations
 			SET
+				table_rows=GREATEST(table_rows, %a),
 				progress=CASE
 					WHEN table_rows=0 THEN 100
 					ELSE LEAST(100, 100*%a/table_rows)
@@ -520,6 +521,7 @@ const (
 	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlAnalyzeTable      = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
@@ -566,13 +568,6 @@ const (
 	sqlUnlockTables       = "UNLOCK TABLES"
 	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
 	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
-)
-
-const (
-	retryMigrationHint     = "retry"
-	cancelMigrationHint    = "cancel"
-	cancelAllMigrationHint = "cancel-all"
-	completeMigrationHint  = "complete"
 )
 
 var (

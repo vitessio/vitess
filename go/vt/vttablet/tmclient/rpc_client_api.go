@@ -51,7 +51,6 @@ func init() {
 		"vtctl",
 		"vtctld",
 		"vtctldclient",
-		"vtgr",
 		"vtorc",
 		"vttablet",
 		"vttestserver",
@@ -78,6 +77,9 @@ type TabletManagerClient interface {
 	//
 	// Various read-write methods
 	//
+
+	// ResetSequences asks the remote tablet to reset the sequences for the specified tables
+	ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error
 
 	// SetReadOnly makes the mysql instance read-only
 	SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error
@@ -169,11 +171,17 @@ type TabletManagerClient interface {
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error
 
+	//
+	// VReplication related methods
+	//
+
+	CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error)
+	DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error)
+	ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error)
+	UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error)
 	// VReplicationExec executes a VReplication command
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error
-	UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error)
-
 	VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error)
 
 	//
@@ -237,6 +245,9 @@ type TabletManagerClient interface {
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error)
+
+	// Throttler
+	CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error)
 
 	//
 	// Management methods

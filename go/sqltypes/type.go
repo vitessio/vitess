@@ -136,6 +136,7 @@ func IsNull(t querypb.Type) bool {
 // switch statements for those who want to cover types
 // by their category.
 const (
+	Unknown    = -1
 	Null       = querypb.Type_NULL_TYPE
 	Int8       = querypb.Type_INT8
 	Uint8      = querypb.Type_UINT8

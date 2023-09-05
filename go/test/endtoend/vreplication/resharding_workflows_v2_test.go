@@ -30,6 +30,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -63,7 +65,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
@@ -78,7 +80,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
@@ -117,6 +119,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		switch currentWorkflowType {
 		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
 			args = append(args, "--defer-secondary-keys")
+			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
 		}
 	}
 	if cells != "" {
@@ -125,6 +128,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if tabletTypes != "" {
 		args = append(args, "--tablet_types", tabletTypes)
 	}
+	args = append(args, "--timeout", time.Minute.String())
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
@@ -241,7 +245,7 @@ func revert(t *testing.T, workflowType string) {
 	validateReadsRouteToSource(t, "replica")
 
 	// cancel the workflow to cleanup
-	_, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "Cancel", ksWorkflow)
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", targetKs, "--workflow", workflowName, "cancel")
 	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
 }
 
@@ -307,7 +311,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 
-	waitForWorkflowState(t, vc, "customer.wf2", workflowStateRunning)
+	waitForWorkflowState(t, vc, "customer.wf2", binlogdatapb.VReplicationWorkflowState_Running.String())
 	waitForLowLag(t, "customer", "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
@@ -341,7 +345,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, "product.wf3", workflowStateRunning)
+	waitForWorkflowState(t, vc, "product.wf3", binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	waitForLowLag(t, "product", "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
@@ -426,7 +430,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	setupCustomerKeyspace(t)
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
-	createMoveTablesWorkflow(t, "customer,vdiff_order,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
+	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
 	if !strings.Contains(lastOutput, "Workflow started successfully") {
 		t.Fail()
 	}
@@ -636,19 +640,56 @@ func setupCustomer2Keyspace(t *testing.T) {
 	c2shards := []string{"-80", "80-"}
 	c2keyspace := "customer2"
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, c2keyspace, strings.Join(c2shards, ","),
-		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 1200, nil); err != nil {
+		customerVSchema, customerSchema, 0, 0, 1200, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, c2shard := range c2shards {
 		err := cluster.WaitForHealthyShard(vc.VtctldClient, c2keyspace, c2shard)
 		require.NoError(t, err)
-		if defaultReplicas > 0 {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas, 30*time.Second))
-		}
-		if defaultRdonly > 0 {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly, 30*time.Second))
-		}
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", c2keyspace, c2shard), 1, 30*time.Second))
 	}
+}
+
+func setupMinimalCluster(t *testing.T) *VitessCluster {
+	cells := []string{"zone1"}
+
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
+	require.NotNil(t, vc)
+	defaultCellName := "zone1"
+	allCellNames = defaultCellName
+	defaultCell = vc.Cells[defaultCellName]
+
+	zone1 := vc.Cells["zone1"]
+
+	vc.AddKeyspace(t, []*Cell{zone1}, "product", "0", initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+
+	vtgate = zone1.Vtgates[0]
+	require.NotNil(t, vtgate)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
+	require.NoError(t, err)
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second))
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	verifyClusterHealth(t, vc)
+	insertInitialData(t)
+
+	sourceTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+
+	return vc
+}
+
+func setupMinimalCustomerKeyspace(t *testing.T) {
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, "customer", "-80,80-",
+		customerVSchema, customerSchema, 0, 0, 200, nil); err != nil {
+		t.Fatal(err)
+	}
+	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "-80"))
+	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "80-"))
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1, 30*time.Second))
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1, 30*time.Second))
+	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 }
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {

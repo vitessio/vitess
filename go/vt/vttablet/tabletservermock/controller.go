@@ -18,13 +18,11 @@ limitations under the License.
 package tabletservermock
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
-
-	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -34,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -134,7 +133,7 @@ func (tqsc *Controller) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.D
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, terTime time.Time, serving bool, reason string) error {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, ptsTime time.Time, serving bool, reason string) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
@@ -218,6 +217,11 @@ func (tqsc *Controller) BroadcastHealth() {
 // TopoServer is part of the tabletserver.Controller interface.
 func (tqsc *Controller) TopoServer() *topo.Server {
 	return tqsc.TS
+}
+
+// CheckThrottler is part of the tabletserver.Controller interface
+func (tqsc *Controller) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+	return nil
 }
 
 // EnterLameduck implements tabletserver.Controller.

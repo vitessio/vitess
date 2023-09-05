@@ -101,6 +101,10 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 	if isCommented {
 		comments = commentedStmt.GetParsedComments()
 	}
+	columns := map[*sqlparser.Union]sqlparser.SelectExprs{}
+	for union, info := range a.tables.unionInfo {
+		columns[union] = info.exprs
+	}
 
 	return &SemTable{
 		Recursive:         a.binder.recursive,
@@ -116,6 +120,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 		Collation:         coll,
 		ExpandedColumns:   a.rewriter.expandedColumns,
+		columns:           columns,
 	}
 }
 
@@ -168,11 +173,6 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.binder.up(cursor); err != nil {
-		a.setError(err)
-		return true
-	}
-
 	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
 		return false
@@ -181,6 +181,12 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		a.setError(err)
 		return false
 	}
+
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+
 	if err := a.typer.up(cursor); err != nil {
 		a.setError(err)
 		return false

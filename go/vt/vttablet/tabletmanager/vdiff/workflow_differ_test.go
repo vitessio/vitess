@@ -29,11 +29,12 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestBuildPlanSuccess(t *testing.T) {
@@ -436,13 +437,10 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
 				Direction: sqlparser.AscOrder,
 			}},
-			aggregates: []*engine.AggregateParams{{
-				Opcode: opcode.AggregateSum,
-				Col:    2,
-			}, {
-				Opcode: opcode.AggregateSum,
-				Col:    3,
-			}},
+			aggregates: []*engine.AggregateParams{
+				engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
+			},
 		},
 	}, {
 		// date conversion on import.
@@ -485,10 +483,11 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 			columnList := make([]string, len(tcase.tablePlan.comparePKs))
 			collationList := make([]string, len(tcase.tablePlan.comparePKs))
+			env := collations.Local()
 			for i := range tcase.tablePlan.comparePKs {
 				columnList[i] = tcase.tablePlan.comparePKs[i].colName
-				if tcase.tablePlan.comparePKs[i].collation != nil {
-					collationList[i] = tcase.tablePlan.comparePKs[i].collation.Name()
+				if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
+					collationList[i] = env.LookupName(tcase.tablePlan.comparePKs[i].collation)
 				} else {
 					collationList[i] = sqltypes.NULL.String()
 				}

@@ -46,9 +46,11 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
@@ -61,7 +63,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -452,6 +453,10 @@ func (tm *TabletManager) Stop() {
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
 
+	if tm.QueryServiceControl != nil {
+		tm.QueryServiceControl.Stats().Stop()
+	}
+
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.Disable()
 	}
@@ -496,7 +501,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		// If the keyspace exists but this is the first tablet added, then
 		// update the keyspace record to the default.
 		if ks.SidecarDbName == "" {
-			ks.SidecarDbName = sidecardb.DefaultName
+			ks.SidecarDbName = sidecar.DefaultName
 			getlockctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 			defer cancel()
 			lockctx, unlock, lockErr := tm.TopoServer.LockKeyspace(getlockctx, tablet.Keyspace, "Setting sidecar database name")
@@ -513,7 +518,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 			}
 		}
 		// Have the tablet use the sidecar database that's set for the keyspace.
-		sidecardb.SetName(ks.SidecarDbName)
+		sidecar.SetName(ks.SidecarDbName)
 		return nil
 	}
 	if err := tm.withRetry(ctx, "setting sidecar database name", setSidecarDBName); err != nil {
@@ -629,7 +634,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 				// Update the primary term start time (current value is 0) because we
 				// assume that we are actually the PRIMARY and in case of a tiebreak,
 				// vtgate should prefer us.
-				tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
+				tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
 			})
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
@@ -744,8 +749,10 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 		// instance of a startup timeout). Upon running this code
 		// again, we want to fix ShardReplication.
 		if updateErr := topo.UpdateTabletReplicationData(ctx, tm.TopoServer, tablet); updateErr != nil {
+			log.Errorf("UpdateTabletReplicationData failed for tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), updateErr)
 			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
 		}
+		log.Infof("Successfully updated tablet replication data for alias: %v", topoproto.TabletAliasString(tablet.Alias))
 
 		// Then overwrite everything, ignoring version mismatch.
 		if err := tm.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {

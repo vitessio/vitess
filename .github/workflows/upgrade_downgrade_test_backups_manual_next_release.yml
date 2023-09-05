@@ -13,7 +13,7 @@ jobs:
   get_next_release:
     if: always()
     name: Get Previous Release - Backups - Manual - Next Release
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     needs:
       - get_next_release
 
@@ -90,7 +90,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.4
+        go-version: 1.21.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -137,7 +137,7 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the next release of Vitess
     - name: Checkout to the other version's code (${{ needs.get_next_release.outputs.next_release }})
@@ -156,7 +156,7 @@ jobs:
       timeout-minutes: 5
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -181,7 +181,7 @@ jobs:
       timeout-minutes: 5
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
@@ -276,14 +276,6 @@ jobs:
         source build.env ; cd examples/backups
         ./take_backups.sh
 
-    # Stopping the tablets so we can perform the upgrade.
-    - name: Stop tablets
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        source build.env ; cd examples/backups
-        ./stop_tablets.sh
-
     # We upgrade: we swap binaries and use the version N of the tablet.
     - name: Upgrade - Swap binaries, use VTTablet N
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -302,9 +294,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env ; cd examples/backups
-        ./restart_tablets.sh
-        # give enough time to the tablets to restore the backup
-        sleep 90
+        ./upgrade_cluster.sh
 
     # We count the number of rows in every table to check that the restore step was successful.
     - name: Assert the number of rows in every table

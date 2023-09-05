@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 		// For upgrade/downgrade tests.
 		if vtgateVer < 17 || vttabletVer < 17 {
 			// Then only the default sidecarDBName is supported.
-			sidecarDBName = sidecardb.DefaultName
+			sidecarDBName = sidecar.DefaultName
 		}
 
 		// Start topo server
@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL:     sqlSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 		if err != nil {
 			return 1

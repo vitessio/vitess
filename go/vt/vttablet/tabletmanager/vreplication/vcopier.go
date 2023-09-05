@@ -28,8 +28,9 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/bytes2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -39,6 +40,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 type vcopier struct {
@@ -141,7 +143,7 @@ type vcopierCopyWorker struct {
 func newVCopier(vr *vreplicator) *vcopier {
 	return &vcopier{
 		vr:               vr,
-		throttlerAppName: vr.throttlerAppName(),
+		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
 	}
 }
 
@@ -236,7 +238,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
 			return err
 		}
-		if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
+		if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
 			return err
 		}
 		if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)",
@@ -267,7 +269,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 			}
 		}
 	} else {
-		if err := vc.vr.setState(binlogplayer.BlpStopped, "There is nothing to replicate"); err != nil {
+		if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "There is nothing to replicate"); err != nil {
 			return err
 		}
 	}
@@ -343,7 +345,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Start vreplication.
 	errch := make(chan error, 1)
 	go func() {
-		errch <- newVPlayer(vc.vr, settings, copyState, mysql.Position{}, "catchup").play(ctx)
+		errch <- newVPlayer(vc.vr, settings, copyState, replication.Position{}, "catchup").play(ctx)
 	}()
 
 	// Wait for catchup.
@@ -457,7 +459,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			if rows.Throttled {
-				_ = vc.vr.updateTimeThrottled(RowStreamerComponentName)
+				_ = vc.vr.updateTimeThrottled(throttlerapp.RowStreamerName)
 				return nil
 			}
 			if rows.Heartbeat {
@@ -465,10 +467,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return nil
 			}
 			// verify throttler is happy, otherwise keep looping
-			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
+			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vc.throttlerAppName)) {
 				break // out of 'for' loop
 			} else { // we're throttled
-				_ = vc.vr.updateTimeThrottled(VCopierComponentName)
+				_ = vc.vr.updateTimeThrottled(throttlerapp.VCopierName)
 			}
 		}
 		if !copyWorkQueue.isOpen {
@@ -669,7 +671,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
 	defer vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
-	pos, err := mysql.DecodePosition(gtid)
+	pos, err := replication.DecodePosition(gtid)
 	if err != nil {
 		return err
 	}

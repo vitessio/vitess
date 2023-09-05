@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
@@ -84,8 +84,8 @@ func (u *updateController) consume() {
 // checkIfWeShouldIgnoreKeyspace inspects an error and
 // will mark a keyspace as failed and won't try to load more information from it
 func checkIfWeShouldIgnoreKeyspace(err error) bool {
-	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-	if sqlErr.Num == mysql.ERBadDb || sqlErr.Num == mysql.ERNoSuchTable {
+	sqlErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	if sqlErr.Num == sqlerror.ERBadDb || sqlErr.Num == sqlerror.ERNoSuchTable {
 		// if we are missing the db or table, no point in retrying
 		return true
 	}

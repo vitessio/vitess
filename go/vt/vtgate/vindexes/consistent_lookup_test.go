@@ -29,7 +29,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,6 +42,60 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+func consistentLookupCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "consistent_lookup",
+		vindexName:   "consistent_lookup",
+		vindexParams: vindexParams,
+
+		expectCost:          20,
+		expectErr:           expectErr,
+		expectIsUnique:      false,
+		expectNeedsVCursor:  true,
+		expectString:        "consistent_lookup",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func consistentLookupUniqueCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "consistent_lookup_unique",
+		vindexName:   "consistent_lookup_unique",
+		vindexParams: vindexParams,
+
+		expectCost:          10,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  true,
+		expectString:        "consistent_lookup_unique",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestConsistentLookupCreateVindex(t *testing.T) {
+	testCaseFs := []func(string, map[string]string, error, []string) createVindexTestCase{
+		consistentLookupCreateVindexTestCase,
+		consistentLookupUniqueCreateVindexTestCase,
+	}
+	for _, testCaseF := range testCaseFs {
+		testLookupCreateVindexInternalCases(t, testCaseF)
+	}
+}
 
 func TestConsistentLookupInit(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", true)
@@ -53,22 +110,6 @@ func TestConsistentLookupInit(t *testing.T) {
 	if got := lookup.(*ConsistentLookup).writeOnly; !got {
 		t.Errorf("lookup.writeOnly: false, want true")
 	}
-}
-
-func TestConsistentLookupInfo(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup", false)
-	assert.Equal(t, 20, lookup.Cost())
-	assert.Equal(t, "consistent_lookup", lookup.String())
-	assert.False(t, lookup.IsUnique())
-	assert.True(t, lookup.NeedsVCursor())
-}
-
-func TestConsistentLookupUniqueInfo(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup_unique", false)
-	assert.Equal(t, 10, lookup.Cost())
-	assert.Equal(t, "consistent_lookup_unique", lookup.String())
-	assert.True(t, lookup.IsUnique())
-	assert.True(t, lookup.NeedsVCursor())
 }
 
 func TestConsistentLookupMap(t *testing.T) {
@@ -239,7 +280,7 @@ func TestConsistentLookupCreateSimple(t *testing.T) {
 func TestConsistentLookupCreateThenRecreate(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, mysql.NewSQLError(mysql.ERDupEntry, mysql.SSConstraintViolation, "Duplicate entry"))
+	vc.AddResult(nil, sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry"))
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
 
@@ -413,7 +454,7 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
-func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
+func TestConsistentLookupUpdateBecauseComparableTypes(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 
@@ -437,7 +478,7 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 
 			err = lookup.(Lookup).Update(context.Background(), vc, []sqltypes.Value{literal, literal}, []byte("test"), []sqltypes.Value{literal, literal})
 			require.NoError(t, err)
-			require.NotEmpty(t, vc.log)
+			vc.verifyLog(t, []string{})
 			vc.log = nil
 		})
 	}
@@ -458,6 +499,7 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, l.(ParamValidating).UnknownParams())
 	cols := []sqlparser.IdentifierCI{
 		sqlparser.NewIdentifierCI("fc1"),
 		sqlparser.NewIdentifierCI("fc2"),
@@ -483,6 +525,10 @@ func (vc *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 
 func (vc *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
+}
+
+func (vc *loggingVCursor) ConnCollation() collations.ID {
+	return collations.Default()
 }
 
 type bv struct {

@@ -28,9 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-// TestPartialMoveTables tests partial move tables by moving each
+// TestPartialMoveTablesBasic tests partial move tables by moving each
 // customer shard -- -80,80- -- once a a time to customer2.
-func TestPartialMoveTables(t *testing.T) {
+func TestPartialMoveTablesBasic(t *testing.T) {
 	origDefaultRdonly := defaultRdonly
 	defer func() {
 		defaultRdonly = origDefaultRdonly
@@ -51,14 +51,14 @@ func TestPartialMoveTables(t *testing.T) {
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
-	vc = setupCluster(t)
+	vc = setupMinimalCluster(t)
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
-	setupCustomerKeyspace(t)
+	setupMinimalCustomerKeyspace(t)
 
 	// Move customer table from unsharded product keyspace to
 	// sharded customer keyspace.
-	createMoveTablesWorkflow(t, "customer")
+	createMoveTablesWorkflow(t, "customer,loadtest")
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
 
@@ -75,6 +75,8 @@ func TestPartialMoveTables(t *testing.T) {
 	applyShardRoutingRules(t, emptyShardRoutingRules)
 	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 
+	runWithLoad := true
+
 	// Now setup the customer2 keyspace so we can do a partial
 	// move tables for one of the two shards: 80-.
 	defaultRdonly = 0
@@ -88,8 +90,17 @@ func TestPartialMoveTables(t *testing.T) {
 
 	// start the partial movetables for 80-
 	err := tstWorkflowExec(t, defaultCellName, wfName, sourceKs, targetKs,
-		"customer", workflowActionCreate, "", shard, "")
+		"customer,loadtest", workflowActionCreate, "", shard, "")
 	require.NoError(t, err)
+	var lg *loadGenerator
+	if runWithLoad { // start load after routing rules are set, otherwise we end up with ambiguous tables
+		lg = newLoadGenerator(t, vc)
+		go func() {
+			lg.start()
+		}()
+		lg.waitForCount(1000)
+	}
+
 	targetTab1 = vc.getPrimaryTablet(t, targetKs, shard)
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
 	vdiff1(t, ksWf, "")
@@ -221,14 +232,14 @@ func TestPartialMoveTables(t *testing.T) {
 	wfName = "partialDash80"
 	shard = "-80"
 	ksWf = fmt.Sprintf("%s.%s", targetKs, wfName)
-
 	// Start the partial movetables for -80, 80- has already been switched
 	err = tstWorkflowExec(t, defaultCellName, wfName, sourceKs, targetKs,
-		"customer", workflowActionCreate, "", shard, "")
+		"customer,loadtest", workflowActionCreate, "", shard, "")
 	require.NoError(t, err)
 	targetTab2 := vc.getPrimaryTablet(t, targetKs, shard)
 	catchup(t, targetTab2, wfName, "Partial MoveTables Customer to Customer2: -80")
 	vdiff1(t, ksWf, "")
+
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", ""))
 	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
@@ -242,6 +253,8 @@ func TestPartialMoveTables(t *testing.T) {
 	// Confirm shard routing rules: all shards should be routed to the
 	// target side (customer2).
 	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
+
+	lg.stop()
 
 	// Cancel both reverse workflows (as we've done the cutover), which should
 	// clean up both the global routing rules and the shard routing rules.
@@ -272,4 +285,5 @@ func TestPartialMoveTables(t *testing.T) {
 
 	// Confirm that the shard routing rules are now gone.
 	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
+
 }
