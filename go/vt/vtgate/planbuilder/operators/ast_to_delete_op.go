@@ -55,7 +55,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return delOp, nil
 	}
 
-	childFks := vindexTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
+	childFks := vindexTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
 		return delOp, nil
@@ -196,7 +196,8 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		return nil, vterrors.VT09016()
 	}
 
-	childOp, err := createOpFromStmt(ctx, childStmt)
+	// For the child statement of a DELETE query, we don't need to verify all the FKs on VTgate or ignore any foreign key explicitly.
+	childOp, err := createOpFromStmt(ctx, childStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
 	if err != nil {
 		return nil, err
 	}
