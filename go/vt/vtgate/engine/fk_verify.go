@@ -89,15 +89,15 @@ func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
 	var inputs []Primitive
 	var inputsMap []map[string]any
-	for idx, parent := range f.Verify {
+	for idx, verify := range f.Verify {
 		inputsMap = append(inputsMap, map[string]any{
-			inputName: fmt.Sprintf("VerifyParent-%d", idx+1),
+			inputName: fmt.Sprintf("Verify-%d", idx+1),
 		})
-		inputs = append(inputs, parent)
+		inputs = append(inputs, verify)
 	}
 	inputs = append(inputs, f.Exec)
 	inputsMap = append(inputsMap, map[string]any{
-		inputName: "Child",
+		inputName: "PostVerify",
 	})
 	return inputs, inputsMap
 
