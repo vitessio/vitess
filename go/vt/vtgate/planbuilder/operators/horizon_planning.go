@@ -135,6 +135,8 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushUnion(ctx, in)
 		case *SubQueryContainer:
 			return pushOrMergeSubQueryContainer(ctx, in)
+		case *QueryGraph:
+			return optimizeQueryGraph(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -208,6 +210,7 @@ func tryMergeSubqueriesRecursively(
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
+		subq:     subQuery,
 	}
 	op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
 	if err != nil {
@@ -243,6 +246,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
+		subq:     subQuery,
 	}
 	op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
 	if err != nil {
@@ -251,7 +255,10 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if op == nil {
 		return outer, rewrite.SameTree, nil
 	}
-	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
+	if !subQuery.IsProjection() {
+		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
+	}
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery._sq)
 	return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
 }
 
@@ -268,6 +275,7 @@ func removeFilterUnderRoute(op *Route, subq *SubQuery) {
 type subqueryRouteMerger struct {
 	outer    *Route
 	original sqlparser.Expr
+	subq     *SubQuery
 }
 
 func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
@@ -277,11 +285,15 @@ func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, old1, 
 func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error) {
 	mergedWith := append(old1.MergedWith, old1, old2)
 	mergedWith = append(mergedWith, old2.MergedWith...)
-	return &Route{
-		Source: &Filter{
+	src := s.outer.Source
+	if !s.subq.IsProjection() {
+		src = &Filter{
 			Source:     s.outer.Source,
 			Predicates: []sqlparser.Expr{s.original},
-		},
+		}
+	}
+	return &Route{
+		Source:        src,
 		MergedWith:    mergedWith,
 		Routing:       r,
 		Ordering:      s.outer.Ordering,
@@ -442,6 +454,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	sqm := &subqueryRouteMerger{
 		outer:    outerRoute,
 		original: newExpr,
+		subq:     inner,
 	}
 	newOp, err := mergeJoinInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if err != nil || newOp == nil {
@@ -483,6 +496,10 @@ func addSubQuery(in ops.Operator, inner *SubQuery) ops.Operator {
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(in.ColumnAliases) > 0 {
 		return nil, nil, errHorizonNotPlanned()
+	}
+
+	if ctx.SemTable.QuerySignature.SubQueries {
+		return expandHorizon(ctx, in)
 	}
 
 	rb, isRoute := in.src().(*Route)
@@ -538,17 +555,50 @@ func tryPushProjection(
 func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	outer := TableID(src.Outer)
 	for _, proj := range p.Projections {
-		if _, isOffset := proj.(*Offset); isOffset {
+		_, isOffset := proj.(Offset)
+		if isOffset {
 			continue
 		}
+
 		expr := proj.GetExpr()
 		if !ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(outer) {
 			return p, rewrite.SameTree, nil
+		}
+
+		se, ok := proj.(SubQueryExpression)
+		if ok {
+			rewriteColNameToArgument(se, src)
 		}
 	}
 	// all projections can be pushed to the outer
 	src.Outer, p.Source = p, src.Outer
 	return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
+}
+
+func rewriteColNameToArgument(se SubQueryExpression, src *SubQueryContainer) {
+	cols := make(map[*sqlparser.ColName]any)
+	for _, sq1 := range se.sqs {
+		for _, sq2 := range src.Inner {
+			if sq1.ReplacedSqColName == sq2.ReplacedSqColName && sq1.ReplacedSqColName != nil {
+				cols[sq1.ReplacedSqColName] = nil
+			}
+		}
+	}
+	if len(cols) > 0 {
+		// replace the ColNames with Argument inside the subquery
+		sqlparser.Rewrite(se.E, nil, func(cursor *sqlparser.Cursor) bool {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok {
+				return true
+			}
+			if _, ok := cols[col]; !ok {
+				return true
+			}
+			arg := sqlparser.NewArgument(col.Name.String())
+			cursor.Replace(arg)
+			return true
+		})
+	}
 }
 
 func pushDownProjectionInVindex(

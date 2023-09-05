@@ -43,6 +43,9 @@ type PlanningContext struct {
 	// DelegateAggregation tells us when we are allowed to split an aggregation across vtgate and mysql
 	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
 	DelegateAggregation bool
+
+	// Projected subqueries that have been merged
+	MergedSubqueries []*sqlparser.Subquery
 }
 
 func CreatePlanningContext(stmt sqlparser.Statement,

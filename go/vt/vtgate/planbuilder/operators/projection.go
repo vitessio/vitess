@@ -74,6 +74,11 @@ type (
 	UnexploredExpression struct {
 		E sqlparser.Expr
 	}
+
+	SubQueryExpression struct {
+		E   sqlparser.Expr
+		sqs []*SubQuery
+	}
 )
 
 var _ selectExpressions = (*Projection)(nil)
@@ -107,6 +112,11 @@ func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Ex
 	return len(p.Projections) - 1
 }
 
+func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) {
+	p.Projections = append(p.Projections, SubQueryExpression{E: expr, sqs: sqs})
+	p.Columns = append(p.Columns, ae)
+}
+
 func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool) int {
 	return p.addUnexploredExpr(expr, expr.Expr)
 }
@@ -138,14 +148,6 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	}
 
 	return -1, nil
-}
-
-// fetchExpr is used to accumulate all expressions we'll need from the input,
-// and store in which column on the projection we want to store the offset returned
-type fetchExpr struct {
-	expr    sqlparser.Expr
-	colIdx  []int
-	groupBy bool
 }
 
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) (int, error) {
@@ -187,6 +189,7 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, add
 func (po Offset) GetExpr() sqlparser.Expr               { return po.Expr }
 func (po Eval) GetExpr() sqlparser.Expr                 { return po.Expr }
 func (po UnexploredExpression) GetExpr() sqlparser.Expr { return po.E }
+func (po SubQueryExpression) GetExpr() sqlparser.Expr   { return po.E }
 
 func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{

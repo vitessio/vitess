@@ -22,9 +22,11 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -132,7 +134,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	}
 
 	if !qp.NeedsAggregation() {
-		projX, err := createProjectionWithoutAggr(qp, horizon.src())
+		projX, err := createProjectionWithoutAggr(ctx, qp, horizon.src())
 		if err != nil {
 			return nil, err
 		}
@@ -224,23 +226,82 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (
 	return p, nil
 }
 
-func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {
-	proj := &Projection{
-		Source: src,
-	}
+func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+	proj := &Projection{}
+	sqc := &SubQueryContainer{}
+	outerID := TableID(src)
 
 	for _, e := range qp.SelectExprs {
 		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
 			return nil, errHorizonNotPlanned()
 		}
 		ae, err := e.GetAliasedExpr()
-
 		if err != nil {
 			return nil, err
 		}
-		expr := ae.Expr
 
-		proj.addUnexploredExpr(ae, expr)
+		expr := ae.Expr
+		newExpr, subqs, err := sqc.handleSubqueries(ctx, expr, outerID)
+		if err != nil {
+			return nil, err
+		}
+		if newExpr == nil {
+			// there was no subquery in this expression
+			proj.addUnexploredExpr(ae, expr)
+		} else {
+			proj.addSubqueryExpr(ae, newExpr, subqs...)
+		}
 	}
+	proj.Source = sqc.getRootOperator(src)
 	return proj, nil
+}
+
+type subqueryExtraction struct {
+	new  sqlparser.Expr
+	subq []*sqlparser.Subquery
+	cols []*sqlparser.ColName
+}
+
+func (sq *SubQueryContainer) handleSubqueries(
+	ctx *plancontext.PlanningContext,
+	expr sqlparser.Expr,
+	outerID semantics.TableSet,
+) (sqlparser.Expr, []*SubQuery, error) {
+	original := sqlparser.CloneExpr(expr)
+	sqe := extractSubQueries(ctx, expr)
+	if sqe == nil {
+		return nil, nil, nil
+	}
+	var newSubqs []*SubQuery
+
+	for idx, subq := range sqe.subq {
+		sqInner, err := createSubquery(ctx, original, subq, outerID, nil, sqe.cols[idx], opcode.PulloutValue)
+		if err != nil {
+			return nil, nil, err
+		}
+		newSubqs = append(newSubqs, sqInner)
+	}
+
+	sq.Inner = append(sq.Inner, newSubqs...)
+
+	return sqe.new, newSubqs, nil
+}
+
+func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *subqueryExtraction {
+	sqe := &subqueryExtraction{}
+	sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
+			reseveSq := ctx.ReservedVars.ReserveSubQuery()
+			reserveSqColName := sqlparser.NewColName(reseveSq)
+			cursor.Replace(reserveSqColName)
+			sqe.subq = append(sqe.subq, subq)
+			sqe.cols = append(sqe.cols, reserveSqColName)
+		}
+		return true
+	})
+	if len(sqe.subq) == 0 {
+		return nil
+	}
+	sqe.new = expr
+	return sqe
 }

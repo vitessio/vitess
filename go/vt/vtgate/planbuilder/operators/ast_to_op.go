@@ -137,28 +137,23 @@ func getSubQuery(expr sqlparser.Expr) *sqlparser.Subquery {
 	return subqueryExprExists
 }
 
-func createSubqueryOp(
-	ctx *plancontext.PlanningContext,
-	expr sqlparser.Expr,
-	subq *sqlparser.Subquery,
-	outerID semantics.TableSet,
-) (*SubQuery, error) {
+func createSubqueryOp(ctx *plancontext.PlanningContext, expr sqlparser.Expr, subq *sqlparser.Subquery, outerID semantics.TableSet) (*SubQuery, error) {
 	switch expr := expr.(type) {
 	case *sqlparser.NotExpr:
 		switch inner := expr.Expr.(type) {
 		case *sqlparser.ExistsExpr:
-			return createSubquery(ctx, expr, subq, outerID, nil, opcode.PulloutNotExists)
+			return createSubquery(ctx, expr, subq, outerID, nil, nil, opcode.PulloutNotExists)
 		case *sqlparser.ComparisonExpr:
 			cmp := *inner
 			cmp.Operator = sqlparser.Inverse(cmp.Operator)
 			return createComparisonSubQuery(ctx, &cmp, subq, outerID)
 		}
 	case *sqlparser.ExistsExpr:
-		return createSubquery(ctx, expr, subq, outerID, nil, opcode.PulloutExists)
+		return createSubquery(ctx, expr, subq, outerID, nil, nil, opcode.PulloutExists)
 	case *sqlparser.ComparisonExpr:
 		return createComparisonSubQuery(ctx, expr, subq, outerID)
 	}
-	return createSubquery(ctx, expr, subq, outerID, nil, opcode.PulloutValue)
+	return createSubquery(ctx, expr, subq, outerID, nil, nil, opcode.PulloutValue)
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -179,6 +174,7 @@ func createSubquery(
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	predicate sqlparser.Expr,
+	rColName *sqlparser.ColName,
 	filterType opcode.PulloutOpcode,
 ) (*SubQuery, error) {
 	original = cloneASTAndSemState(ctx, original)
@@ -227,11 +223,13 @@ func createSubquery(
 	opInner = sqc.getRootOperator(opInner)
 
 	return &SubQuery{
-		FilterType:     filterType,
-		Subquery:       opInner,
-		Predicates:     jpc.predicates,
-		OuterPredicate: predicate,
-		Original:       original,
+		FilterType:        filterType,
+		Subquery:          opInner,
+		Predicates:        jpc.predicates,
+		OuterPredicate:    predicate,
+		Original:          original,
+		ReplacedSqColName: rColName,
+		_sq:               subq,
 	}, nil
 
 }
@@ -268,7 +266,7 @@ func createComparisonSubQuery(
 		filterType = opcode.PulloutNotIn
 	}
 
-	return createSubquery(ctx, original, subq, outerID, predicate, filterType)
+	return createSubquery(ctx, original, subq, outerID, predicate, nil, filterType)
 }
 
 type joinPredicateCollector struct {
