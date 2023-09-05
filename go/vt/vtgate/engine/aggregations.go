@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
@@ -348,9 +346,7 @@ func isComparable(typ sqltypes.Type) bool {
 }
 
 func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (aggregationState, []*querypb.Field, error) {
-	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field {
-		return proto.Clone(from).(*querypb.Field)
-	})
+	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field { return from.CloneVT() })
 
 	agstate := make([]aggregator, len(fields))
 	for _, aggr := range aggregates {

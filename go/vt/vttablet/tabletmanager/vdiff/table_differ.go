@@ -23,17 +23,11 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -42,6 +36,10 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -376,8 +374,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			// unbuffered channels which would present a major performance bottleneck.
 			// This need arises from the gRPC VStreamRowsResponse pooling and re-use/recycling done for
 			// gRPCQueryClient.VStreamRows() in vttablet/grpctabletconn/conn.
-			vsr := proto.Clone(vsrRaw).(*binlogdatapb.VStreamRowsResponse)
-
+			vsr := vsrRaw.CloneVT()
 			if len(fields) == 0 {
 				if len(vsr.Fields) == 0 {
 					return fmt.Errorf("did not received expected fields in response %+v on tablet %v",

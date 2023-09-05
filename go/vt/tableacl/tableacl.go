@@ -26,13 +26,11 @@ import (
 	"sync"
 
 	"github.com/tchap/go-patricia/patricia"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/tableacl/acl"
-
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
+	"vitess.io/vitess/go/vt/tableacl/acl"
 )
 
 // ACLResult embeds an acl.ACL and also tell which table group it belongs to.
@@ -188,7 +186,7 @@ func (tacl *tableACL) Set(config *tableaclpb.Config) error {
 	}
 	tacl.Lock()
 	tacl.entries = entries
-	tacl.config = proto.Clone(config).(*tableaclpb.Config)
+	tacl.config = config.CloneVT()
 	callback := tacl.callback
 	tacl.Unlock()
 	if callback != nil {
@@ -277,7 +275,7 @@ func GetCurrentConfig() *tableaclpb.Config {
 func (tacl *tableACL) Config() *tableaclpb.Config {
 	tacl.RLock()
 	defer tacl.RUnlock()
-	return proto.Clone(tacl.config).(*tableaclpb.Config)
+	return tacl.config.CloneVT()
 }
 
 // Register registers an AclFactory.

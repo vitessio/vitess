@@ -1217,7 +1217,7 @@ func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants .
 	t.Helper()
 	for i, want := range wants {
 		val := <-ch
-		got := proto.Clone(val).(*binlogdatapb.VStreamResponse)
+		got := val.CloneVT()
 		require.NotNil(t, got)
 		for _, event := range got.Events {
 			event.Timestamp = 0

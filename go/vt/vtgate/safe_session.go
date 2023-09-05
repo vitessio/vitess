@@ -135,7 +135,7 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 // NewAutocommitSession returns a SafeSession based on the original
 // session, but with autocommit enabled.
 func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
-	newSession := proto.Clone(sessn).(*vtgatepb.Session)
+	newSession := sessn.CloneVT()
 	newSession.InTransaction = false
 	newSession.ShardSessions = nil
 	newSession.PreSessions = nil

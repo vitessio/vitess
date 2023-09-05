@@ -30,8 +30,6 @@ import (
 	"text/template"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -1573,8 +1571,7 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 
 			span, ctx := trace.NewSpan(ctx, "Vtctld.GetSchema")
 			defer span.Finish()
-
-			req := proto.Clone(opts.BaseRequest).(*vtctldatapb.GetSchemaRequest)
+			req := opts.BaseRequest.CloneVT()
 			req.TableSizesOnly = sizesOnly
 			req.TabletAlias = tablet.Tablet.Alias
 

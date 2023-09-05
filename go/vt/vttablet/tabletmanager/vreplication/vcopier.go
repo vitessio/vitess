@@ -26,11 +26,9 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -504,7 +502,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// Clone rows, since pointer values will change while async work is
 		// happening. Can skip this when there's no parallelism.
 		if parallelism > 1 {
-			rows = proto.Clone(rows).(*binlogdatapb.VStreamRowsResponse)
+			rows = rows.CloneVT()
 		}
 
 		// Prepare a vcopierCopyTask for the current batch of work.

@@ -22,14 +22,10 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations/charset"
-	"vitess.io/vitess/go/mysql/collations/colldata"
-	"vitess.io/vitess/go/vt/vttablet"
-
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -39,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -80,7 +77,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		// bind var names.
 		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
 		for _, fld := range fieldEvent.Fields {
-			trimmed := proto.Clone(fld).(*querypb.Field)
+			trimmed := fld.CloneVT()
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
