@@ -51,7 +51,7 @@ require (
 	github.com/pires/go-proxyproto v0.6.2
 	github.com/pkg/errors v0.9.1
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
-	github.com/planetscale/vtprotobuf v0.4.0
+	github.com/planetscale/vtprotobuf v0.5.0
 	github.com/prometheus/client_golang v1.15.1
 	github.com/prometheus/common v0.43.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475

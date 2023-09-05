@@ -264,7 +264,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		--go_out=. --plugin protoc-gen-go="${VTROOTBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${VTROOTBIN}/protoc-gen-go-grpc" \
 		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${VTROOTBIN}/protoc-gen-go-vtproto" \
-		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
+		--go-vtproto_opt=features=marshal+unmarshal+size+pool+clone \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
 		-I${PWD}/dist/vt-protoc-21.3/include:proto $(PROTO_SRCS)
