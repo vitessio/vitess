@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -221,7 +222,11 @@ func SetBinlogRotationThreshold(threshold int64) {
 // startSnapshotAllTables starts a streaming query with a snapshot view of all tables, returning the
 // GTID set from the time when the snapshot was taken.
 func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid string, err error) {
-	lockConn, err := mysqlConnect(ctx, conn.cp)
+	const MaxLockWaitTime = 30 * time.Second
+	shortCtx, cancel := context.WithTimeout(ctx, MaxLockWaitTime)
+	defer cancel()
+
+	lockConn, err := mysqlConnect(shortCtx, conn.cp)
 	if err != nil {
 		return "", err
 	}

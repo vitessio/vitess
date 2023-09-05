@@ -38,9 +38,14 @@ import (
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
 func TestFKWorkflow(t *testing.T) {
+	// ensure that there are multiple copy phase cycles per table
+	extraVTTabletArgs = []string{"--vstream_packet_size=256"}
+	defer func() { extraVTTabletArgs = nil }()
+
 	cellName := "zone"
 	cells := []string{cellName}
 	vc = NewVitessCluster(t, "TestFKWorkflow", cells, mainClusterConfig)
+
 	require.NotNil(t, vc)
 	allCellNames = cellName
 	defaultCellName := cellName
@@ -103,9 +108,7 @@ func TestFKWorkflow(t *testing.T) {
 	waitForAdditionalRows(t, 200)
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
 	if withLoad {
-		go func() {
-			cancel()
-		}()
+		cancel()
 		<-ch
 	}
 	mt.SwitchReadsAndWrites()
@@ -114,20 +117,12 @@ func TestFKWorkflow(t *testing.T) {
 
 	if withLoad {
 		ctx, cancel = context.WithCancel(context.Background())
-		defer func() {
-			select {
-			case <-ctx.Done():
-			default:
-				cancel()
-			}
-		}()
+		defer cancel()
 		go simulateLoad(t, ctx)
 	}
 	waitForAdditionalRows(t, 200)
 	if withLoad {
-		go func() {
-			cancel()
-		}()
+		cancel()
 		<-ch
 	}
 }
@@ -221,6 +216,7 @@ func insert(t *testing.T) {
 	insertQuery := fmt.Sprintf("INSERT INTO parent (id) VALUES (%d)", currentParentId)
 	qr := exec2(t, insertQuery)
 	require.NotNil(t, qr)
+	// insert one or more children, some with valid foreign keys, some without.
 	for i := 0; i < rand.Intn(4)+1; i++ {
 		currentChildId++
 		if i == 3 {

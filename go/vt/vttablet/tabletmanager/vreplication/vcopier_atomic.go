@@ -82,15 +82,15 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
-	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
-	defer copyStateGCTicker.Stop()
 
 	parallelism := getInsertParallelism()
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
-	// Allocate a result channel to collect results from tasks.
-	resultCh := make(chan *vcopierCopyTaskResult, parallelism*4)
+	// Allocate a result channel to collect results from tasks. To not block fast workers, we allocate a buffer of
+	// MaxResultsInFlight results per worker.
+	const MaxResultsInFlight = 4
+	resultCh := make(chan *vcopierCopyTaskResult, parallelism*MaxResultsInFlight)
 	defer close(resultCh)
 
 	var lastpk *querypb.Row
@@ -142,10 +142,18 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 
 			state.currentTableName = tableName
 		}
+
+		// A new copy queue is created for each table. The queue is closed when the table is done.
 		if !copyWorkQueue.isOpen {
 			if len(resp.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", resp)
 			}
+
+			lastpk = nil
+			// pkfields are only used for logging, so that we can monitor progress.
+			pkfields = make([]*querypb.Field, len(resp.Pkfields))
+			copy(pkfields, resp.Pkfields)
+
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tableName,
 			}
@@ -154,7 +162,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			if err != nil {
 				return err
 			}
-			pkfields = append(pkfields, pkfields...)
+
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
@@ -163,6 +171,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			addLatestCopyState := buf.ParsedQuery()
 			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
 		}
+		// When rowstreamer has finished streaming all rows, we get a callback with empty rows.
 		if len(resp.Rows) == 0 {
 			return nil
 		}
@@ -171,6 +180,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			Fields: pkfields,
 			Rows:   []*querypb.Row{lastpk},
 		})
+
 		if merr != nil {
 			return fmt.Errorf("failed to marshal pk fields and value into query result: %s", merr.Error())
 		}

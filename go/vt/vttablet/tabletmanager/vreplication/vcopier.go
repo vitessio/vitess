@@ -509,6 +509,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			rows = rows.CloneVT()
 		}
 
+		// Code below is copied from vcopier.go. It was implemented to facilitate
+		// parallel bulk inserts in https://github.com/vitessio/vitess/pull/10828.
+		// We can probably extract this into a common package and use it for both
+		// flavors of the vcopier. But cut/pasting it for now, so as to not change
+		// vcopier at the moment to avoid any regressions.
+
 		// Prepare a vcopierCopyTask for the current batch of work.
 		// TODO(maxeng) see if using a pre-allocated pool will speed things up.
 		currCh := make(chan *vcopierCopyTaskResult, 1)
@@ -671,6 +677,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	return nil
 }
 
+// updatePos is called after the last table is copied in an atomic copy, to set the gtid so that the replicating phase
+// can start from the gtid where the snapshot with all tables was taken. It also updates the final copy row count.
 func (vc *vcopier) updatePos(ctx context.Context, gtid string) error {
 	pos, err := replication.DecodePosition(gtid)
 	if err != nil {
@@ -1215,6 +1223,7 @@ func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState 
 	return vts
 }
 
+// getInsertParallelism returns the number of parallel workers to use for inserting batches during the copy phase.
 func getInsertParallelism() int {
 	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
 	return parallelism

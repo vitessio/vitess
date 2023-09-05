@@ -21,6 +21,9 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -243,6 +246,9 @@ func canStartWorkflow(keyspace, workflow string) error {
 	}
 	if len(resp.Workflows) == 0 {
 		return fmt.Errorf("workflow %s not found", workflow)
+	}
+	if len(resp.Workflows) > 1 {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "multiple results found for workflow %s", workflow)
 	}
 	wf := resp.Workflows[0]
 	if wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_AtomicCopy.String() {

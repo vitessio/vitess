@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	schema2 "vitess.io/vitess/go/vt/schema"
 )
 
 /*
@@ -90,7 +91,15 @@ func (ts *tableStreamer) Stream() error {
 	defer conn.Close()
 	ts.snapshotConn = conn
 
-	if ts.gtid, err = conn.startSnapshotAllTables(ts.ctx); err != nil {
+	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
+	if err != nil {
+		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
+		ts.gtid, err = conn.startSnapshotAllTables(ts.ctx)
+	} else {
+		// session_track_gtids = START_GTID supported. Get a transaction with consistent GTID without LOCKing tables.
+		ts.gtid, err = conn.startSnapshotWithConsistentGTID(ts.ctx)
+	}
+	if err != nil {
 		return err
 	}
 
@@ -104,6 +113,10 @@ func (ts *tableStreamer) Stream() error {
 	}
 	for _, row := range rs.Rows {
 		tableName := row[0].ToString()
+		if schema2.IsInternalOperationTableName(tableName) {
+			log.Infof("Skipping internal table %s", tableName)
+			continue
+		}
 		ts.tables = append(ts.tables, tableName)
 	}
 	log.Infof("Found %d tables to stream: %+v", len(ts.tables), ts.tables)
