@@ -2532,3 +2532,14 @@ func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int)
 	}
 	panic("switch should be exhaustive")
 }
+
+func IsNonLiteral(updExprs UpdateExprs) bool {
+	for _, updateExpr := range updExprs {
+		switch updateExpr.Expr.(type) {
+		case *Argument, *NullVal, BoolVal, *Literal:
+		default:
+			return true
+		}
+	}
+	return false
+}
