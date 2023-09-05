@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -54,8 +55,8 @@ func (p *BackupManifestPath) String() string {
 // possible, or is empty.
 func ChooseBinlogsForIncrementalBackup(
 	ctx context.Context,
-	backupFromGTIDSet mysql.GTIDSet,
-	purgedGTIDSet mysql.GTIDSet,
+	backupFromGTIDSet replication.GTIDSet,
+	purgedGTIDSet replication.GTIDSet,
 	binaryLogs []string,
 	pgtids func(ctx context.Context, binlog string) (gtids string, err error),
 ) (
@@ -64,13 +65,13 @@ func ChooseBinlogsForIncrementalBackup(
 	incrementalBackupToGTID string,
 	err error,
 ) {
-	var prevGTIDsUnion mysql.GTIDSet
+	var prevGTIDsUnion replication.GTIDSet
 	for i, binlog := range binaryLogs {
 		previousGtids, err := pgtids(ctx, binlog)
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot get previous gtids for binlog %v", binlog)
 		}
-		previousGTIDsPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, previousGtids)
+		previousGTIDsPos, err := replication.ParsePosition(replication.Mysql56FlavorID, previousGtids)
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot decode binlog %s position in incremental backup: %v", binlog, previousGTIDsPos)
 		}
@@ -93,13 +94,21 @@ func ChooseBinlogsForIncrementalBackup(
 			// know this when we look into the _next_ binlog file's Previous-GTIDs.
 			continue
 		}
+		// Got here? This means backupFromGTIDSet does not full contain the current binlog's Previous-GTIDs.
+		// In other words, Previoud-GTIDs have entries on top of backupFromGTIDSet. Which suggests that these
+		// entries were added by the previous binary log.
 		if i == 0 {
+			// Ummm... there _is no_ previous binary log.
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Required entries have been purged. Oldest binary log %v expects entries not found in backup pos. Expected pos=%v", binlog, previousGTIDsPos)
 		}
-		if !prevGTIDsUnion.Union(purgedGTIDSet).Contains(backupFromGTIDSet) {
+		// The other thing to validate, is that we can't allow a situation where the backup-GTIDs have entries not covered
+		// by our binary log's Previous-GTIDs (padded with purged GTIDs). Because that means we can't possibly restore to
+		// such position.
+		prevGTIDsUnionPurged := prevGTIDsUnion.Union(purgedGTIDSet)
+		if !prevGTIDsUnionPurged.Contains(backupFromGTIDSet) {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Neither fully contains the other. Requested pos=%v, binlog pos=%v",
-				backupFromGTIDSet, previousGTIDsPos.GTIDSet)
+				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Neither fully contains the other.\n- Requested pos=%v\n- binlog pos=%v\n- purgedGTIDSet=%v\n- union=%v\n- union purged=%v",
+				backupFromGTIDSet, previousGTIDsPos.GTIDSet, purgedGTIDSet, prevGTIDsUnion, prevGTIDsUnionPurged)
 		}
 		// We begin with the previous binary log, and we ignore the last binary log, because it's still open and being written to.
 		binaryLogsToBackup = binaryLogs[i-1 : len(binaryLogs)-1]
@@ -130,7 +139,7 @@ func ChooseBinlogsForIncrementalBackup(
 // IsValidIncrementalBakcup determines whether the given manifest can be used to extend a backup
 // based on baseGTIDSet. The manifest must be able to pick up from baseGTIDSet, and must extend it by at least
 // one entry.
-func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, purgedGTIDSet mysql.GTIDSet, manifest *BackupManifest) bool {
+func IsValidIncrementalBakcup(baseGTIDSet replication.GTIDSet, purgedGTIDSet replication.GTIDSet, manifest *BackupManifest) bool {
 	if manifest == nil {
 		return false
 	}
@@ -159,7 +168,7 @@ func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, purgedGTIDSet mysql.GTI
 // - zero or more incremental backups
 // The path ends with restoreToGTIDSet or goes beyond it. No shorter path will do the same.
 // The function returns an error when a path cannot be found.
-func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
+func FindPITRPath(restoreToGTIDSet replication.GTIDSet, manifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
 	sortedManifests := make([](*BackupManifest), 0, len(manifests))
 	for _, m := range manifests {
 		if m != nil {
@@ -199,8 +208,8 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 
 	var validRestorePaths []BackupManifestPath
 	// recursive function that searches for all possible paths:
-	var findPaths func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest)
-	findPaths = func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) {
+	var findPaths func(baseGTIDSet replication.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest)
+	findPaths = func(baseGTIDSet replication.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) {
 		// The algorithm was first designed to find all possible paths. But then we recognized that it will be
 		// doing excessive work. At this time we choose to end the search once we find the first valid path, even if
 		// it's not the most optimal. The next "if" statement is the addition to the algorithm, where we suffice with
@@ -230,6 +239,151 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 	findPaths(fullBackup.Position.GTIDSet, sortedManifests[0:1], sortedManifests[1:])
 	if len(validRestorePaths) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no path found that leads to GTID %v", restoreToGTIDSet)
+	}
+	// Now find a shortest path
+	for i := range validRestorePaths {
+		path := validRestorePaths[i]
+		if shortestPath == nil {
+			shortestPath = path
+			continue
+		}
+		if len(path) < len(shortestPath) {
+			shortestPath = path
+		}
+	}
+	return shortestPath, nil
+}
+
+// FindPITRToTimePath evaluates the shortest path to recover a restoreToGTIDSet. The past is composed of:
+// - a full backup, followed by:
+// - zero or more incremental backups
+// The path ends with restoreToGTIDSet or goes beyond it. No shorter path will do the same.
+// The function returns an error when a path cannot be found.
+func FindPITRToTimePath(restoreToTime time.Time, manifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
+	restoreToTimeStr := FormatRFC3339(restoreToTime)
+	sortedManifests := make([](*BackupManifest), 0, len(manifests))
+	for _, m := range manifests {
+		if m != nil {
+			sortedManifests = append(sortedManifests, m)
+		}
+	}
+	sort.SliceStable(sortedManifests, func(i, j int) bool {
+		return sortedManifests[j].Position.GTIDSet.Union(sortedManifests[i].PurgedPosition.GTIDSet).Contains(sortedManifests[i].Position.GTIDSet)
+	})
+	mostRelevantFullBackupIndex := -1 // an invalid value
+	for i, manifest := range sortedManifests {
+		if manifest.Incremental {
+			continue
+		}
+		startTime, err := ParseRFC3339(manifest.BackupTime)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "parsing manifest BackupTime %s", manifest.BackupTime)
+		}
+		finishedTime, err := ParseRFC3339(manifest.FinishedTime)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "parsing manifest FinishedTime %s", manifest.FinishedTime)
+		}
+		var compareWithTime time.Time
+		switch manifest.BackupMethod {
+		case xtrabackupEngineName:
+			// Xtrabackup backups are true to the time they complete (the snapshot is taken at the very end).
+			// Therefore the finish time best represents the backup time.
+			compareWithTime = finishedTime
+		case builtinBackupEngineName:
+			// Builtin takes down the MySQL server. Hence the _start time_ represents the backup time best
+			compareWithTime = startTime
+		default:
+			compareWithTime = startTime
+		}
+		if restoreToTime.Before(compareWithTime) {
+			// We want a bfull backup whose time is _before_ restore-to-time, and we will top it with
+			// inremental restore via binlogs.
+			continue
+		}
+		mostRelevantFullBackupIndex = i
+	}
+
+	if mostRelevantFullBackupIndex < 0 {
+		// No full backup prior to desired restore point...
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no full backup found before timestmap %v", restoreToTimeStr)
+	}
+	// All that interests us starts with mostRelevantFullBackupIndex: that's where the full backup is,
+	// and any relevant incremental backups follow that point (because manifests are sorted by backup pos, ascending)
+	sortedManifests = sortedManifests[mostRelevantFullBackupIndex:]
+	// Of all relevant backups, we take the most recent one.
+	fullBackup := sortedManifests[0]
+	purgedGTIDSet := fullBackup.PurgedPosition.GTIDSet
+
+	timeIsInRange := func(t, from, to time.Time) bool {
+		// integrity:
+		if to.Before(from) {
+			return false // bad input
+		}
+		if t.Before(from) {
+			return false
+		}
+		if t.After(to) {
+			return false
+		}
+		return true
+	}
+
+	var validRestorePaths []BackupManifestPath
+	// recursive function that searches for all possible paths:
+	var findPaths func(baseGTIDSet replication.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) error
+	findPaths = func(baseGTIDSet replication.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) error {
+		// The algorithm was first designed to find all possible paths. But then we recognized that it will be
+		// doing excessive work. At this time we choose to end the search once we find the first valid path, even if
+		// it's not the most optimal. The next "if" statement is the addition to the algorithm, where we suffice with
+		// a single result.
+		if len(validRestorePaths) > 0 {
+			return nil
+		}
+		// remove the above if you wish to explore all paths.
+		lastManifest := pathManifests[len(pathManifests)-1]
+		if lastManifest.Incremental {
+			lastManifestIncrementalDetails := lastManifest.IncrementalDetails
+
+			firstTimestamp, err := ParseRFC3339(lastManifestIncrementalDetails.FirstTimestamp)
+			if err != nil {
+				return err
+			}
+			if restoreToTime.Before(firstTimestamp) {
+				// the restore-to-time falls between previous manifest's timestamp (whether previous manifest is a
+				// full backup or incremental backup is not important), and this manifest's first-timestamp.
+				// This means the previous manifest is the end of a valid restore path. We couldn't know it back then.
+				validRestorePaths = append(validRestorePaths, pathManifests[0:len(pathManifests)-1])
+				return nil
+			}
+			lastTimestamp, err := ParseRFC3339(lastManifestIncrementalDetails.LastTimestamp)
+			if err != nil {
+				return err
+			}
+			if timeIsInRange(restoreToTime, firstTimestamp, lastTimestamp) {
+				// successful end of path. Update list of successful paths
+				validRestorePaths = append(validRestorePaths, pathManifests)
+				return nil
+			}
+		}
+		if len(remainingManifests) == 0 {
+			// end of the road. No possibilities from here.
+			return nil
+		}
+		// if the next manifest is eligible to be part of the path, try it out
+		if IsValidIncrementalBakcup(baseGTIDSet, purgedGTIDSet, remainingManifests[0]) {
+			nextGTIDSet := baseGTIDSet.Union(remainingManifests[0].Position.GTIDSet)
+			findPaths(nextGTIDSet, append(pathManifests, remainingManifests[0]), remainingManifests[1:])
+		}
+		// also, try without the next manifest
+		findPaths(baseGTIDSet, pathManifests, remainingManifests[1:])
+		return nil
+	}
+	// find all paths, entry point
+	if err := findPaths(fullBackup.Position.GTIDSet, sortedManifests[0:1], sortedManifests[1:]); err != nil {
+		return nil, err
+	}
+	if len(validRestorePaths) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no path found that leads to timestamp %v", restoreToTimeStr)
 	}
 	// Now find a shortest path
 	for i := range validRestorePaths {

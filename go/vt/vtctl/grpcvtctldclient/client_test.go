@@ -36,8 +36,10 @@ import (
 )
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return grpcvtctldserver.NewVtctldServer(ts)
 	})
@@ -80,9 +82,11 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return grpcvtctldserver.NewVtctldServer(ts)
 	})
@@ -107,9 +111,11 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return grpcvtctldserver.NewVtctldServer(ts)
 	})

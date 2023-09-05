@@ -32,11 +32,13 @@ import (
 	"time"
 	"unicode"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/constants/sidecar"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -89,7 +91,7 @@ type Config struct {
 	Charset string
 
 	// PlannerVersion is the planner version to use for the vtgate.
-	// Choose between V3, V3Insert, Gen4, Gen4Greedy and Gen4Fallback
+	// Choose between Gen4, Gen4Greedy and Gen4Left2Right
 	PlannerVersion string
 
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
@@ -528,7 +530,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 func (db *LocalCluster) createVTSchema() error {
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecardb.GetIdentifier())}, ""); err != nil {
+			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecar.GetIdentifier())}, ""); err != nil {
 				return nil, err
 			}
 		}

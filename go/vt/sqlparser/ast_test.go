@@ -261,7 +261,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -286,7 +286,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -313,7 +313,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -338,7 +338,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -359,23 +359,6 @@ func TestWhere(t *testing.T) {
 	w.Format(buf)
 	if buf.String() != "" {
 		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String())
-	}
-}
-
-func TestIsAggregate(t *testing.T) {
-	f := FuncExpr{Name: NewIdentifierCI("avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("Avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("foo")}
-	if f.IsAggregate() {
-		t.Error("IsAggregate: true, want false")
 	}
 }
 
@@ -816,5 +799,34 @@ func BenchmarkStringTraces(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+func TestCloneComments(t *testing.T) {
+	c := []string{"/*vt+ a=b */"}
+	parsedComments := Comments(c).Parsed()
+	directives := parsedComments.Directives()
+	{
+		assert.NotEmpty(t, directives.m)
+		val, ok := directives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+	cloned := CloneRefOfParsedComments(parsedComments)
+	cloned.ResetDirectives()
+	clonedDirectives := cloned.Directives()
+	{
+		assert.NotEmpty(t, clonedDirectives.m)
+		val, ok := clonedDirectives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+	{
+		delete(directives.m, "a")
+		assert.Empty(t, directives.m)
+
+		val, ok := clonedDirectives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
 	}
 }

@@ -17,18 +17,15 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"reflect"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )
 
 // checkDirectory tests the directory part of the topo.Conn API.
-func checkDirectory(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
-
+func checkDirectory(t *testing.T, ctx context.Context, ts *topo.Server) {
 	// global cell
 	t.Logf("===   checkDirectoryInCell global")
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)

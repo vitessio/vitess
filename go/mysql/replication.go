@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -45,7 +46,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	pos = writeUint32(data, pos, serverID)
 	_ = writeEOFString(data, pos, binlogFilename)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }
@@ -92,7 +93,7 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	pos = writeUint32(data, pos, uint32(len(gtidSet)))        //nolint
 	pos += copy(data[pos:], gtidSet)                          //nolint
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }
@@ -110,7 +111,7 @@ func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
 	pos = writeUint64(data, pos, binlogPos)
 	_ = writeEOFString(data, pos, binlogFilename)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 
@@ -132,7 +133,7 @@ func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
 	}
 	_ = writeEOFString(data, pos, string(ev.Bytes()))
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }

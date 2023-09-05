@@ -101,6 +101,15 @@ func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb
 	return client.c.BackupShard(ctx, in, opts...)
 }
 
+// CancelSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldatapb.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CancelSchemaMigration(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {
@@ -108,6 +117,24 @@ func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctld
 	}
 
 	return client.c.ChangeTabletType(ctx, in, opts...)
+}
+
+// CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CleanupSchemaMigration(ctx, in, opts...)
+}
+
+// CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CompleteSchemaMigration(ctx, in, opts...)
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
@@ -317,6 +344,15 @@ func (client *gRPCVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.G
 	return client.c.GetSchema(ctx, in, opts...)
 }
 
+// GetSchemaMigrations is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSchemaMigrations(ctx, in, opts...)
+}
+
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	if client.c == nil {
@@ -432,6 +468,33 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	}
 
 	return client.c.InitShardPrimary(ctx, in, opts...)
+}
+
+// LaunchSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldatapb.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LaunchSchemaMigration(ctx, in, opts...)
+}
+
+// MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MoveTablesComplete(ctx, in, opts...)
+}
+
+// MoveTablesCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MoveTablesCreate(ctx, in, opts...)
 }
 
 // PingTablet is part of the vtctlservicepb.VtctldClient interface.
@@ -558,6 +621,15 @@ func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctl
 	}
 
 	return client.c.RestoreFromBackup(ctx, in, opts...)
+}
+
+// RetrySchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RetrySchemaMigration(ctx context.Context, in *vtctldatapb.RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RetrySchemaMigration(ctx, in, opts...)
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
@@ -783,6 +855,33 @@ func (client *gRPCVtctldClient) ValidateVersionShard(ctx context.Context, in *vt
 	}
 
 	return client.c.ValidateVersionShard(ctx, in, opts...)
+}
+
+// WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldatapb.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowDeleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowDelete(ctx, in, opts...)
+}
+
+// WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowStatus(ctx context.Context, in *vtctldatapb.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowStatus(ctx, in, opts...)
+}
+
+// WorkflowSwitchTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowSwitchTraffic(ctx context.Context, in *vtctldatapb.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowSwitchTraffic(ctx, in, opts...)
 }
 
 // WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.

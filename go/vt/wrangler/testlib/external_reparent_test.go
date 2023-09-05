@@ -47,8 +47,9 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -139,8 +140,9 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
@@ -221,8 +223,9 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
@@ -313,8 +316,9 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
@@ -398,8 +402,9 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, and a good replica.
@@ -501,8 +506,9 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	flag.Set("disable_active_reparents", "true")
 	defer flag.Set("disable_active_reparents", "false")
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary and a new primary
@@ -549,6 +555,9 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 		}
 	}
+
+	// PrimaryAlias in the shard record is updated asynchronously, so we should wait for it to succeed.
+	waitForShardPrimary(t, wr, newPrimary.Tablet)
 
 	shardInfo, err := ts.GetShard(context.Background(), newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard)
 	assert.NoError(t, err)

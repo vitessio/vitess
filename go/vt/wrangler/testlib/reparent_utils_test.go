@@ -24,12 +24,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -47,8 +48,9 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
@@ -67,9 +69,9 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 
 	// primary action loop (to initialize host and port)
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			5: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			5: replication.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -80,9 +82,9 @@ func TestShardReplicationStatuses(t *testing.T) {
 	defer primary.StopActionLoop(t)
 
 	// replica loop
-	replica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			5: mysql.MariadbGTID{
+	replica.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			5: replication.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 890,
@@ -130,8 +132,9 @@ func TestReparentTablet(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
@@ -186,8 +189,9 @@ func TestReparentTablet(t *testing.T) {
 
 // TestSetReplicationSource tests that SetReplicationSource works as intended under various circumstances.
 func TestSetReplicationSource(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets

@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: {{.Name}}
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-4cores-1
 
     steps:
     - name: Skip CI
@@ -33,6 +33,13 @@ jobs:
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+
+        PR_DATA=$(curl \
+          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
+        draft=$(echo "$PR_DATA" | jq .draft -r)
+        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -62,7 +69,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.21.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -142,7 +149,7 @@ jobs:
         make tools
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -151,19 +158,27 @@ jobs:
         launchable verify || true
 
         # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
+        launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: Run test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
+        set -exo pipefail
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
+
+        export NOVTADMINBUILD=1
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Print test output and Record test result in launchable
+    - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
       run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        if [[ "{{"${{steps.skip-workflow.outputs.is_draft}}"}}" ==  "false" ]]; then
+          # send recorded tests to launchable
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        fi
 
         # print test output
         cat output.txt

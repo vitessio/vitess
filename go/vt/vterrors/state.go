@@ -55,6 +55,8 @@ const (
 	CantDoThisInTransaction
 	RequiresPrimaryKey
 	OperandColumns
+	RowIsReferenced2
+	NoReferencedRow2
 	UnknownStmtHandler
 
 	// not found

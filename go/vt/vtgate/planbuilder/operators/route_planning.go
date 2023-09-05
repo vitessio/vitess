@@ -404,7 +404,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 }
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, *rewrite.ApplyResult, error) {
-	newPlan, err := Merge(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
+	newPlan, err := mergeJoinInputs(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -548,8 +548,9 @@ func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) s
 		}
 
 		exp = semantics.RewriteDerivedTableExpression(exp, tbl)
-		exp = getColName(exp)
-		if exp == nil {
+		if col := getColName(exp); col != nil {
+			exp = col
+		} else {
 			return nil
 		}
 	}

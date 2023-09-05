@@ -77,6 +77,7 @@ func main() {
 	logutil.RegisterFlags(fs)
 
 	servenv.ParseFlags("topo2topo")
+	servenv.Init()
 
 	fromTS, err := topo.OpenServer(fromImplementation, fromServerAddress, fromRoot)
 	if err != nil {

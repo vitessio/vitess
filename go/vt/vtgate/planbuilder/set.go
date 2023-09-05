@@ -261,7 +261,7 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 		}
 	case *sqlparser.ColName:
 		// this is a little of a hack. it's used when the setting is not a normal expression, but rather
-		// an enumeration, such as utf8, utf8mb4, etc
+		// an enumeration, such as utf8mb3, utf8mb4, etc
 		switch node.Name.Lowered() {
 		case "on":
 			return "1", nil

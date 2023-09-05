@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -57,6 +56,11 @@ const (
 	RestoreState = "restore_in_progress"
 	// BackupTimestampFormat is the format in which we save BackupTime and FinishedTime
 	BackupTimestampFormat = "2006-01-02.150405"
+
+	// closeTimeout is the timeout for closing backup files after writing.
+	// The value is a bit arbitrary. How long does it make sense to wait for a Close()? With a cloud-based implementation,
+	// network might be an issue. _Seconds_ are probably too short. The whereabouts of a minute us a reasonable value.
+	closeTimeout = 1 * time.Minute
 )
 
 const (
@@ -93,6 +97,18 @@ func init() {
 	}
 }
 
+func FormatRFC3339(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
+func ParseRFC3339(timestamp string) (time.Time, error) {
+	return time.Parse(time.RFC3339, timestamp)
+}
+
+func ParseBinlogTimestamp(timestamp string) (time.Time, error) {
+	return time.Parse("060102 15:04:05", timestamp)
+}
+
 func registerBackupFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
 	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
@@ -105,7 +121,7 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
 	if params.Stats == nil {
-		params.Stats = stats.NoStats()
+		params.Stats = backupstats.NoStats()
 	}
 
 	startTs := time.Now()
@@ -120,8 +136,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	// Scope bsStats to selected storage engine.
 	bsStats := params.Stats.Scope(
-		stats.Component(stats.BackupStorage),
-		stats.Implementation(
+		backupstats.Component(backupstats.BackupStorage),
+		backupstats.Implementation(
 			titleCase(backupstorage.BackupStorageImplementation),
 		),
 	)
@@ -134,12 +150,13 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
+	params.Logger.Infof("Starting backup %v", bh.Name())
 
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
-		stats.Component(stats.BackupEngine),
-		stats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Component(backupstats.BackupEngine),
+		backupstats.Implementation(titleCase(backupEngineImplementation)),
 	)
 	var be BackupEngine
 	if isIncrementalBackup(beParams) {
@@ -174,8 +191,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// The backup worked, so just return the finish error, if any.
-	stats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(stats.Operation("Backup")).TimedIncrement(time.Since(startTs))
+	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
 	return finishErr
 }
 
@@ -341,7 +358,7 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
 	if params.Stats == nil {
-		params.Stats = stats.NoStats()
+		params.Stats = backupstats.NoStats()
 	}
 
 	startTs := time.Now()
@@ -355,8 +372,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	// Scope bsStats to selected storage engine.
 	bsStats := params.Stats.Scope(
-		stats.Component(backupstats.BackupStorage),
-		stats.Implementation(
+		backupstats.Component(backupstats.BackupStorage),
+		backupstats.Implementation(
 			titleCase(backupstorage.BackupStorageImplementation),
 		),
 	)
@@ -410,8 +427,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// Scope stats to selected backup engine.
 	reParams := params.Copy()
 	reParams.Stats = params.Stats.Scope(
-		stats.Component(backupstats.BackupEngine),
-		stats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Component(backupstats.BackupEngine),
+		backupstats.Implementation(titleCase(backupEngineImplementation)),
 	)
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
@@ -469,8 +486,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
-	stats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(stats.Operation("Restore")).TimedIncrement(time.Since(startTs))
+	backupstats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(backupstats.Operation("Restore")).TimedIncrement(time.Since(startTs))
 	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }

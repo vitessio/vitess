@@ -144,7 +144,9 @@ func TestConsulTopo(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	test.TopoServerTestSuite(t, func() *topo.Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
 		testIndex++
@@ -190,7 +192,9 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	test.TopoServerTestSuite(t, func() *topo.Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
 		testIndex++
@@ -247,7 +251,9 @@ func TestConsulTopoWithAuth(t *testing.T) {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
-	test.TopoServerTestSuite(t, func() *topo.Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
 		testIndex++

@@ -27,11 +27,54 @@ import (
 )
 
 func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
-	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
+	statement := horizon.selectStatement()
+	switch sel := statement.(type) {
+	case *sqlparser.Select:
+		return expandSelectHorizon(ctx, horizon, sel)
+	case *sqlparser.Union:
+		return expandUnionHorizon(ctx, horizon, sel)
+	}
+	return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement))
+}
+
+func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	op := horizon.Source
+
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
+	if len(qp.OrderExprs) > 0 {
+		op = &Ordering{
+			Source: op,
+			Order:  qp.OrderExprs,
+		}
+	}
+
+	if union.Limit != nil {
+		op = &Limit{
+			Source: op,
+			AST:    union.Limit,
+		}
+	}
+
+	if horizon.TableId != nil {
+		op = &Projection{
+			Source:  op,
+			TableID: horizon.TableId,
+			Alias:   horizon.Alias,
+		}
+	}
+
+	if op == horizon.Source {
+		return op, rewrite.NewTree("removed UNION horizon not used", op), nil
+	}
+
+	return op, rewrite.NewTree("expand UNION horizon into smaller components", op), nil
+}
+
+func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, nil, err
@@ -44,8 +87,9 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Oper
 
 	if qp.NeedsDistinct() {
 		op = &Distinct{
-			Source: op,
-			QP:     qp,
+			Required: true,
+			Source:   op,
+			QP:       qp,
 		}
 	}
 
@@ -71,7 +115,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Oper
 		}
 	}
 
-	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
+	return op, rewrite.NewTree("expand SELECT horizon into smaller components", op), nil
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {
@@ -192,7 +236,7 @@ func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projec
 			aggr, ok := expr.(sqlparser.AggrFunc)
 			if !ok {
 				// need to add logic to extract aggregations and pushed them to the top level
-				return nil, errHorizonNotPlanned()
+				return nil, vterrors.VT12001(fmt.Sprintf("unsupported aggregation expression: %s", sqlparser.String(expr)))
 			}
 			expr = aggr.GetArg()
 			if expr == nil {

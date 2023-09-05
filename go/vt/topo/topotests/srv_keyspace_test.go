@@ -62,8 +62,10 @@ func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace str
 func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// No SrvKeyspace -> ErrNoNode
 	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
@@ -76,8 +78,10 @@ func TestWatchSrvKeyspace(t *testing.T) {
 
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// Create initial value
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, &topodatapb.SrvKeyspace{}); err != nil {
@@ -175,8 +179,10 @@ func TestWatchSrvKeyspace(t *testing.T) {
 func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// No SrvKeyspace -> ErrNoNode
 	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
@@ -223,8 +229,10 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell, cell2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell, cell2)
+	defer ts.Close()
 
 	keyRange, err := key.ParseShardingSpec("-")
 	if err != nil || len(keyRange) != 1 {
@@ -464,8 +472,10 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell, cell2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell, cell2)
+	defer ts.Close()
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
@@ -656,8 +666,10 @@ func TestGetShardServingTypes(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell, cell2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell, cell2)
+	defer ts.Close()
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
@@ -764,8 +776,10 @@ func TestGetShardServingCells(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell, cell2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell, cell2)
+	defer ts.Close()
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
@@ -868,8 +882,10 @@ func TestMasterMigrateServedType(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell, cell2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell, cell2)
+	defer ts.Close()
 
 	initialKeyRange, err := key.ParseShardingSpec("-")
 	if err != nil || len(initialKeyRange) != 1 {
@@ -1152,8 +1168,10 @@ func TestValidateSrvKeyspace(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell, cell2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell, cell2)
+	defer ts.Close()
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {

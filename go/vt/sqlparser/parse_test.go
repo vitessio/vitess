@@ -44,17 +44,25 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select * from foo limit 5 + 5",
+	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (now()))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime(6) DEFAULT (now()))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime(6) default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (now() + 1))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now() + 1)\n)",
 	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
@@ -93,52 +101,52 @@ var (
 		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb BLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
-		output: "create table t2 (\n\tb blob default ('abc')\n)",
+		output: "create table t2 (\n\tb blob default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
@@ -147,16 +155,16 @@ var (
 		output: "create table t2 (\n\tb JSON default null\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
-		output: "create table t2 (\n\tb JSON default null\n)",
+		output: "create table t2 (\n\tb JSON default (null)\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
-		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+		output: "create table t2 (\n\tb JSON default '{name:abc}'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT 7.0)",
-		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+		output: "create table x (\n\tlocation POINT default 7.0\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT (7.0))",
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
@@ -2599,7 +2607,8 @@ var (
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
-		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		input:  "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		output: "select 1 from t where foo = _utf8mb3 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -2610,10 +2619,10 @@ var (
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
 		input:  "select 1 from t where foo = _utf8mb3 'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
-		input:  "select 1 from t where foo = _utf8mb3'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		input:  "select 1 from t where foo = _utf8'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
@@ -4036,13 +4045,13 @@ func TestIntroducers(t *testing.T) {
 		output: "select _utf32 'x' from dual",
 	}, {
 		input:  "select _utf8 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
 	}, {
 		input:  "select _utf8mb3 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -5000,7 +5009,7 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t (
 	time1 timestamp default now(),
 	time2 timestamp default now(),
-	time3 timestamp default now(),
+	time3 timestamp default (now()),
 	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
@@ -6186,7 +6195,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
+			fmt.Printf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations\n", tempDir)
 		}
 	})
 }

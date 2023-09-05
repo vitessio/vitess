@@ -45,6 +45,11 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			newAnalysisCode:  inst.DeadPrimaryAndSomeReplicas,
 			shouldBeEqual:    true,
 		}, {
+			// DeadPrimary and PrimaryTabletDeleted are different recoveries.
+			prevAnalysisCode: inst.DeadPrimary,
+			newAnalysisCode:  inst.PrimaryTabletDeleted,
+			shouldBeEqual:    false,
+		}, {
 			// same codes will always have same recovery
 			prevAnalysisCode: inst.DeadPrimary,
 			newAnalysisCode:  inst.DeadPrimary,
@@ -120,7 +125,10 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	analysisEntry := &inst.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
 	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry)
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
@@ -172,7 +180,10 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
 	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
 	require.Nil(t, err)
 
@@ -198,6 +209,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                 "DeadPrimary with ERS disabled",
 			ersEnabled:           false,
 			analysisCode:         inst.DeadPrimary,
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:                 "PrimaryTabletDeleted with ERS enabled",
+			ersEnabled:           true,
+			analysisCode:         inst.PrimaryTabletDeleted,
+			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
+		}, {
+			name:                 "PrimaryTabletDeleted with ERS disabled",
+			ersEnabled:           false,
+			analysisCode:         inst.PrimaryTabletDeleted,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryHasPrimary",

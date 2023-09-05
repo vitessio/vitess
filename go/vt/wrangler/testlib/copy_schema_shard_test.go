@@ -53,7 +53,9 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -155,6 +157,10 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	if useShardAsSource {
 		source = "ks/-80"
 	}
+
+	// PrimaryAlias in the shard record is updated asynchronously, so we should wait for it to succeed.
+	waitForShardPrimary(t, wr, destinationPrimary.Tablet)
+
 	if err := vp.Run([]string{"CopySchemaShard", "--include-views", source, "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}

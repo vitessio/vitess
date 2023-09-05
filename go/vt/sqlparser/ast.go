@@ -70,6 +70,7 @@ type (
 		GetColumnCount() int
 		GetColumns() SelectExprs
 		Commented
+		IsDistinct() bool
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -137,10 +138,11 @@ type (
 
 	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
-		Column      *ColName
-		DropDefault bool
-		DefaultVal  Expr
-		Invisible   *bool
+		Column         *ColName
+		DropDefault    bool
+		DefaultVal     Expr
+		DefaultLiteral bool
+		Invisible      *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -1834,14 +1836,15 @@ type ColumnTypeOptions struct {
 	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
 	Therefore we do not know whether the column is nullable or not in case 3.
 	*/
-	Null          *bool
-	Autoincrement bool
-	Default       Expr
-	OnUpdate      Expr
-	As            Expr
-	Comment       *Literal
-	Storage       ColumnStorage
-	Collate       string
+	Null           *bool
+	Autoincrement  bool
+	Default        Expr
+	DefaultLiteral bool
+	OnUpdate       Expr
+	As             Expr
+	Comment        *Literal
+	Storage        ColumnStorage
+	Collate        string
 	// Reference stores a foreign key constraint for the given column
 	Reference *ReferenceDefinition
 
@@ -2299,11 +2302,6 @@ type (
 
 	// ColName represents a column name.
 	ColName struct {
-		// Metadata is not populated by the parser.
-		// It's a placeholder for analyzers to store
-		// additional data, typically info about which
-		// table or column this node references.
-		Metadata  any
 		Name      IdentifierCI
 		Qualifier TableName
 	}
@@ -2869,6 +2867,7 @@ type (
 
 	DistinctableAggr interface {
 		IsDistinct() bool
+		SetDistinct(bool)
 	}
 
 	Count struct {
@@ -3380,6 +3379,13 @@ func (max *Max) IsDistinct() bool                   { return max.Distinct }
 func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
 func (count *Count) IsDistinct() bool               { return count.Distinct }
 func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
+
+func (sum *Sum) SetDistinct(distinct bool)                   { sum.Distinct = distinct }
+func (min *Min) SetDistinct(distinct bool)                   { min.Distinct = distinct }
+func (max *Max) SetDistinct(distinct bool)                   { max.Distinct = distinct }
+func (avg *Avg) SetDistinct(distinct bool)                   { avg.Distinct = distinct }
+func (count *Count) SetDistinct(distinct bool)               { count.Distinct = distinct }
+func (grpConcat *GroupConcatExpr) SetDistinct(distinct bool) { grpConcat.Distinct = distinct }
 
 func (*Sum) AggrName() string             { return "sum" }
 func (*Min) AggrName() string             { return "min" }

@@ -63,7 +63,7 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
 	// field Key string
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
@@ -157,7 +157,7 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(16)
 	}
 	return size
 }
@@ -245,6 +245,18 @@ func (cached *IntervalExpr) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
+func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
+	return size
+}
 func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -267,7 +279,7 @@ func (cached *LikeExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Match vitess.io/vitess/go/mysql/collations.WildcardPattern
+	// field Match vitess.io/vitess/go/mysql/collations/colldata.WildcardPattern
 	if cc, ok := cached.Match.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1613,8 +1625,8 @@ func (cached *builtinWeightString) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field String vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.String.(cachedObject); ok {
+	// field Expr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Cast string

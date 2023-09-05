@@ -26,12 +26,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -72,10 +73,10 @@ type FakeMysqlDaemon struct {
 
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus
-	CurrentPrimaryPosition mysql.Position
+	CurrentPrimaryPosition replication.Position
 
 	// CurrentSourceFilePosition is used to determine the executed file based positioning of the replication source.
-	CurrentSourceFilePosition mysql.Position
+	CurrentSourceFilePosition replication.Position
 
 	// ReplicationStatusError is used by ReplicationStatus
 	ReplicationStatusError error
@@ -106,10 +107,10 @@ type FakeMysqlDaemon struct {
 
 	// SetReplicationPositionPos is matched against the input of SetReplicationPosition.
 	// If it doesn't match, SetReplicationPosition will return an error.
-	SetReplicationPositionPos mysql.Position
+	SetReplicationPositionPos replication.Position
 
 	// StartReplicationUntilAfterPos is matched against the input
-	StartReplicationUntilAfterPos mysql.Position
+	StartReplicationUntilAfterPos replication.Position
 
 	// SetReplicationSourceInputs are matched against the input of SetReplicationSource
 	// (as "%v:%v"). If all of them don't match, SetReplicationSource will return an error.
@@ -123,10 +124,10 @@ type FakeMysqlDaemon struct {
 
 	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
 	// in it, then the function returns nil, else the function returns an error
-	WaitPrimaryPositions []mysql.Position
+	WaitPrimaryPositions []replication.Position
 
 	// PromoteResult is returned by Promote
-	PromoteResult mysql.Position
+	PromoteResult replication.Position
 
 	// PromoteError is used by Promote
 	PromoteError error
@@ -170,6 +171,9 @@ type FakeMysqlDaemon struct {
 	// TimeoutHook is a func that can be called at the beginning of any method to fake a timeout.
 	// all a test needs to do is make it { return context.DeadlineExceeded }
 	TimeoutHook func() error
+
+	// Version is the version that will be returned by GetVersionString.
+	Version string
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -180,6 +184,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		db:              db,
 		Running:         true,
 		IOThreadRunning: true,
+		Version:         "8.0.32",
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0, 0)
@@ -230,8 +235,13 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
 }
 
 // ApplyBinlogFile is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	return nil
+}
+
+// ReadBinlogFilesTimestamps is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
+	return nil, nil
 }
 
 // ReinitConfig is part of the MysqlDaemon interface
@@ -268,47 +278,47 @@ func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
 }
 
 // CurrentPrimaryPositionLocked is thread-safe
-func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos mysql.Position) {
+func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos replication.Position) {
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
 	fmd.CurrentPrimaryPosition = pos
 }
 
 // ReplicationStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error) {
+func (fmd *FakeMysqlDaemon) ReplicationStatus() (replication.ReplicationStatus, error) {
 	if fmd.ReplicationStatusError != nil {
-		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
+		return replication.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
-	return mysql.ReplicationStatus{
+	return replication.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
 		FilePosition:                           fmd.CurrentSourceFilePosition,
 		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
-		IOState:    mysql.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),
-		SQLState:   mysql.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating)),
+		IOState:    replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),
+		SQLState:   replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
 	}, nil
 }
 
 // PrimaryStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error) {
+func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error) {
 	if fmd.PrimaryStatusError != nil {
-		return mysql.PrimaryStatus{}, fmd.PrimaryStatusError
+		return replication.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
-	return mysql.PrimaryStatus{
+	return replication.PrimaryStatus{
 		Position:     fmd.CurrentPrimaryPosition,
 		FilePosition: fmd.CurrentSourceFilePosition,
 	}, nil
 }
 
 // GetGTIDPurged is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (mysql.Position, error) {
-	return mysql.Position{}, nil
+func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
+	return replication.Position{}, nil
 }
 
 // ResetReplication is part of the MysqlDaemon interface.
@@ -361,7 +371,7 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 }
 
 // PrimaryPosition is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PrimaryPosition() (mysql.Position, error) {
+func (fmd *FakeMysqlDaemon) PrimaryPosition() (replication.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil
 }
 
@@ -408,7 +418,7 @@ func (fmd *FakeMysqlDaemon) RestartReplication(hookExtraEnv map[string]string) e
 }
 
 // StartReplicationUntilAfter is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
+func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
 	if !reflect.DeepEqual(fmd.StartReplicationUntilAfterPos, pos) {
 		return fmt.Errorf("wrong pos for StartReplicationUntilAfter: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
@@ -436,7 +446,7 @@ func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 }
 
 // SetReplicationPosition is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos mysql.Position) error {
+func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos replication.Position) error {
 	if !reflect.DeepEqual(fmd.SetReplicationPositionPos, pos) {
 		return fmt.Errorf("wrong pos for SetReplicationPosition: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
@@ -479,7 +489,7 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 }
 
 // WaitSourcePos is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos mysql.Position) error {
+func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos replication.Position) error {
 	if fmd.TimeoutHook != nil {
 		return fmd.TimeoutHook()
 	}
@@ -492,12 +502,12 @@ func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos mysql.Position)
 }
 
 // Promote is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (replication.Position, error) {
 	if fmd.PromoteLag > 0 {
 		time.Sleep(fmd.PromoteLag)
 	}
 	if fmd.PromoteError != nil {
-		return mysql.Position{}, fmd.PromoteError
+		return replication.Position{}, fmd.PromoteError
 	}
 	return fmd.PromoteResult, nil
 }
@@ -686,11 +696,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 }
 
 // GetVersionString is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
+	return fmd.Version, nil
 }
 
 // GetVersionComment is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
-	return ""
+func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
+	return "", nil
 }

@@ -22,6 +22,8 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -43,7 +45,7 @@ var _ flavor = (*mysqlFlavor57)(nil)
 var _ flavor = (*mysqlFlavor80)(nil)
 
 // primaryGTIDSet is part of the Flavor interface.
-func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
+func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
@@ -52,11 +54,11 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
-	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // purgedGTIDSet is part of the Flavor interface.
-func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_purged", 1, false)
 	if err != nil {
@@ -65,7 +67,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
-	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // serverUUID is part of the Flavor interface.
@@ -105,11 +107,11 @@ func (mysqlFlavor) restartReplicationCommands() []string {
 	}
 }
 
-func (mysqlFlavor) startReplicationUntilAfter(pos Position) string {
+func (mysqlFlavor) startReplicationUntilAfter(pos replication.Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
 
-func (mysqlFlavor) startSQLThreadUntilAfter(pos Position) string {
+func (mysqlFlavor) startSQLThreadUntilAfter(pos replication.Position) string {
 	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
 
@@ -130,8 +132,8 @@ func (mysqlFlavor) startSQLThreadCommand() string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error {
-	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
+func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
+	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
@@ -163,7 +165,7 @@ func (mysqlFlavor) resetReplicationParametersCommands(c *Conn) []string {
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (mysqlFlavor) setReplicationPositionCommands(pos Position) []string {
+func (mysqlFlavor) setReplicationPositionCommands(pos replication.Position) []string {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
@@ -176,88 +178,46 @@ func (mysqlFlavor) changeReplicationSourceArg() string {
 }
 
 // status is part of the Flavor interface.
-func (mysqlFlavor) status(c *Conn) (ReplicationStatus, error) {
+func (mysqlFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data, meaning the server
 		// is not configured as a replica.
-		return ReplicationStatus{}, ErrNotReplica
+		return replication.ReplicationStatus{}, ErrNotReplica
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 
-	return parseMysqlReplicationStatus(resultMap)
-}
-
-func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
-	status := parseReplicationStatus(resultMap)
-	uuidString := resultMap["Master_UUID"]
-	if uuidString != "" {
-		sid, err := ParseSID(uuidString)
-		if err != nil {
-			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode SourceUUID")
-		}
-		status.SourceUUID = sid
-	}
-
-	var err error
-	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
-	if err != nil {
-		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
-	}
-	relayLogGTIDSet, err := ParseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
-	if err != nil {
-		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
-	}
-	// We take the union of the executed and retrieved gtidset, because the retrieved gtidset only represents GTIDs since
-	// the relay log has been reset. To get the full Position, we need to take a union of executed GTIDSets, since these would
-	// have been in the relay log's GTIDSet in the past, prior to a reset.
-	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
-
-	return status, nil
+	return replication.ParseMysqlReplicationStatus(resultMap)
 }
 
 // primaryStatus is part of the Flavor interface.
-func (mysqlFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
+func (mysqlFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return PrimaryStatus{}, err
+		return replication.PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return PrimaryStatus{}, ErrNoPrimaryStatus
+		return replication.PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return PrimaryStatus{}, err
+		return replication.PrimaryStatus{}, err
 	}
 
-	return parseMysqlPrimaryStatus(resultMap)
-}
-
-func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
-	status := parsePrimaryStatus(resultMap)
-
-	var err error
-	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
-	if err != nil {
-		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
-	}
-
-	return status, nil
+	return replication.ParseMysqlPrimaryStatus(resultMap)
 }
 
 // waitUntilPositionCommand is part of the Flavor interface.
-
-// waitUntilPositionCommand is part of the Flavor interface.
-func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
+func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
 	// A timeout of 0 means wait indefinitely.
 	timeoutSeconds := 0
 	if deadline, ok := ctx.Deadline(); ok {
@@ -285,7 +245,7 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	switch result[0] {
 	case EOFPacket:
-		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", io.EOF)
+		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}
@@ -361,7 +321,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 		i.allocated_size
 	FROM information_schema.tables t
 		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8_general_ci
+	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
 	WHERE
 		t.table_schema = database() AND not t.create_options <=> 'partitioned'
 UNION ALL
@@ -374,7 +334,7 @@ UNION ALL
 		SUM(i.allocated_size)
 	FROM information_schema.tables t
 		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8_general_ci )
+	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci )
 	WHERE
 		t.table_schema = database() AND t.create_options <=> 'partitioned'
 	GROUP BY

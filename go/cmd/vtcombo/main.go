@@ -30,9 +30,10 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -61,7 +62,7 @@ var (
 	mysqlPort          = flags.Int("mysql_port", 3306, "mysql port")
 	externalTopoServer = flags.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
-	plannerName           = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, V3Insert, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerName           = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 	vschemaPersistenceDir = flags.String("vschema-persistence-dir", "", "If set, per-keyspace vschema will be persisted in this directory "+
 		"and reloaded into the in-memory topology server across restarts. Bookkeeping is performed using a simple watcher goroutine. "+
 		"This is useful when running vtcombo as an application development container (e.g. vttestserver) where you want to keep the same "+
@@ -185,7 +186,7 @@ func main() {
 		ts = topo.Open()
 	} else {
 		// Create topo server. We use a 'memorytopo' implementation.
-		ts = memorytopo.NewServer(tpb.Cells...)
+		ts = memorytopo.NewServer(context.Background(), tpb.Cells...)
 	}
 
 	// attempt to load any routing rules specified by tpb
@@ -278,7 +279,7 @@ func main() {
 	}
 
 	// vtgate configuration and init
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
@@ -342,7 +343,7 @@ func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) 
 }
 
 // StartReplicationUntilAfter implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
+func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
 	return nil
 }
 

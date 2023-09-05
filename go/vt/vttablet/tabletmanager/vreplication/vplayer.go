@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -39,15 +39,15 @@ import (
 // vplayer replays binlog events by pulling them from a vstreamer.
 type vplayer struct {
 	vr        *vreplicator
-	startPos  mysql.Position
-	stopPos   mysql.Position
+	startPos  replication.Position
+	stopPos   replication.Position
 	saveStop  bool
 	copyState map[string]*sqltypes.Result
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
 
-	pos mysql.Position
+	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
 	// saving, which is on an empty commit.
 	// If nothing else happens for idleTimeout since timeLastSaved,
@@ -84,7 +84,7 @@ type vplayer struct {
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
 //
 //	This is used by the fastForward function during copying.
-func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos replication.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos
@@ -100,7 +100,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		timeLastSaved:    time.Now(),
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
-		throttlerAppName: vr.throttlerAppName(),
+		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
 	}
 }
 
@@ -109,7 +109,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
 		log.Infof("Stop position %v already reached: %v", vp.startPos, vp.stopPos)
 		if vp.saveStop {
-			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
 	}
@@ -153,7 +153,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -251,7 +251,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	if posReached {
 		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
 			}
 		}
@@ -544,7 +544,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
 			if err := vp.vr.dbClient.Commit(); err != nil {
@@ -608,7 +608,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			switch {
 			case found && notFound:
 				// Some were found and some were not found. We can't handle this.
-				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+				if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "unable to handle journal event: tables were partially matched"); err != nil {
 					return err
 				}
 				return io.EOF
@@ -620,7 +620,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
 				return err
 			}
 			return io.EOF

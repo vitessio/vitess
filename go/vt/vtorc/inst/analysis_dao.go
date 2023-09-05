@@ -84,6 +84,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
+		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.data_center) AS data_center,
@@ -267,6 +268,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		JOIN vitess_keyspace ON (
 			vitess_tablet.keyspace = vitess_keyspace.keyspace
 		)
+		JOIN vitess_shard ON (
+			vitess_tablet.keyspace = vitess_shard.keyspace
+			AND vitess_tablet.shard = vitess_shard.shard
+		)
 		LEFT JOIN database_instance primary_instance ON (
 			vitess_tablet.alias = primary_instance.alias
 			AND vitess_tablet.hostname = primary_instance.hostname
@@ -326,6 +331,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 
+		a.ShardPrimaryTermTimestamp = m.GetString("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
 		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
 		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
@@ -469,9 +475,16 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" {
+		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == "" {
+			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
+			ca.hasClusterwideAction = true
+		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp != "" {
+			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
+			// the primary tablet was deleted.
+			a.Analysis = PrimaryTabletDeleted
+			a.Description = "Primary tablet has been deleted"
 			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
 			a.Analysis = ReplicaIsWritable

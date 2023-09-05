@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -47,7 +49,7 @@ func (c *Conn) WriteComQuery(query string) error {
 	pos++
 	copy(data[pos:], query)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
@@ -61,7 +63,7 @@ func (c *Conn) writeComInitDB(db string) error {
 	pos++
 	copy(data[pos:], db)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
@@ -74,7 +76,7 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 	pos++
 	writeUint16(data, pos, operation)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
@@ -84,36 +86,36 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	colDef, err := c.readEphemeralPacket()
 	if err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 
 	// Catalog is ignored, always set to "def"
 	pos, ok := skipLenEncString(colDef, 0)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v catalog failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v catalog failed", index)
 	}
 
 	// schema, table, orgTable, name and OrgName are strings.
 	field.Database, pos, ok = readLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v schema failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v schema failed", index)
 	}
 	field.Table, pos, ok = readLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v table failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v table failed", index)
 	}
 	field.OrgTable, pos, ok = readLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v org_table failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v org_table failed", index)
 	}
 	field.Name, pos, ok = readLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v name failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v name failed", index)
 	}
 	field.OrgName, pos, ok = readLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v org_name failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v org_name failed", index)
 	}
 
 	// Skip length of fixed-length fields.
@@ -122,37 +124,37 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	// characterSet is a uint16.
 	characterSet, pos, ok := readUint16(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v characterSet failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v characterSet failed", index)
 	}
 	field.Charset = uint32(characterSet)
 
 	// columnLength is a uint32.
 	field.ColumnLength, pos, ok = readUint32(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v columnLength failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v columnLength failed", index)
 	}
 
 	// type is one byte.
 	t, pos, ok := readByte(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v type failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v type failed", index)
 	}
 
 	// flags is 2 bytes.
 	flags, pos, ok := readUint16(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v flags failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v flags failed", index)
 	}
 
 	// Convert MySQL type to Vitess type.
 	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
 	if err != nil {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
 	// Decimals is a byte.
 	decimals, _, ok := readByte(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v decimals failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v decimals failed", index)
 	}
 	field.Decimals = uint32(decimals)
 
@@ -182,7 +184,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	colDef, err := c.readEphemeralPacket()
 	if err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 
@@ -190,27 +192,27 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	// strings, all skipped.
 	pos, ok := skipLenEncString(colDef, 0)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v catalog failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v catalog failed", index)
 	}
 	pos, ok = skipLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v schema failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v schema failed", index)
 	}
 	pos, ok = skipLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v table failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v table failed", index)
 	}
 	pos, ok = skipLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v org_table failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v org_table failed", index)
 	}
 	pos, ok = skipLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v name failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v name failed", index)
 	}
 	pos, ok = skipLenEncString(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "skipping col %v org_name failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "skipping col %v org_name failed", index)
 	}
 
 	// Skip length of fixed-length fields.
@@ -219,31 +221,31 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	// characterSet is a uint16.
 	_, pos, ok = readUint16(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v characterSet failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v characterSet failed", index)
 	}
 
 	// columnLength is a uint32.
 	_, pos, ok = readUint32(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v columnLength failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v columnLength failed", index)
 	}
 
 	// type is one byte
 	t, pos, ok := readByte(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v type failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v type failed", index)
 	}
 
 	// flags is 2 bytes
 	flags, _, ok := readUint16(colDef, pos)
 	if !ok {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v flags failed", index)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extracting col %v flags failed", index)
 	}
 
 	// Convert MySQL type to Vitess type.
 	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
 	if err != nil {
-		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
 
 	// skip decimals
@@ -269,7 +271,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 		var ok bool
 		s, pos, ok = reader(data, pos)
 		if !ok {
-			return nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding string failed")
+			return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "decoding string failed")
 		}
 		result = append(result, sqltypes.MakeTrusted(fields[i].Type, s))
 	}
@@ -310,7 +312,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, more bool, err error) {
 	defer func() {
 		if err != nil {
-			if sqlerr, ok := err.(*SQLError); ok {
+			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
 				sqlerr.Query = query
 			}
 		}
@@ -334,7 +336,7 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfields bool) (result *sqltypes.Result, warnings uint16, err error) {
 	defer func() {
 		if err != nil {
-			if sqlerr, ok := err.(*SQLError); ok {
+			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
 				sqlerr.Query = query
 			}
 		}
@@ -394,7 +396,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		// EOF is only present here if it's not deprecated.
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		if c.isEOFPacket(data) {
 
@@ -416,7 +418,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 	for {
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 
 		if c.isEOFPacket(data) {
@@ -481,7 +483,7 @@ func (c *Conn) drainResults() error {
 	for {
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+			return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		if c.isEOFPacket(data) {
 			c.recycleReadPacket()
@@ -497,11 +499,11 @@ func (c *Conn) drainResults() error {
 func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 	data, err := c.readEphemeralPacket()
 	if err != nil {
-		return 0, nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 	if len(data) == 0 {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
 
 	switch data[0] {
@@ -517,10 +519,10 @@ func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 	}
 	n, pos, ok := readLenEncInt(data, 0)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
 	}
 	if pos != len(data) {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extra data in COM_QUERY response")
+		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
 	return int(n), &PacketOK{}, nil
 }
@@ -550,32 +552,32 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	// statement ID
 	stmtID, pos, ok := readUint32(payload, 0)
 	if !ok {
-		return 0, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading statement ID failed")
+		return 0, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading statement ID failed")
 	}
 	prepare, ok := prepareData[stmtID]
 	if !ok {
-		return 0, 0, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "statement ID is not found from record")
+		return 0, 0, sqlerror.NewSQLError(sqlerror.CRCommandsOutOfSync, sqlerror.SSUnknownSQLState, "statement ID is not found from record")
 	}
 
 	// cursor type flags
 	cursorType, pos, ok := readByte(payload, pos)
 	if !ok {
-		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading cursor type flags failed")
+		return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading cursor type flags failed")
 	}
 
 	// iteration count
 	iterCount, pos, ok := readUint32(payload, pos)
 	if !ok {
-		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading iteration count failed")
+		return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading iteration count failed")
 	}
 	if iterCount != uint32(1) {
-		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "iteration count is not equal to 1")
+		return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "iteration count is not equal to 1")
 	}
 
 	if prepare.ParamsCount > 0 {
 		bitMap, pos, ok = readBytes(payload, pos, (int(prepare.ParamsCount)+7)/8)
 		if !ok {
-			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading NULL-bitmap failed")
+			return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading NULL-bitmap failed")
 		}
 	}
 
@@ -585,18 +587,18 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		for i := uint16(0); i < prepare.ParamsCount; i++ {
 			mysqlType, pos, ok = readByte(payload, pos)
 			if !ok {
-				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter type failed")
+				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading parameter type failed")
 			}
 
 			flags, pos, ok = readByte(payload, pos)
 			if !ok {
-				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter flags failed")
+				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading parameter flags failed")
 			}
 
 			// convert MySQL type to internal type.
 			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
 			if err != nil {
-				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
+				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}
 
 			prepare.ParamsType[i] = int32(valType)
@@ -618,7 +620,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 			val, pos, ok = c.parseStmtArgs(payload, querypb.Type(prepare.ParamsType[i]), pos)
 		}
 		if !ok {
-			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding parameter value failed: %v", prepare.ParamsType[i])
+			return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "decoding parameter value failed: %v", prepare.ParamsType[i])
 		}
 
 		prepare.BindVars[parameterID] = sqltypes.ValueBindVariable(val)
@@ -1073,7 +1075,9 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 			if err := c.writeColumnDefinition(&querypb.Field{
 				Name:    "?",
 				Type:    sqltypes.VarBinary,
-				Charset: 63}); err != nil {
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+			}); err != nil {
 				return err
 			}
 		}
@@ -1516,4 +1520,18 @@ func val2MySQLLen(v sqltypes.Value) (int, error) {
 		return 0, err
 	}
 	return length, nil
+}
+
+func FlagsForColumn(t sqltypes.Type, col collations.ID) uint32 {
+	var fl uint32
+	if sqltypes.IsNumber(t) {
+		fl |= uint32(querypb.MySqlFlag_NUM_FLAG)
+	}
+	if sqltypes.IsUnsigned(t) {
+		fl |= uint32(querypb.MySqlFlag_UNSIGNED_FLAG)
+	}
+	if sqltypes.IsQuoted(t) && col == collations.CollationBinaryID {
+		fl |= uint32(querypb.MySqlFlag_BINARY_FLAG)
+	}
+	return fl
 }

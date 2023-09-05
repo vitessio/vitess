@@ -17,16 +17,13 @@ limitations under the License.
 package repltracker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
@@ -193,7 +190,7 @@ func (r *heartbeatReader) bindHeartbeatFetch() (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, sidecardb.GetIdentifier(), ":ks")
+	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, sidecar.GetIdentifier(), ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
@@ -206,7 +203,7 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
 		return 0, fmt.Errorf("failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
-	ts, err := evalengine.ToInt64(res.Rows[0][0])
+	ts, err := res.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return 0, err
 	}

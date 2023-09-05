@@ -33,6 +33,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql/collations"
@@ -115,9 +117,8 @@ type Executor struct {
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
 
-	// truncateErrorLen truncates errors sent to client if they are above this value
-	// (0 means do not truncate).
-	truncateErrorLen int
+	// queryLogger is passed in for logging from this vtgate executor.
+	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 }
 
 var executorOnce sync.Once
@@ -134,10 +135,11 @@ func NewExecutor(
 	resolver *Resolver,
 	normalize, warnOnShardedOnly bool,
 	streamSize int,
-	cacheCfg *cache.Config,
+	plans cache.Cache,
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	queryLogger *streamlog.StreamLogger[*logstats.LogStats],
 ) *Executor {
 	e := &Executor{
 		serv:            serv,
@@ -145,13 +147,14 @@ func NewExecutor(
 		resolver:        resolver,
 		scatterConn:     resolver.scatterConn,
 		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
+		plans:           plans,
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
 		pv:              pv,
+		queryLogger:     queryLogger,
 	}
 
 	vschemaacl.Init()
@@ -215,7 +218,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 
 	logStats.SaveEndTime()
-	QueryLogger.Send(logStats)
+	e.queryLogger.Send(logStats)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 	return result, err
 }
@@ -349,7 +352,7 @@ func (e *Executor) StreamExecute(
 	}
 
 	logStats.SaveEndTime()
-	QueryLogger.Send(logStats)
+	e.queryLogger.Send(logStats)
 	return vterrors.TruncateError(err, truncateErrorLen)
 
 }
@@ -400,7 +403,7 @@ func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 }
 
 // addNeededBindVars adds bind vars that are needed by the plan
-func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
+func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
 	for _, funcName := range bindVarNeeds.NeedFunctionResult {
 		switch funcName {
 		case sqlparser.DBVarName:
@@ -449,6 +452,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(v)
 		case sysvars.DDLStrategy.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
+		case sysvars.MigrationContext.Name:
+			bindVars[key] = sqltypes.StringBindVariable(session.MigrationContext)
 		case sysvars.SessionUUID.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.SessionUUID)
 		case sysvars.SessionEnableSystemSettings.Name:
@@ -494,7 +499,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				if err != nil {
 					return err
 				}
-				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value())
+				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value(vcursor.collation))
 			}
 		}
 	}
@@ -1224,7 +1229,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 		fields[i] = &querypb.Field{
 			Name:    v,
 			Type:    sqltypes.VarChar,
-			Charset: collations.CollationUtf8ID,
+			Charset: uint32(collations.SystemCollation.Collation),
 			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 		}
 	}
@@ -1265,7 +1270,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	// it was a no-op record (i.e. didn't issue any queries)
 	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
 		logStats.SaveEndTime()
-		QueryLogger.Send(logStats)
+		e.queryLogger.Send(logStats)
 	}
 	return fld, vterrors.TruncateError(err, truncateErrorLen)
 }
@@ -1307,7 +1312,6 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
-	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
@@ -1325,7 +1329,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
-	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
+	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
 		return nil, err
@@ -1504,4 +1508,14 @@ func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, qu
 		return nil, nil, err
 	}
 	return plan, stmt, nil
+}
+
+func (e *Executor) Close() {
+	e.scatterConn.Close()
+	topo, err := e.serv.GetTopoServer()
+	if err != nil {
+		panic(err)
+	}
+	topo.Close()
+	e.plans.Close()
 }

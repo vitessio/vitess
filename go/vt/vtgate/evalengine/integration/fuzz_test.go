@@ -169,7 +169,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		}()
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
-			tt, err = env.TypeOf(local, fields)
+			tt, _, err = env.TypeOf(local, fields)
 			if errors.Is(err, evalengine.ErrAmbiguousType) {
 				tt = -1
 				err = nil
@@ -229,7 +229,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value()
+			res.localVal = eval.Value(collations.Default())
 		}
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0]
@@ -344,11 +344,12 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 
 	var localCollationName string
 	var remoteCollationName string
-	if coll := local.Collation.Get(); coll != nil {
-		localCollationName = coll.Name()
+	env := collations.Local()
+	if coll := local.Collation; coll != collations.Unknown {
+		localCollationName = env.LookupName(coll)
 	}
-	if coll := remote.Collation.Get(); coll != nil {
-		remoteCollationName = coll.Name()
+	if coll := remote.Collation; coll != collations.Unknown {
+		remoteCollationName = env.LookupName(coll)
 	}
 
 	equals, err := cmp.Equals(local.Value, remote.Value)

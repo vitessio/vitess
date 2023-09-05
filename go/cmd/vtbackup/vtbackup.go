@@ -70,10 +70,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -107,6 +108,7 @@ var (
 	initialBackup       bool
 	allowFirstBackup    bool
 	restartBeforeBackup bool
+	upgradeSafe         bool
 	// vttablet-like flags
 	initDbNameOverride string
 	initKeyspace       string
@@ -135,6 +137,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&initialBackup, "initial_backup", initialBackup, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	fs.BoolVar(&allowFirstBackup, "allow_first_backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
+	fs.BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	// vttablet-like flags
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
@@ -301,6 +304,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Shard:              initShard,
 		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
 		Stats:              backupstats.BackupStats(),
+		UpgradeSafe:        upgradeSafe,
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -356,7 +360,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Stats:               backupstats.RestoreStats(),
 	}
 	backupManifest, err := mysqlctl.Restore(ctx, params)
-	var restorePos mysql.Position
+	var restorePos replication.Position
 	switch err {
 	case nil:
 		// if err is nil, we expect backupManifest to be non-nil
@@ -367,7 +371,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if !allowFirstBackup {
 			return fmt.Errorf("no backup found; not starting up empty since --initial_backup flag was not enabled")
 		}
-		restorePos = mysql.Position{}
+		restorePos = replication.Position{}
 	default:
 		return fmt.Errorf("can't restore from backup: %v", err)
 	}
@@ -405,7 +409,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	tmc := tmclient.NewTabletManagerClient()
 	// Keep retrying if we can't contact the primary. The primary might be
 	// changing, moving, or down temporarily.
-	var primaryPos mysql.Position
+	var primaryPos replication.Position
 	err = retryOnError(ctx, func() error {
 		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
 		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
@@ -513,7 +517,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	return nil
 }
 
-func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.MysqlDaemon) error {
+func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {
 	cmds := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget replication source host:port.
@@ -560,27 +564,27 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	return nil
 }
 
-func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (mysql.Position, error) {
+func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, initKeyspace, initShard)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
+		return replication.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
 	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		// Normal tablets will sit around waiting to be reparented in this case.
 		// Since vtbackup is a batch job, we just have to fail.
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", initKeyspace, initShard)
+		return replication.Position{}, fmt.Errorf("shard %v/%v has no primary", initKeyspace, initShard)
 	}
 	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
+		return replication.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
 	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
+		return replication.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
-	pos, err := mysql.DecodePosition(posStr)
+	pos, err := replication.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
+		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }

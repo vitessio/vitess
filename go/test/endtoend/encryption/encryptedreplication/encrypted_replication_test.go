@@ -25,10 +25,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/encryption"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
 )
 
 var (
@@ -131,7 +131,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	for _, keyspaceStr := range []string{keyspace} {
 		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
 		keyspace := *KeyspacePtr
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name, sidecardb.DefaultName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name, sidecar.DefaultName); err != nil {
 			return 1, err
 		}
 		shard := &cluster.Shard{

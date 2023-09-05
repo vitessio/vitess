@@ -5,7 +5,7 @@ jobs:
 
   build:
     name: End-to-End Test
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-4cores-1
     steps:
     - name: Skip CI
       run: |
@@ -52,7 +52,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.21.0
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -78,10 +78,14 @@ jobs:
     - name: Build
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        make build
+        NOVTADMINBUILD=1 make build
 
     - name: endtoend
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
+
         eatmydata -- tools/e2e_test_runner.sh

@@ -17,11 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -41,7 +40,7 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	executorEnv, _, _, _ := createExecutorEnv()
+	executorEnv, _, _, _, ctx := createExecutorEnv(t)
 
 	testcases := []struct {
 		in  string
@@ -228,14 +227,14 @@ func TestExecutorSet(t *testing.T) {
 		in: "set transaction isolation level serializable",
 		out: &vtgatepb.Session{
 			Autocommit: true,
-			Warnings:   []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}},
+			Warnings:   []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}},
 		},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -270,7 +269,7 @@ func TestExecutorSet(t *testing.T) {
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executorEnv.Execute(context.Background(), nil, "TestExecute", session, tcase.in, nil)
+			_, err := executorEnv.Execute(ctx, nil, "TestExecute", session, tcase.in, nil)
 			if tcase.err == "" {
 				require.NoError(t, err)
 				utils.MustMatch(t, tcase.out, session.Session, "new executor")
@@ -282,7 +281,7 @@ func TestExecutorSet(t *testing.T) {
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 	sysVarSetEnabled = true
 
 	returnResult := func(columnName, typ, value string) *sqltypes.Result {
@@ -366,11 +365,13 @@ func TestExecutorSetOp(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewAutocommitSession(primarySession)
+			session := NewAutocommitSession(&vtgatepb.Session{
+				TargetString: "@primary",
+			})
 			session.TargetString = KsTestUnsharded
 			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
-			_, err := executor.Execute(context.Background(), nil, "TestExecute", session, tcase.in, nil)
+			_, err := executor.Execute(ctx, nil, "TestExecute", session, tcase.in, nil)
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.warning, session.Warnings, "")
 			utils.MustMatch(t, tcase.sysVars, session.SystemVariables, "")
@@ -379,64 +380,69 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
-	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err := executor.Execute(context.Background(), nil, "TestExecute", session, set, nil)
-	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
+	t.Run("Session 1", func(t *testing.T) {
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
-	vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
-	}()
+		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
+		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
+		assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
+	})
 
-	executor, _, _, _ = createExecutorEnv()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+	t.Run("Session 2", func(t *testing.T) {
+		vschemaacl.AuthorizedDDLUsers = "%"
+		defer func() {
+			vschemaacl.AuthorizedDDLUsers = ""
+		}()
 
-	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err = executor.Execute(context.Background(), nil, "TestExecute", session, set, nil)
-	assert.NoError(t, err, "%s error: %v", set, err)
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
-	show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
-	result, err := executor.Execute(context.Background(), nil, "TestExecute", session, show, nil)
-	assert.NoError(t, err)
+		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
+		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
+		assert.NoError(t, err, "%s error: %v", set, err)
 
-	want := "1"
-	got := result.Rows[0][1].ToString()
-	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
+		show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
+		result, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
+		assert.NoError(t, err)
 
-	// Update metadata
-	set = "set @@vitess_metadata.app_keyspace_v2='2'"
-	_, err = executor.Execute(context.Background(), nil, "TestExecute", session, set, nil)
-	assert.NoError(t, err, "%s error: %v", set, err)
+		want := "1"
+		got := result.Rows[0][1].ToString()
+		assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
 
-	show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
-	gotqr, err := executor.Execute(context.Background(), nil, "TestExecute", session, show, nil)
-	assert.NoError(t, err)
+		// Update metadata
+		set = "set @@vitess_metadata.app_keyspace_v2='2'"
+		_, err = executor.Execute(ctx, nil, "TestExecute", session, set, nil)
+		assert.NoError(t, err, "%s error: %v", set, err)
 
-	wantqr := &sqltypes.Result{
-		Fields: buildVarCharFields("Key", "Value"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("app_keyspace_v1", "1"),
-			buildVarCharRow("app_keyspace_v2", "2"),
-		},
-		RowsAffected: 2,
-	}
+		show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
+		gotqr, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
+		assert.NoError(t, err)
 
-	assert.Equal(t, wantqr.Fields, gotqr.Fields)
-	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+		wantqr := &sqltypes.Result{
+			Fields: buildVarCharFields("Key", "Value"),
+			Rows: [][]sqltypes.Value{
+				buildVarCharRow("app_keyspace_v1", "1"),
+				buildVarCharRow("app_keyspace_v2", "2"),
+			},
+			RowsAffected: 2,
+		}
 
-	show = "show vitess_metadata variables"
-	gotqr, err = executor.Execute(context.Background(), nil, "TestExecute", session, show, nil)
-	require.NoError(t, err)
+		assert.Equal(t, wantqr.Fields, gotqr.Fields)
+		assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
 
-	assert.Equal(t, wantqr.Fields, gotqr.Fields)
-	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+		show = "show vitess_metadata variables"
+		gotqr, err = executor.Execute(ctx, nil, "TestExecute", session, show, nil)
+		require.NoError(t, err)
+
+		assert.Equal(t, wantqr.Fields, gotqr.Fields)
+		assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+	})
 }
 
 func TestPlanExecutorSetUDV(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	testcases := []struct {
 		in  string
@@ -455,7 +461,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executor.Execute(context.Background(), nil, "TestExecute", session, tcase.in, nil)
+			_, err := executor.Execute(ctx, nil, "TestExecute", session, tcase.in, nil)
 			if err != nil {
 				require.EqualError(t, err, tcase.err)
 			} else {
@@ -466,7 +472,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 }
 
 func TestSetUDVFromTabletInput(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
 
 	fields := sqltypes.MakeTestFields("some", "VARCHAR")
 	sbc1.SetResults([]*sqltypes.Result{
@@ -476,15 +482,12 @@ func TestSetUDVFromTabletInput(t *testing.T) {
 		),
 	})
 
-	primarySession.TargetString = "TestExecutor"
-	defer func() {
-		primarySession.TargetString = ""
-	}()
-	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
+	session := &vtgatepb.Session{TargetString: "TestExecutor"}
+	_, err := executorExec(ctx, executor, session, "set @foo = concat('a','b','c')", nil)
 	require.NoError(t, err)
 
 	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
-	utils.MustMatch(t, want, primarySession.UserDefinedVariables, "")
+	utils.MustMatch(t, want, session.UserDefinedVariables, "")
 }
 
 func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
@@ -500,7 +503,7 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 }
 
 func TestSetVar(t *testing.T) {
-	executor, _, _, sbc := createExecutorEnv()
+	executor, _, _, sbc, ctx := createExecutorEnv(t)
 	executor.normalize = true
 
 	oldVersion := sqlparser.GetParserVersion()
@@ -514,7 +517,7 @@ func TestSetVar(t *testing.T) {
 		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 		"|only_full_group_by")})
 
-	_, err := executor.Execute(context.Background(), nil, "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(ctx, nil, "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	tcases := []struct {
@@ -536,7 +539,7 @@ func TestSetVar(t *testing.T) {
 			// reset reserved conn need.
 			session.SetReservedConn(false)
 
-			_, err = executor.Execute(context.Background(), nil, "TestSetVar", session, tc.sql, map[string]*querypb.BindVariable{})
+			_, err = executor.Execute(ctx, nil, "TestSetVar", session, tc.sql, map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
 			assert.Equal(t, tc.rc, session.InReservedConn())
 		})
@@ -544,7 +547,7 @@ func TestSetVar(t *testing.T) {
 }
 
 func TestSetVarShowVariables(t *testing.T) {
-	executor, _, _, sbc := createExecutorEnv()
+	executor, _, _, sbc, ctx := createExecutorEnv(t)
 	executor.normalize = true
 
 	oldVersion := sqlparser.GetParserVersion()
@@ -562,18 +565,18 @@ func TestSetVarShowVariables(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE")})
 
-	_, err := executor.Execute(context.Background(), nil, "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(ctx, nil, "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	// this should return the updated value of sql_mode.
-	qr, err := executor.Execute(context.Background(), nil, "TestSetVar", session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
+	qr, err := executor.Execute(ctx, nil, "TestSetVar", session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
 	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
-	e, _, _, sbc := createExecutorEnv()
+	e, _, _, sbc, ctx := createExecutorEnv(t)
 	e.normalize = true
 
 	testcases := []struct {
@@ -609,7 +612,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 					sqltypes.MakeTestResult(nil)}) // third one for new set query
 
 				setQ := fmt.Sprintf("set %s = '%s'", tcase.sysVar, tcase.val)
-				_, err := e.Execute(context.Background(), nil, "TestExecutorSetAndSelect", session, setQ, nil)
+				_, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, setQ, nil)
 				require.NoError(t, err)
 			}
 
@@ -617,7 +620,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 			// if the query reaches the shard, it will return REPEATABLE-READ isolation level.
 			sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), "REPEATABLE-READ")})
 
-			qr, err := e.Execute(context.Background(), nil, "TestExecutorSetAndSelect", session, selectQ, nil)
+			qr, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, selectQ, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.exp, fmt.Sprintf("%v", qr.Rows))
 		})

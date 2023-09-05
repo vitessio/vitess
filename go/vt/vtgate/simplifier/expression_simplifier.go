@@ -21,104 +21,59 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // CheckF is used to see if the given expression exhibits the sought after issue
 type CheckF = func(sqlparser.Expr) bool
 
-func SimplifyExpr(in sqlparser.Expr, test CheckF) (smallestKnown sqlparser.Expr) {
-	var maxDepth, level int
-	resetTo := func(e sqlparser.Expr) {
-		smallestKnown = e
-		maxDepth = depth(e)
-		level = 0
+func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
+	// since we can't rewrite the top level, wrap the expr in an Exprs object
+	smallestKnown := sqlparser.Exprs{sqlparser.CloneExpr(in)}
+
+	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
+		return true
 	}
-	resetTo(in)
-	for level <= maxDepth {
-		current := sqlparser.CloneExpr(smallestKnown)
-		nodes, replaceF := getNodesAtLevel(current, level)
-		replace := func(e sqlparser.Expr, idx int) {
-			// if we are at the first level, we are replacing the root,
-			// not rewriting something deep in the tree
-			if level == 0 {
-				current = e
+
+	up := func(cursor *sqlparser.Cursor) bool {
+		node := sqlparser.CloneSQLNode(cursor.Node())
+		s := &shrinker{orig: node}
+		expr := s.Next()
+		for expr != nil {
+			cursor.Replace(expr)
+
+			valid := test(smallestKnown[0])
+			log.Errorf("test: %t: simplified %s to %s, full expr: %s", valid, sqlparser.String(node), sqlparser.String(expr), sqlparser.String(smallestKnown))
+			if valid {
+				break // we will still continue trying to simplify other expressions at this level
 			} else {
-				// replace `node` in current with the simplified expression
-				replaceF[idx](e)
+				// undo the change
+				cursor.Replace(node)
 			}
+			expr = s.Next()
 		}
-		simplified := false
-		for idx, node := range nodes {
-			// simplify each element and create a new expression with the node replaced by the simplification
-			// this means that we not only need the node, but also a way to replace the node
-			s := &shrinker{orig: node}
-			expr := s.Next()
-			for expr != nil {
-				replace(expr, idx)
+		return true
+	}
 
-				valid := test(current)
-				log.Errorf("test: %t - %s", valid, sqlparser.String(current))
-				if valid {
-					simplified = true
-					break // we will still continue trying to simplify other expressions at this level
-				} else {
-					// undo the change
-					replace(node, idx)
-				}
-				expr = s.Next()
-			}
-		}
-		if simplified {
-			resetTo(current)
-		} else {
-			level++
+	// loop until rewriting introduces no more changes
+	for {
+		prevSmallest := sqlparser.CloneExprs(smallestKnown)
+		sqlparser.SafeRewrite(smallestKnown, alwaysVisit, up)
+		if sqlparser.Equals.Exprs(prevSmallest, smallestKnown) {
+			break
 		}
 	}
-	return smallestKnown
-}
 
-func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, replaceF []func(node sqlparser.SQLNode)) {
-	lvl := 0
-	pre := func(cursor *sqlparser.Cursor) bool {
-		if expr, isExpr := cursor.Node().(sqlparser.Expr); level == lvl && isExpr {
-			result = append(result, expr)
-			replaceF = append(replaceF, cursor.ReplacerF())
-		}
-		lvl++
-		return true
-	}
-	post := func(cursor *sqlparser.Cursor) bool {
-		lvl--
-		return true
-	}
-	sqlparser.Rewrite(e, pre, post)
-	return
-}
-
-func depth(e sqlparser.Expr) (depth int) {
-	lvl := 0
-	pre := func(cursor *sqlparser.Cursor) bool {
-		lvl++
-		if lvl > depth {
-			depth = lvl
-		}
-		return true
-	}
-	post := func(cursor *sqlparser.Cursor) bool {
-		lvl--
-		return true
-	}
-	sqlparser.Rewrite(e, pre, post)
-	return
+	return smallestKnown[0]
 }
 
 type shrinker struct {
-	orig  sqlparser.Expr
-	queue []sqlparser.Expr
+	orig  sqlparser.SQLNode
+	queue []sqlparser.SQLNode
 }
 
-func (s *shrinker) Next() sqlparser.Expr {
+func (s *shrinker) Next() sqlparser.SQLNode {
 	for {
 		// first we check if there is already something in the queue.
 		// note that we are doing a nil check and not a length check here.
@@ -142,6 +97,10 @@ func (s *shrinker) Next() sqlparser.Expr {
 func (s *shrinker) fillQueue() bool {
 	before := len(s.queue)
 	switch e := s.orig.(type) {
+	case *sqlparser.AndExpr:
+		s.queue = append(s.queue, e.Left, e.Right)
+	case *sqlparser.OrExpr:
+		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.BinaryExpr:
@@ -228,9 +187,39 @@ func (s *shrinker) fillQueue() bool {
 		for _, ae := range e.GetArgs() {
 			s.queue = append(s.queue, ae)
 		}
+
+		clone := sqlparser.CloneAggrFunc(e)
+		if da, ok := clone.(sqlparser.DistinctableAggr); ok {
+			if da.IsDistinct() {
+				da.SetDistinct(false)
+				s.queue = append(s.queue, clone)
+			}
+		}
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
-		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
+		s.queue = append(s.queue, sqlparser.NewIntLiteral("0"))
+	case *sqlparser.CaseExpr:
+		s.queue = append(s.queue, e.Expr, e.Else)
+		for _, when := range e.Whens {
+			s.queue = append(s.queue, when.Cond, when.Val)
+		}
+
+		if len(e.Whens) > 1 {
+			for i := range e.Whens {
+				whensCopy := sqlparser.CloneSliceOfRefOfWhen(e.Whens)
+				// replace ith element with last element, then truncate last element
+				whensCopy[i] = whensCopy[len(whensCopy)-1]
+				whensCopy = whensCopy[:len(whensCopy)-1]
+				s.queue = append(s.queue, sqlparser.NewCaseExpr(e.Expr, whensCopy, e.Else))
+			}
+		}
+
+		if e.Else != nil {
+			s.queue = append(s.queue, sqlparser.NewCaseExpr(e.Expr, e.Whens, nil))
+		}
+		if e.Expr != nil {
+			s.queue = append(s.queue, sqlparser.NewCaseExpr(nil, e.Whens, e.Else))
+		}
 	default:
 		return false
 	}
