@@ -80,6 +80,8 @@ const (
 	PlanShowMigrationLogs
 	PlanShowThrottledApps
 	PlanShowThrottlerStatus
+	// PlanBegin is for BEGIN statements. This plan type is just a placeholder because BEGIN has no plan.
+	PlanBegin
 	NumPlans
 )
 
@@ -116,6 +118,7 @@ var planName = []string{
 	"ShowMigrationLogs",
 	"ShowThrottledApps",
 	"ShowThrottlerStatus",
+	"Begin",
 }
 
 func (pt PlanType) String() string {
@@ -249,6 +252,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
 	case *sqlparser.CallProc:
 		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
+	case *sqlparser.Begin:
+		plan, err = &Plan{PlanID: PlanBegin, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}

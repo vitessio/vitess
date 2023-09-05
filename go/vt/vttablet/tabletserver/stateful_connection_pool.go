@@ -244,6 +244,11 @@ func (sf *StatefulConnectionPool) Capacity() int {
 	return int(sf.conns.Capacity())
 }
 
+// UsagePercent returns the capacity of the pool as a percentage.
+func (sf *StatefulConnectionPool) UsagePercent() float64 {
+	return sf.conns.UsagePercent()
+}
+
 // renewConn unregister and registers with new id.
 func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
 	sf.active.Unregister(sc.ConnID, "renew existing connection")

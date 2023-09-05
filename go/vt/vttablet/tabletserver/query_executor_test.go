@@ -81,7 +81,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// inTxWant is the query log we expect if we're in a transation.
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
-		// errorWant is the error we expect to get, if any, and should be nil if no error should be returned
+		// errorWant is the error we expect to get in errors, if any, and should be nil if no error should be returned
 		errorWant error
 		// TxThrottler allows the test case to override the transaction throttler
 		txThrottler txthrottler.TxThrottler
@@ -277,8 +277,8 @@ func TestQueryExecutorPlans(t *testing.T) {
 			query:  "update test_table set a = 1 limit 10001",
 			result: dmlResult,
 		}},
-		errorWant:   errTxThrottled,
-		txThrottler: &mockTxThrottler{true},
+		errorWant:   txthrottler.ErrThrottledReplicationLag,
+		txThrottler: &mockTxThrottler{txthrottler.ErrThrottledReplicationLag},
 	}, {
 		input:       "update test_table set a=1",
 		passThrough: true,
@@ -286,8 +286,16 @@ func TestQueryExecutorPlans(t *testing.T) {
 			query:  "update test_table set a = 1 limit 10001",
 			result: dmlResult,
 		}},
-		errorWant:   errTxThrottled,
-		txThrottler: &mockTxThrottler{true},
+		errorWant:   txthrottler.ErrThrottledTxPoolUsageHard,
+		txThrottler: &mockTxThrottler{txthrottler.ErrThrottledTxPoolUsageHard},
+	}, {
+		input: "select * from test_table where a=1",
+		dbResponses: []dbResponse{{
+			query:  "select * from test_table where a = 1 limit 10001",
+			result: selectResult,
+		}},
+		errorWant:   txthrottler.ErrThrottledConnPoolUsageHard,
+		txThrottler: &mockTxThrottler{txthrottler.ErrThrottledConnPoolUsageHard},
 	},
 	}
 	for _, tcase := range testcases {
@@ -316,7 +324,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 				assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			} else {
-				assert.True(t, vterrors.Equals(err, tcase.errorWant))
+				assert.ErrorAs(t, err, tcase.errorWant)
 			}
 			// Wait for the existing query to be processed by the cache
 			tsv.QueryPlanCacheWait()
@@ -341,7 +349,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				}
 				assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
 			} else {
-				assert.True(t, vterrors.Equals(err, tcase.errorWant))
+				assert.ErrorAs(t, err, tcase.errorWant)
 			}
 		})
 	}
@@ -1794,7 +1802,7 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 }
 
 type mockTxThrottler struct {
-	throttle bool
+	throttleErr error
 }
 
 func (m mockTxThrottler) InitDBConfig(target *querypb.Target) {
@@ -1808,6 +1816,6 @@ func (m mockTxThrottler) Open() (err error) {
 func (m mockTxThrottler) Close() {
 }
 
-func (m mockTxThrottler) Throttle(priority int, workload string) (result bool) {
-	return m.throttle
+func (m mockTxThrottler) Throttle(plan *planbuilder.Plan, options *querypb.ExecuteOptions) error {
+	return m.throttleErr
 }

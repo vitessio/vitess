@@ -22,13 +22,15 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
 )
 
 var (
-	errInvalidKeyValuePair = errors.New("invalid key:value pair")
+	errInvalidKeyValuePair                = errors.New("invalid key:value pair")
+	errInvalidLowHighPercentIntValuesPair = errors.New("invalid low:high int pair")
 )
 
 // StringListValue is a []string flag that accepts a comma separated
@@ -133,6 +135,45 @@ func (value StringMapValue) String() string {
 
 // Type is part of the pflag.Value interface.
 func (value StringMapValue) Type() string { return "StringMap" }
+
+type LowHighPercentIntValues struct {
+	Low  int
+	High int
+}
+
+// Get returns the LowHighPercentIntValues value of this flag.
+func (value LowHighPercentIntValues) Get() any {
+	return LowHighPercentIntValues(value)
+}
+
+// Set sets the value of this flag from parsing the given string.
+func (value *LowHighPercentIntValues) Set(v string) (err error) {
+	minMax := strings.SplitN(v, ":", 2)
+	value.High = 100
+	if value.Low, err = strconv.Atoi(minMax[0]); err != nil {
+		return errInvalidLowHighPercentIntValuesPair
+	}
+	if len(minMax) == 2 {
+		if value.High, err = strconv.Atoi(minMax[1]); err != nil {
+			return errInvalidLowHighPercentIntValuesPair
+		}
+	}
+	if value.Low < 1 || value.High > 100 || value.Low >= value.High {
+		return errInvalidLowHighPercentIntValuesPair
+	}
+	return nil
+}
+
+// String returns the string representation of this flag.
+func (value LowHighPercentIntValues) String() string {
+	if value.Low <= 0 && value.High <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", value.Low, value.High)
+}
+
+// Type is part of the pflag.Value interface.
+func (value LowHighPercentIntValues) Type() string { return "int:int" }
 
 // DualFormatStringListVar creates a flag which supports both dashes and underscores
 func DualFormatStringListVar(fs *pflag.FlagSet, p *[]string, name string, value []string, usage string) {

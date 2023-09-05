@@ -146,6 +146,12 @@ func (te *TxEngine) AcceptReadOnly() {
 	te.transition(AcceptingReadOnly)
 }
 
+// GetPoolUsagePercent returns the capacity of the
+// engine tx pool as a percentage.
+func (te *TxEngine) GetPoolUsagePercent() float64 {
+	return te.txPool.UsagePercent()
+}
+
 func (te *TxEngine) transition(state txEngineState) {
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()

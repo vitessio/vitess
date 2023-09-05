@@ -20,23 +20,36 @@ import (
 	"context"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	ErrThrottledConnPoolUsageHard = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Query throttled: ConnPoolUsageHard")
+	ErrThrottledConnPoolUsageSoft = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Query throttled: ConnPoolUsageSoft")
+	ErrThrottledReplicationLag    = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled: ReplicationLag")
+	ErrThrottledTxPoolUsageHard   = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled: TxPoolUsageHard")
+	ErrThrottledTxPoolUsageSoft   = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled: TxPoolUsageSoft")
 )
 
 // These vars store the functions used to create the topo server, healthcheck,
@@ -73,7 +86,13 @@ type TxThrottler interface {
 	InitDBConfig(target *querypb.Target)
 	Open() (err error)
 	Close()
-	Throttle(priority int, workload string) (result bool)
+	Throttle(plan *planbuilder.Plan, options *querypb.ExecuteOptions) error
+}
+
+// TabletserverEngineInterface defines an interface that provides throttling
+// signals based on pool usage.
+type TabletserverEngineInterface interface {
+	GetPoolUsagePercent() float64
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -119,23 +138,23 @@ func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *query
 //
 // Intended Usage:
 //
-//	// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
-//	t := NewTxThrottler(config, topoServer)
+//		// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
+//		t := NewTxThrottler(config, topoServer)
 //
-//	// A transaction throttler must be opened before its first use:
-//	if err := t.Open(keyspace, shard); err != nil {
-//	  return err
-//	}
+//		// A transaction throttler must be opened before its first use:
+//		if err := t.Open(keyspace, shard); err != nil {
+//		  return err
+//		}
 //
-//	// Checking whether to throttle can be done as follows before starting a transaction.
-//	if t.Throttle() {
-//	  return fmt.Errorf("Transaction throttled!")
-//	} else {
-//	  // execute transaction.
-//	}
+//		// Checking whether to throttle can be done as follows before starting a transaction.
+//		if err := t.Throttle(); err != nil {
+//		  return fmt.Errorf("Transaction throttled: %w", err)
+//		} else {
+//	  		// execute transaction.
+//		}
 //
-//	// To release the resources used by the throttler the caller should call Close().
-//	t.Close()
+//		// To release the resources used by the throttler the caller should call Close().
+//		t.Close()
 //
 // A txThrottler object is generally not thread-safe: at any given time at most one goroutine should
 // be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
@@ -147,6 +166,10 @@ type txThrottler struct {
 	// if the TransactionThrottler is closed.
 	state txThrottlerState
 
+	// engines
+	queryEngine TabletserverEngineInterface
+	txEngine    TabletserverEngineInterface
+
 	target     *querypb.Target
 	topoServer *topo.Server
 
@@ -155,14 +178,14 @@ type txThrottler struct {
 	topoWatchers              *stats.GaugesWithSingleLabel
 	healthChecksReadTotal     *stats.CountersWithMultiLabels
 	healthChecksRecordedTotal *stats.CountersWithMultiLabels
-	requestsTotal             *stats.CountersWithSingleLabel
-	requestsThrottled         *stats.CountersWithSingleLabel
+	requestsTotal             *stats.CountersWithMultiLabels
+	requestsThrottled         *stats.CountersWithMultiLabels
 }
 
 type txThrottlerState interface {
 	deallocateResources()
 	StatsUpdate(tabletStats *discovery.TabletHealth)
-	throttle() bool
+	throttle(plan *planbuilder.Plan) error
 }
 
 // txThrottlerStateImpl holds the state of an open TxThrottler object.
@@ -175,6 +198,8 @@ type txThrottlerStateImpl struct {
 	throttleMu       sync.Mutex
 	throttler        ThrottlerInterface
 	stopHealthCheck  context.CancelFunc
+	queryEngine      TabletserverEngineInterface
+	txEngine         TabletserverEngineInterface
 	topologyWatchers map[string]TopologyWatcherInterface
 
 	healthCheck      discovery.HealthCheck
@@ -188,7 +213,7 @@ type txThrottlerStateImpl struct {
 
 // NewTxThrottler tries to construct a txThrottler from the relevant
 // fields in the tabletenv.Env and topo.Server objects.
-func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
+func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server, queryEngine, txEngine TabletserverEngineInterface) TxThrottler {
 	config := env.Config()
 	if config.EnableTxThrottler {
 		if len(config.TxThrottlerHealthCheckCells) == 0 {
@@ -204,6 +229,8 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 
 	return &txThrottler{
 		config:           config,
+		queryEngine:      queryEngine,
+		txEngine:         txEngine,
 		topoServer:       topoServer,
 		throttlerRunning: env.Exporter().NewGauge(TxThrottlerName+"Running", "transaction throttler running state"),
 		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel(TxThrottlerName+"TopoWatchers", "transaction throttler topology watchers", "cell"),
@@ -211,9 +238,39 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 			[]string{"cell", "DbType"}),
 		healthChecksRecordedTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRecorded", "transaction throttler healthchecks recorded",
 			[]string{"cell", "DbType"}),
-		requestsTotal:     env.Exporter().NewCountersWithSingleLabel(TxThrottlerName+"Requests", "transaction throttler requests", "workload"),
-		requestsThrottled: env.Exporter().NewCountersWithSingleLabel(TxThrottlerName+"Throttled", "transaction throttler requests throttled", "workload"),
+		requestsTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"Requests", "transaction throttler requests",
+			[]string{"plan", "workload"},
+		),
+		requestsThrottled: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"Throttled", "transaction throttler requests throttled",
+			[]string{"plan", "cause", "workload"},
+		),
 	}
+}
+
+// getPriorityFromOptions returns the priority of an operation as an integer between 0 and
+// 100. The defaultPriority is returned if none is found in *querypb.ExecuteOptions.
+func (t *txThrottler) getPriorityFromOptions(options *querypb.ExecuteOptions) int {
+	priority := t.config.TxThrottlerDefaultPriority
+	if options == nil {
+		return priority
+	}
+	if options.Priority == "" {
+		return priority
+	}
+
+	optionsPriority, err := strconv.Atoi(options.Priority)
+	// This should never error out, as the value for Priority has been validated in the vtgate already.
+	// Still, handle it just to make sure.
+	if err != nil {
+		log.Errorf(
+			"The value of the %s query directive could not be converted to integer, using the "+
+				"default value. Error was: %s",
+			sqlparser.DirectivePriority, priority, err)
+
+		return priority
+	}
+
+	return optionsPriority
 }
 
 // InitDBConfig initializes the target parameters for the throttler.
@@ -231,7 +288,7 @@ func (t *txThrottler) Open() (err error) {
 	}
 	log.Info("txThrottler: opening")
 	t.throttlerRunning.Set(1)
-	t.state, err = newTxThrottlerState(t, t.config, t.target)
+	t.state, err = newTxThrottlerState(t, t.config, t.target, t.queryEngine, t.txEngine)
 	return err
 }
 
@@ -251,31 +308,57 @@ func (t *txThrottler) Close() {
 	log.Info("txThrottler: closed")
 }
 
-// Throttle should be called before a new transaction is started.
-// It returns true if the transaction should not proceed (the caller
-// should back off). Throttle requires that Open() was previously called
-// successfully.
-func (t *txThrottler) Throttle(priority int, workload string) (result bool) {
+// Throttle should be called before a new transaction is started. It
+// returns an error if the transaction should not proceed (the caller
+// should back off). Throttle requires that Open() was previously
+// called successfully.
+func (t *txThrottler) Throttle(plan *planbuilder.Plan, options *querypb.ExecuteOptions) (err error) {
 	if !t.config.EnableTxThrottler {
-		return false
+		return nil
 	}
 	if t.state == nil {
-		return false
+		return nil
 	}
 
-	// Throttle according to both what the throttler state says and the priority. Workloads with lower priority value
-	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
-
-	t.requestsTotal.Add(workload, 1)
-	if result {
-		t.requestsThrottled.Add(workload, 1)
+	// get priority from execute options, skip if the priority
+	// is equal to sqlparser.MinPriorityValue
+	planType := plan.PlanID.String()
+	workload := options.GetWorkloadName()
+	metricLabels := []string{planType, workload}
+	t.requestsTotal.Add(metricLabels, 1)
+	priority := t.getPriorityFromOptions(options)
+	if priority == sqlparser.MinPriorityValue {
+		return nil
 	}
 
-	return result && !t.config.TxThrottlerDryRun
+	// check if any throttling is needed
+	throttleErr := t.state.throttle(plan)
+	if throttleErr == nil {
+		return nil
+	}
+
+	// Throttle probabilistically according to both what the throttler state says and the priority.
+	// Workloads with lower priority value are less likely to be throttled. "Hard" pool usage
+	// errors will throttle regardless of priority.
+	metricLabels = []string{planType, throttleErr.Error(), workload}
+	switch throttleErr {
+	case ErrThrottledConnPoolUsageHard, ErrThrottledTxPoolUsageHard:
+		t.requestsThrottled.Add(metricLabels, 1)
+		err = throttleErr
+	case ErrThrottledConnPoolUsageSoft, ErrThrottledTxPoolUsageSoft, ErrThrottledReplicationLag:
+		if rand.Intn(sqlparser.MaxPriorityValue) < priority {
+			t.requestsThrottled.Add(metricLabels, 1)
+			err = throttleErr
+		}
+	}
+
+	if t.config.TxThrottlerDryRun {
+		err = nil
+	}
+	return err
 }
 
-func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfig, target *querypb.Target) (txThrottlerState, error) {
+func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfig, target *querypb.Target, queryEngine, txEngine TabletserverEngineInterface) (txThrottlerState, error) {
 	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.TxThrottlerConfig.Get()}
 
 	t, err := throttlerFactory(
@@ -304,6 +387,8 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 		tabletTypes:      tabletTypes,
 		throttler:        t,
 		txThrottler:      txThrottler,
+		queryEngine:      queryEngine,
+		txEngine:         txEngine,
 	}
 
 	// get cells from topo if none defined in tabletenv config
@@ -387,15 +472,51 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoS
 	}
 }
 
-func (ts *txThrottlerStateImpl) throttle() bool {
+func checkEnginePoolUsage(engine TabletserverEngineInterface, thresholds *flagutil.LowHighPercentIntValues, highErr, lowErr error) error {
+	if thresholds.Low <= 0 && thresholds.High >= 100 {
+		return nil
+	}
+	// Calls to .GetPoolUsagePercent() are serialized by the underlying engine.
+	switch usagePercent := engine.GetPoolUsagePercent(); {
+	case thresholds.High < 100 && int(usagePercent) >= thresholds.High:
+		return highErr
+	case thresholds.Low > 0 && int(usagePercent) >= thresholds.Low:
+		return lowErr
+	default:
+		return nil
+	}
+}
+
+func (ts *txThrottlerStateImpl) throttle(plan *planbuilder.Plan) error {
 	if ts.throttler == nil {
 		log.Error("txThrottler: throttle called after deallocateResources was called")
-		return false
+		return nil
 	}
-	// Serialize calls to ts.throttle.Throttle()
-	ts.throttleMu.Lock()
-	defer ts.throttleMu.Unlock()
-	return ts.throttler.Throttle(0 /* threadId */) > 0
+	if plan == nil {
+		log.Error("txThrottler: throttle called with no plan")
+		return nil
+	}
+	switch plan.PlanID {
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShow:
+		// check query engine conn pool usage
+		return checkEnginePoolUsage(ts.queryEngine, ts.config.TxThrottlerQueryPoolThresholds,
+			ErrThrottledConnPoolUsageHard, ErrThrottledConnPoolUsageSoft)
+	default:
+		// check tx engine pool usage
+		if err := checkEnginePoolUsage(ts.txEngine, ts.config.TxThrottlerTxPoolThresholds,
+			ErrThrottledTxPoolUsageHard, ErrThrottledTxPoolUsageSoft); err != nil {
+			return err
+		}
+
+		// check max replication lag.
+		// serialize calls to ts.throttle.Throttle().
+		ts.throttleMu.Lock()
+		defer ts.throttleMu.Unlock()
+		if ts.throttler.Throttle(0 /* threadId */) > 0 {
+			return ErrThrottledReplicationLag
+		}
+	}
+	return nil
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
