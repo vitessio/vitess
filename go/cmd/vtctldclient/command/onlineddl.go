@@ -28,7 +28,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -82,6 +85,22 @@ var (
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandOnlineDDLRetry,
+	}
+	OnlineDDLThrottle = &cobra.Command{
+		Use:                   "throttle <keyspace> <uuid|all>",
+		Short:                 "throttles one or all migrations",
+		Example:               "OnlineDDL throttle all",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLThrottle,
+	}
+	OnlineDDLUnthrottle = &cobra.Command{
+		Use:                   "unthrottle <keyspace> <uuid|all>",
+		Short:                 "unthrottles one or all migrations",
+		Example:               "OnlineDDL unthrottle all",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLUnthrottle,
 	}
 	OnlineDDLShow = &cobra.Command{
 		Use:   "show",
@@ -239,6 +258,80 @@ func commandOnlineDDLRetry(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// commandOnlineDDLThrottle throttles one or multiple migrations.
+// As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
+// Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
+func commandOnlineDDLThrottle(cmd *cobra.Command, args []string) error {
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	throttledAppRule := topodatapb.ThrottledAppRule{
+		Ratio:     throttle.DefaultThrottleRatio,
+		ExpiresAt: protoutil.TimeToProto(time.Now().Add(throttle.DefaultAppThrottleDuration)),
+	}
+	if strings.ToLower(uuid) == AllMigrationsIndicator {
+		throttledAppRule.Name = throttlerapp.OnlineDDLName.String()
+	} else {
+		throttledAppRule.Name = uuid
+	}
+
+	updateThrottlerConfigOptions.Keyspace = keyspace
+	updateThrottlerConfigOptions.ThrottledApp = &throttledAppRule
+
+	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+// commandOnlineDDLUnthrottle unthrottles one or multiple migrations.
+// As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
+// Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
+func commandOnlineDDLUnthrottle(cmd *cobra.Command, args []string) error {
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	unthrottledAppRule := topodatapb.ThrottledAppRule{
+		Ratio:     0,
+		ExpiresAt: protoutil.TimeToProto(time.Now()),
+	}
+	if strings.ToLower(uuid) == AllMigrationsIndicator {
+		unthrottledAppRule.Name = throttlerapp.OnlineDDLName.String()
+	} else {
+		unthrottledAppRule.Name = uuid
+	}
+
+	updateThrottlerConfigOptions.Keyspace = keyspace
+	updateThrottlerConfigOptions.ThrottledApp = &unthrottledAppRule
+
+	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 var onlineDDLShowArgs = struct {
 	JSON     bool
 	OrderStr string
@@ -314,6 +407,8 @@ func init() {
 	OnlineDDL.AddCommand(OnlineDDLComplete)
 	OnlineDDL.AddCommand(OnlineDDLLaunch)
 	OnlineDDL.AddCommand(OnlineDDLRetry)
+	OnlineDDL.AddCommand(OnlineDDLThrottle)
+	OnlineDDL.AddCommand(OnlineDDLUnthrottle)
 
 	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "Output JSON instead of human-readable table.")
 	OnlineDDLShow.Flags().StringVar(&onlineDDLShowArgs.OrderStr, "order", "asc", "Sort the results by `id` property of the Schema migration.")
