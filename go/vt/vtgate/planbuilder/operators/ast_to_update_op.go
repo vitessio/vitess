@@ -52,7 +52,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return updOp, nil
 	}
 
-	parentFks, childFks := getFKRequirementsForUpdate(updStmt.Exprs, vindexTable)
+	parentFks, childFks := getFKRequirementsForUpdate(ctx, updStmt.Exprs, vindexTable)
 	if len(childFks) == 0 && len(parentFks) == 0 {
 		return updOp, nil
 	}
@@ -62,7 +62,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
 	}
 
-	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks)
+	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks, vindexTable)
 }
 
 func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
@@ -118,9 +118,9 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 
 // getFKRequirementsForUpdate analyzes update expressions to determine which foreign key constraints needs management at the VTGate.
 // It identifies parent and child foreign keys that require verification or cascade operations due to column updates.
-func getFKRequirementsForUpdate(updateExprs sqlparser.UpdateExprs, vindexTable *vindexes.Table) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-	parentFks := vindexTable.ParentFKsNeedsHandling()
-	childFks := vindexTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
+func getFKRequirementsForUpdate(ctx *plancontext.PlanningContext, updateExprs sqlparser.UpdateExprs, vindexTable *vindexes.Table) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+	parentFks := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
+	childFks := vindexTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
 	if len(childFks) == 0 && len(parentFks) == 0 {
 		return nil, nil
 	}
@@ -177,8 +177,8 @@ func getFKRequirementsForUpdate(updateExprs sqlparser.UpdateExprs, vindexTable *
 	return pFksNeedsHandling, cFksNeedsHandling
 }
 
-func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
-	op, err := createFKCascadeOp(ctx, updOp, updClone, childFks)
+func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
+	op, err := createFKCascadeOp(ctx, updOp, updClone, childFks, updatedTable)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updCl
 	return createFKVerifyOp(ctx, op, updClone, parentFks)
 }
 
-func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
 	if len(childFks) == 0 {
 		return parentOp, nil
 	}
@@ -210,7 +210,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		cols, exprs := selectParentColumns(fk, len(selectExprs))
 		selectExprs = append(selectExprs, exprs...)
 
-		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, cols)
+		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, cols, updatedTable)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +241,7 @@ func isNonLiteral(updExprs sqlparser.UpdateExprs) bool {
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
-func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, cols []int) (*FkChild, error) {
+func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, cols []int, updatedTable *vindexes.Table) (*FkChild, error) {
 	// Reserve a bind variable name
 	bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
 
@@ -258,6 +258,9 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	// Populate the update expressions and the where clause for the child update query based on the foreign key constraint type.
 	var childWhereExpr sqlparser.Expr = compExpr
 	var childUpdateExprs sqlparser.UpdateExprs
+	var parsedComments *sqlparser.ParsedComments
+	var foreignKeyToIgnore string
+	var verifyAllFKs bool
 
 	switch fk.OnUpdate {
 	case sqlparser.Cascade:
@@ -279,6 +282,17 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 				Expr: updateExpr.Expr,
 			})
 		}
+		// Because we could be updating the child to a non-null value,
+		// We have to run with foreign key checks OFF because the parent isn't guaranteed to have
+		// the data being updated to.
+		parsedComments = sqlparser.Comments{
+			"/*+ SET_VAR(foreign_key_checks=OFF) */",
+		}.Parsed()
+		// Since we are running the child update with foreign key checks turned off,
+		// we need to verify the validity of the remaining foreign keys on VTGate,
+		// while specifically ignoring the parent foreign key in question.
+		verifyAllFKs = true
+		foreignKeyToIgnore = fk.String(updatedTable)
 	case sqlparser.SetNull:
 		// For SET NULL type constraint, the query looks like this -
 		//		`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
@@ -320,12 +334,13 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	}
 
 	childStmt := &sqlparser.Update{
+		Comments:   parsedComments,
 		Exprs:      childUpdateExprs,
 		TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 		Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: childWhereExpr},
 	}
 
-	childOp, err := createOpFromStmt(ctx, childStmt)
+	childOp, err := createOpFromStmt(ctx, childStmt, verifyAllFKs, foreignKeyToIgnore)
 	if err != nil {
 		return nil, err
 	}

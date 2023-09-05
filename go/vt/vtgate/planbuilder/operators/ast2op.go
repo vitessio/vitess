@@ -111,14 +111,19 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	return &Horizon{Source: union, Query: node}, nil
 }
 
-func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+// createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—
+// 1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
+// 2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement.
+func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (ops.Operator, error) {
 	newCtx, err := plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
 	if err != nil {
 		return nil, err
 	}
-	ctx = newCtx
 
-	return PlanQuery(ctx, stmt)
+	newCtx.VerifyAllFKs = verifyAllFKs
+	newCtx.ParentFKToIgnore = fkToIgnore
+
+	return PlanQuery(newCtx, stmt)
 }
 
 func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (ops.Operator, error) {
@@ -151,7 +156,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.ParentFKsNeedsHandling()
+		parentFKs := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
 		if len(parentFKs) > 0 {
 			return nil, vterrors.VT12002()
 		}
@@ -599,7 +604,8 @@ func createSelectionOp(ctx *plancontext.PlanningContext, selectExprs []sqlparser
 		Where:       where,
 		Limit:       limit,
 	}
-	return createOpFromStmt(ctx, selectionStmt)
+	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
+	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
 }
 
 func selectParentColumns(fk vindexes.ChildFKInfo, lastOffset int) ([]int, []sqlparser.SelectExpr) {
