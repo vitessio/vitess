@@ -357,7 +357,7 @@ const (
 		SET
 			completed_timestamp=NOW(6)
 		WHERE
-			migration_status='cancelled'
+			migration_status IN ('cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
