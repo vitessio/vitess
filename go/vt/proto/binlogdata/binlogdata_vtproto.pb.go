@@ -541,8 +541,8 @@ func (m *MinimalTable) CloneVT() *MinimalTable {
 		return (*MinimalTable)(nil)
 	}
 	r := &MinimalTable{
-		Name:    m.Name,
-		PKIndex: m.PKIndex,
+		Name:        m.Name,
+		PKIndexName: m.PKIndexName,
 	}
 	if rhs := m.Fields; rhs != nil {
 		tmpContainer := make([]*query.Field, len(rhs))
@@ -2263,10 +2263,10 @@ func (m *MinimalTable) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.PKIndex) > 0 {
-		i -= len(m.PKIndex)
-		copy(dAtA[i:], m.PKIndex)
-		i = encodeVarint(dAtA, i, uint64(len(m.PKIndex)))
+	if len(m.PKIndexName) > 0 {
+		i -= len(m.PKIndexName)
+		copy(dAtA[i:], m.PKIndexName)
+		i = encodeVarint(dAtA, i, uint64(len(m.PKIndexName)))
 		i--
 		dAtA[i] = 0x22
 	}
@@ -3738,7 +3738,7 @@ func (m *MinimalTable) SizeVT() (n int) {
 		}
 		n += 1 + sov(uint64(l)) + l
 	}
-	l = len(m.PKIndex)
+	l = len(m.PKIndexName)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -8066,7 +8066,7 @@ func (m *MinimalTable) UnmarshalVT(dAtA []byte) error {
 			}
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PKIndex", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PKIndexName", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -8094,7 +8094,7 @@ func (m *MinimalTable) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.PKIndex = string(dAtA[iNdEx:postIndex])
+			m.PKIndexName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

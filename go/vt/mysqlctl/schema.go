@@ -31,10 +31,11 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -74,7 +75,7 @@ func encodeEntityName(name string) string {
 // tableListSQL returns an IN clause "('t1', 't2'...) for a list of tables."
 func tableListSQL(tables []string) (string, error) {
 	if len(tables) == 0 {
-		return "", vterrors.New(vtrpc.Code_INTERNAL, "no tables for tableListSQL")
+		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "no tables for tableListSQL")
 	}
 
 	encodedTables := make([]string, len(tables))
@@ -566,10 +567,11 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // GetPrimaryKeyEquivalentColumns can be used if the table has
 // no defined PRIMARY KEY. It will return the columns in a
 // viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
-// KEY -- in the specified table. When multiple PKE indexes
-// are available it will attempt to choose the most efficient
-// one based on the column data types and the number of columns
-// in the index. See here for the data type storage sizes:
+// KEY -- along with that index's name in the specified table.
+// When multiple PKE indexes are available it will attempt to
+// choose the most efficient one based on the column data types
+// and the number of columns in the index. See here for the data
+// type storage sizes:
 //
 //	https://dev.mysql.com/doc/refman/en/storage-requirements.html
 //
@@ -634,12 +636,23 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 
 	named := qr.Named()
 	cols := make([]string, len(qr.Rows))
-	index := ""
+	indexName := ""
 	for i, row := range named.Rows {
 		cols[i] = row.AsString("column_name", "")
-		index = row.AsString("index_name", "")
+		in := row.AsString("index_name", "")
+		if in == "" { // This should never happen
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "PKE column (%s) returned with an empty index name",
+				cols[i])
+		}
+		switch {
+		case i == 0:
+			indexName = in
+		case i > 0 && indexName != in: // This should never happen
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "PKE columns (%s) returned for more than one index: %s, %s",
+				strings.Join(cols, ","), indexName, in)
+		}
 	}
-	return cols, index, err
+	return cols, indexName, err
 }
 
 // tableDefinitions is a sortable collection of table definitions

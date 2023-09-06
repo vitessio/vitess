@@ -245,7 +245,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 		}
 		pkColumns = append(pkColumns, int(pk))
 	}
-	st.PKIndex = "PRIMARY"
+	st.PKIndexName = "PRIMARY"
 	return pkColumns, nil
 }
 
@@ -270,8 +270,8 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	// do a FILESORT of all the results. This index should contain all
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
-	if st.PKIndex != "" {
-		indexHint = fmt.Sprintf(" force index (`%s`)", st.PKIndex)
+	if st.PKIndexName != "" {
+		indexHint = fmt.Sprintf(" force index (`%s`)", st.PKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {

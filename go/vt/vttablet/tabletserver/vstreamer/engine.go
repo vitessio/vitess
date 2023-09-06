@@ -597,7 +597,7 @@ func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.
 		return nil, err
 	}
 	if len(pkeColNames) > 0 && indexName != "" {
-		table.PKIndex = indexName
+		table.PKIndexName = indexName
 	}
 	pkeCols := make([]int, len(pkeColNames))
 	matches := 0
