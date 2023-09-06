@@ -102,12 +102,12 @@ func (sq *SubQueryContainer) handleSubquery(
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
 ) (*SubQuery, error) {
-	subq := getSubQuery(expr)
+	subq, parentExpr := getSubQuery(expr)
 	if subq == nil {
 		return nil, nil
 	}
 
-	sqInner, err := createSubqueryOp(ctx, expr, subq, outerID)
+	sqInner, err := createSubqueryOp(ctx, parentExpr, subq, outerID)
 	if err != nil {
 		return nil, err
 	}
@@ -125,16 +125,19 @@ func (sq *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
 	return sq
 }
 
-func getSubQuery(expr sqlparser.Expr) *sqlparser.Subquery {
-	var subqueryExprExists *sqlparser.Subquery
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if subq, ok := node.(*sqlparser.Subquery); ok {
+func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr) {
+	_ = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
 			subqueryExprExists = subq
-			return false, nil
+			parentExpr = subq
+			if expr, ok := cursor.Parent().(sqlparser.Expr); ok {
+				parentExpr = expr
+			}
+			return false
 		}
-		return true, nil
-	}, expr)
-	return subqueryExprExists
+		return true
+	})
+	return
 }
 
 func createSubqueryOp(ctx *plancontext.PlanningContext, expr sqlparser.Expr, subq *sqlparser.Subquery, outerID semantics.TableSet) (*SubQuery, error) {

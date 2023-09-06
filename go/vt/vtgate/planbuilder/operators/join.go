@@ -89,7 +89,7 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
-	subq := getSubQuery(tableExpr.Condition.On)
+	subq, _ := getSubQuery(tableExpr.Condition.On)
 	if subq != nil {
 		return nil, vterrors.VT12001("subquery in outer join predicate")
 	}

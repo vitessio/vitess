@@ -75,9 +75,16 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 }
 
 func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
+	sqc := &SubQueryContainer{}
 	assignments := make(map[string]sqlparser.Expr)
 	for _, set := range updStmt.Exprs {
-		assignments[set.Name.Name.String()] = set.Expr
+		expr := set.Expr
+		if subq, err := sqc.handleSubquery(ctx, expr, qt.ID); err != nil {
+			return nil, err
+		} else if subq != nil {
+			expr = subq.ReplacedSqColName
+		}
+		assignments[set.Name.Name.String()] = expr
 	}
 
 	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
@@ -102,7 +109,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	outerID := TableID(r)
-	sqc := &SubQueryContainer{}
 	for _, predicate := range qt.Predicates {
 		if subq, err := sqc.handleSubquery(ctx, predicate, outerID); err != nil {
 			return nil, err

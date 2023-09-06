@@ -3368,7 +3368,28 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
-    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3))",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   },
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as routing predicate",
