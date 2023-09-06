@@ -152,12 +152,16 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			lastpk = nil
 			// pkfields are only used for logging, so that we can monitor progress.
 			pkfields = make([]*querypb.Field, len(resp.Pkfields))
-			copy(pkfields, resp.Pkfields)
+			for _, f := range resp.Pkfields {
+				pkfields = append(pkfields, f.CloneVT())
+			}
 
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tableName,
 			}
-			fieldEvent.Fields = append(fieldEvent.Fields, resp.Fields...)
+			for _, f := range resp.Fields {
+				fieldEvent.Fields = append(fieldEvent.Fields, f.CloneVT())
+			}
 			tablePlan, err := state.plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
@@ -191,7 +195,6 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			},
 		}
 		log.Infof("copying table %s with lastpk %v", tableName, lastpkbv)
-
 		// Prepare a vcopierCopyTask for the current batch of work.
 		currCh := make(chan *vcopierCopyTaskResult, 1)
 		currT := newVCopierCopyTask(newVCopierCopyTaskArgs(resp.Rows, resp.Lastpk))
