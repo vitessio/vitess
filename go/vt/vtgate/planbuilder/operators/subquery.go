@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 
@@ -156,7 +157,17 @@ func (sj *SubQuery) SetInputs(inputs []ops.Operator) {
 }
 
 func (sj *SubQuery) ShortDescription() string {
-	return sj.FilterType.String() + " WHERE " + sqlparser.String(sj.Predicates)
+	var typ string
+	if sj.IsProjection() {
+		typ = "PROJ"
+	} else {
+		typ = "FILTER"
+	}
+	var pred string
+	if len(sj.Predicates) > 0 {
+		pred = " WHERE " + sqlparser.String(sj.Predicates)
+	}
+	return fmt.Sprintf("%s %v%s", typ, sj.FilterType.String(), pred)
 }
 
 func (sj *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {

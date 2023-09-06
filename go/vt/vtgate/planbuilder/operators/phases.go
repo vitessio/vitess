@@ -102,11 +102,12 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 		case *SubQueryContainer:
 			outer := op.Outer
 			for _, subq := range op.Inner {
-				newOuter, err := settleSubquery(ctx, outer, subq)
+				newOuter, err := subq.settle(ctx, outer)
 				if err != nil {
 					return nil, nil, err
 				}
-				outer = newOuter
+				subq.Outer = newOuter
+				outer = subq
 			}
 			return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
 		case *Projection:
@@ -156,26 +157,6 @@ func isMerged(ctx *plancontext.PlanningContext, se SubQueryExpression) (merged b
 		}
 	}
 	return
-}
-
-// settleSubquery is run when the subqueries have been pushed as far down as they can go.
-// At this point, we know that the subqueries will not be pushed under a Route, so we need to
-// plan for how to run them on the vtgate
-func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq *SubQuery) (ops.Operator, error) {
-	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
-	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
-	// this query is equivalent to
-	// select * from user where id = 5 and exists(select 1 from music where baz = 13 and user.id = bar)
-	// Long term, we should have a cost based optimizer that can make this decision for us.
-
-	newOuter, err := subq.settle(ctx, outer)
-	if err != nil {
-		return nil, err
-	}
-
-	subq.Outer = newOuter
-
-	return subq, nil
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
