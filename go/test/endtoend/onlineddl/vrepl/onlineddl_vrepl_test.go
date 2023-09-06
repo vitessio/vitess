@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
-	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -45,7 +44,6 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
-	httpClient      = throttlebase.SetupHTTPClient(time.Second)
 
 	normalMigrationWait   = 45 * time.Second
 	extendedMigrationWait = 60 * time.Second

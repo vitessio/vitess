@@ -1,4 +1,7 @@
-Usage of vtorc:
+Usage:
+  vtorc [flags]
+
+Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
@@ -25,13 +28,12 @@ Usage of vtorc:
       --grpc_keepalive_timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtorc
       --instance-poll-time duration                                 Timer duration on which VTOrc refreshes MySQL information (default 5s)
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                       Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
-      --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                              If non-empty, write log files in this directory
       --log_err_stacks                                              log stack traces for errors
       --log_rotate_max_size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -87,5 +89,4 @@ Usage of vtorc:
       --topo_zk_tls_key string                                      the key to use to connect to the zk topo server, enables TLS
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
-      --vmodule moduleSpec                                          comma-separated list of pattern=N settings for file-filtered logging
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)

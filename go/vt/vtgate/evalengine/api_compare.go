@@ -51,61 +51,7 @@ func (err UnsupportedCollationError) Error() string {
 // UnsupportedCollationHashError is returned when we try to get the hash value and are missing the collation to use
 var UnsupportedCollationHashError = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 
-// Min returns the minimum of v1 and v2. If one of the
-// values is NULL, it returns the other value. If both
-// are NULL, it returns NULL.
-func Min(v1, v2 sqltypes.Value, collation collations.ID) (sqltypes.Value, error) {
-	return minmax(v1, v2, true, collation)
-}
-
-// Max returns the maximum of v1 and v2. If one of the
-// values is NULL, it returns the other value. If both
-// are NULL, it returns NULL.
-func Max(v1, v2 sqltypes.Value, collation collations.ID) (sqltypes.Value, error) {
-	return minmax(v1, v2, false, collation)
-}
-
-func minmax(v1, v2 sqltypes.Value, min bool, collation collations.ID) (sqltypes.Value, error) {
-	if v1.IsNull() {
-		return v2, nil
-	}
-	if v2.IsNull() {
-		return v1, nil
-	}
-
-	n, err := NullsafeCompare(v1, v2, collation)
-	if err != nil {
-		return sqltypes.NULL, err
-	}
-
-	// XNOR construct. See tests.
-	v1isSmaller := n < 0
-	if min == v1isSmaller {
-		return v1, nil
-	}
-	return v2, nil
-}
-
-// NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
-// NULL is the lowest value. If any value is
-// numeric, then a numeric comparison is performed after
-// necessary conversions. If none are numeric, then it's
-// a simple binary comparison. Uncomparable values return an error.
-func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
-	// Based on the categorization defined for the types,
-	// we're going to allow comparison of the following:
-	// Null, isNumber, IsBinary. This will exclude IsQuoted
-	// types that are not Binary, and Expression.
-	if v1.IsNull() {
-		if v2.IsNull() {
-			return 0, nil
-		}
-		return -1, nil
-	}
-	if v2.IsNull() {
-		return 1, nil
-	}
-
+func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
 	// We have a fast path here for the case where both values are
 	// the same type, and it's one of the basic types we can compare
 	// directly. This is a common case for equality checks.
@@ -201,4 +147,26 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		return 1, nil
 	}
 	return -1, nil
+}
+
+// NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
+// NULL is the lowest value. If any value is
+// numeric, then a numeric comparison is performed after
+// necessary conversions. If none are numeric, then it's
+// a simple binary comparison. Uncomparable values return an error.
+func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
+	// Based on the categorization defined for the types,
+	// we're going to allow comparison of the following:
+	// Null, isNumber, IsBinary. This will exclude IsQuoted
+	// types that are not Binary, and Expression.
+	if v1.IsNull() {
+		if v2.IsNull() {
+			return 0, nil
+		}
+		return -1, nil
+	}
+	if v2.IsNull() {
+		return 1, nil
+	}
+	return compare(v1, v2, collationID)
 }

@@ -207,7 +207,7 @@ func (m *MaxReplicationLagModule) applyLatestConfig() {
 func (m *MaxReplicationLagModule) getConfiguration() *throttlerdatapb.Configuration {
 	m.mutableConfigMu.Lock()
 	defer m.mutableConfigMu.Unlock()
-	return proto.Clone(m.mutableConfig.Configuration).(*throttlerdatapb.Configuration)
+	return m.mutableConfig.Configuration.CloneVT()
 }
 
 func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error {
@@ -217,7 +217,7 @@ func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerda
 	newConfig := m.mutableConfig
 
 	if copyZeroValues {
-		newConfig.Configuration = proto.Clone(configuration).(*throttlerdatapb.Configuration)
+		newConfig.Configuration = configuration.CloneVT()
 	} else {
 		proto.Merge(newConfig.Configuration, configuration)
 	}
@@ -599,7 +599,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 
 	if replicationLagChange == equal {
 		// The replication lag did not change. Keep going at the current rate.
-		r.Reason = fmt.Sprintf("did not decrease the rate because the lag did not change (assuming a 1s error margin)") // nolint
+		r.Reason = "did not decrease the rate because the lag did not change (assuming a 1s error margin)"
 		return
 	}
 

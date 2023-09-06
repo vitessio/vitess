@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -143,31 +144,27 @@ func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 }
 
 // Inputs implements the Primitive interface
-func (f *FkVerify) Inputs() []Primitive {
-	return nil
+func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
+	var inputs []Primitive
+	var inputsMap []map[string]any
+	for idx, parent := range f.Verify {
+		inputsMap = append(inputsMap, map[string]any{
+			inputName: fmt.Sprintf("VerifyParent-%d", idx+1),
+			"BvName":  parent.BvName,
+			"Cols":    parent.Cols,
+		})
+		inputs = append(inputs, parent.Exec)
+	}
+	inputs = append(inputs, f.Exec)
+	inputsMap = append(inputsMap, map[string]any{
+		inputName: "Child",
+	})
+	return inputs, inputsMap
+
 }
 
 func (f *FkVerify) description() PrimitiveDescription {
-	var parentDesc []PrimitiveDescription
-	for _, parent := range f.Verify {
-		parentDesc = append(parentDesc, PrimitiveDescription{
-			OperatorType: "FkVerifyParent",
-			Inputs: []PrimitiveDescription{
-				PrimitiveToPlanDescription(parent.Exec),
-			},
-			Other: map[string]any{
-				"BvName": parent.BvName,
-				"Cols":   parent.Cols,
-			},
-		})
-	}
-	return PrimitiveDescription{
-		OperatorType: f.RouteType(),
-		Other: map[string]any{
-			"Parent": parentDesc,
-			"Child":  PrimitiveToPlanDescription(f.Exec),
-		},
-	}
+	return PrimitiveDescription{OperatorType: f.RouteType()}
 }
 
 var _ Primitive = (*FkVerify)(nil)

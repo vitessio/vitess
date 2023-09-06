@@ -24,14 +24,12 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog"
@@ -464,7 +462,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 		// Insert/Delete/Update are supported only to be used in the context of external mysql streams where source databases
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
-
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
@@ -838,7 +835,7 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, table, database stri
 	// will be modified by adding ColumnType below
 	fieldsCopy := make([]*querypb.Field, len(fields))
 	for i, field := range fields {
-		fieldsCopy[i] = proto.Clone(field).(*querypb.Field)
+		fieldsCopy[i] = field.CloneVT()
 	}
 	extColInfos, err := getExtColInfos(ctx, cp, table, database)
 	if err != nil {
@@ -946,6 +943,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				RowChanges: rowChanges,
 				Keyspace:   vs.vse.keyspace,
 				Shard:      vs.vse.shard,
+				Flags:      uint32(rows.Flags),
 			},
 		})
 	}

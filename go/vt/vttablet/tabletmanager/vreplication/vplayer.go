@@ -68,7 +68,11 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
+
+	foreignKeyCheck bool
 }
+
+const NoForeignKeyCheckFlagBitmask uint32 = 1 << 1
 
 // newVPlayer creates a new vplayer. Parameters:
 // vreplicator: the outer replicator. It's used for common functions like setState.
@@ -101,6 +105,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
 		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		foreignKeyCheck:  false,
 	}
 }
 
@@ -131,6 +136,25 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 
 	return vp.fetchAndApply(ctx)
+}
+
+// updateFKCheck will check if the fk checks value has changed from what it is currently set to and update it if it has.
+// This is done to avoid setting the fk checks value for every row event. vplayer starts with fk checks off.
+func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	// The 2nd bit (least significant) of the flags attribute of the binlog row event
+	// is set to 1 if foreign key checks are disabled.
+	enableFK := true
+	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
+		enableFK = false
+	}
+	if vp.foreignKeyCheck == enableFK {
+		// if not changed, return
+		return nil
+	}
+	vp.foreignKeyCheck = enableFK
+	log.Infof("Setting foreign_key_checks to %v", enableFK)
+	_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(enableFK))
+	return err
 }
 
 // fetchAndApply performs the fetching and application of the binlogs.
@@ -217,6 +241,9 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
+		return err
+	}
 	tplan := vp.tablePlans[rowEvent.TableName]
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
@@ -503,6 +530,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
+			log.Infof("Error applying row event: %s", err.Error())
 			return err
 		}
 		//Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event

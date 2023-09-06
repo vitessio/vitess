@@ -74,32 +74,59 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	initialProductVSchema = `
 {
   "tables": {
-	"product": {},
-	"merchant": {},
-	"orders": {},
+    "product": {},
+    "merchant": {},
+    "orders": {},
     "loadtest": {},
-	"customer": {},
-	"customer_seq": {
-		"type": "sequence"
-	},
-	"customer2": {},
-	"customer_seq2": {
-		"type": "sequence"
-	},
-	"order_seq": {
-		"type": "sequence"
-	},
-	"Lead": {},
-	"Lead-1": {},
-	"db_order_test": {},
-	"vdiff_order": {},
-	"datze": {},
-	"reftable": {
-		"type": "reference"
-	}
+    "customer": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "customer2": {},
+    "customer_seq2": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    },
+    "Lead": {},
+    "Lead-1": {},
+    "db_order_test": {},
+    "vdiff_order": {},
+    "datze": {},
+    "reftable": {
+      "type": "reference"
+    }
   }
 }
 `
+
+	createLookupVindexVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "customer_name_keyspace_id": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "product.customer_name_keyspace_id",
+        "from": "name,cid",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "customer"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [{
+        "columns": ["name", "cid"],
+        "name": "customer_name_keyspace_id"
+      }]
+    }
+  }
+}
+`
+
 	customerSchema  = ""
 	customerVSchema = `
 {

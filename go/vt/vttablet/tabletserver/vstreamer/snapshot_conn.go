@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -216,4 +217,48 @@ func GetBinlogRotationThreshold() int64 {
 // stream (e.g. a ResultStreamer or RowStreamer).
 func SetBinlogRotationThreshold(threshold int64) {
 	atomic.StoreInt64(&binlogRotationThreshold, threshold)
+}
+
+// startSnapshotAllTables starts a streaming query with a snapshot view of all tables, returning the
+// GTID set from the time when the snapshot was taken.
+func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid string, err error) {
+	const MaxLockWaitTime = 30 * time.Second
+	shortCtx, cancel := context.WithTimeout(ctx, MaxLockWaitTime)
+	defer cancel()
+
+	lockConn, err := mysqlConnect(shortCtx, conn.cp)
+	if err != nil {
+		return "", err
+	}
+	// To be safe, always unlock tables, even if lock tables might fail.
+	defer func() {
+		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
+		if err != nil {
+			log.Warning("Unlock tables failed: %v", err)
+		}
+		lockConn.Close()
+	}()
+
+	log.Infof("Locking all tables")
+	if _, err := lockConn.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 1, false); err != nil {
+		log.Infof("Error locking all tables")
+		return "", err
+	}
+	mpos, err := lockConn.PrimaryPosition()
+	if err != nil {
+		return "", err
+	}
+
+	// Starting a transaction now will allow us to start the read later,
+	// which will happen after we release the lock on the table.
+	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+	return replication.EncodePosition(mpos), nil
 }
