@@ -404,17 +404,28 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	switch src := op.Source.(type) {
 	case *operators.Insert:
 		return transformInsertPlan(ctx, op, src)
-	case *operators.Update:
-		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
 	}
-	condition := getVindexPredicate(ctx, op)
-	sel, err := operators.ToSQL(ctx, op.Source)
+	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
-	replaceSubQuery(ctx, sel)
+
+	switch stmt := stmt.(type) {
+	case *sqlparser.Update:
+		replaceSubQuery(ctx, stmt)
+		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)
+	case sqlparser.SelectStatement:
+		replaceSubQuery(ctx, stmt)
+		return buildRouteLogicalPlan(ctx, op, stmt)
+	default:
+		panic(fmt.Sprintf("dont know how to %T", stmt))
+	}
+}
+
+func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	condition := getVindexPredicate(ctx, op)
 	eroute, err := routeToEngineRoute(ctx, op)
 	for _, order := range op.Ordering {
 		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
@@ -431,11 +442,35 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 	return &route{
 		eroute:    eroute,
-		Select:    sel,
+		Select:    stmt,
 		tables:    operators.TableID(op),
 		condition: condition,
 	}, nil
+}
 
+func buildUpdateLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, dmlOp ops.Operator, stmt sqlparser.Statement) (logicalPlan, error) {
+	upd := dmlOp.(*operators.Update)
+	rp := newRoutingParams(ctx, op.Routing.OpCode())
+	err := op.Routing.UpdateRoutingParams(ctx, rp)
+	if err != nil {
+		return nil, err
+	}
+	edml := &engine.DML{
+		Query:             generateQuery(stmt),
+		TableNames:        []string{upd.VTable.Name.String()},
+		Vindexes:          upd.VTable.ColumnVindexes,
+		OwnedVindexQuery:  upd.OwnedVindexQuery,
+		RoutingParameters: rp,
+	}
+
+	transformDMLPlan(upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
+
+	e := &engine.Update{
+		ChangedVindexValues: upd.ChangedVindexValues,
+		DML:                 edml,
+	}
+
+	return &primitiveWrapper{prim: e}, nil
 }
 
 func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (i *insert, err error) {
@@ -539,32 +574,6 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		return
 	}
 	node.Format(buf)
-}
-
-func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
-	ast := upd.AST
-	replaceSubQuery(ctx, ast)
-	rp := newRoutingParams(ctx, op.Routing.OpCode())
-	err := op.Routing.UpdateRoutingParams(ctx, rp)
-	if err != nil {
-		return nil, err
-	}
-	edml := &engine.DML{
-		Query:             generateQuery(ast),
-		TableNames:        []string{upd.VTable.Name.String()},
-		Vindexes:          upd.VTable.ColumnVindexes,
-		OwnedVindexQuery:  upd.OwnedVindexQuery,
-		RoutingParameters: rp,
-	}
-
-	transformDMLPlan(upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
-
-	e := &engine.Update{
-		ChangedVindexValues: upd.ChangedVindexValues,
-		DML:                 edml,
-	}
-
-	return &primitiveWrapper{prim: e}, nil
 }
 
 func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
