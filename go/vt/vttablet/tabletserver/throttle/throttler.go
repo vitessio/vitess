@@ -602,10 +602,10 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	recentCheckTicker := addTicker(time.Second)
 
 	tmClient := tmclient.NewTabletManagerClient()
-	defer tmClient.Close()
 
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
+		defer tmClient.Close()
 		for _, t := range tickers {
 			defer t.Stop()
 			// since we just started the tickers now, speed up the ticks by forcing an immediate tick
@@ -786,8 +786,10 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 
 					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
 					if clusterName == selfStoreName {
+						// Throttler probing its own tablet's metrics
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
+						// Throttler probing other tablets
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
@@ -801,7 +803,6 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 
 // refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
-
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Load()
@@ -851,6 +852,9 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				return
 			}
 			if !throttler.isLeader.Load() {
+				// This tablet may have used to being the primary. Ensure the probes for this cluster are
+				// overwritten with an empty list
+				throttler.mysqlClusterProbesChan <- clusterProbes
 				// not the leader (primary tablet)? Then no more work for us.
 				return
 			}
