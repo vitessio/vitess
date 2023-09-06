@@ -88,7 +88,7 @@ var (
 	}
 	OnlineDDLThrottle = &cobra.Command{
 		Use:                   "throttle <keyspace> <uuid|all>",
-		Short:                 "throttles one or all migrations",
+		Short:                 "Throttles one or all migrations",
 		Example:               "OnlineDDL throttle all",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -96,7 +96,7 @@ var (
 	}
 	OnlineDDLUnthrottle = &cobra.Command{
 		Use:                   "unthrottle <keyspace> <uuid|all>",
-		Short:                 "unthrottles one or all migrations",
+		Short:                 "Unthrottles one or all migrations",
 		Example:               "OnlineDDL unthrottle all",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
