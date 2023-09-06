@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -217,9 +215,7 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 }
 
 // InitDBConfig initializes the target parameters for the throttler.
-func (t *txThrottler) InitDBConfig(target *querypb.Target) {
-	t.target = proto.Clone(target).(*querypb.Target)
-}
+func (t *txThrottler) InitDBConfig(target *querypb.Target) { t.target = target.CloneVT() }
 
 // Open opens the transaction throttler. It must be called prior to 'Throttle'.
 func (t *txThrottler) Open() (err error) {

@@ -101,7 +101,7 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) {
 				}
 			}
 			if _, err := toTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
-				toSI.Shard = proto.Clone(si.Shard).(*topodatapb.Shard)
+				toSI.Shard = si.Shard.CloneVT()
 				return nil
 			}); err != nil {
 				log.Fatalf("UpdateShardFields(%v, %v): %v", keyspace, shard, err)

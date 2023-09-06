@@ -26,11 +26,9 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -483,12 +481,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 			}
-			fieldEvent.Fields = append(fieldEvent.Fields, rows.Fields...)
+			for _, f := range rows.Fields {
+				fieldEvent.Fields = append(fieldEvent.Fields, f.CloneVT())
+			}
 			tablePlan, err := plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
 			}
-			pkfields = append(pkfields, rows.Pkfields...)
+			for _, f := range rows.Pkfields {
+				pkfields = append(pkfields, f.CloneVT())
+			}
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
@@ -504,7 +506,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// Clone rows, since pointer values will change while async work is
 		// happening. Can skip this when there's no parallelism.
 		if parallelism > 1 {
-			rows = proto.Clone(rows).(*binlogdatapb.VStreamRowsResponse)
+			rows = rows.CloneVT()
 		}
 
 		// Prepare a vcopierCopyTask for the current batch of work.

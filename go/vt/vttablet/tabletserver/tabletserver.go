@@ -33,8 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/acl"
@@ -161,7 +159,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		TruncateErrorLen:       config.TruncateErrorLen,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
-		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
+		alias:                  alias.CloneVT(),
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
 
@@ -266,7 +264,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 		return vterrors.NewErrorf(vtrpcpb.Code_UNAVAILABLE, vterrors.ServerNotAvailable, "Server isn't available")
 	}
 	tsv.sm.Init(tsv, target)
-	tsv.sm.target = proto.Clone(target).(*querypb.Target)
+	tsv.sm.target = target.CloneVT()
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
