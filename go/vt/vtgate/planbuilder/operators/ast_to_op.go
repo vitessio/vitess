@@ -126,6 +126,7 @@ func (sq *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
 }
 
 func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr) {
+	flipped := false
 	_ = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
 		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
 			subqueryExprExists = subq
@@ -133,10 +134,19 @@ func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, p
 			if expr, ok := cursor.Parent().(sqlparser.Expr); ok {
 				parentExpr = expr
 			}
+			flipped = true
 			return false
 		}
 		return true
-	}, nil)
+	}, func(cursor *sqlparser.Cursor) bool {
+		if !flipped {
+			return true
+		}
+		if not, isNot := cursor.Parent().(*sqlparser.NotExpr); isNot {
+			parentExpr = not
+		}
+		return false
+	})
 	return
 }
 
