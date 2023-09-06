@@ -1040,6 +1040,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		SourceShards:              req.SourceShards,
 		OnDdl:                     req.OnDdl,
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		AtomicCopy:                req.AtomicCopy,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone

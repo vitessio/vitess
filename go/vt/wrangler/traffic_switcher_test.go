@@ -2169,7 +2169,7 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
 	require.NoError(t, err, "failed to rebuild keyspace")
 
-	err = tme.wr.MoveTables(ctx, "testwf", "ks1", "ks2", "t1,t2", "cell1", "primary,replica", false, "", true, false, "", false, false, "", "", nil, false)
+	err = tme.wr.MoveTables(ctx, "testwf", "ks1", "ks2", "t1,t2", "cell1", "primary,replica", false, "", true, false, "", false, false, "", "", nil, false, false)
 	require.Error(t, err)
 
 	// Check that there are no orphaned routing rules.

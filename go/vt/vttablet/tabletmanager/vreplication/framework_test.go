@@ -62,17 +62,16 @@ import (
 )
 
 var (
-	playerEngine   *Engine
-	streamerEngine *vstreamer.Engine
-
-	envMu sync.Mutex
-	env   *testenv.Env
-
-	globalFBC             = &fakeBinlogClient{}
-	vrepldb               = "vrepl"
-	globalDBQueries       = make(chan string, 1000)
-	testForeignKeyQueries = false
-	doNotLogDBQueries     = false
+	playerEngine             *Engine
+	streamerEngine           *vstreamer.Engine
+	env                      *testenv.Env
+	envMu                    sync.Mutex
+	globalFBC                = &fakeBinlogClient{}
+	vrepldb                  = "vrepl"
+	globalDBQueries          = make(chan string, 1000)
+	testForeignKeyQueries    = false
+	testSetForeignKeyQueries = false
+	doNotLogDBQueries        = false
 )
 
 type LogExpectation struct {
@@ -477,6 +476,8 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	}
 	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
 		globalDBQueries <- query
+	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
+		globalDBQueries <- query
 	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
@@ -485,6 +486,9 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
 	expectNontxQueries(t, qh.Expect(
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
@@ -549,6 +553,9 @@ func shouldIgnoreQuery(query string) bool {
 
 func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, skippableOnce ...string) {
 	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
 	failed := false
 	skippedOnce := false
 	validator := qh.NewVerifier(expectations)
@@ -609,7 +616,9 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 // It also disregards updates to _vt.vreplication.
 func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 	t.Helper()
-
+	if doNotLogDBQueries {
+		return
+	}
 	failed := false
 
 	validator := qh.NewVerifier(expectations)

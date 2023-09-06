@@ -88,7 +88,6 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
-	// id
 	id, err := strconv.ParseInt(params["id"], 10, 32)
 	if err != nil {
 		return nil, err
@@ -99,6 +98,10 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 
 	state := params["state"]
 	blpStats.State.Store(state)
+	if err := prototext.Unmarshal([]byte(params["source"]), ct.source); err != nil {
+		return nil, err
+	}
+
 	// Nothing to do if replication is stopped or is known to have an unrecoverable error.
 	if state == binlogdatapb.VReplicationWorkflowState_Stopped.String() || state == binlogdatapb.VReplicationWorkflowState_Error.String() {
 		ct.cancel = func() {}
@@ -107,14 +110,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		return ct, nil
 	}
 
-	// source, stopPos
-	if err := prototext.Unmarshal([]byte(params["source"]), ct.source); err != nil {
-		return nil, err
-	}
 	ct.stopPos = params["stop_pos"]
 
 	if ct.source.GetExternalMysql() == "" {
-		// tabletPicker
 		if v := params["cell"]; v != "" {
 			cell = v
 		}
@@ -138,7 +136,6 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		ct.tabletPicker = tp
 	}
 
-	// cancel
 	ctx, ct.cancel = context.WithCancel(ctx)
 
 	go ct.run(ctx)
@@ -167,7 +164,7 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, retryDelay), err)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, retryDelay), err)
 		timer := time.NewTimer(retryDelay)
 		select {
 		case <-ctx.Done():
@@ -257,7 +254,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// If this is a mysql error that we know needs manual intervention OR
 		// we cannot identify this as non-recoverable, but it has persisted
 		// beyond the retry limit (maxTimeToRetryError).
-		if isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
+		// In addition, we cannot restart a workflow started with AtomicCopy which has _any_ error.
+		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
+			isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
+
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
 				log.Errorf("INTERNAL: unable to setState() in controller. Attempting to set error text: [%v]; setState() error is: %v", err, errSetState)
