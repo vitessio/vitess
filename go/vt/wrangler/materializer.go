@@ -131,7 +131,7 @@ func shouldInclude(table string, excludes []string) bool {
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
-	sourceShards []string, noRoutingRules bool) (err error) {
+	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -238,6 +238,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		SourceShards:              sourceShards,
 		OnDdl:                     onDDL,
 		DeferSecondaryKeys:        deferSecondaryKeys,
+		AtomicCopy:                atomicCopy,
 	}
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
@@ -1386,19 +1387,13 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
-		workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
-		if mz.isPartial {
-			workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+		var workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		workflowSubType, s, err := mz.getWorkflowSubType()
+		if err != nil {
+			return s, err
 		}
-		var workflowType binlogdatapb.VReplicationWorkflowType
-		switch mz.ms.MaterializationIntent {
-		case vtctldatapb.MaterializationIntent_CUSTOM:
-			workflowType = binlogdatapb.VReplicationWorkflowType_Materialize
-		case vtctldatapb.MaterializationIntent_MOVETABLES:
-			workflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-		case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
-			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
-		}
+
+		workflowType := mz.getWorkflowType()
 
 		tabletTypeStr := mz.ms.TabletTypes
 		if mz.ms.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
@@ -1412,6 +1407,34 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		)
 	}
 	return ig.String(), nil
+}
+
+func (mz *materializer) getWorkflowType() binlogdatapb.VReplicationWorkflowType {
+	var workflowType binlogdatapb.VReplicationWorkflowType
+	switch mz.ms.MaterializationIntent {
+	case vtctldatapb.MaterializationIntent_CUSTOM:
+		workflowType = binlogdatapb.VReplicationWorkflowType_Materialize
+	case vtctldatapb.MaterializationIntent_MOVETABLES:
+		workflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
+		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+	}
+	return workflowType
+}
+
+func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, string, error) {
+	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
+	switch {
+	case mz.isPartial && mz.ms.AtomicCopy:
+		return workflowSubType, "", fmt.Errorf("both atomic copy and partial mode cannot be specified for the same workflow")
+	case mz.isPartial:
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+	case mz.ms.AtomicCopy:
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_AtomicCopy
+	default:
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_None
+	}
+	return workflowSubType, "", nil
 }
 
 func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {

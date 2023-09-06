@@ -707,6 +707,16 @@ func (itc *internalTabletConn) VStreamRows(
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// VStreamTables is part of the QueryService interface.
+func (itc *internalTabletConn) VStreamTables(
+	ctx context.Context,
+	request *binlogdatapb.VStreamTablesRequest,
+	send func(*binlogdatapb.VStreamTablesResponse) error,
+) error {
+	err := itc.tablet.qsc.QueryService().VStreamTables(ctx, request, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // VStreamResults is part of the QueryService interface.
 func (itc *internalTabletConn) VStreamResults(
 	ctx context.Context,
