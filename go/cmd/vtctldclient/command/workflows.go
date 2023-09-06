@@ -237,9 +237,9 @@ func getWorkflow(keyspace, workflow string) (*vtctldatapb.GetWorkflowsResponse, 
 	return resp, nil
 }
 
-// canStartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
+// canRestartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
 // Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
-func canStartWorkflow(keyspace, workflow string) error {
+func canRestartWorkflow(keyspace, workflow string) error {
 	resp, err := getWorkflow(keyspace, workflow)
 	if err != nil {
 		return err
@@ -354,7 +354,7 @@ func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 	var state binlogdatapb.VReplicationWorkflowState
 	switch strings.ToLower(cmd.Name()) {
 	case "start":
-		if err := canStartWorkflow(workflowUpdateOptions.Workflow, workflowOptions.Keyspace); err != nil {
+		if err := canRestartWorkflow(workflowUpdateOptions.Workflow, workflowOptions.Keyspace); err != nil {
 			return err
 		}
 

@@ -387,9 +387,9 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	return query, nil
 }
 
-// canStartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
+// canRestartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
 // Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
-func (wr *Wrangler) canStartWorkflow(ctx context.Context, workflow, keyspace string) error {
+func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace string) error {
 	res, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 	if err != nil {
 		return err
@@ -418,7 +418,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 
 	switch action {
 	case "start":
-		err = wr.canStartWorkflow(ctx, workflow, keyspace)
+		err = wr.canRestartWorkflow(ctx, workflow, keyspace)
 		if err != nil {
 			return nil, err
 		}

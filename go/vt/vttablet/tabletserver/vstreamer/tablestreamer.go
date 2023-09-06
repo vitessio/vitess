@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -120,7 +121,7 @@ func (ts *tableStreamer) Stream() error {
 		}
 		ts.tables = append(ts.tables, tableName)
 	}
-	log.Infof("Found %d tables to stream: %+v", len(ts.tables), ts.tables)
+	log.Infof("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", "))
 	for _, tableName := range ts.tables {
 		log.Infof("Streaming table %s", tableName)
 		if err := ts.streamTable(ts.ctx, tableName); err != nil {

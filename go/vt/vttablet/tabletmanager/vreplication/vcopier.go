@@ -1092,7 +1092,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			}
 		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
-				if vbc.copyStateInsert == nil {
+				if vbc.copyStateInsert == nil { // we don't insert copy state for atomic copy
 					log.Infof("Skipping copy_state insert")
 					return nil
 				}

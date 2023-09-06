@@ -274,7 +274,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			}
 			if vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
 				if err := newVCopier(vr).copyAll(ctx, settings); err != nil {
-					log.Infof("Error copying all tables: %v", err)
+					log.Infof("Error atomically copying all tables: %v", err)
 					vr.stats.ErrorCounts.Add([]string{"CopyAll"}, 1)
 					return err
 				}
