@@ -401,10 +401,6 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
-	switch src := op.Source.(type) {
-	case *operators.Insert:
-		return transformInsertPlan(ctx, op, src)
-	}
 	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -413,12 +409,14 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	replaceSubQuery(ctx, stmt)
 
 	switch stmt := stmt.(type) {
-	case *sqlparser.Update:
-		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)
 	case sqlparser.SelectStatement:
 		return buildRouteLogicalPlan(ctx, op, stmt)
+	case *sqlparser.Update:
+		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)
 	case *sqlparser.Delete:
 		return buildDeleteLogicalPlan(ctx, op, dmlOp, stmt)
+	case *sqlparser.Insert:
+		return buildInsertLogicalPlan(ctx, op, dmlOp, stmt)
 	default:
 		panic(fmt.Sprintf("dont know how to %T", stmt))
 	}
@@ -448,10 +446,11 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	}, nil
 }
 
-func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (i *insert, err error) {
+func buildInsertLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert) (logicalPlan, error) {
+	ins := op.(*operators.Insert)
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
-		Keyspace:          op.Routing.Keyspace(),
+		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), ins.Input != nil),
+		Keyspace:          rb.Routing.Keyspace(),
 		TableName:         ins.VTable.Name.String(),
 		Ignore:            ins.Ignore,
 		ForceNonStreaming: ins.ForceNonStreaming,
@@ -460,7 +459,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		VindexValues:      ins.VindexValues,
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	i = &insert{eInsert: eins}
+	lp := &insert{eInsert: eins}
 
 	// we would need to generate the query on the fly. The only exception here is
 	// when unsharded query with autoincrement for that there is no input operator.
@@ -469,15 +468,16 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 
 	if ins.Input == nil {
-		eins.Query = generateQuery(ins.AST)
+		eins.Query = generateQuery(stmt)
 	} else {
-		i.source, err = transformToLogicalPlan(ctx, ins.Input)
+		newSrc, err := transformToLogicalPlan(ctx, ins.Input)
 		if err != nil {
-			return
+			return nil, err
 		}
+		lp.source = newSrc
 	}
 
-	return
+	return lp, nil
 }
 
 func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {

@@ -386,25 +386,25 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 			return err
 		}
 		qb.asSelectStatement().MakeDistinct()
-		return nil
 	case *Update:
-		buildUpdate(op, qb)
-		return nil
+		buildDML(op, qb)
 	case *Delete:
-		buildDelete(op, qb)
+		buildDML(op, qb)
+	case *Insert:
+		buildDML(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op))
 	}
 	return nil
 }
 
-func buildDelete(op *Delete, qb *queryBuilder) {
-	qb.stmt = op.AST
-	qb.dmlOperator = op
+type OpWithAST interface {
+	ops.Operator
+	Statement() sqlparser.Statement
 }
 
-func buildUpdate(op *Update, qb *queryBuilder) {
-	qb.stmt = op.AST
+func buildDML(op OpWithAST, qb *queryBuilder) {
+	qb.stmt = op.Statement()
 	qb.dmlOperator = op
 }
 
@@ -498,10 +498,10 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	// if the projection is on derived table, we use the select we have
 	// created above and transform it into a derived table
 	if op.TableID != nil {
-		sel := qb.stmt
+		sel := qb.asSelectStatement()
 		qb.stmt = nil
 		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-			Select: sel.(sqlparser.SelectStatement),
+			Select: sel,
 		}, nil, nil)
 	}
 
