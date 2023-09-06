@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the gRPC tabletconn client
+// Imports and register the 'etcd2' topo.Server.
 
 import (
-	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 )

@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// Imports and register the 'consul' topo.Server.
 
 import (
-	_ "vitess.io/vitess/go/vt/mysqlctl/cephbackupstorage"
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
 )
