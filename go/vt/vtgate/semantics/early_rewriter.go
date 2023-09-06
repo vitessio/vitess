@@ -344,34 +344,13 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 //
 // This function returns an error if it encounters a non-authoritative table or
 // if it cannot find a SELECT statement to add the WHERE predicate to.
-func rewriteJoinUsing(
-	current *scope,
-	using sqlparser.Columns,
-	org originable,
-) error {
-	predicates, err := buildJoinPredicates(current, using, org)
+func rewriteJoinUsing(current *scope, cond *sqlparser.JoinCondition, org originable) error {
+	predicates, err := buildJoinPredicates(current, cond.Using, org)
 	if err != nil {
 		return err
 	}
-	// now, we go up the scope until we find a SELECT
-	// with a where clause we can add this predicate to
-	for current != nil {
-		sel, found := current.stmt.(*sqlparser.Select)
-		if !found {
-			current = current.parent
-			continue
-		}
-		if sel.Where != nil {
-			predicates = append(predicates, sel.Where.Expr)
-			sel.Where = nil
-		}
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: sqlparser.AndExpressions(predicates...),
-		}
-		return nil
-	}
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
+	cond.On = sqlparser.AndExpressions(predicates...)
+	return nil
 }
 
 // buildJoinPredicates constructs the join predicates for a given set of USING columns.

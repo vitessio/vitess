@@ -85,7 +85,23 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			currScope.joinUsing[ident.Lowered()] = deps.direct
 		}
 		if len(node.Using) > 0 {
-			err := rewriteJoinUsing(currScope, node.Using, b.org)
+			err := rewriteJoinUsing(currScope, node, b.org)
+			if err != nil {
+				return err
+			}
+			err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				column, isColumn := node.(*sqlparser.ColName)
+				if !isColumn {
+					return true, nil
+				}
+				deps, err := b.resolveColumn(column, currScope, false)
+				if err != nil {
+					return false, err
+				}
+				b.recursive[column] = deps.recursive
+				b.direct[column] = deps.direct
+				return true, nil
+			}, node.On)
 			if err != nil {
 				return err
 			}
