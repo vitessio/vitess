@@ -137,7 +137,7 @@ func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
 func (plan *Plan) fields() []*querypb.Field {
 	fields := make([]*querypb.Field, len(plan.ColExprs))
 	for i, ce := range plan.ColExprs {
-		fields[i] = ce.Field
+		fields[i] = ce.Field.CloneVT()
 	}
 	return fields
 }

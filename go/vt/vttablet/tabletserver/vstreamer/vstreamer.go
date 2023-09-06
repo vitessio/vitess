@@ -24,14 +24,12 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog"
@@ -838,7 +836,7 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, table, database stri
 	// will be modified by adding ColumnType below
 	fieldsCopy := make([]*querypb.Field, len(fields))
 	for i, field := range fields {
-		fieldsCopy[i] = proto.Clone(field).(*querypb.Field)
+		fieldsCopy[i] = field.CloneVT()
 	}
 	extColInfos, err := getExtColInfos(ctx, cp, table, database)
 	if err != nil {

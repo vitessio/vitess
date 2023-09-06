@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -243,14 +244,21 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 				log.V(2).Infof("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid)
 			}
 
+			// Store a copy of the fields and pkfields because the original will be cleared
+			// when GRPC returns our request to the pool
+			uvs.fields = slice.Map(rows.Fields, func(f *querypb.Field) *querypb.Field {
+				return f.CloneVT()
+			})
+			uvs.pkfields = slice.Map(rows.Pkfields, func(f *querypb.Field) *querypb.Field {
+				return f.CloneVT()
+			})
+
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tableName,
-				Fields:    rows.Fields,
+				Fields:    uvs.fields,
 				Keyspace:  uvs.vse.keyspace,
 				Shard:     uvs.vse.shard,
 			}
-			uvs.fields = rows.Fields
-			uvs.pkfields = rows.Pkfields
 			if err := uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent); err != nil {
 				log.Infof("sendFieldEvent returned error %v", err)
 				return err
@@ -277,7 +285,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 
 		newLastPK = sqltypes.CustomProto3ToResult(uvs.pkfields, &querypb.QueryResult{
 			Fields: uvs.pkfields,
-			Rows:   []*querypb.Row{rows.Lastpk},
+			Rows:   []*querypb.Row{rows.Lastpk.CloneVT()},
 		})
 		qrLastPK := sqltypes.ResultToProto3(newLastPK)
 		log.V(2).Infof("Calling sendEventForRows with gtid %s", rows.Gtid)

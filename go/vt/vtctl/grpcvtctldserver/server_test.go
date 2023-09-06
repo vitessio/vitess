@@ -31,7 +31,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -4885,7 +4884,7 @@ func TestGetCellInfo(t *testing.T) {
 		ServerAddress: "example.com",
 		Root:          "vitess",
 	}
-	input := proto.Clone(expected).(*topodatapb.CellInfo)
+	input := expected.CloneVT()
 	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", input))
 
 	resp, err := vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "cell1"})
@@ -4917,7 +4916,7 @@ func TestGetCellsAliases(t *testing.T) {
 	}
 
 	for i, alias := range []*topodatapb.CellsAlias{alias1, alias2} {
-		input := proto.Clone(alias).(*topodatapb.CellsAlias)
+		input := alias.CloneVT()
 		name := fmt.Sprintf("a%d", i+1)
 		require.NoError(t, ts.CreateCellsAlias(ctx, name, input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, input)
 	}

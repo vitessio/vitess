@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/constants/sidecar"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -682,7 +680,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	var newids []int32
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
-		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
+		bls := vre.controllers[refid].source.CloneVT()
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)

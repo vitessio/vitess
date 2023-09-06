@@ -207,7 +207,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	// if refreshKnownTablets is disabled, this case is *not*
 	// detected and the tablet remains in the topo using the
 	// old key
-	origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
+	origTablet := tablet.CloneVT()
 	origKey := TabletToMapKey(tablet)
 	tablet.PortMap["vt"] = 456
 	if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
@@ -246,9 +246,8 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	// tablet2 happens to land on the host:port that tablet 1 used to be on.
 	// This can only be tested when we refresh known tablets.
 	if refreshKnownTablets {
-		origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
-		origTablet2 := proto.Clone(tablet2).(*topodatapb.Tablet)
-
+		origTablet := tablet.CloneVT()
+		origTablet2 := tablet2.CloneVT()
 		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = tablet.Hostname
 			t.PortMap = tablet.PortMap
@@ -607,7 +606,7 @@ func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 	allTablets = fhc.GetAllTablets()
 	assert.Len(t, allTablets, 1)
 	origKey := TabletToMapKey(tablet)
-	tabletWithNewPort := proto.Clone(tablet).(*topodatapb.Tablet)
+	tabletWithNewPort := tablet.CloneVT()
 	tabletWithNewPort.PortMap["vt"] = 456
 	keyWithNewPort := TabletToMapKey(tabletWithNewPort)
 	assert.Contains(t, allTablets, origKey)
