@@ -110,6 +110,7 @@ func (m *MaterializeSettings) CloneVT() *MaterializeSettings {
 		OnDdl:                     m.OnDdl,
 		DeferSecondaryKeys:        m.DeferSecondaryKeys,
 		TabletSelectionPreference: m.TabletSelectionPreference,
+		AtomicCopy:                m.AtomicCopy,
 	}
 	if rhs := m.TableSettings; rhs != nil {
 		tmpContainer := make([]*TableMaterializeSettings, len(rhs))
@@ -2555,6 +2556,7 @@ func (m *MoveTablesCreateRequest) CloneVT() *MoveTablesCreateRequest {
 		DeferSecondaryKeys:        m.DeferSecondaryKeys,
 		AutoStart:                 m.AutoStart,
 		NoRoutingRules:            m.NoRoutingRules,
+		AtomicCopy:                m.AtomicCopy,
 	}
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))

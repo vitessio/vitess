@@ -345,6 +345,7 @@ func (m *RowEvent) CloneVT() *RowEvent {
 		TableName: m.TableName,
 		Keyspace:  m.Keyspace,
 		Shard:     m.Shard,
+		Flags:     m.Flags,
 	}
 	if rhs := m.RowChanges; rhs != nil {
 		tmpContainer := make([]*RowChange, len(rhs))
@@ -701,6 +702,67 @@ func (m *VStreamRowsResponse) CloneVT() *VStreamRowsResponse {
 }
 
 func (m *VStreamRowsResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *VStreamTablesRequest) CloneVT() *VStreamTablesRequest {
+	if m == nil {
+		return (*VStreamTablesRequest)(nil)
+	}
+	r := &VStreamTablesRequest{
+		EffectiveCallerId: m.EffectiveCallerId.CloneVT(),
+		ImmediateCallerId: m.ImmediateCallerId.CloneVT(),
+		Target:            m.Target.CloneVT(),
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *VStreamTablesRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *VStreamTablesResponse) CloneVT() *VStreamTablesResponse {
+	if m == nil {
+		return (*VStreamTablesResponse)(nil)
+	}
+	r := &VStreamTablesResponse{
+		TableName: m.TableName,
+		Gtid:      m.Gtid,
+		Lastpk:    m.Lastpk.CloneVT(),
+	}
+	if rhs := m.Fields; rhs != nil {
+		tmpContainer := make([]*query.Field, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Fields = tmpContainer
+	}
+	if rhs := m.Pkfields; rhs != nil {
+		tmpContainer := make([]*query.Field, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Pkfields = tmpContainer
+	}
+	if rhs := m.Rows; rhs != nil {
+		tmpContainer := make([]*query.Row, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Rows = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *VStreamTablesResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -3058,11 +3120,23 @@ var vtprotoPool_VStreamTablesResponse = sync.Pool{
 }
 
 func (m *VStreamTablesResponse) ResetVT() {
+	for _, mm := range m.Fields {
+		mm.Reset()
+	}
+	f0 := m.Fields[:0]
+	for _, mm := range m.Pkfields {
+		mm.Reset()
+	}
+	f1 := m.Pkfields[:0]
 	for _, mm := range m.Rows {
 		mm.ResetVT()
 	}
+	f2 := m.Rows[:0]
 	m.Lastpk.ReturnToVTPool()
 	m.Reset()
+	m.Fields = f0
+	m.Pkfields = f1
+	m.Rows = f2
 }
 func (m *VStreamTablesResponse) ReturnToVTPool() {
 	if m != nil {
