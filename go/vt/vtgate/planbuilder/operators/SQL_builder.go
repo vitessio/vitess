@@ -390,10 +390,17 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 	case *Update:
 		buildUpdate(op, qb)
 		return nil
+	case *Delete:
+		buildDelete(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op))
 	}
 	return nil
+}
+
+func buildDelete(op *Delete, qb *queryBuilder) {
+	qb.stmt = op.AST
+	qb.dmlOperator = op
 }
 
 func buildUpdate(op *Update, qb *queryBuilder) {
