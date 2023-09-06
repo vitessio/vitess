@@ -1226,18 +1226,41 @@
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select a, (select col from `user` where 1 != 1) from unsharded where 1 != 1",
-        "Query": "select a, (select col from `user`) from unsharded",
-        "Table": "unsharded"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 from unsharded",
+            "Table": "unsharded"
+          }
+        ]
       },
       "TablesUsed": [
-        "main.unsharded"
+        "main.unsharded",
+        "user.user"
       ]
     }
   },
@@ -1248,18 +1271,41 @@
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select a, 1 + (select col from `user` where 1 != 1) from unsharded where 1 != 1",
-        "Query": "select a, 1 + (select col from `user`) from unsharded",
-        "Table": "unsharded"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 from unsharded",
+            "Table": "unsharded"
+          }
+        ]
       },
       "TablesUsed": [
-        "main.unsharded"
+        "main.unsharded",
+        "user.user"
       ]
     }
   },
@@ -2030,15 +2076,43 @@
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t.a from (select (select col from `user` where 1 != 1) as a from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select t.a from (select (select col from `user` limit 1) as a from `user`) as t",
-            "Table": "`user`"
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.a from (select :__sq1 as a from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.a from (select :__sq1 as a from `user`) as t",
+                "Table": "`user`"
+              }
+            ]
           },
           {
             "OperatorType": "Route",
@@ -2147,7 +2221,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2158,7 +2232,7 @@
                 "Table": "`user`"
               },
               {
-            "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2204,7 +2278,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2216,7 +2290,7 @@
                 "Table": "`user`"
               },
               {
-            "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2252,7 +2326,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u1_col1": 1
+          "u1_col": 1
         },
         "TableName": "`user`_`user`_user_extra",
         "Inputs": [
@@ -2275,6 +2349,7 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2287,14 +2362,14 @@
               },
               {
                 "InputName": "SubQuery",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u1_col1 and ue.col = :u2_col",
+                "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
                 "Table": "user_extra"
               }
             ]
@@ -2328,7 +2403,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2339,7 +2414,7 @@
                 "Table": "`user`"
               },
               {
-            "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2595,17 +2670,47 @@
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select (select id from `user` where 1 != 1) from user_extra where 1 != 1",
-        "Query": "select (select id from `user` order by id asc limit 1) from user_extra",
-        "Table": "user_extra"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Limit",
+            "Count": "INT64(1)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
+            "Query": "select :__sq1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
       },
       "TablesUsed": [
+        "user.user",
         "user.user_extra"
       ]
     }

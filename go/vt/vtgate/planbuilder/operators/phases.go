@@ -110,35 +110,17 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 			}
 			return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
 		case *Projection:
-			for _, proj := range op.Projections {
+			for idx, proj := range op.Projections {
 				se, ok := proj.(SubQueryExpression)
 				if !ok {
 					continue
 				}
-				expr := se.GetExpr()
-				for _, sq := range se.sqs {
-					for _, sq2 := range ctx.MergedSubqueries {
-						if sq._sq == sq2 {
-							sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-								switch expr := cursor.Node().(type) {
-								case *sqlparser.ColName:
-									if expr.Name.String() != sq.ReplacedSqColName.Name.String() {
-										return true
-									}
-								case *sqlparser.Argument:
-									if expr.Name != sq.ReplacedSqColName.Name.String() {
-										return true
-									}
-								default:
-									return true
-								}
-
-								cursor.Replace(sq._sq)
-								return false
-							})
-						}
-					}
+				if isMerged(ctx, se) {
+					// if the expression has been merged, there is nothing left we need to do
+					continue
 				}
+				// TODO: this doesn't look correct. what if the
+				op.Columns[idx].Expr = se.GetExpr()
 			}
 			return op, rewrite.SameTree, nil
 		default:
@@ -146,6 +128,34 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 		}
 	}
 	return rewrite.BottomUp(op, TableID, visit, nil)
+}
+
+func isMerged(ctx *plancontext.PlanningContext, se SubQueryExpression) (merged bool) {
+	expr := se.GetExpr()
+	for _, sq := range se.sqs {
+		for _, sq2 := range ctx.MergedSubqueries {
+			if sq._sq == sq2 {
+				sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+					switch expr := cursor.Node().(type) {
+					case *sqlparser.ColName:
+						if expr.Name.String() != sq.ReplacedSqColName.Name.String() {
+							return true
+						}
+					case *sqlparser.Argument:
+						if expr.Name != sq.ReplacedSqColName.Name.String() {
+							return true
+						}
+					default:
+						return true
+					}
+					merged = true
+					cursor.Replace(sq._sq)
+					return false
+				})
+			}
+		}
+	}
+	return
 }
 
 // settleSubquery is run when the subqueries have been pushed as far down as they can go.

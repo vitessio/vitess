@@ -2210,6 +2210,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Filter",
             "Predicate": ":__sq_has_values1 and `user`.col in ::__sq1",
             "ResultColumns": 1,
@@ -2275,6 +2276,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2286,6 +2288,7 @@
                 "Table": "`user`"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Filter",
                 "Predicate": ":__sq_has_values1 and `user`.col in ::__sq1",
                 "Inputs": [

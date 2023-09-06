@@ -554,7 +554,7 @@ func tryPushProjection(
 
 func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	outer := TableID(src.Outer)
-	for _, proj := range p.Projections {
+	for idx, proj := range p.Projections {
 		_, isOffset := proj.(Offset)
 		if isOffset {
 			continue
@@ -567,7 +567,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 
 		se, ok := proj.(SubQueryExpression)
 		if ok {
-			rewriteColNameToArgument(se, src)
+			p.Projections[idx] = rewriteColNameToArgument(se, src)
 		}
 	}
 	// all projections can be pushed to the outer
@@ -575,7 +575,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 	return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 }
 
-func rewriteColNameToArgument(se SubQueryExpression, src *SubQueryContainer) {
+func rewriteColNameToArgument(se SubQueryExpression, src *SubQueryContainer) SubQueryExpression {
 	cols := make(map[*sqlparser.ColName]any)
 	for _, sq1 := range se.sqs {
 		for _, sq2 := range src.Inner {
@@ -584,21 +584,26 @@ func rewriteColNameToArgument(se SubQueryExpression, src *SubQueryContainer) {
 			}
 		}
 	}
-	if len(cols) > 0 {
-		// replace the ColNames with Argument inside the subquery
-		sqlparser.Rewrite(se.E, nil, func(cursor *sqlparser.Cursor) bool {
-			col, ok := cursor.Node().(*sqlparser.ColName)
-			if !ok {
-				return true
-			}
-			if _, ok := cols[col]; !ok {
-				return true
-			}
-			arg := sqlparser.NewArgument(col.Name.String())
-			cursor.Replace(arg)
-			return true
-		})
+	if len(cols) <= 0 {
+		return se
 	}
+
+	// replace the ColNames with Argument inside the subquery
+	result := sqlparser.Rewrite(se.E, nil, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
+		}
+		if _, ok := cols[col]; !ok {
+			return true
+		}
+		arg := sqlparser.NewArgument(col.Name.String())
+		cursor.Replace(arg)
+		return true
+	})
+	se.E = result.(sqlparser.Expr)
+
+	return se
 }
 
 func pushDownProjectionInVindex(

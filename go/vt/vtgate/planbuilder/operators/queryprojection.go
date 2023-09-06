@@ -19,6 +19,7 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -217,7 +218,7 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 		return nil, err
 	}
 	if !qp.HasAggr && sel.Having != nil {
-		qp.HasAggr = sqlparser.ContainsAggregation(sel.Having.Expr)
+		qp.HasAggr = containsAggr(sel.Having.Expr)
 	}
 	qp.calculateDistinct(ctx)
 
@@ -290,7 +291,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			col := SelectExpr{
 				Col: selExp,
 			}
-			if sqlparser.ContainsAggregation(selExp.Expr) {
+			if containsAggr(selExp.Expr) {
 				col.Aggr = true
 				qp.HasAggr = true
 			}
@@ -307,6 +308,19 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 		}
 	}
 	return nil
+}
+
+func containsAggr(e sqlparser.SQLNode) (containsAggr bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, isAggr := node.(sqlparser.AggrFunc); isAggr {
+			containsAggr = true
+			return false, io.EOF
+		}
+
+		_, isSubquery := node.(*sqlparser.Subquery)
+		return !isSubquery, nil
+	}, e)
+	return
 }
 
 // createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
@@ -360,7 +374,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			Inner:          sqlparser.CloneRefOfOrder(order),
 			SimplifiedExpr: simpleExpr,
 		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(simpleExpr)
+		canPushDownSorting = canPushDownSorting && !containsAggr(simpleExpr)
 	}
 	qp.CanPushDownSorting = canPushDownSorting
 	return nil
@@ -562,7 +576,7 @@ func (qp *QueryProjection) NeedsProjecting(
 			}
 
 			rewritten := semantics.RewriteDerivedTableExpression(col, dt)
-			if sqlparser.ContainsAggregation(rewritten) {
+			if containsAggr(rewritten) {
 				offset, tErr := pusher(&sqlparser.AliasedExpr{Expr: col})
 				if tErr != nil {
 					err = tErr
@@ -633,7 +647,7 @@ orderBy:
 		}
 		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
 			Col:  &sqlparser.AliasedExpr{Expr: orderExpr},
-			Aggr: sqlparser.ContainsAggregation(orderExpr),
+			Aggr: containsAggr(orderExpr),
 		})
 		qp.AddedColumn++
 	}
@@ -649,7 +663,7 @@ orderBy:
 
 		idxCopy := idx
 
-		if !sqlparser.ContainsAggregation(expr.Col) {
+		if !containsAggr(expr.Col) {
 			getExpr, err := expr.GetExpr()
 			if err != nil {
 				return nil, false, err
@@ -681,7 +695,7 @@ orderBy:
 				out = append(out, aggrFunc)
 				return false
 			}
-			if sqlparser.ContainsAggregation(node) {
+			if containsAggr(node) {
 				complex = true
 				return true
 			}

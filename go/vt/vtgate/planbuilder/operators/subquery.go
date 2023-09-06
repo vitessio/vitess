@@ -194,6 +194,7 @@ func (sj *SubQuery) GetMergePredicates() []sqlparser.Expr {
 
 func (sj *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
 	if sj.IsProjection() {
+		sj.SubqueryValueName = sj.ReplacedSqColName.Name.String()
 		return outer, nil
 	}
 	return sj.settleFilter(ctx, outer)

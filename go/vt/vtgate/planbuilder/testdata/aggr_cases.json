@@ -2554,7 +2554,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-                    "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2565,7 +2565,7 @@
                 "Table": "`user`"
               },
               {
-                    "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3257,32 +3257,24 @@
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Filter",
+            "Predicate": "count(ue.col) > 10",
             "Inputs": [
               {
-                "OperatorType": "Filter",
-                "Predicate": ":1 > 10",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(ue.col)",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(ue.col)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1, count(ue.col) from `user` as u where 1 != 1",
-                        "Query": "select 1, count(ue.col) from `user` as u",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(ue.col) from `user` as u where 1 != 1",
+                    "Query": "select 1, count(ue.col) from `user` as u",
+                    "Table": "`user`"
                   }
                 ]
               }

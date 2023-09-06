@@ -289,7 +289,11 @@ func (sq *SubQueryContainer) handleSubqueries(
 
 func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
-	sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		_, isExists := cursor.Parent().(*sqlparser.ExistsExpr)
+		if isExists {
+			return true
+		}
 		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
 			reseveSq := ctx.ReservedVars.ReserveSubQuery()
 			reserveSqColName := sqlparser.NewColName(reseveSq)
@@ -298,7 +302,7 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *s
 			sqe.cols = append(sqe.cols, reserveSqColName)
 		}
 		return true
-	})
+	}).(sqlparser.Expr)
 	if len(sqe.subq) == 0 {
 		return nil
 	}

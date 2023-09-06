@@ -1990,6 +1990,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -4243,6 +4244,7 @@
             "TableName": "`user`_unsharded",
             "Inputs": [
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
