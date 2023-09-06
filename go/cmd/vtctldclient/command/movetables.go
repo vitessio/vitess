@@ -79,24 +79,6 @@ See the --help output for each command for more details.`,
 		RunE:                  commandMoveTablesComplete,
 	}
 
-	checkAtomicCopyOptions = func() error {
-		var errors []string
-		if !moveTablesCreateOptions.AtomicCopy {
-			return nil
-		}
-		if !moveTablesCreateOptions.AllTables {
-			errors = append(errors, "atomic copy requires --all-tables.")
-		}
-		if len(moveTablesCreateOptions.IncludeTables) > 0 || len(moveTablesCreateOptions.ExcludeTables) > 0 {
-			errors = append(errors, "atomic copy does not support specifying tables.")
-		}
-		if len(errors) > 0 {
-			errors = append(errors, "Found options incompatible with atomic copy:")
-			return fmt.Errorf(strings.Join(errors, " "))
-		}
-		return nil
-	}
-
 	// MoveTablesCreate makes a MoveTablesCreate gRPC call to a vtctld.
 	MoveTablesCreate = &cobra.Command{
 		Use:                   "create",
@@ -124,6 +106,23 @@ See the --help output for each command for more details.`,
 				return fmt.Errorf("invalid on-ddl value: %s", moveTablesCreateOptions.OnDDL)
 			}
 
+			checkAtomicCopyOptions := func() error {
+				var errors []string
+				if !moveTablesCreateOptions.AtomicCopy {
+					return nil
+				}
+				if !moveTablesCreateOptions.AllTables {
+					errors = append(errors, "atomic copy requires --all-tables.")
+				}
+				if len(moveTablesCreateOptions.IncludeTables) > 0 || len(moveTablesCreateOptions.ExcludeTables) > 0 {
+					errors = append(errors, "atomic copy does not support specifying tables.")
+				}
+				if len(errors) > 0 {
+					errors = append(errors, "Found options incompatible with atomic copy:")
+					return fmt.Errorf(strings.Join(errors, " "))
+				}
+				return nil
+			}
 			if err := checkAtomicCopyOptions(); err != nil {
 				return err
 			}

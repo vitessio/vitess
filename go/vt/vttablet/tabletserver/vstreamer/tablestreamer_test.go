@@ -26,7 +26,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-// TestTableStreamer streams multiple tables and ensures all rows are received in the correct order.
+// TestTableStreamer streams all tables and ensures all rows are received in the correct order.
 func TestTableStreamer(t *testing.T) {
 	ctx := context.Background()
 	execStatements(t, []string{

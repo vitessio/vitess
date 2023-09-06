@@ -59,7 +59,8 @@ type tableStreamer struct {
 	gtid         string
 }
 
-func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema, send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine) *tableStreamer {
+func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
+	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine) *tableStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &tableStreamer{
 		ctx:     ctx,
@@ -78,7 +79,7 @@ func (ts *tableStreamer) Cancel() {
 }
 
 func (ts *tableStreamer) Stream() error {
-	// Ensure that the schema engine is Open. If vttablet came up in a non_serving role, it may not have been initialized.
+	// Ensure that the schema engine is Open. If vttablet came up non_serving, it may not have been initialized.
 	var err error
 	if err = ts.se.Open(); err != nil {
 		return err

@@ -68,12 +68,15 @@ func TestFKWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
+	var ls *fkLoadSimulator
+
 	insertInitialFKData(t)
 	withLoad := true // Set it to false to skip load simulation, while debugging
 	var cancel context.CancelFunc
 	var ctx context.Context
 	if withLoad {
 		ctx, cancel = context.WithCancel(context.Background())
+		ls = newFKLoadSimulator(t, ctx)
 		defer func() {
 			select {
 			case <-ctx.Done():
@@ -81,7 +84,7 @@ func TestFKWorkflow(t *testing.T) {
 				cancel()
 			}
 		}()
-		go simulateLoad(t, ctx)
+		go ls.simulateLoad()
 	}
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
@@ -105,7 +108,7 @@ func TestFKWorkflow(t *testing.T) {
 	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
-	waitForAdditionalRows(t, 200)
+	ls.waitForAdditionalRows(200)
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
 	if withLoad {
 		cancel()
@@ -117,10 +120,11 @@ func TestFKWorkflow(t *testing.T) {
 
 	if withLoad {
 		ctx, cancel = context.WithCancel(context.Background())
+		ls = newFKLoadSimulator(t, ctx)
 		defer cancel()
-		go simulateLoad(t, ctx)
+		go ls.simulateLoad()
 	}
-	waitForAdditionalRows(t, 200)
+	ls.waitForAdditionalRows(200)
 	if withLoad {
 		cancel()
 		<-ch
@@ -150,14 +154,27 @@ func init() {
 
 var ch = make(chan bool)
 
-func simulateLoad(t *testing.T, ctx context.Context) {
+type fkLoadSimulator struct {
+	t   *testing.T
+	ctx context.Context
+}
+
+func newFKLoadSimulator(t *testing.T, ctx context.Context) *fkLoadSimulator {
+	return &fkLoadSimulator{
+		t:   t,
+		ctx: ctx,
+	}
+}
+
+func (ls *fkLoadSimulator) simulateLoad() {
+	t := ls.t
 	var err error
 	for i := 0; ; i++ {
 		if i%1000 == 0 {
 			log.Infof("Load simulation iteration %d", i)
 		}
 		select {
-		case <-ctx.Done():
+		case <-ls.ctx.Done():
 			ch <- true
 			return
 		default:
@@ -166,18 +183,19 @@ func simulateLoad(t *testing.T, ctx context.Context) {
 		op := rand.Intn(100)
 		switch {
 		case op < 50: // 50% chance to insert
-			insert(t)
+			ls.insert()
 		case op < 80: // 30% chance to update
-			update(t)
+			ls.update()
 		default: // 20% chance to delete
-			delete(t)
+			ls.delete()
 		}
 		require.NoError(t, err)
 		time.Sleep(1 * time.Millisecond)
 	}
 }
 
-func getNumRowsParent(t *testing.T, vtgateConn *mysql.Conn) int {
+func (ls *fkLoadSimulator) getNumRowsParent(vtgateConn *mysql.Conn) int {
+	t := ls.t
 	qr := execVtgateQuery(t, vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
@@ -185,10 +203,11 @@ func getNumRowsParent(t *testing.T, vtgateConn *mysql.Conn) int {
 	return numRows
 }
 
-func waitForAdditionalRows(t *testing.T, count int) {
+func (ls *fkLoadSimulator) waitForAdditionalRows(count int) {
+	t := ls.t
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	numRowsStart := getNumRowsParent(t, vtgateConn)
+	numRowsStart := ls.getNumRowsParent(vtgateConn)
 	shortCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	for {
@@ -196,7 +215,7 @@ func waitForAdditionalRows(t *testing.T, count int) {
 		case shortCtx.Err() != nil:
 			t.Fatalf("Timed out waiting for additional rows")
 		default:
-			numRows := getNumRowsParent(t, vtgateConn)
+			numRows := ls.getNumRowsParent(vtgateConn)
 			if numRows >= numRowsStart+count {
 				return
 			}
@@ -205,33 +224,29 @@ func waitForAdditionalRows(t *testing.T, count int) {
 	}
 }
 
-func exec2(t *testing.T, query string) *sqltypes.Result {
-	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
-	require.NotNil(t, qr)
-	return qr
-}
-
-func insert(t *testing.T) {
+func (ls *fkLoadSimulator) insert() {
+	t := ls.t
 	currentParentId++
 	insertQuery := fmt.Sprintf("INSERT INTO parent (id) VALUES (%d)", currentParentId)
-	qr := exec2(t, insertQuery)
+	qr := ls.exec(insertQuery)
 	require.NotNil(t, qr)
 	// insert one or more children, some with valid foreign keys, some without.
 	for i := 0; i < rand.Intn(4)+1; i++ {
 		currentChildId++
 		if i == 3 {
 			insertQuery = fmt.Sprintf("INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO child (id, parent_id) VALUES (%d, %d)", currentChildId, currentParentId+1000000)
-			exec2(t, insertQuery)
+			ls.exec(insertQuery)
 		} else {
 			insertQuery = fmt.Sprintf("INSERT INTO child (id, parent_id) VALUES (%d, %d)", currentChildId, currentParentId)
-			exec2(t, insertQuery)
+			ls.exec(insertQuery)
 		}
 	}
 }
 
-func getRandomId(t *testing.T) int64 {
+func (ls *fkLoadSimulator) getRandomId() int64 {
+	t := ls.t
 	selectQuery := "SELECT id FROM parent ORDER BY RAND() LIMIT 1"
-	qr := exec2(t, selectQuery)
+	qr := ls.exec(selectQuery)
 	require.NotNil(t, qr)
 	if len(qr.Rows) == 0 {
 		return 0
@@ -241,12 +256,19 @@ func getRandomId(t *testing.T) int64 {
 	return id
 }
 
-func update(t *testing.T) {
-	updateQuery := fmt.Sprintf("UPDATE parent SET name = 'parent%d' WHERE id = %d", rand.Intn(1000)+1, getRandomId(t))
-	exec2(t, updateQuery)
+func (ls *fkLoadSimulator) update() {
+	updateQuery := fmt.Sprintf("UPDATE parent SET name = 'parent%d' WHERE id = %d", rand.Intn(1000)+1, ls.getRandomId())
+	ls.exec(updateQuery)
 }
 
-func delete(t *testing.T) {
-	deleteQuery := fmt.Sprintf("DELETE FROM parent WHERE id = %d", getRandomId(t))
-	exec2(t, deleteQuery)
+func (ls *fkLoadSimulator) delete() {
+	deleteQuery := fmt.Sprintf("DELETE FROM parent WHERE id = %d", ls.getRandomId())
+	ls.exec(deleteQuery)
+}
+
+func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
+	t := ls.t
+	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
+	require.NotNil(t, qr)
+	return qr
 }
