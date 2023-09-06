@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"flag"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -97,6 +98,18 @@ func addStatusParts() {
 }
 
 func init() {
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+
+	Main.Flags().AddFlagSet(servenv.GetFlagSetFor("vtorc"))
+
+	// glog flags, no better way to do this
+	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(Main.Flags())
+	Main.Flags().AddGoFlag(flag.Lookup("logtostderr"))
+	Main.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
+	Main.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
+	Main.Flags().AddGoFlag(flag.Lookup("log_dir"))
+
 	logic.RegisterFlags(Main.Flags())
 	server.RegisterFlags(Main.Flags())
 	config.RegisterFlags(Main.Flags())

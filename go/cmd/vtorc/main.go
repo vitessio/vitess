@@ -17,31 +17,15 @@
 package main
 
 import (
-	"flag"
-
 	_ "github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/cmd/vtorc/cli"
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 // main is the application's entry point. It will spawn an HTTP interface.
 func main() {
-	servenv.RegisterDefaultFlags()
-	servenv.RegisterFlags()
-
-	cli.Main.Flags().AddFlagSet(servenv.GetFlagSetFor("vtorc"))
-
-	// glog flags, no better way to do this
-	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(cli.Main.Flags())
-	cli.Main.Flags().AddGoFlag(flag.Lookup("logtostderr"))
-	cli.Main.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
-	cli.Main.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
-	cli.Main.Flags().AddGoFlag(flag.Lookup("log_dir"))
-
 	// TODO: viperutil.BindFlags()
 
 	if err := cli.Main.Execute(); err != nil {

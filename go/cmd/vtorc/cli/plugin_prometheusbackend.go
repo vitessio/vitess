@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 // This plugin imports Prometheus to allow for instrumentation
 // with the Prometheus client library
