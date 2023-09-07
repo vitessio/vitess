@@ -66,6 +66,7 @@ Available Commands:
   RemoveKeyspaceCell          Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.
   RemoveShardCell             Remove the specified cell from the specified shard's Cells list.
   ReparentTablet              Reparent a tablet to the current primary in the shard.
+  Reshard                     Perform commands related to resharding a keyspace.
   RestoreFromBackup           Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.
   RunHealthCheck              Runs a healthcheck on the remote tablet.
   SetKeyspaceDurabilityPolicy Sets the durability-policy used by the specified keyspace.

@@ -2,9 +2,10 @@ package workflow
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"sort"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
