@@ -39,12 +39,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-<<<<<<< HEAD
-=======
-const (
-	ThrottledAppsTimeout = 60 * time.Second
-)
-
 var (
 	testsStartupTime time.Time
 )
@@ -53,7 +47,6 @@ func init() {
 	testsStartupTime = time.Now()
 }
 
->>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 // VtgateExecQuery runs a query on VTGate using given query params
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -369,7 +362,7 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, timeo
 	jsonPath := "IsEnabled"
 	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
 
-	ctx, cancel := context.WithTimeout(context.Background(), throttlerConfigTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
