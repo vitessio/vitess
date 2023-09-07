@@ -39,6 +39,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+<<<<<<< HEAD
+=======
+const (
+	ThrottledAppsTimeout = 60 * time.Second
+)
+
+var (
+	testsStartupTime time.Time
+)
+
+func init() {
+	testsStartupTime = time.Now()
+}
+
+>>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 // VtgateExecQuery runs a query on VTGate using given query params
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -427,4 +442,32 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 		assert.NotZero(t, count)
 		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
 	}
+}
+
+// ValidateCompletedTimestamp ensures that any migration in `cancelled`, `completed`, `failed` statuses
+// has a non-nil and valid `completed_timestamp` value.
+func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
+	require.False(t, testsStartupTime.IsZero())
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+
+	completedTimestampNumValidations := 0
+	for _, row := range r.Named().Rows {
+		migrationStatus := row.AsString("migration_status", "")
+		require.NotEmpty(t, migrationStatus)
+		switch migrationStatus {
+		case string(schema.OnlineDDLStatusComplete),
+			string(schema.OnlineDDLStatusFailed),
+			string(schema.OnlineDDLStatusCancelled):
+			{
+				assert.False(t, row["completed_timestamp"].IsNull())
+				// Also make sure the timestamp is "real", and that it is recent.
+				timestamp := row.AsString("completed_timestamp", "")
+				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
+				assert.NoError(t, err)
+				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
+				completedTimestampNumValidations++
+			}
+		}
+	}
+	assert.NotZero(t, completedTimestampNumValidations)
 }
