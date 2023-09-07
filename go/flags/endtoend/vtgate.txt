@@ -1,4 +1,7 @@
-Usage of vtgate:
+Usage:
+  vtgate [flags]
+
+Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
@@ -69,7 +72,7 @@ Usage of vtgate:
       --grpc_use_effective_callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
       --healthcheck_retry_delay duration                                 health check retry delay (default 2ms)
       --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vtgate
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)

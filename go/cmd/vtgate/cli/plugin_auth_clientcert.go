@@ -14,14 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// This plugin imports opentsdb to register the opentsdb stats backend.
+// This plugin imports clientcert to register the client certificate implementation of AuthServer.
 
 import (
-	"vitess.io/vitess/go/stats/opentsdb"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtgate"
 )
 
 func init() {
-	opentsdb.Init("vtgate")
+	vtgate.RegisterPluginInitializer(func() { mysql.InitAuthServerClientCert() })
 }

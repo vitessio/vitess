@@ -14,15 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// This plugin imports clientcert to register the client certificate implementation of AuthServer.
+// Imports and register the gRPC tabletconn client
 
 import (
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vtgate"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
-
-func init() {
-	vtgate.RegisterPluginInitializer(func() { mysql.InitAuthServerClientCert() })
-}

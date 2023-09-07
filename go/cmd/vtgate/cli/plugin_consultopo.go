@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// This plugin imports InitAuthServerVault to register the HashiCorp Vault implementation of AuthServer.
+// This plugin imports consultopo to register the consul implementation of TopoServer.
 
 import (
-	"vitess.io/vitess/go/mysql/vault"
-	"vitess.io/vitess/go/vt/vtgate"
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
 )
-
-func init() {
-	vtgate.RegisterPluginInitializer(func() { vault.InitAuthServerVault() })
-}

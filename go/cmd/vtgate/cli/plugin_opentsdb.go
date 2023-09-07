@@ -14,10 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the gRPC vtgateservice server
+// This plugin imports opentsdb to register the opentsdb stats backend.
 
 import (
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
+	"vitess.io/vitess/go/stats/opentsdb"
 )
+
+func init() {
+	opentsdb.Init("vtgate")
+}

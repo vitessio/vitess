@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// This plugin imports etcd2topo to register the etcd2 implementation of TopoServer.
+// Imports and register the gRPC vtgateservice server
 
 import (
-	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 )
