@@ -208,25 +208,25 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CommonVRCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 }
 
-type VrSwitchTrafficCommonOptions = struct {
-	Cells                    []string
-	TabletTypes              []topodatapb.TabletType
-	Timeout                  time.Duration
-	MaxReplicationLagAllowed time.Duration
-	EnableReverseReplication bool
-	DryRun                   bool
-	Direction                workflow.TrafficSwitchDirection
-}
-
 var CommonSwitchTrafficOptions = struct {
-	VrSwitchTrafficCommonOptions
+	Cells                     []string
+	TabletTypes               []topodatapb.TabletType
+	Timeout                   time.Duration
+	MaxReplicationLagAllowed  time.Duration
+	EnableReverseReplication  bool
+	DryRun                    bool
+	Direction                 workflow.TrafficSwitchDirection
+	InitializeTargetSequences bool
 }{}
 
-func AddCommonSwitchTrafficFlags(cmd *cobra.Command) {
+func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences bool) {
 	cmd.Flags().StringSliceVarP(&CommonSwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in")
 	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&CommonSwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
 	cmd.Flags().DurationVar(&CommonSwitchTrafficOptions.Timeout, "timeout", TimeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	cmd.Flags().DurationVar(&CommonSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", MaxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	cmd.Flags().BoolVar(&CommonSwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover")
 	cmd.Flags().BoolVar(&CommonSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	if initializeTargetSequences {
+		cmd.Flags().BoolVar(&CommonSwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
+	}
 }

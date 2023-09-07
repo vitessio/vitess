@@ -26,7 +26,7 @@ import (
 
 	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 
-	// import all commands, so that the init()s within them get called and they register their commands/subcommands.
+	// these immports ensure init()s within them get called and they register their commands/subcommands.
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/reshard"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"

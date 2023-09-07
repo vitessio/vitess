@@ -53,11 +53,11 @@ func registerReshardCommands(root *cobra.Command) {
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
 	//fixme: add flag to initialize sequences
-	common.AddCommonSwitchTrafficFlags(switchTrafficCommand)
+	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, false)
 	reshard.AddCommand(switchTrafficCommand)
 
 	reverseTrafficCommand := common.GetReverseTrafficCommand(opts)
-	common.AddCommonSwitchTrafficFlags(reverseTrafficCommand)
+	common.AddCommonSwitchTrafficFlags(reverseTrafficCommand, false)
 	reshard.AddCommand(reverseTrafficCommand)
 
 	reshard.AddCommand(common.GetCompleteCommand(opts))

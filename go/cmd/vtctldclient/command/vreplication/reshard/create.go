@@ -33,12 +33,12 @@ var (
 
 	// reshardCreate makes a reshardCreate gRPC call to a vtctld.
 	reshardCreate = &cobra.Command{
-		Use:                   "create",
+		Use:                   "Create",
 		Short:                 "Create and optionally run a reshard VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 reshard --workflow customer2customer --target-keyspace customer create --source_shards="0" --target_shards="-80,80-" --cells zone1 --cells zone2 --tablet-types replica`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Create"},
+		Aliases:               []string{"create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := common.ParseAndValidateCreateOptions(cmd, &common.CommonVRCreateOptions.VrCreateCommonOptions); err != nil {
