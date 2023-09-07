@@ -420,6 +420,7 @@ func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 	require.False(t, testsStartupTime.IsZero())
 	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
 
+	completedTimestampNumValidations := 0
 	for _, row := range r.Named().Rows {
 		migrationStatus := row.AsString("migration_status", "")
 		require.NotEmpty(t, migrationStatus)
@@ -434,7 +435,9 @@ func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
 				assert.NoError(t, err)
 				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
+				completedTimestampNumValidations++
 			}
 		}
 	}
+	assert.NotZero(t, completedTimestampNumValidations)
 }
