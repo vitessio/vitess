@@ -8160,5 +8160,256 @@
         "user.user_metadata"
       ]
     }
+  },
+  {
+    "comment": "pick email as vindex lookup",
+    "query": "select * from customer where email = 'a@mail.com'",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where email = 'a@mail.com'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where email = 'a@mail.com'",
+        "Table": "customer",
+        "Values": [
+          "VARCHAR(\"a@mail.com\")"
+        ],
+        "Vindex": "unq_lkp_vdx"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where email = 'a@mail.com'",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "VARCHAR(\"a@mail.com\")"
+        ],
+        "Vindex": "unq_lkp_vdx",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select unq_key, keyspace_id from unq_lkp_idx where 1 != 1",
+            "Query": "select unq_key, keyspace_id from unq_lkp_idx where unq_key in ::__vals",
+            "Table": "unq_lkp_idx",
+            "Values": [
+              "::unq_key"
+            ],
+            "Vindex": "shard_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from customer where 1 != 1",
+            "Query": "select * from customer where email = 'a@mail.com'",
+            "Table": "customer"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
+  },
+  {
+    "comment": "phone is in backfill vindex - not selected for vindex lookup",
+    "query": "select * from customer where phone = 123456",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where phone = 123456",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where phone = 123456",
+        "Table": "customer",
+        "Values": [
+          "INT64(123456)"
+        ],
+        "Vindex": "unq_lkp_bf_vdx"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where phone = 123456",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where phone = 123456",
+        "Table": "customer"
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
+  },
+  {
+    "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
+    "query": "select * from customer where email = 'a@mail.com' and phone = 123456",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where email = 'a@mail.com' and phone = 123456",
+        "Table": "customer",
+        "Values": [
+          "INT64(123456)"
+        ],
+        "Vindex": "unq_lkp_bf_vdx"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "VARCHAR(\"a@mail.com\")"
+        ],
+        "Vindex": "unq_lkp_vdx",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select unq_key, keyspace_id from unq_lkp_idx where 1 != 1",
+            "Query": "select unq_key, keyspace_id from unq_lkp_idx where unq_key in ::__vals",
+            "Table": "unq_lkp_idx",
+            "Values": [
+              "::unq_key"
+            ],
+            "Vindex": "shard_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from customer where 1 != 1",
+            "Query": "select * from customer where email = 'a@mail.com' and phone = 123456",
+            "Table": "customer"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
+  },
+  {
+    "comment": "predicate order changed: email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
+    "query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
+        "Table": "customer",
+        "Values": [
+          "INT64(123456)"
+        ],
+        "Vindex": "unq_lkp_bf_vdx"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "VARCHAR(\"a@mail.com\")"
+        ],
+        "Vindex": "unq_lkp_vdx",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select unq_key, keyspace_id from unq_lkp_idx where 1 != 1",
+            "Query": "select unq_key, keyspace_id from unq_lkp_idx where unq_key in ::__vals",
+            "Table": "unq_lkp_idx",
+            "Values": [
+              "::unq_key"
+            ],
+            "Vindex": "shard_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from customer where 1 != 1",
+            "Query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
+            "Table": "customer"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
   }
 ]

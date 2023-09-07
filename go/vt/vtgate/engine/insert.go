@@ -679,7 +679,7 @@ func (ins *Insert) getInsertShardedRoute(
 				if err != nil {
 					return nil, nil, err
 				}
-				rowsResolvedValues = append(rowsResolvedValues, result.Value())
+				rowsResolvedValues = append(rowsResolvedValues, result.Value(vcursor.ConnCollation()))
 			}
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {

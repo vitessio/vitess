@@ -269,7 +269,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=18.0
+BOOTSTRAP_VERSION=18.1
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -324,6 +324,9 @@ $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
 
 docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
+
+docker_lite_push:
+	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
 
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
@@ -459,9 +462,6 @@ generate_ci_workflows:
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh
-
-release-notes:
-	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh

@@ -134,6 +134,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
+	params.Logger.Infof("Starting backup %v", bh.Name())
 
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()

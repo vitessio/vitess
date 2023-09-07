@@ -24,6 +24,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/stats"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/hook"
@@ -53,6 +55,9 @@ var (
 	restoreFromBackupTsStr string
 	restoreConcurrency     = 4
 	waitForBackupInterval  time.Duration
+
+	statsRestoreBackupTime     *stats.String
+	statsRestoreBackupPosition *stats.String
 )
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
@@ -93,6 +98,9 @@ func init() {
 
 	servenv.OnParseFor("vtcombo", registerPointInTimeRestoreFlags)
 	servenv.OnParseFor("vttablet", registerPointInTimeRestoreFlags)
+
+	statsRestoreBackupTime = stats.NewString("RestoredBackupTime")
+	statsRestoreBackupPosition = stats.NewString("RestorePosition")
 }
 
 // RestoreData is the main entry point for backup restore.
@@ -177,6 +185,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, logutil.ProtoToTime(request.BackupTime))
 	}
 
+	startTime := logutil.ProtoToTime(request.BackupTime)
+	if startTime.IsZero() {
+		startTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
+	}
+
 	params := mysqlctl.RestoreParams{
 		Cnf:                 tm.Cnf,
 		Mysqld:              tm.MysqlDaemon,
@@ -187,7 +200,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DbName:              topoproto.TabletDbName(tablet),
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
-		StartTime:           logutil.ProtoToTime(request.BackupTime),
+		StartTime:           startTime,
 		DryRun:              request.DryRun,
 		Stats:               backupstats.RestoreStats(),
 	}
@@ -222,6 +235,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
+		if backupManifest != nil {
+			statsRestoreBackupPosition.Set(mysql.EncodePosition(backupManifest.Position))
+			statsRestoreBackupTime.Set(backupManifest.BackupTime)
+		}
 		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
 		if waitForBackupInterval == 0 {
 			break

@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 
 	discovery "vitess.io/vitess/go/vt/discovery"
 	query "vitess.io/vitess/go/vt/proto/query"

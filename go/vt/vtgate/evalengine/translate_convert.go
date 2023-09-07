@@ -105,7 +105,7 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 				convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
 		}
 	case "NCHAR":
-		convert.Collation = collations.CollationUtf8ID
+		convert.Collation = collations.CollationUtf8mb3ID
 	case "CHAR":
 		convert.Collation, err = ast.translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary)
 		if err != nil {

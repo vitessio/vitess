@@ -771,8 +771,10 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
 		fields = append(fields, &querypb.Field{
-			Name: fmt.Sprintf("@%d", i+1),
-			Type: t,
+			Name:    fmt.Sprintf("@%d", i+1),
+			Type:    t,
+			Charset: uint32(collations.DefaultCollationForType(t)),
+			Flags:   mysql.FlagsForColumn(t, collations.DefaultCollationForType(t)),
 		})
 	}
 	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), mysql.EncodePosition(vs.pos))

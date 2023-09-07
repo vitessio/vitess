@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -46,7 +47,7 @@ var (
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
 	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
-	ShouldDrainForBackup() bool
+	ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool
 }
 
 // BackupParams is the struct that holds all params passed to ExecuteBackup

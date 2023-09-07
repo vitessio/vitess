@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	vtenv "vitess.io/vitess/go/vt/env"
@@ -46,12 +48,15 @@ import (
 var selectRowsResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
 		{
-			Name: "id",
-			Type: querypb.Type_INT32,
+			Name:    "id",
+			Type:    querypb.Type_INT32,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		},
 		{
-			Name: "name",
-			Type: querypb.Type_VARCHAR,
+			Name:    "name",
+			Type:    querypb.Type_VARCHAR,
+			Charset: uint32(collations.CollationUtf8mb4ID),
 		},
 	},
 	Rows: [][]sqltypes.Value{
@@ -136,8 +141,9 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
-					Name: "schema_name",
-					Type: querypb.Type_VARCHAR,
+					Name:    "schema_name",
+					Type:    querypb.Type_VARCHAR,
+					Charset: uint32(collations.Default()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -154,8 +160,9 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
-					Name: "ssl_flag",
-					Type: querypb.Type_VARCHAR,
+					Name:    "ssl_flag",
+					Type:    querypb.Type_VARCHAR,
+					Charset: uint32(collations.Default()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -168,12 +175,14 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
-					Name: "user",
-					Type: querypb.Type_VARCHAR,
+					Name:    "user",
+					Type:    querypb.Type_VARCHAR,
+					Charset: uint32(collations.Default()),
 				},
 				{
-					Name: "user_data",
-					Type: querypb.Type_VARCHAR,
+					Name:    "user_data",
+					Type:    querypb.Type_VARCHAR,
+					Charset: uint32(collations.Default()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -186,8 +195,9 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	case "50ms delay":
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{{
-				Name: "result",
-				Type: querypb.Type_VARCHAR,
+				Name:    "result",
+				Type:    querypb.Type_VARCHAR,
+				Charset: uint32(collations.Default()),
 			}},
 		})
 		time.Sleep(50 * time.Millisecond)
@@ -201,8 +211,9 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 			callback(&sqltypes.Result{
 				Fields: []*querypb.Field{
 					{
-						Name: "result",
-						Type: querypb.Type_VARCHAR,
+						Name:    "result",
+						Type:    querypb.Type_VARCHAR,
+						Charset: uint32(collations.Default()),
 					},
 				},
 				Rows: [][]sqltypes.Value{
@@ -1486,8 +1497,9 @@ func TestServerFlush(t *testing.T) {
 		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
-		Name: "result",
-		Type: querypb.Type_VARCHAR,
+		Name:    "result",
+		Type:    querypb.Type_VARCHAR,
+		Charset: uint32(collations.Default()),
 	}}
 	assert.Equal(t, want1, flds)
 

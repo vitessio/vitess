@@ -29,7 +29,6 @@ type (
 		Offset    int
 		Type      sqltypes.Type
 		Collation collations.TypedCollation
-		typed     bool
 	}
 )
 
@@ -53,14 +52,14 @@ func (c *Column) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.T
 		return fields[c.Offset].Type, flagNullable // we probably got here because the value was NULL,
 		// so let's assume we are on a nullable field
 	}
-	if c.typed {
+	if c.typed() {
 		return c.Type, flagNullable
 	}
-	return sqltypes.Null, flagAmbiguousType
+	return sqltypes.Unknown, flagAmbiguousType
 }
 
 func (column *Column) compile(c *compiler) (ctype, error) {
-	if !column.typed {
+	if !column.typed() {
 		return ctype{}, c.unsupported(column)
 	}
 
@@ -101,4 +100,8 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		Flag: flagNullable,
 		Col:  col,
 	}, nil
+}
+
+func (column *Column) typed() bool {
+	return column.Type >= 0
 }

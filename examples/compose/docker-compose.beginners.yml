@@ -1,7 +1,7 @@
 version: "2.1"
 services:
   consul1:
-    image: consul:latest
+    image: hashicorp/consul:latest
     hostname: "consul1"
     ports:
       - "8400:8400"
@@ -9,7 +9,7 @@ services:
       - "8600:8600"
     command: "agent -server -bootstrap-expect 3 -ui -disable-host-node-id -client 0.0.0.0"
   consul2:
-    image: consul:latest
+    image: hashicorp/consul:latest
     hostname: "consul2"
     expose:
       - "8400"
@@ -19,7 +19,7 @@ services:
     depends_on:
       - consul1
   consul3:
-    image: consul:latest
+    image: hashicorp/consul:latest
     hostname: "consul3"
     expose:
       - "8400"
@@ -58,7 +58,7 @@ services:
       - "3306"
 
   vtctld:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     ports:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
@@ -81,7 +81,7 @@ services:
         condition: service_healthy
 
   vtgate:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     ports:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
@@ -111,7 +111,7 @@ services:
         condition: service_healthy
 
   schemaload:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     command:
     - sh
     - -c
@@ -144,12 +144,12 @@ services:
     environment:
       - KEYSPACES=$KEYSPACE
       - GRPC_PORT=15999
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     volumes:
       - .:/script
 
   vttablet100:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     ports:
       - "15100:$WEB_PORT"
       - "$GRPC_PORT"
@@ -181,7 +181,7 @@ services:
       retries: 15
 
   vttablet101:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     ports:
       - "15101:$WEB_PORT"
       - "$GRPC_PORT"
@@ -213,7 +213,7 @@ services:
       retries: 15
 
   vttablet102:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     ports:
       - "15102:$WEB_PORT"
       - "$GRPC_PORT"
@@ -245,7 +245,7 @@ services:
       retries: 15
 
   vttablet103:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     ports:
       - "15103:$WEB_PORT"
       - "$GRPC_PORT"
@@ -277,7 +277,7 @@ services:
       retries: 15
 
   vtorc:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     command: ["sh", "-c", "/script/vtorc-up.sh"]
     depends_on:
       - vtctld
@@ -307,7 +307,7 @@ services:
       retries: 15
 
   vreplication:
-    image: vitess/lite:v17.0.0-rc1
+    image: vitess/lite:v17.0.2
     volumes:
       - ".:/script"
     environment:

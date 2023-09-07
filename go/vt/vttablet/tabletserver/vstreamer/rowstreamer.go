@@ -298,21 +298,18 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		return err
 	}
 
-	// first call the callback with the fields
-	flds, err := conn.Fields()
-	if err != nil {
-		return err
-	}
 	pkfields := make([]*querypb.Field, len(rs.pkColumns))
 	for i, pk := range rs.pkColumns {
 		pkfields[i] = &querypb.Field{
-			Name: flds[pk].Name,
-			Type: flds[pk].Type,
+			Name:    rs.plan.Table.Fields[pk].Name,
+			Type:    rs.plan.Table.Fields[pk].Type,
+			Charset: rs.plan.Table.Fields[pk].Charset,
+			Flags:   rs.plan.Table.Fields[pk].Flags,
 		}
 	}
 
-	charsets := make([]collations.ID, len(flds))
-	for i, fld := range flds {
+	charsets := make([]collations.ID, len(rs.plan.Table.Fields))
+	for i, fld := range rs.plan.Table.Fields {
 		charsets[i] = collations.ID(fld.Charset)
 	}
 

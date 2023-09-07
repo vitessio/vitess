@@ -42,11 +42,16 @@ fi
 # start vtctld
 CELL=zone1 ../common/scripts/vtctld-up.sh
 
-# Create the keyspace with the sidecar database name and set the
-# correct durability policy. Please see the comment above for
-# more context on using a custom sidecar database name in your
-# Vitess clusters.
-vtctldclient --server localhost:15999 CreateKeyspace --sidecar-db-name="${SIDECAR_DB_NAME}" --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
+if vtctldclient GetKeyspace commerce > /dev/null 2>&1 ; then
+	# Keyspace already exists: we could be running this 101 example on an non-empty VTDATAROOT
+	vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce || fail "Failed to set keyspace durability policy on the commerce keyspace"
+else
+	# Create the keyspace with the sidecar database name and set the
+	# correct durability policy. Please see the comment above for
+	# more context on using a custom sidecar database name in your
+	# Vitess clusters.
+	vtctldclient --server localhost:15999 CreateKeyspace --sidecar-db-name="${SIDECAR_DB_NAME}" --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
+fi
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do

@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -1080,7 +1081,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
 // backup requires query service to be stopped, hence true
-func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
+func (be *BuiltinBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
+	if req != nil && req.IncrementalFromPos != "" {
+		// Incremental backup: we do not drain the tablet.
+		return false
+	}
 	return true
 }
 

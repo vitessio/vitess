@@ -24,7 +24,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
-	"encoding/hex"
+	gohex "encoding/hex"
 	"errors"
 	"hash/crc32"
 	"math"
@@ -34,6 +34,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"vitess.io/vitess/go/mysql/hex"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -2045,7 +2047,7 @@ func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 func (asm *assembler) Fn_HEX_c(t sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		encoded := env.vm.arena.newEvalText(hexEncodeBytes(arg.bytes), col)
+		encoded := env.vm.arena.newEvalText(hex.EncodeBytes(arg.bytes), col)
 		encoded.tt = int16(t)
 		env.vm.stack[env.vm.sp-1] = encoded
 		return 1
@@ -2055,7 +2057,7 @@ func (asm *assembler) Fn_HEX_c(t sqltypes.Type, col collations.TypedCollation) {
 func (asm *assembler) Fn_HEX_d(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(evalNumeric)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hexEncodeUint(uint64(arg.toInt64().i)), col)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hex.EncodeUint(uint64(arg.toInt64().i)), col)
 		return 1
 	}, "FN HEX NUMERIC(SP-1)")
 }
@@ -2067,7 +2069,7 @@ func (asm *assembler) Fn_UNHEX_i(tt sqltypes.Type) {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.toInt64().i)), tt, collationBinary)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hex.DecodeUint(uint64(arg.toInt64().i)), tt, collationBinary)
 		return 1
 	}, "FN UNHEX INT64(SP-1)")
 }
@@ -2075,7 +2077,7 @@ func (asm *assembler) Fn_UNHEX_i(tt sqltypes.Type) {
 func (asm *assembler) Fn_UNHEX_u(tt sqltypes.Type) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.u)), tt, collationBinary)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hex.DecodeUint(uint64(arg.u)), tt, collationBinary)
 		return 1
 	}, "FN UNHEX UINT64(SP-1)")
 }
@@ -2088,7 +2090,7 @@ func (asm *assembler) Fn_UNHEX_f(tt sqltypes.Type) {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.f)), tt, collationBinary)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hex.DecodeUint(uint64(arg.f)), tt, collationBinary)
 		return 1
 	}, "FN UNHEX FLOAT64(SP-1)")
 }
@@ -2096,9 +2098,9 @@ func (asm *assembler) Fn_UNHEX_f(tt sqltypes.Type) {
 func (asm *assembler) Fn_UNHEX_b(tt sqltypes.Type) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		decoded := make([]byte, hexDecodedLen(arg.bytes))
+		decoded := make([]byte, hex.DecodedLen(arg.bytes))
 
-		ok := hexDecodeBytes(decoded, arg.bytes)
+		ok := hex.DecodeBytes(decoded, arg.bytes)
 		if !ok {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
@@ -3328,6 +3330,7 @@ func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uin
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(t)
 		val.bytes = format.Format(env.time(utc), prec)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3344,6 +3347,7 @@ func (asm *assembler) Fn_Sysdate(prec uint8) {
 			now = now.In(tz)
 		}
 		val.bytes = datetime.FromStdTime(now).Format(prec)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3356,6 +3360,7 @@ func (asm *assembler) Fn_Curdate() {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
 		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(false), 0)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3368,6 +3373,7 @@ func (asm *assembler) Fn_UtcDate() {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
 		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(true), 0)
+		val.col = collationBinary
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3411,8 +3417,8 @@ func (asm *assembler) Fn_MD5(col collations.TypedCollation) {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
 		sum := md5.Sum(arg.bytes)
-		buf := make([]byte, hex.EncodedLen(len(sum)))
-		hex.Encode(buf, sum[:])
+		buf := make([]byte, gohex.EncodedLen(len(sum)))
+		gohex.Encode(buf, sum[:])
 
 		arg.tt = int16(sqltypes.VarChar)
 		arg.bytes = buf
@@ -3426,8 +3432,8 @@ func (asm *assembler) Fn_SHA1(col collations.TypedCollation) {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
 		sum := sha1.Sum(arg.bytes)
-		buf := make([]byte, hex.EncodedLen(len(sum)))
-		hex.Encode(buf, sum[:])
+		buf := make([]byte, gohex.EncodedLen(len(sum)))
+		gohex.Encode(buf, sum[:])
 
 		arg.tt = int16(sqltypes.VarChar)
 		arg.bytes = buf
@@ -3461,8 +3467,8 @@ func (asm *assembler) Fn_SHA2(col collations.TypedCollation) {
 			env.vm.sp--
 			return 1
 		}
-		buf := make([]byte, hex.EncodedLen(len(sum)))
-		hex.Encode(buf, sum[:])
+		buf := make([]byte, gohex.EncodedLen(len(sum)))
+		gohex.Encode(buf, sum[:])
 
 		arg.tt = int16(sqltypes.VarChar)
 		arg.bytes = buf
@@ -4239,4 +4245,14 @@ func (asm *assembler) Fn_UUID_TO_BIN1() {
 		env.vm.sp--
 		return 1
 	}, "FN UUID_TO_BIN VARBINARY(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Introduce(offset int, t sqltypes.Type, col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
+		arg.tt = int16(t)
+		arg.col = col
+		env.vm.stack[env.vm.sp-offset] = arg
+		return 1
+	}, "INTRODUCE (SP-1)")
 }
