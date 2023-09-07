@@ -110,6 +110,14 @@ const (
 	ThrottleCheckSelf
 )
 
+// throttlerTopoService represents the functionality we expect from a TopoServer, abstracted so that
+// it can be mocked in unit tests
+type throttlerTopoService interface {
+	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error)
+	FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error)
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
+}
+
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
@@ -125,7 +133,7 @@ type Throttler struct {
 	env             tabletenv.Env
 	pool            *connpool.Pool
 	tabletTypeFunc  func() topodatapb.TabletType
-	ts              *topo.Server
+	ts              throttlerTopoService
 	srvTopoServer   srvtopo.Server
 	heartbeatWriter heartbeat.HeartbeatWriter
 

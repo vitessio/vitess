@@ -7,12 +7,52 @@
 package throttle
 
 import (
+	"context"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+type FakeTopoServer struct {
+}
+
+func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	tablet := &topo.TabletInfo{
+		Tablet: &topodatapb.Tablet{
+			Alias:         alias,
+			Hostname:      "127.0.0.1",
+			MysqlHostname: "127.0.0.1",
+			MysqlPort:     3306,
+			PortMap:       map[string]int32{"vt": 5000},
+			Type:          topodatapb.TabletType_REPLICA,
+		},
+	}
+	return tablet, nil
+}
+
+func (ts *FakeTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	aliases := []*topodatapb.TabletAlias{
+		{Cell: "zone1", Uid: 100},
+		{Cell: "zone2", Uid: 101},
+	}
+	return aliases, nil
+}
+
+func (ts *FakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	ks := &topodatapb.SrvKeyspace{}
+	return ks, nil
+}
 
 type FakeHeartbeatWriter struct {
 }
@@ -50,6 +90,7 @@ func TestIsAppThrottled(t *testing.T) {
 }
 
 func TestIsAppExempted(t *testing.T) {
+
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
 		heartbeatWriter: FakeHeartbeatWriter{},
@@ -74,4 +115,94 @@ func TestIsAppExempted(t *testing.T) {
 	assert.True(t, throttler.IsAppExempted("schema-tracker"))
 	throttler.UnthrottleApp("schema-tracker") // meaningless. App is statically exempted
 	assert.True(t, throttler.IsAppExempted("schema-tracker"))
+}
+
+func TestRefreshMySQLInventory(t *testing.T) {
+	metricsQuery := "select 1"
+	config.Settings().Stores.MySQL.Clusters = map[string]*config.MySQLClusterConfigurationSettings{
+		selfStoreName: {},
+		"ks1":         {},
+		"ks2":         {},
+	}
+	clusters := config.Settings().Stores.MySQL.Clusters
+	for _, s := range clusters {
+		s.MetricQuery = metricsQuery
+		s.ThrottleThreshold = &atomic.Uint64{}
+		s.ThrottleThreshold.Store(1)
+	}
+
+	throttler := &Throttler{
+		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
+		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
+		ts:                     &FakeTopoServer{},
+		mysqlInventory:         mysql.NewInventory(),
+	}
+	throttler.metricsQuery.Store(metricsQuery)
+	throttler.initThrottleTabletTypes()
+
+	validateClusterProbes := func(t *testing.T, ctx context.Context) {
+		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
+		t.Run(testName, func(t *testing.T) {
+			t.Run("waiting for probes", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				numClusterProbesResults := 0
+				for {
+					select {
+					case probes := <-throttler.mysqlClusterProbesChan:
+						assert.NotNil(t, probes)
+
+						throttler.updateMySQLClusterProbes(ctx, probes)
+
+						numClusterProbesResults++
+						if probes.ClusterName == selfStoreName {
+							assert.Equal(t, 1, len(*probes.InstanceProbes))
+						} else if throttler.isLeader.Load() {
+							assert.NotZero(t, len(*probes.InstanceProbes))
+						} else {
+							assert.Empty(t, *probes.InstanceProbes)
+						}
+						if numClusterProbesResults == len(clusters) {
+							return
+						}
+					case <-ctx.Done():
+						assert.FailNowf(t, ctx.Err().Error(), "waiting for %d cluster probes", len(clusters))
+					}
+				}
+			})
+			t.Run("validating probes", func(t *testing.T) {
+				for clusterName := range clusters {
+					probes, ok := throttler.mysqlInventory.ClustersProbes[clusterName]
+					require.True(t, ok)
+					if clusterName == selfStoreName {
+						assert.Equal(t, 1, len(*probes))
+					} else if throttler.isLeader.Load() {
+						assert.NotZero(t, len(*probes))
+					} else {
+						assert.Empty(t, *probes)
+					}
+				}
+			})
+		})
+	}
+	//
+	ctx := context.Background()
+
+	t.Run("initial, not leader", func(t *testing.T) {
+		throttler.isLeader.Store(false)
+		throttler.refreshMySQLInventory(ctx)
+		validateClusterProbes(t, ctx)
+	})
+
+	t.Run("promote", func(t *testing.T) {
+		throttler.isLeader.Store(true)
+		throttler.refreshMySQLInventory(ctx)
+		validateClusterProbes(t, ctx)
+	})
+
+	t.Run("demote, expect cleanup", func(t *testing.T) {
+		throttler.isLeader.Store(false)
+		throttler.refreshMySQLInventory(ctx)
+		validateClusterProbes(t, ctx)
+	})
 }
