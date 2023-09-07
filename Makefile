@@ -328,6 +328,9 @@ $(DOCKER_LITE_TARGETS): docker_lite_%:
 
 docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 
+docker_lite_push:
+	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
+
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
 
