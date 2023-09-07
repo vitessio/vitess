@@ -24,13 +24,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (

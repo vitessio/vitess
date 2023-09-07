@@ -19,7 +19,7 @@ package movetables
 import (
 	"github.com/spf13/cobra"
 
-	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 )
 
 var (

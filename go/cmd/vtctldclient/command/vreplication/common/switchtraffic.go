@@ -24,9 +24,10 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/vtctl/workflow"
 )
 
 func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {

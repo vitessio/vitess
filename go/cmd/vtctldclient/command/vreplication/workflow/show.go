@@ -23,7 +23,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 

@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/textutil"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

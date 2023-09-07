@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 

@@ -21,15 +21,14 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
-	common "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

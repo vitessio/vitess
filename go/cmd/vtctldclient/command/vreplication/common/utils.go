@@ -23,19 +23,17 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/workflow"
-
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
