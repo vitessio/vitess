@@ -51,7 +51,6 @@ func registerMoveTablesCommands(root *cobra.Command) {
 	moveTables.AddCommand(common.GetStopCommand(opts))
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
-	//fixme: add flag to initialize sequences
 	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, true)
 	moveTables.AddCommand(switchTrafficCommand)
 

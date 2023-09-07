@@ -34,11 +34,11 @@ source ../common/env.sh # Required so that "mysql" works from alias
 ./101_initial_cluster.sh
 sleep 5 # Give vtgate time to really start.
 
-#killall_vtdataroot
+killall_vtdataroot
 # verify local example is able to start on an existing setup
 
-#./101_initial_cluster.sh
-#sleep 5 # Give vtgate time to really start.
+./101_initial_cluster.sh
+sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
@@ -66,11 +66,11 @@ mysql --table < ../common/select_customer0_data.sql
 # We expect this to fail due to the denied tables
 # rules in place.
 # For some reason this succeeds...
-# $(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
+$(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./205_clean_commerce.sh
 # We expect this to fail as the keyspace is now gone.
-#(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
+(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh

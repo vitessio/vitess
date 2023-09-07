@@ -2227,19 +2227,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
 	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger) (err error) {
-	log.Infof("In updateShardRecords")
-	defer func() {
-		if err != nil {
-			log.Errorf("updateShardRecords failed: %v", err)
-		} else {
-			log.Infof("updateShardRecords succeeded")
-		}
-	}()
-	err = topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, logger)
-	if err != nil {
-		log.Errorf("UpdateShardRecords failed: %v", err)
-	}
-	return err
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, logger)
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
@@ -2250,7 +2238,6 @@ func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.Shard
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			log.Infof("RefreshState primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
 			ti, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -2317,7 +2304,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		rdDryRunResults, wrDryRunResults  *[]string
 		hasReplica, hasRdonly, hasPrimary bool
 	)
-	log.Infof("WorkflowSwitchTraffic request: %+v\n", req)
 	timeout, set, err := protoutil.DurationFromProto(req.Timeout)
 	if err != nil {
 		err = vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
@@ -2326,7 +2312,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if !set {
 		timeout = defaultDuration
 	}
-	log.Infof("WorkflowSwitchTraffic timeout: %v\n", timeout)
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
 		return nil, err
@@ -2344,7 +2329,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if !set {
 		maxReplicationLagAllowed = defaultDuration
 	}
-	log.Infof("WorkflowSwitchTraffic maxReplicationLagAllowed: %v\n", maxReplicationLagAllowed)
 	direction := TrafficSwitchDirection(req.Direction)
 	if direction == DirectionBackward {
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
@@ -2359,7 +2343,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if reason != "" {
 		return nil, fmt.Errorf("cannot switch traffic for workflow %s at this time: %s", startState.Workflow, reason)
 	}
-	log.Infof("WorkflowSwitchTraffic direction: %v\n", direction)
 	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
 	if err != nil {
 		return nil, err
