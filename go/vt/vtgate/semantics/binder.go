@@ -74,32 +74,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.subqueryRef[node] = sq
 
 		b.setSubQueryDependencies(node, currScope)
-	case *sqlparser.JoinTableExpr:
-		currScope := b.scoper.currentScope()
-		if len(node.Condition.Using) == 0 {
-			return nil
-		}
-		err := rewriteJoinUsing(b, node)
-		if err != nil {
-			return err
-		}
-		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			column, isColumn := node.(*sqlparser.ColName)
-			if !isColumn {
-				return true, nil
-			}
-			deps, err := b.resolveColumn(column, currScope, false)
-			if err != nil {
-				return false, err
-			}
-			b.recursive[column] = deps.recursive
-			b.direct[column] = deps.direct
-			return true, nil
-		}, node.Condition.On)
-		if err != nil {
-			return err
-		}
-		node.Condition.Using = nil
 	case *sqlparser.JoinCondition:
 		currScope := b.scoper.currentScope()
 		for _, ident := range node.Using {

@@ -60,6 +60,38 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
+func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.JoinTableExpr:
+		currScope := r.binder.scoper.currentScope()
+		if len(node.Condition.Using) == 0 {
+			return nil
+		}
+		err := rewriteJoinUsing(r.binder, node)
+		if err != nil {
+			return err
+		}
+		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			column, isColumn := node.(*sqlparser.ColName)
+			if !isColumn {
+				return true, nil
+			}
+			deps, err := r.binder.resolveColumn(column, currScope, false)
+			if err != nil {
+				return false, err
+			}
+			r.binder.recursive[column] = deps.recursive
+			r.binder.direct[column] = deps.direct
+			return true, nil
+		}, node.Condition.On)
+		if err != nil {
+			return err
+		}
+		node.Condition.Using = nil
+	}
+	return nil
+}
+
 // handleWhereClause processes WHERE clauses, specifically the HAVING clause.
 func handleWhereClause(node *sqlparser.Where, parent sqlparser.SQLNode) {
 	if node.Type != sqlparser.HavingClause {
