@@ -111,6 +111,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--vtctld_addr", vttablet.VtctldAddress,
 		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
+		// disable probabilistic caching in all endtoend tests to prevent flakiness
+		"--queryserver-config-query-cache-doorkeeper=false",
 	)
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))

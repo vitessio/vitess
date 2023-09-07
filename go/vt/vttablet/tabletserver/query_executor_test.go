@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -319,7 +320,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				assert.True(t, vterrors.Equals(err, tcase.errorWant))
 			}
 			// Wait for the existing query to be processed by the cache
-			tsv.QueryPlanCacheWait()
+			time.Sleep(100 * time.Millisecond)
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
@@ -412,7 +413,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Wait for the existing query to be processed by the cache
-			tsv.QueryPlanCacheWait()
+			time.Sleep(100 * time.Millisecond)
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
