@@ -376,14 +376,17 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 		return childOp, nil
 	}
 
-	var Verify []ops.Operator
+	var Verify []*VerifyOp
 	// This validates that new values exists on the parent table.
 	for _, fk := range parentFks {
 		op, err := createFkVerifyOpForParentFKForUpdate(ctx, updStmt, fk)
 		if err != nil {
 			return nil, err
 		}
-		Verify = append(Verify, op)
+		Verify = append(Verify, &VerifyOp{
+			Op:  op,
+			Typ: ParentVerify,
+		})
 	}
 	// This validates that the old values don't exist on the child table.
 	for _, fk := range restrictChildFks {
@@ -391,7 +394,10 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 		if err != nil {
 			return nil, err
 		}
-		Verify = append(Verify, op)
+		Verify = append(Verify, &VerifyOp{
+			Op:  op,
+			Typ: ChildVerify,
+		})
 	}
 
 	return &FkVerify{

@@ -26,10 +26,15 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+type Verify struct {
+	Exec Primitive
+	Typ  string
+}
+
 // FkVerify is a primitive that verifies that the foreign key constraints in parent tables are satisfied.
 // It does this by executing a select distinct query on the parent table with the values that are being inserted/updated.
 type FkVerify struct {
-	Verify []Primitive
+	Verify []*Verify
 	Exec   Primitive
 
 	txNeeded
@@ -57,8 +62,8 @@ func (f *FkVerify) GetFields(ctx context.Context, vcursor VCursor, bindVars map[
 
 // TryExecute implements the Primitive interface
 func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	for _, prim := range f.Verify {
-		qr, err := vcursor.ExecutePrimitive(ctx, prim, bindVars, wantfields)
+	for _, v := range f.Verify {
+		qr, err := vcursor.ExecutePrimitive(ctx, v.Exec, bindVars, wantfields)
 		if err != nil {
 			return nil, err
 		}
@@ -71,8 +76,8 @@ func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute implements the Primitive interface
 func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	for _, prim := range f.Verify {
-		err := vcursor.StreamExecutePrimitive(ctx, prim, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	for _, v := range f.Verify {
+		err := vcursor.StreamExecutePrimitive(ctx, v.Exec, bindVars, wantfields, func(qr *sqltypes.Result) error {
 			if len(qr.Rows) > 0 {
 				return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
 			}
@@ -89,11 +94,11 @@ func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
 	var inputs []Primitive
 	var inputsMap []map[string]any
-	for idx, verify := range f.Verify {
+	for idx, v := range f.Verify {
 		inputsMap = append(inputsMap, map[string]any{
-			inputName: fmt.Sprintf("Verify-%d", idx+1),
+			inputName: fmt.Sprintf("%s-%d", v.Typ, idx+1),
 		})
-		inputs = append(inputs, verify)
+		inputs = append(inputs, v.Exec)
 	}
 	inputs = append(inputs, f.Exec)
 	inputsMap = append(inputsMap, map[string]any{

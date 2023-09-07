@@ -20,11 +20,23 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
+// VerifyOp keeps the information about the foreign key verification operation.
+// It is a Parent verification or a Child verification.
+type VerifyOp struct {
+	Op  ops.Operator
+	Typ string
+}
+
+const (
+	ParentVerify = "VerifyParent"
+	ChildVerify  = "VerifyChild"
+)
+
 // FkVerify is used to represent a foreign key verification operation
 // as an operator. This operator is created for DML queries that require
 // verifications on the existence of the rows in the parent table (for example, INSERT and UPDATE).
 type FkVerify struct {
-	Verify []ops.Operator
+	Verify []*VerifyOp
 	Input  ops.Operator
 
 	noColumns
@@ -36,22 +48,28 @@ var _ ops.Operator = (*FkVerify)(nil)
 // Inputs implements the Operator interface
 func (fkv *FkVerify) Inputs() []ops.Operator {
 	inputs := []ops.Operator{fkv.Input}
-	inputs = append(inputs, fkv.Verify...)
+	for _, v := range fkv.Verify {
+		inputs = append(inputs, v.Op)
+	}
 	return inputs
 }
 
 // SetInputs implements the Operator interface
 func (fkv *FkVerify) SetInputs(operators []ops.Operator) {
 	fkv.Input = operators[0]
-	fkv.Verify = nil
-	if len(operators) > 1 {
-		fkv.Verify = operators[1:]
+	if len(fkv.Verify) != len(operators)-1 {
+		panic("mismatched number of verify inputs")
+	}
+	for i := 1; i < len(operators); i++ {
+		fkv.Verify[i-1].Op = operators[i]
 	}
 }
 
 // Clone implements the Operator interface
 func (fkv *FkVerify) Clone(inputs []ops.Operator) ops.Operator {
-	newFkv := &FkVerify{}
+	newFkv := &FkVerify{
+		Verify: fkv.Verify,
+	}
 	newFkv.SetInputs(inputs)
 	return newFkv
 }
