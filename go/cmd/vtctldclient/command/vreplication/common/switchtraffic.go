@@ -29,10 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 )
 
-var switchTrafficOptions = struct {
-	InitializeTargetSequences bool
-}{}
-
 func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                   "SwitchTraffic",
@@ -99,7 +95,7 @@ func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
 		Timeout:                   protoutil.DurationToProto(CommonSwitchTrafficOptions.Timeout),
 		DryRun:                    CommonSwitchTrafficOptions.DryRun,
 		EnableReverseReplication:  CommonSwitchTrafficOptions.EnableReverseReplication,
-		InitializeTargetSequences: switchTrafficOptions.InitializeTargetSequences,
+		InitializeTargetSequences: CommonSwitchTrafficOptions.InitializeTargetSequences,
 		Direction:                 int32(CommonSwitchTrafficOptions.Direction),
 	}
 	resp, err := GetClient().WorkflowSwitchTraffic(GetCommandCtx(), req)
