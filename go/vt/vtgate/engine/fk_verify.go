@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// Verify contains the verification primitve and its type i.e. parent or child
 type Verify struct {
 	Exec Primitive
 	Typ  string
@@ -40,6 +41,7 @@ type FkVerify struct {
 	txNeeded
 }
 
+// constants for verification type.
 const (
 	ParentVerify = "VerifyParent"
 	ChildVerify  = "VerifyChild"

@@ -1336,12 +1336,3 @@ func (t *Table) getReferenceInKeyspace(keyspace string) *Table {
 	}
 	return t
 }
-
-func (t *Table) FindColumn(column sqlparser.IdentifierCI) *Column {
-	for _, c := range t.Columns {
-		if c.Name.Equal(column) {
-			return &c
-		}
-	}
-	return nil
-}
