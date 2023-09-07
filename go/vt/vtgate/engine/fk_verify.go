@@ -40,6 +40,11 @@ type FkVerify struct {
 	txNeeded
 }
 
+const (
+	ParentVerify = "VerifyParent"
+	ChildVerify  = "VerifyChild"
+)
+
 // RouteType implements the Primitive interface
 func (f *FkVerify) RouteType() string {
 	return "FKVerify"
@@ -68,7 +73,7 @@ func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 			return nil, err
 		}
 		if len(qr.Rows) > 0 {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
+			return nil, getError(v.Typ)
 		}
 	}
 	return vcursor.ExecutePrimitive(ctx, f.Exec, bindVars, wantfields)
@@ -79,7 +84,7 @@ func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	for _, v := range f.Verify {
 		err := vcursor.StreamExecutePrimitive(ctx, v.Exec, bindVars, wantfields, func(qr *sqltypes.Result) error {
 			if len(qr.Rows) > 0 {
-				return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
+				return getError(v.Typ)
 			}
 			return nil
 		})
@@ -113,3 +118,10 @@ func (f *FkVerify) description() PrimitiveDescription {
 }
 
 var _ Primitive = (*FkVerify)(nil)
+
+func getError(typ string) error {
+	if typ == ParentVerify {
+		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoReferencedRow2, "Cannot add or update a child row: a foreign key constraint fails")
+	}
+	return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RowIsReferenced2, "Cannot delete or update a parent row: a foreign key constraint fails")
+}

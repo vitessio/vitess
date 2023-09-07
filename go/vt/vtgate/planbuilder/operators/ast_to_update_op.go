@@ -385,7 +385,7 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 		}
 		Verify = append(Verify, &VerifyOp{
 			Op:  op,
-			Typ: ParentVerify,
+			Typ: engine.ParentVerify,
 		})
 	}
 	// This validates that the old values don't exist on the child table.
@@ -396,7 +396,7 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 		}
 		Verify = append(Verify, &VerifyOp{
 			Op:  op,
-			Typ: ChildVerify,
+			Typ: engine.ChildVerify,
 		})
 	}
 
