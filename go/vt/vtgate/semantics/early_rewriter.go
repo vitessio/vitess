@@ -405,14 +405,14 @@ func buildJoinPredicates(b *binder, join *sqlparser.JoinTableExpr) ([]sqlparser.
 	return predicates, nil
 }
 
-func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, column sqlparser.IdentifierCI) (TableInfo, error) {
+func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, column sqlparser.IdentifierCI) ([]TableInfo, error) {
 	switch tbl := tbl.(type) {
 	case *sqlparser.AliasedTableExpr:
 		ts := b.tc.tableSetFor(tbl)
 		tblInfo := b.tc.Tables[ts.TableOffset()]
 		for _, info := range tblInfo.getColumns() {
 			if column.EqualString(info.Name) {
-				return tblInfo, nil
+				return []TableInfo{tblInfo}, nil
 			}
 		}
 		return nil, nil
@@ -425,15 +425,10 @@ func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, colum
 		if err != nil {
 			return nil, err
 		}
-		if tblInfoL != nil && tblInfoR != nil {
-			return nil, vterrors.VT03021(column.String())
-		}
-		if tblInfoR != nil {
-			return tblInfoR, nil
-		}
-		return tblInfoL, nil
+
+		return append(tblInfoL, tblInfoR...), nil
 	case *sqlparser.ParenTableExpr:
-		var tblInfo TableInfo
+		var tblInfo []TableInfo
 		for _, parenTable := range tbl.Exprs {
 			newTblInfo, err := findOnlyOneTableInfoThatHasColumn(b, parenTable, column)
 			if err != nil {
@@ -467,15 +462,22 @@ func findTablesWithColumn(b *binder, join *sqlparser.JoinTableExpr, column sqlpa
 	if leftTableInfo == nil || rightTableInfo == nil {
 		return nil, ShardedError{Inner: vterrors.VT03019(column.String())}
 	}
-	leftTableName, err := leftTableInfo.Name()
-	if err != nil {
-		return nil, err
+	var tableNames []sqlparser.TableName
+	for _, info := range leftTableInfo {
+		nm, err := info.Name()
+		if err != nil {
+			return nil, err
+		}
+		tableNames = append(tableNames, nm)
 	}
-	rightTableName, err := rightTableInfo.Name()
-	if err != nil {
-		return nil, err
+	for _, info := range rightTableInfo {
+		nm, err := info.Name()
+		if err != nil {
+			return nil, err
+		}
+		tableNames = append(tableNames, nm)
 	}
-	return []sqlparser.TableName{leftTableName, rightTableName}, nil
+	return tableNames, nil
 }
 
 // createComparisonPredicates creates a list of comparison predicates between the given column and foundTables.
