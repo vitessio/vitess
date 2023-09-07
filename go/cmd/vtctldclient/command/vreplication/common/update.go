@@ -21,6 +21,9 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -79,12 +82,54 @@ func GetStopCommand(opts *SubCommandsOpts) *cobra.Command {
 	return cmd
 }
 
+func getWorkflow(keyspace, workflow string) (*vtctldatapb.GetWorkflowsResponse, error) {
+	resp, err := GetClient().GetWorkflows(GetCommandCtx(), &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: keyspace,
+		Workflow: workflow,
+	})
+	if err != nil {
+		return &vtctldatapb.GetWorkflowsResponse{}, err
+	}
+	return resp, nil
+}
+
+// CanRestartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
+// Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
+func CanRestartWorkflow(keyspace, workflow string) error {
+	resp, err := getWorkflow(keyspace, workflow)
+	if err != nil {
+		return err
+	}
+	if len(resp.Workflows) == 0 {
+		return fmt.Errorf("workflow %s not found", workflow)
+	}
+	if len(resp.Workflows) > 1 {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "multiple results found for workflow %s", workflow)
+	}
+	wf := resp.Workflows[0]
+	if wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_AtomicCopy.String() {
+		return nil
+	}
+	// If we're here, we have an atomic copy workflow.
+	for _, shardStream := range wf.ShardStreams {
+		for _, stream := range shardStream.Streams {
+			if len(stream.CopyStates) > 0 {
+				return fmt.Errorf("stream %d is still in the copy phase: can only start workflow %s if all streams have completed the copy phase.", stream.Id, workflow)
+			}
+		}
+	}
+	return nil
+}
+
 func commandUpdateState(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	var state binlogdatapb.VReplicationWorkflowState
 	switch strings.ToLower(cmd.Name()) {
 	case "start":
+		if err := CanRestartWorkflow(workflowUpdateOptions.Workflow, workflowOptions.Keyspace); err != nil {
+			return err
+		}
 		state = binlogdatapb.VReplicationWorkflowState_Running
 	case "stop":
 		state = binlogdatapb.VReplicationWorkflowState_Stopped
