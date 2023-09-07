@@ -405,3 +405,26 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
 	}
 }
+
+// ValidateCompletedTimestamp ensures that any migration in `cancelled`, `completed`, `failed` statuses
+// has a non-nil and valid `compelted_timestamp` value.
+func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+	for _, row := range r.Named().Rows {
+		migrationStatus := row.AsString("migration_status", "")
+		require.NotEmpty(t, migrationStatus)
+		switch migrationStatus {
+		case string(schema.OnlineDDLStatusComplete),
+			string(schema.OnlineDDLStatusFailed),
+			string(schema.OnlineDDLStatusCancelled):
+			{
+				assert.False(t, row["completed_timestamp"].IsNull())
+				// Also make sure the timestamp is "real", and that it is recent.
+				timestamp := row.AsString("completed_timestamp", "")
+				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
+				assert.NoError(t, err)
+				assert.Greater(t, completedTime.Unix(), time.Now().Add(-time.Hour).Unix())
+			}
+		}
+	}
+}

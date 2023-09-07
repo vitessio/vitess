@@ -275,6 +275,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
 		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
 	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
 }
 
 func testScheduler(t *testing.T) {
@@ -362,13 +365,6 @@ func testScheduler(t *testing.T) {
 		`
 	)
 
-	testCompletedTimetamp := func(t *testing.T, uuid string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-		require.NotNil(t, rs)
-		for _, row := range rs.Named().Rows {
-			assert.False(t, row["completed_timestamp"].IsNull())
-		}
-	}
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
@@ -698,7 +694,6 @@ func testScheduler(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
-			testCompletedTimetamp(t, drop1uuid)
 		})
 		t.Run("complete t1", func(t *testing.T) {
 			// t1 should be still running!
@@ -832,7 +827,6 @@ func testScheduler(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
-			testCompletedTimetamp(t, uuid)
 		})
 
 		// now, we submit the exact same migratoin again: same UUID, same migration context.
