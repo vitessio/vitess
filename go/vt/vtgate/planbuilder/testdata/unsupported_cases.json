@@ -37,12 +37,12 @@
   {
     "comment": "join with USING construct",
     "query": "select * from user join user_extra using(id)",
-    "plan": "can't handle JOIN USING without authoritative tables"
+    "plan": "VT03019: column id not found"
   },
   {
     "comment": "join with USING construct with 3 tables",
     "query": "select user.id from user join user_extra using(id) join music using(id2)",
-    "plan": "can't handle JOIN USING without authoritative tables"
+    "plan": "VT03019: column id2 not found"
   },
   {
     "comment": "natural left join",
