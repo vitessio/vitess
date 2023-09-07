@@ -1,5 +1,8 @@
+//go:build noasm || (!amd64 && !arm64 && !ppc64le)
+// +build noasm !amd64,!arm64,!ppc64le
+
 /*
-Copyright 2023 The Vitess Authors.
+Copyright (c) 2017 Minio Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,27 +17,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vthash
+package highway
 
-import (
-	"vitess.io/vitess/go/vt/vthash/highway"
-	"vitess.io/vitess/go/vt/vthash/metro"
+var (
+	useSSE4 = false
+	useAVX2 = false
+	useNEON = false
+	useVMX  = false
 )
 
-type Hasher = metro.Metro128
-type Hash = [16]byte
-
-func New() Hasher {
-	h := Hasher{}
-	h.Reset()
-	return h
+func initialize(state *[16]uint64, k []byte) {
+	initializeGeneric(state, k)
 }
 
-type Hasher256 = highway.Digest
-type Hash256 = [32]byte
+func update(state *[16]uint64, msg []byte) {
+	updateGeneric(state, msg)
+}
 
-var defaultHash256Key = [32]byte{}
-
-func New256() *Hasher256 {
-	return highway.New(defaultHash256Key)
+func finalize(out []byte, state *[16]uint64) {
+	finalizeGeneric(out, state)
 }
