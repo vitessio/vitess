@@ -76,7 +76,7 @@ var (
 )
 
 var (
-	// fixCompletedTimestampOnce fixes a nil `completed_tiemstamp` columns, see
+	// fixCompletedTimestampDone fixes a nil `completed_tiemstamp` columns, see
 	// https://github.com/vitessio/vitess/issues/13927
 	// The fix is in release-18.0
 	// TODO: remove in release-19.0
