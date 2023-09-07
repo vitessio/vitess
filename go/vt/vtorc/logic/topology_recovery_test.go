@@ -248,7 +248,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			analysisCode:                 inst.ErrantGTIDDetected,
 			wantRecoveryFunction:         recoverErrantGTIDDetectedFunc,
 		}, {
-			name:                         "ErrantGTIDDetected with --convert-tablets-with-errant-gtids false",
+			name:                         "ErrantGTIDDetected with --change-tablets-with-errant-gtid-to-drained false",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: false,
 			analysisCode:                 inst.ErrantGTIDDetected,

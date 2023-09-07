@@ -7,7 +7,7 @@
     - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
-    - [VTOrc flag `--convert-tablets-with-errant-gtids`](#new-flag-errant-gtid-convert)
+    - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
@@ -47,12 +47,12 @@ reparent operations. The users that want VTOrc to fix the replication issues, bu
 should start using this flag. By default, VTOrc will be able to run `EmergencyReparentShard`. The users must specify the
 flag to `false` to change the behaviour.
 
-#### <a id="new-flag-errant-gtid-convert"/>VTOrc flag `--convert-tablets-with-errant-gtids`
+#### <a id="new-flag-errant-gtid-convert"/>VTOrc flag `--change-tablets-with-errant-gtid-to-drained`
 
-VTOrc has a new flag `--convert-tablets-with-errant-gtids` that allows the users to toggle the ability of VTOrc to change the 
+VTOrc has a new flag `--change-tablets-with-errant-gtid-to-drained` that allows users to choose whether VTOrc should change the
 tablet type of tablets with errant GTIDs to `DRAINED`. By default, the flag is false.
 
-This feature allows the users to configure VTOrc such that any tablet that encounters errant GTIDs is automatically taken out of the
+This feature allows users to configure VTOrc such that any tablet that encounters errant GTIDs is automatically taken out of the
 serving graph. These tablets can then be inspected for what the errant GTIDs are, and once fixed, they can rejoin the cluster.
 
 #### <a id="new-ers-subflag"/>ERS sub flag `--wait-for-all-tablets`

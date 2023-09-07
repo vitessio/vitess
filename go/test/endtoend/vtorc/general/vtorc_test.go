@@ -105,7 +105,7 @@ func TestKeyspaceShard(t *testing.T) {
 func TestVTOrcRepairs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--convert-tablets-with-errant-gtids"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]

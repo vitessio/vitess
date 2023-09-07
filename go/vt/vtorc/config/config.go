@@ -62,7 +62,7 @@ var (
 	topoInformationRefreshDuration = 15 * time.Second
 	recoveryPollDuration           = 1 * time.Second
 	ersEnabled                     = true
-	convertTabletWithErrantGTIDs   = false
+	convertTabletsWithErrantGTIDs  = false
 )
 
 // RegisterFlags registers the flags required by VTOrc
@@ -83,7 +83,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
-	fs.BoolVar(&convertTabletWithErrantGTIDs, "convert-tablets-with-errant-gtids", convertTabletWithErrantGTIDs, "Whether VTOrc should be changing the type of the tablets with errant GTIDs to DRAINED")
+	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -147,12 +147,12 @@ func SetERSEnabled(val bool) {
 
 // ConvertTabletWithErrantGTIDs reports whether VTOrc is allowed to change the tablet type of tablets with errant GTIDs to DRAINED.
 func ConvertTabletWithErrantGTIDs() bool {
-	return convertTabletWithErrantGTIDs
+	return convertTabletsWithErrantGTIDs
 }
 
 // SetConvertTabletWithErrantGTIDs sets the value for the convertTabletWithErrantGTIDs variable. This should only be used from tests.
 func SetConvertTabletWithErrantGTIDs(val bool) {
-	convertTabletWithErrantGTIDs = val
+	convertTabletsWithErrantGTIDs = val
 }
 
 // LogConfigValues is used to log the config values.
