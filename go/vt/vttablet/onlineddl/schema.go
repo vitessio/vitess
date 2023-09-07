@@ -133,7 +133,8 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
-			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')
+			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled'),
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -414,7 +415,7 @@ const (
 		SET
 			completed_timestamp=NOW()
 		WHERE
-			migration_status='failed'
+			migration_status IN ('cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`

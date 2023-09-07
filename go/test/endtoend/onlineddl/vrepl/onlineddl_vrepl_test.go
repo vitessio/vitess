@@ -756,6 +756,9 @@ func TestSchemaChange(t *testing.T) {
 			}
 		})
 	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
 }
 
 func insertRow(t *testing.T) {
