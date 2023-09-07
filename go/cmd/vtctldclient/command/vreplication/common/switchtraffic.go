@@ -57,11 +57,11 @@ func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 
 func GetReverseTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "reversetraffic",
+		Use:                   "ReverseTraffic",
 		Short:                 fmt.Sprintf("Reverse traffic for a %s VReplication workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer reversetraffic`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"ReverseTraffic"},
+		Aliases:               []string{"reversetraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			CommonSwitchTrafficOptions.Direction = workflow.DirectionBackward

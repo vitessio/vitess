@@ -20,11 +20,11 @@ var completeOptions = struct {
 
 func GetCompleteCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "complete",
+		Use:                   "Complete",
 		Short:                 "Complete a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer complete`,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Complete"},
+		Aliases:               []string{"complete"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandComplete,
 	}
