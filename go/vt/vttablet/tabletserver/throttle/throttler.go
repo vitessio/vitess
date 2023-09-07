@@ -853,15 +853,19 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			}
 
 			if clusterName == selfStoreName {
-				// special case: just looking at this tablet's MySQL server
+				// special case: just looking at this tablet's MySQL server.
 				// We will probe this "cluster" (of one server) is a special way.
 				addInstanceKey(nil, "", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return
 			}
 			if !throttler.isLeader.Load() {
-				// This tablet may have used to being the primary. Ensure the probes for this cluster are
-				// overwritten with an empty list
+				// This tablet may have used to being the primary, but it isn't now. It may have a recollection
+				// of previous clusters it used to probe. It may have recollection of cpecific probes for such clusters.
+				// This now ensures any existing cluster probes are overrridden with an empty list of probes.
+				// `clusterProbes` was created above as empty, and identificable via `clusterName`. This will in turn
+				// be used to overwrite throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] in
+				// updateMySQLClusterProbes().
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				// not the leader (primary tablet)? Then no more work for us.
 				return
