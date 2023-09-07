@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -25,14 +26,19 @@ import (
 
 var _ logicalPlan = (*fkVerify)(nil)
 
+type verifyLP struct {
+	verify logicalPlan
+	typ    string
+}
+
 // fkVerify is the logicalPlan for engine.FkVerify.
 type fkVerify struct {
 	input  logicalPlan
-	verify []logicalPlan
+	verify []*verifyLP
 }
 
 // newFkVerify builds a new fkVerify.
-func newFkVerify(input logicalPlan, verify []logicalPlan) *fkVerify {
+func newFkVerify(input logicalPlan, verify []*verifyLP) *fkVerify {
 	return &fkVerify{
 		input:  input,
 		verify: verify,
@@ -41,9 +47,12 @@ func newFkVerify(input logicalPlan, verify []logicalPlan) *fkVerify {
 
 // Primitive implements the logicalPlan interface
 func (fkc *fkVerify) Primitive() engine.Primitive {
-	var verify []engine.Primitive
+	var verify []*engine.Verify
 	for _, v := range fkc.verify {
-		verify = append(verify, v.Primitive())
+		verify = append(verify, &engine.Verify{
+			Exec: v.verify.Primitive(),
+			Typ:  v.typ,
+		})
 	}
 	return &engine.FkVerify{
 		Exec:   fkc.input.Primitive(),
@@ -54,7 +63,7 @@ func (fkc *fkVerify) Primitive() engine.Primitive {
 // Wireup implements the logicalPlan interface
 func (fkc *fkVerify) Wireup(ctx *plancontext.PlanningContext) error {
 	for _, v := range fkc.verify {
-		err := v.Wireup(ctx)
+		err := v.verify.Wireup(ctx)
 		if err != nil {
 			return err
 		}
@@ -64,10 +73,12 @@ func (fkc *fkVerify) Wireup(ctx *plancontext.PlanningContext) error {
 
 // Rewrite implements the logicalPlan interface
 func (fkc *fkVerify) Rewrite(inputs ...logicalPlan) error {
+	if len(fkc.verify) != len(inputs)-1 {
+		return vterrors.VT13001("fkVerify: wrong number of inputs")
+	}
 	fkc.input = inputs[0]
-	fkc.verify = nil
-	if len(inputs) > 1 {
-		fkc.verify = inputs[1:]
+	for i := 1; i < len(inputs); i++ {
+		fkc.verify[i-1].verify = inputs[i]
 	}
 	return nil
 }
@@ -80,7 +91,9 @@ func (fkc *fkVerify) ContainsTables() semantics.TableSet {
 // Inputs implements the logicalPlan interface
 func (fkc *fkVerify) Inputs() []logicalPlan {
 	inputs := []logicalPlan{fkc.input}
-	inputs = append(inputs, fkc.verify...)
+	for _, v := range fkc.verify {
+		inputs = append(inputs, v.verify)
+	}
 	return inputs
 }
 

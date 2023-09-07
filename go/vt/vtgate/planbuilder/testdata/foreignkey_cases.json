@@ -499,7 +499,7 @@
         "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "Verify-1",
+            "InputName": "VerifyParent-1",
             "OperatorType": "Projection",
             "Expressions": [
               "INT64(1) as 1"
@@ -823,7 +823,7 @@
         "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "Verify-1",
+            "InputName": "VerifyParent-1",
             "OperatorType": "Projection",
             "Expressions": [
               "INT64(1) as 1"
@@ -923,7 +923,7 @@
             ],
             "Inputs": [
               {
-                "InputName": "Verify-1",
+                "InputName": "VerifyParent-1",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
@@ -999,7 +999,7 @@
             ],
             "Inputs": [
               {
-                "InputName": "Verify-1",
+                "InputName": "VerifyParent-1",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
@@ -1011,7 +1011,7 @@
                 "Table": "u_tbl3, u_tbl4"
               },
               {
-                "InputName": "Verify-2",
+                "InputName": "VerifyChild-2",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
