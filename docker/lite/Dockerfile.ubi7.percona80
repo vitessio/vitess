@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=14.5
+ARG bootstrap_version=14.6
 ARG image="vitess/bootstrap:${bootstrap_version}-percona80"
 
 FROM "${image}" AS builder
@@ -47,6 +47,8 @@ RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
  && rpmkeys --checksig /tmp/perconarepo.rpm \
  && rpm -Uvh /tmp/perconarepo.rpm \
  && rm -f /tmp/perconarepo.rpm
+RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+RUN yum install -y zstd
 RUN echo H4sICH852V8CA2ZvbwC1jr0OgkAQhPt7CgrbY7W6xOQaDaEgRqKxMMTiOFYg/F2WI9G39xCttKGg2UxmJrNfokWqeryxVjUo99ja45kLj3s757IxGqiWhbVmC9CURB352rW63u8oh0mCAHdWY1uRLoDlJtcF6kpuRlnhU97LGt0CoNVgqhLINNxFcIoPPIxDHgVX/v3OsFVpjZlcM5ZoMZhMWex/ES9TMIPyM7UYKj4sqT+kwdufAToNLcP5AvRgmV7zAQAA | base64 -d | gzip -dc > /etc/yum.repos.d/CentOS-Base.repo \
  && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs --enablerepo c7base --enablerepo c7updates --enablerepo c7extras install libev gperftools-libs numactl-libs sysstat strace
 RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
