@@ -415,7 +415,7 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 }
 
 // ValidateCompletedTimestamp ensures that any migration in `cancelled`, `completed`, `failed` statuses
-// has a non-nil and valid `compelted_timestamp` value.
+// has a non-nil and valid `completed_timestamp` value.
 func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 	require.False(t, testsStartupTime.IsZero())
 	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
