@@ -77,7 +77,6 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-<<<<<<< HEAD
 var vexecUpdateTemplates = []string{
 	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
 	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
@@ -102,7 +101,6 @@ var vexecInsertTemplates = []string{
 		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
 	)`,
 }
-=======
 var (
 	// fixCompletedTimestampDone fixes a nil `completed_tiemstamp` columns, see
 	// https://github.com/vitessio/vitess/issues/13927
@@ -110,7 +108,6 @@ var (
 	// TODO: remove in release-19.0
 	fixCompletedTimestampDone bool
 )
->>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
@@ -3764,15 +3761,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-<<<<<<< HEAD
-	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
-		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
-		// see https://github.com/vitessio/vitess/issues/8499
-		// Running this query retroactively sets completed_timestamp
-		// This 'if' clause can be removed in version v13
-		return err
-	}
-=======
 	// v18 fix. Remove in v19
 	if !fixCompletedTimestampDone {
 		if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
@@ -3784,7 +3772,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		fixCompletedTimestampDone = true
 	}
 
->>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
