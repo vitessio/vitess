@@ -35,12 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-<<<<<<< HEAD
-=======
-const (
-	ThrottledAppsTimeout = 60 * time.Second
-)
-
 var (
 	testsStartupTime time.Time
 )
@@ -49,7 +43,6 @@ func init() {
 	testsStartupTime = time.Now()
 }
 
->>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 // VtgateExecQuery runs a query on VTGate using given query params
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -359,8 +352,6 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
 }
-<<<<<<< HEAD
-=======
 
 // ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does
 // not have gaps
@@ -426,4 +417,3 @@ func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 	}
 	assert.NotZero(t, completedTimestampNumValidations)
 }
->>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
