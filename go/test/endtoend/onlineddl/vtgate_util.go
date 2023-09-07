@@ -40,6 +40,14 @@ const (
 	ThrottledAppsTimeout = 60 * time.Second
 )
 
+var (
+	testsStartupTime time.Time
+)
+
+func init() {
+	testsStartupTime = time.Now()
+}
+
 // VtgateExecQuery runs a query on VTGate using given query params
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -409,7 +417,9 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 // ValidateCompletedTimestamp ensures that any migration in `cancelled`, `completed`, `failed` statuses
 // has a non-nil and valid `compelted_timestamp` value.
 func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
+	require.False(t, testsStartupTime.IsZero())
 	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+
 	for _, row := range r.Named().Rows {
 		migrationStatus := row.AsString("migration_status", "")
 		require.NotEmpty(t, migrationStatus)
@@ -423,7 +433,7 @@ func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 				timestamp := row.AsString("completed_timestamp", "")
 				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
 				assert.NoError(t, err)
-				assert.Greater(t, completedTime.Unix(), time.Now().Add(-time.Hour).Unix())
+				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
 			}
 		}
 	}
