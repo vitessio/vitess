@@ -756,6 +756,15 @@ func TestSchemaChange(t *testing.T) {
 			}
 		})
 	})
+<<<<<<< HEAD
+=======
+	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
+		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
+>>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 }
 
 func insertRow(t *testing.T) {

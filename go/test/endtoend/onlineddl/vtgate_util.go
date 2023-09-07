@@ -35,6 +35,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+<<<<<<< HEAD
+=======
+const (
+	ThrottledAppsTimeout = 60 * time.Second
+)
+
+var (
+	testsStartupTime time.Time
+)
+
+func init() {
+	testsStartupTime = time.Now()
+}
+
+>>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 // VtgateExecQuery runs a query on VTGate using given query params
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -344,3 +359,71 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
 }
+<<<<<<< HEAD
+=======
+
+// ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does
+// not have gaps
+func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard) {
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+	shardMin := map[string]uint64{}
+	shardMax := map[string]uint64{}
+	shardCount := map[string]uint64{}
+
+	for _, row := range r.Named().Rows {
+		id := row.AsUint64("id", 0)
+		require.NotZero(t, id)
+
+		shard := row.AsString("shard", "")
+		require.NotEmpty(t, shard)
+
+		if _, ok := shardMin[shard]; !ok {
+			shardMin[shard] = id
+			shardMax[shard] = id
+		}
+		if id < shardMin[shard] {
+			shardMin[shard] = id
+		}
+		if id > shardMax[shard] {
+			shardMax[shard] = id
+		}
+		shardCount[shard]++
+	}
+	require.NotEmpty(t, shards)
+	assert.Equal(t, len(shards), len(shardMin))
+	assert.Equal(t, len(shards), len(shardMax))
+	assert.Equal(t, len(shards), len(shardCount))
+	for shard, count := range shardCount {
+		assert.NotZero(t, count)
+		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
+	}
+}
+
+// ValidateCompletedTimestamp ensures that any migration in `cancelled`, `completed`, `failed` statuses
+// has a non-nil and valid `completed_timestamp` value.
+func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
+	require.False(t, testsStartupTime.IsZero())
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+
+	completedTimestampNumValidations := 0
+	for _, row := range r.Named().Rows {
+		migrationStatus := row.AsString("migration_status", "")
+		require.NotEmpty(t, migrationStatus)
+		switch migrationStatus {
+		case string(schema.OnlineDDLStatusComplete),
+			string(schema.OnlineDDLStatusFailed),
+			string(schema.OnlineDDLStatusCancelled):
+			{
+				assert.False(t, row["completed_timestamp"].IsNull())
+				// Also make sure the timestamp is "real", and that it is recent.
+				timestamp := row.AsString("completed_timestamp", "")
+				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
+				assert.NoError(t, err)
+				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
+				completedTimestampNumValidations++
+			}
+		}
+	}
+	assert.NotZero(t, completedTimestampNumValidations)
+}
+>>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))

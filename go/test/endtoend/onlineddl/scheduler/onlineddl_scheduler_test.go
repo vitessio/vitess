@@ -161,6 +161,25 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaChange(t *testing.T) {
+<<<<<<< HEAD
+=======
+
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+
+	t.Run("scheduler", testScheduler)
+	t.Run("singleton", testSingleton)
+	t.Run("declarative", testDeclarative)
+	t.Run("foreign-keys", testForeignKeys)
+	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
+		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
+}
+
+func testScheduler(t *testing.T) {
+>>>>>>> f71583b6ef (OnlineDDL: fix nil 'completed_timestamp' for cancelled migrations (#13928))
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
