@@ -213,7 +213,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		os.Exit(1)
-	} else {
+	} else { // nolint:revive
 		os.Exit(exitcode)
 	}
 
@@ -537,11 +537,11 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 			})
 			t.Run("wait for vreplication to run on shard -80", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
 				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
 			})
 			t.Run("wait for vreplication to run on shard 80-", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
 				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
 			})
 			t.Run("check status again", func(t *testing.T) {
@@ -646,11 +646,11 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 			})
 			t.Run("wait for vreplication to run on shard -80", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
 				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
 			})
 			t.Run("wait for vreplication to run on shard 80-", func(t *testing.T) {
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
 				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
 			})
 			t.Run("check status again", func(t *testing.T) {
@@ -887,6 +887,9 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
 		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
 	})
 }
 
