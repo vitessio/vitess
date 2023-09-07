@@ -794,10 +794,10 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 
 					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
 					if clusterName == selfStoreName {
-						// Throttler probing its own tablet's metrics
+						// Throttler is probing its own tablet's metrics:
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
-						// Throttler probing other tablets
+						// Throttler probing other tablets:
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
