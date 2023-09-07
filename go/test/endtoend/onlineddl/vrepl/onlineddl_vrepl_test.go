@@ -896,6 +896,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
 		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
 	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
 }
 
 func insertRow(t *testing.T) {
