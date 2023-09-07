@@ -145,6 +145,12 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select * from t1 join t2 on t1.a = t2.c1",
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 join t2 on t1.a = t2.c1",
 	}, {
+		sql:    "select * from t1 left join t2 on t1.a = t2.c1",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 left join t2 on t1.a = t2.c1",
+	}, {
+		sql:    "select * from t1 right join t2 on t1.a = t2.c1",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 right join t2 on t1.a = t2.c1",
+	}, {
 		sql:      "select * from t2 join t4 using (c1)",
 		expSQL:   "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 on t2.c1 = t4.c1",
 		expanded: "main.t2.c1, main.t2.c2, main.t4.c4",
