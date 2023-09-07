@@ -28,14 +28,12 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -126,7 +124,6 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl10", createFkDefinition([]string{"sk", "col"}, "tbl2", []string{"col2", "col"}, sqlparser.Restrict, sqlparser.Restrict))
 		// FK from tbl10 referencing tbl3 that is not shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl10", createFkDefinition([]string{"col"}, "tbl3", []string{"col"}, sqlparser.Restrict, sqlparser.Restrict))
-		setCol(t, vschema, "sharded_fk_allow", "tbl3", "col", sqltypes.VarChar, "CollationUtf8mb4ID")
 
 		// FK from tbl4 referencing tbl5 that is shard scoped.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl4", createFkDefinition([]string{"col4"}, "tbl5", []string{"col5"}, sqlparser.SetNull, sqlparser.Cascade))
@@ -170,12 +167,6 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl7", []string{"col7"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl4", []string{"col4"}, sqlparser.Restrict, sqlparser.Restrict))
 	}
-}
-
-func setCol(t *testing.T, vschema *vindexes.VSchema, ks string, name string, col string, typ querypb.Type, coll string) {
-	tbl, err := vschema.FindTable(ks, name)
-	require.NoError(t, err)
-	tbl.Columns = append(tbl.Columns, vindexes.Column{Name: sqlparser.NewIdentifierCI(col), Type: typ, CollationName: coll})
 }
 
 func TestSystemTables57(t *testing.T) {
