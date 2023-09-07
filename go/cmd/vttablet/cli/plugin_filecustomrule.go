@@ -14,20 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the gRPC queryservice server
+// Imports and register the file custom rule source
 
 import (
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	_ "vitess.io/vitess/go/vt/vttablet/customrule/filecustomrule"
 )
-
-func init() {
-	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
-		if servenv.GRPCCheckServiceMap("queryservice") {
-			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())
-		}
-	})
-}

@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the gRPC binlog streamer
+// Imports and register the gRPC binlog player
 
 import (
-	_ "vitess.io/vitess/go/vt/binlog/grpcbinlogstreamer"
+	_ "vitess.io/vitess/go/vt/binlog/grpcbinlogplayer"
 )

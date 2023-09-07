@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the file custom rule source
+// Imports and register the gRPC tabletmanager client
 
 import (
-	_ "vitess.io/vitess/go/vt/vttablet/customrule/filecustomrule"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )

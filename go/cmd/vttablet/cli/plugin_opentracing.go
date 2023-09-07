@@ -14,16 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	servenv.OnInit(func() {
+		closer := trace.StartTracing("vttablet")
+		servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+	})
 }

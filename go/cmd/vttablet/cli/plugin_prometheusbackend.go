@@ -14,10 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the gRPC tabletmanager client
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
 
 import (
-	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/stats/prometheusbackend"
+	"vitess.io/vitess/go/vt/servenv"
 )
+
+func init() {
+	servenv.OnRun(func() {
+		prometheusbackend.Init("vttablet")
+	})
+}

@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// Imports and register the gRPC throttler server.
+// Imports and register the gRPC tabletconn client
 
 import (
-	_ "vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
