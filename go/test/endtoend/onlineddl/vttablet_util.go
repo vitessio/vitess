@@ -31,7 +31,7 @@ import (
 )
 
 // WaitForVReplicationStatus waits for a vreplication stream to be in one of given states, or timeout
-func WaitForVReplicationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...string) (status string) {
+func WaitForVReplicationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...string) (status string) { // nolint:revive
 
 	query, err := sqlparser.ParseAndBind("select workflow, state from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
