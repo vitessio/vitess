@@ -27,11 +27,6 @@ type VerifyOp struct {
 	Typ string
 }
 
-const (
-	ParentVerify = "VerifyParent"
-	ChildVerify  = "VerifyChild"
-)
-
 // FkVerify is used to represent a foreign key verification operation
 // as an operator. This operator is created for DML queries that require
 // verifications on the existence of the rows in the parent table (for example, INSERT and UPDATE).

@@ -35,6 +35,13 @@ func TestFKVerifyUpdate(t *testing.T) {
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 		},
 	}
+	verifyC := &Route{
+		Query: "select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48",
+		RoutingParameters: &RoutingParameters{
+			Opcode:   Unsharded,
+			Keyspace: &vindexes.Keyspace{Name: "ks"},
+		},
+	}
 	childP := &Update{
 		DML: &DML{
 			Query: "update child set cola = 1, colb = 'a' where foo = 48",
@@ -45,7 +52,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		},
 	}
 	fkc := &FkVerify{
-		Verify: []Primitive{verifyP},
+		Verify: []*Verify{{Exec: verifyP, Typ: ParentVerify}},
 		Exec:   childP,
 	}
 
@@ -73,7 +80,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		})
 	})
 
-	t.Run("foreign key verification failure", func(t *testing.T) {
+	t.Run("parent foreign key verification failure", func(t *testing.T) {
 		// No results from select, should cause the foreign key verification to fail.
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
 		vc := newDMLTestVCursor("0")
@@ -91,6 +98,28 @@ func TestFKVerifyUpdate(t *testing.T) {
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`StreamExecuteMulti select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null ks.0: {} `,
+		})
+	})
+
+	fkc.Verify[0] = &Verify{Exec: verifyC, Typ: ChildVerify}
+	t.Run("child foreign key verification failure", func(t *testing.T) {
+		// No results from select, should cause the foreign key verification to fail.
+		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
+		vc := newDMLTestVCursor("0")
+		vc.results = []*sqltypes.Result{fakeRes}
+		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48 {} false false`,
+		})
+
+		vc.Rewind()
+		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`StreamExecuteMulti select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48 ks.0: {} `,
 		})
 	})
 }
