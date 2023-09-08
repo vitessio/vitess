@@ -418,7 +418,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *sqlparser.Insert:
 		return buildInsertLogicalPlan(ctx, op, dmlOp, stmt)
 	default:
-		panic(fmt.Sprintf("dont know how to %T", stmt))
+		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
 	}
 }
 
