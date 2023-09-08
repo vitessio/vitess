@@ -37,12 +37,12 @@
   {
     "comment": "join with USING construct",
     "query": "select * from user join user_extra using(id)",
-    "plan": "column id not found, can't handle JOIN USING without authoritative tables"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "join with USING construct with 3 tables",
     "query": "select user.id from user join user_extra using(id) join music using(id2)",
-    "plan": "column id2 not found, can't handle JOIN USING without authoritative tables"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "natural left join",
