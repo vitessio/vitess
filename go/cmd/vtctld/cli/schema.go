@@ -14,13 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
 	"context"
 	"time"
-
-	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -41,14 +39,12 @@ var (
 )
 
 func init() {
-	servenv.OnParse(func(fs *pflag.FlagSet) {
-		fs.StringVar(&schemaChangeDir, "schema_change_dir", schemaChangeDir, "Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.")
-		fs.StringVar(&schemaChangeController, "schema_change_controller", schemaChangeController, "Schema change controller is responsible for finding schema changes and responding to schema change events.")
-		fs.StringVar(&schemaChangeUser, "schema_change_user", schemaChangeUser, "The user who schema changes are submitted on behalf of.")
+	Main.Flags().StringVar(&schemaChangeDir, "schema_change_dir", schemaChangeDir, "Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.")
+	Main.Flags().StringVar(&schemaChangeController, "schema_change_controller", schemaChangeController, "Schema change controller is responsible for finding schema changes and responding to schema change events.")
+	Main.Flags().StringVar(&schemaChangeUser, "schema_change_user", schemaChangeUser, "The user who schema changes are submitted on behalf of.")
 
-		fs.DurationVar(&schemaChangeCheckInterval, "schema_change_check_interval", schemaChangeCheckInterval, "How often the schema change dir is checked for schema changes. This value must be positive; if zero or lower, the default of 1m is used.")
-		fs.DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
-	})
+	Main.Flags().DurationVar(&schemaChangeCheckInterval, "schema_change_check_interval", schemaChangeCheckInterval, "How often the schema change dir is checked for schema changes. This value must be positive; if zero or lower, the default of 1m is used.")
+	Main.Flags().DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
 }
 
 func initSchema() {
