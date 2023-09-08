@@ -28,13 +28,12 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -152,7 +151,10 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// u_tbl3(col2)  -> u_tbl2(col2)  Cascade Null.
 		// u_tbl4(col4)  -> u_tbl3(col3)  Restrict.
 		// u_tbl6(col6)  -> u_tbl5(col5)  Restrict.
-		// u_tbl8(col8)  -> u_tbl9(col9)  Cascade Null.
+		// u_tbl8(col8)  -> u_tbl9(col9)  Null Null.
+		// u_tbl8(col8)  -> u_tbl6(col6)  Cascade Null.
+		// u_tbl4(col4)  -> u_tbl7(col7)  Cascade Cascade.
+		// u_tbl9(col9)  -> u_tbl4(col4)  Restrict Restrict.
 
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl2", createFkDefinition([]string{"col2"}, "u_tbl1", []string{"col1"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl1", []string{"col1"}, sqlparser.SetNull, sqlparser.NoAction))
@@ -161,6 +163,9 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl3", []string{"col3"}, sqlparser.Restrict, sqlparser.Restrict))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl6", createFkDefinition([]string{"col6"}, "u_tbl5", []string{"col5"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl9", []string{"col9"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl6", []string{"col6"}, sqlparser.Cascade, sqlparser.CASCADE))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl7", []string{"col7"}, sqlparser.Cascade, sqlparser.Cascade))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl4", []string{"col4"}, sqlparser.Restrict, sqlparser.Restrict))
 	}
 }
 
