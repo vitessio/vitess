@@ -45,13 +45,13 @@
     "comment": "join with USING construct",
     "query": "select * from user join user_extra using(id)",
     "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
-    "gen4-plan": "can't handle JOIN USING without authoritative tables"
+    "gen4-plan": "VT09015: schema tracking required"
   },
   {
     "comment": "join with USING construct with 3 tables",
     "query": "select user.id from user join user_extra using(id) join music using(id2)",
     "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
-    "gen4-plan": "can't handle JOIN USING without authoritative tables"
+    "gen4-plan": "VT09015: schema tracking required"
   },
   {
     "comment": "natural left join",

@@ -269,7 +269,7 @@ func TestStackFormat(t *testing.T) {
 // but the change in errors#27 made them incomparable. Assert that
 // various kinds of errors have a functional equality operator, even
 // if the result of that equality is always false.
-func TestErrorEquality(t *testing.T) {
+func TestErrorEquality(_ *testing.T) {
 	vals := []error{
 		nil,
 		io.EOF,

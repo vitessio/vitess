@@ -17,8 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"strconv"
-	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -106,6 +106,33 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		cursor.Replace(sqlparser.AndExpressions(predicates...))
 	}
 	return nil
+}
+
+func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
+	// this rewriting is done in the `up` phase, because we need the scope to have been
+	// filled in with the available tables
+	node, ok := cursor.Node().(*sqlparser.JoinTableExpr)
+	if !ok || len(node.Condition.Using) == 0 {
+		return nil
+	}
+
+	err := rewriteJoinUsing(r.binder, node)
+	if err != nil {
+		return err
+	}
+
+	// since the binder has already been over the join, we need to invoke it again so it
+	// can bind columns to the right tables
+	sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
+		innerErr := r.binder.up(cursor)
+		if innerErr == nil {
+			return true
+		}
+
+		err = innerErr
+		return false
+	})
+	return err
 }
 
 func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
@@ -279,67 +306,144 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 	return nil
 }
 
-func rewriteJoinUsing(
-	current *scope,
-	using sqlparser.Columns,
-	org originable,
-) error {
-	joinUsing := current.prepareUsingMap()
-	predicates := make([]sqlparser.Expr, 0, len(using))
-	for _, column := range using {
-		var foundTables []sqlparser.TableName
-		for _, tbl := range current.tables {
-			if !tbl.authoritative() {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
-			}
+// rewriteJoinUsing rewrites SQL JOINs that use the USING clause to their equivalent
+// JOINs with the ON condition. This function finds all the tables that have the
+// specified columns in the USING clause, constructs an equality predicate for
+// each pair of tables, and adds the resulting predicates to the WHERE clause
+// of the outermost SELECT statement.
+//
+// For example, given the query:
+//
+//	SELECT * FROM t1 JOIN t2 USING (col1, col2)
+//
+// The rewriteJoinUsing function will rewrite the query to:
+//
+//	SELECT * FROM t1 JOIN t2 ON (t1.col1 = t2.col1 AND t1.col2 = t2.col2)
+//
+// This function returns an error if it encounters a non-authoritative table or
+// if it cannot find a SELECT statement to add the WHERE predicate to.
+func rewriteJoinUsing(b *binder, join *sqlparser.JoinTableExpr) error {
+	predicates, err := buildJoinPredicates(b, join)
+	if err != nil {
+		return err
+	}
+	if len(predicates) > 0 {
+		join.Condition.On = sqlparser.AndExpressions(predicates...)
+		join.Condition.Using = nil
+	}
+	return nil
+}
 
-			currTable := tbl.getTableSet(org)
-			usingCols := joinUsing[currTable]
-			if usingCols == nil {
-				usingCols = map[string]TableSet{}
-			}
-			for _, col := range tbl.getColumns() {
-				_, found := usingCols[strings.ToLower(col.Name)]
-				if found {
-					tblName, err := tbl.Name()
-					if err != nil {
-						return err
-					}
+// buildJoinPredicates constructs the join predicates for a given set of USING columns.
+// It returns a slice of sqlparser.Expr, each representing a join predicate for the given columns.
+func buildJoinPredicates(b *binder, join *sqlparser.JoinTableExpr) ([]sqlparser.Expr, error) {
+	var predicates []sqlparser.Expr
 
-					foundTables = append(foundTables, tblName)
-					break // no need to look at other columns in this table
-				}
-			}
+	for _, column := range join.Condition.Using {
+		foundTables, err := findTablesWithColumn(b, join, column)
+		if err != nil {
+			return nil, err
 		}
-		for i, lft := range foundTables {
-			for j := i + 1; j < len(foundTables); j++ {
-				rgt := foundTables[j]
-				predicates = append(predicates, &sqlparser.ComparisonExpr{
-					Operator: sqlparser.EqualOp,
-					Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
-					Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
-				})
-			}
-		}
+
+		predicates = append(predicates, createComparisonPredicates(column, foundTables)...)
 	}
 
-	// now, we go up the scope until we find a SELECT with a where clause we can add this predicate to
-	for current != nil {
-		sel, found := current.stmt.(*sqlparser.Select)
-		if found {
-			if sel.Where == nil {
-				sel.Where = &sqlparser.Where{
-					Type: sqlparser.WhereClause,
-					Expr: sqlparser.AndExpressions(predicates...),
-				}
-			} else {
-				sel.Where.Expr = sqlparser.AndExpressions(append(predicates, sel.Where.Expr)...)
+	return predicates, nil
+}
+
+func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, column sqlparser.IdentifierCI) ([]TableInfo, error) {
+	switch tbl := tbl.(type) {
+	case *sqlparser.AliasedTableExpr:
+		ts := b.tc.tableSetFor(tbl)
+		tblInfo := b.tc.Tables[ts.TableOffset()]
+		for _, info := range tblInfo.getColumns() {
+			if column.EqualString(info.Name) {
+				return []TableInfo{tblInfo}, nil
 			}
-			return nil
 		}
-		current = current.parent
+		return nil, nil
+	case *sqlparser.JoinTableExpr:
+		tblInfoR, err := findOnlyOneTableInfoThatHasColumn(b, tbl.RightExpr, column)
+		if err != nil {
+			return nil, err
+		}
+		tblInfoL, err := findOnlyOneTableInfoThatHasColumn(b, tbl.LeftExpr, column)
+		if err != nil {
+			return nil, err
+		}
+
+		return append(tblInfoL, tblInfoR...), nil
+	case *sqlparser.ParenTableExpr:
+		var tblInfo []TableInfo
+		for _, parenTable := range tbl.Exprs {
+			newTblInfo, err := findOnlyOneTableInfoThatHasColumn(b, parenTable, column)
+			if err != nil {
+				return nil, err
+			}
+			if tblInfo != nil && newTblInfo != nil {
+				return nil, vterrors.VT03021(column.String())
+			}
+			if newTblInfo != nil {
+				tblInfo = newTblInfo
+			}
+		}
+		return tblInfo, nil
+	default:
+		panic(fmt.Sprintf("unsupported TableExpr type in JOIN: %T", tbl))
 	}
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
+}
+
+// findTablesWithColumn finds the tables with the specified column in the current scope.
+func findTablesWithColumn(b *binder, join *sqlparser.JoinTableExpr, column sqlparser.IdentifierCI) ([]sqlparser.TableName, error) {
+	leftTableInfo, err := findOnlyOneTableInfoThatHasColumn(b, join.LeftExpr, column)
+	if err != nil {
+		return nil, err
+	}
+
+	rightTableInfo, err := findOnlyOneTableInfoThatHasColumn(b, join.RightExpr, column)
+	if err != nil {
+		return nil, err
+	}
+
+	if leftTableInfo == nil || rightTableInfo == nil {
+		return nil, ShardedError{Inner: vterrors.VT09015()}
+	}
+	var tableNames []sqlparser.TableName
+	for _, info := range leftTableInfo {
+		nm, err := info.Name()
+		if err != nil {
+			return nil, err
+		}
+		tableNames = append(tableNames, nm)
+	}
+	for _, info := range rightTableInfo {
+		nm, err := info.Name()
+		if err != nil {
+			return nil, err
+		}
+		tableNames = append(tableNames, nm)
+	}
+	return tableNames, nil
+}
+
+// createComparisonPredicates creates a list of comparison predicates between the given column and foundTables.
+func createComparisonPredicates(column sqlparser.IdentifierCI, foundTables []sqlparser.TableName) []sqlparser.Expr {
+	var predicates []sqlparser.Expr
+	for i, lft := range foundTables {
+		for j := i + 1; j < len(foundTables); j++ {
+			rgt := foundTables[j]
+			predicates = append(predicates, createComparisonBetween(column, lft, rgt))
+		}
+	}
+	return predicates
+}
+
+func createComparisonBetween(column sqlparser.IdentifierCI, lft, rgt sqlparser.TableName) *sqlparser.ComparisonExpr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
+		Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
+	}
 }
 
 func (r *earlyRewriter) expandTableColumns(
