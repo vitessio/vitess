@@ -1046,11 +1046,8 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				autoIncrementStep, autoIncrementStep)
 			tablet.QueryTablet(autoIncrementSetQuery, "", false)
 		}
-		workflowType := "Reshard"
-		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
-			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Create", ksWorkflow); err != nil {
-			t.Fatalf("Reshard Create command failed with %+v\n", err)
-		}
+		reshardAction(t, "Create", workflow, ksName, sourceShards, targetShards, sourceCellOrAlias, "replica,primary")
+
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
@@ -1063,17 +1060,14 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		}
 		vdiff1(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
-			switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultSwitchReads)
+			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica", "--dry-run")
 		}
-		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica")
 		if dryRunResultSwitchWrites != nil {
-			switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultSwitchWrites)
+			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "primary", "--dry-run")
 		}
-		switchWrites(t, workflowType, ksWorkflow, false)
-		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
-			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Complete", ksWorkflow); err != nil {
-			t.Fatalf("Reshard Complete command failed with %+v\n", err)
-		}
+		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "primary")
+		reshardAction(t, "Complete", workflow, ksName, "", "", "", "")
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
 				continue
@@ -1410,6 +1404,35 @@ func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourc
 		if !ignoreErrors {
 			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 		}
+	}
+}
+
+// reshardAction is a helper function to run the reshard command, using the vtctldclient commands.
+func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, targetShards, cell, tabletTypes string, extraFlags ...string) {
+	var err error
+	args := []string{"Reshard", "--workflow=" + workflow, "--target-keyspace=" + keyspaceName, action}
+
+	switch strings.ToLower(action) {
+	case strings.ToLower(workflowActionCreate):
+		if tabletTypes == "" {
+			tabletTypes = "replica,rdonly,primary"
+		}
+		args = append(args, "--source-shards="+sourceShards, "--target-shards="+targetShards)
+	}
+	if cell != "" {
+		args = append(args, "--cells="+cell)
+	}
+	if tabletTypes != "" {
+		args = append(args, "--tablet-types="+tabletTypes)
+	}
+	args = append(args, extraFlags...)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+	if output != "" {
+		log.Infof("Output of vtctldclient Reshard %s for %s workflow:\n++++++\n%s\n--------\n",
+			action, workflow, output)
+	}
+	if err != nil {
+		t.Fatalf("Reshard %s command failed with %+v\n", action, err)
 	}
 }
 
