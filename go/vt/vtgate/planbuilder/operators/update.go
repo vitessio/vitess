@@ -68,3 +68,7 @@ func (u *Update) TablesUsed() []string {
 func (u *Update) ShortDescription() string {
 	return u.VTable.String()
 }
+
+func (u *Update) Statement() sqlparser.Statement {
+	return u.AST
+}
