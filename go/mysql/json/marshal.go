@@ -137,7 +137,7 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		return dst
 	case TypeBoolean:
 		if top {
-			dst = append(dst, "CAST("...)
+			dst = append(dst, "CAST('"...)
 		}
 		if v == ValueTrue {
 			dst = append(dst, "true"...)
@@ -145,16 +145,16 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 			dst = append(dst, "false"...)
 		}
 		if top {
-			dst = append(dst, " as JSON)"...)
+			dst = append(dst, "' as JSON)"...)
 		}
 		return dst
 	case TypeNull:
 		if top {
-			dst = append(dst, "CAST("...)
+			dst = append(dst, "CAST('"...)
 		}
 		dst = append(dst, "null"...)
 		if top {
-			dst = append(dst, " as JSON)"...)
+			dst = append(dst, "' as JSON)"...)
 		}
 		return dst
 	default:
