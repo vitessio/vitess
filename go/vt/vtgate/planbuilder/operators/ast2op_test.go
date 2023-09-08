@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -36,14 +37,20 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: &vindexes.Keyspace{Name: "ks2"},
 	}
+	t3 := &vindexes.Table{
+		Name:     sqlparser.NewIdentifierCS("t3"),
+		Keyspace: &vindexes.Keyspace{Name: "ks"},
+	}
 
 	tests := []struct {
-		name            string
-		updateExprs     sqlparser.UpdateExprs
-		parentFks       []vindexes.ParentFKInfo
-		childFks        []vindexes.ChildFKInfo
-		parentFKsWanted []bool
-		childFKsWanted  []bool
+		name             string
+		verifyAllFks     bool
+		parentFkToIgnore string
+		updateExprs      sqlparser.UpdateExprs
+		parentFks        []vindexes.ParentFKInfo
+		childFks         []vindexes.ChildFKInfo
+		parentFKsWanted  []bool
+		childFKsWanted   []bool
 	}{{
 		name: "No Fks filtered",
 		updateExprs: sqlparser.UpdateExprs{
@@ -111,15 +118,74 @@ func Test_fkNeedsHandlingForUpdates(t *testing.T) {
 		parentFks: []vindexes.ParentFKInfo{
 			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
 			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b")},
+			{Table: t3, ChildColumns: sqlparser.MakeColumns("a", "b")},
 		},
-		parentFKsWanted: []bool{false, true},
+		parentFKsWanted: []bool{false, true, false},
+		childFKsWanted:  []bool{true},
+	}, {
+		name:         "Unsharded fk with verifyAllFk",
+		verifyAllFks: true,
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("c"), Expr: &sqlparser.NullVal{}},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b")},
+			{Table: t3, ChildColumns: sqlparser.MakeColumns("a", "b")},
+			{Table: t3, ChildColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFKsWanted: []bool{false, true, true, false},
+		childFKsWanted:  []bool{true},
+	}, {
+		name:             "Mixed case",
+		verifyAllFks:     true,
+		parentFkToIgnore: "ks.t1abks.t3",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("c"), Expr: &sqlparser.NullVal{}},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b")},
+			{Table: t3, ChildColumns: sqlparser.MakeColumns("a", "b")},
+			{Table: t3, ChildColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFKsWanted: []bool{false, true, false, false},
+		childFKsWanted:  []bool{true},
+	}, {
+		name:             "Ignore Fk specified",
+		parentFkToIgnore: "ks.t1aefks2.t2",
+		updateExprs: sqlparser.UpdateExprs{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("a"), Expr: sqlparser.NewIntLiteral("1")},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("c"), Expr: &sqlparser.NullVal{}},
+		},
+		childFks: []vindexes.ChildFKInfo{
+			{Table: t2, ParentColumns: sqlparser.MakeColumns("a", "b", "c")},
+		},
+		parentFks: []vindexes.ParentFKInfo{
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("b", "a", "c")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "b")},
+			{Table: t2, ChildColumns: sqlparser.MakeColumns("a", "e", "f")},
+		},
+		parentFKsWanted: []bool{false, true, false},
 		childFKsWanted:  []bool{true},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t1.ParentForeignKeys = tt.parentFks
 			t1.ChildForeignKeys = tt.childFks
-			parentFksGot, childFksGot := getFKRequirementsForUpdate(tt.updateExprs, t1)
+			ctx := &plancontext.PlanningContext{
+				VerifyAllFKs:     tt.verifyAllFks,
+				ParentFKToIgnore: tt.parentFkToIgnore,
+			}
+			parentFksGot, childFksGot := getFKRequirementsForUpdate(ctx, tt.updateExprs, t1)
 			var pFks []vindexes.ParentFKInfo
 			for idx, expected := range tt.parentFKsWanted {
 				if expected {
