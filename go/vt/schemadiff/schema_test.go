@@ -628,7 +628,7 @@ func TestViewReferences(t *testing.T) {
 				"create table t2(id int primary key, n int, info int)",
 				"create view v1 as select id, c as ch from t1 where id > 0",
 				"create view v2 as select n as num, info from t2",
-				"create view v3 as select num, v1.id, ch from v1 join v2 using (id) where info > 5",
+				"create view v3 as select num, v1.id, ch from v1 join v2 on v1.id = v2.num where info > 5",
 			},
 		},
 		{
