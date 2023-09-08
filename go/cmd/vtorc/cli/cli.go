@@ -32,7 +32,7 @@ var (
 	configFile string
 	Main       = &cobra.Command{
 		Use:     "vtorc",
-		Short:   "VTOrc is the automated fault detection and repair tool of Vitess.",
+		Short:   "VTOrc is the automated fault detection and repair tool in Vitess.",
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
