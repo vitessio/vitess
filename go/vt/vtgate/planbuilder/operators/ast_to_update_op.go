@@ -59,7 +59,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	// If the delete statement has a limit, we don't support it yet.
 	if updStmt.Limit != nil {
-		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
+		return nil, vterrors.VT12001("update with limit with foreign key constraints")
 	}
 
 	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks, vindexTable)
@@ -180,7 +180,7 @@ func getFKRequirementsForUpdate(ctx *plancontext.PlanningContext, updateExprs sq
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
 	// We only support simple expressions in update queries for foreign key handling.
 	if sqlparser.IsNonLiteral(updClone.Exprs) {
-		return nil, vterrors.VT12001("foreign keys management at vitess with non-literal values")
+		return nil, vterrors.VT12001("update expression with non-literal values with foreign key constraints")
 	}
 
 	restrictChildFks, cascadeChildFks := splitChildFks(childFks)

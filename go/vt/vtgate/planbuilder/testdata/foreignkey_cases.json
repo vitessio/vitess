@@ -786,17 +786,17 @@
   {
     "comment": "update in a table with limit - disallowed",
     "query": "update u_tbl2 set col2 = 'bar' limit 2",
-    "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
+    "plan": "VT12001: unsupported: update with limit with foreign key constraints"
   },
   {
     "comment": "update in a table with non-literal value - set null fail due to child update where condition",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
-    "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
+    "plan": "VT12001: unsupported: update expression with non-literal values with foreign key constraints"
   },
   {
     "comment": "update in a table with non-literal value - with cascade fail as the cascade value is not known",
     "query": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
-    "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
+    "plan": "VT12001: unsupported: update expression with non-literal values with foreign key constraints"
   },
   {
     "comment": "update in a table with a child table having SET DEFAULT constraint - disallowed",
@@ -811,7 +811,7 @@
   {
     "comment": "update with fk on cross-shard with a where condition on non-literal value - disallowed",
     "query": "update tbl3 set coly = colx + 10 where coly = 10",
-    "plan": "VT12001: unsupported: foreign keys management at vitess with non-literal values"
+    "plan": "VT12001: unsupported: update expression with non-literal values with foreign key constraints"
   },
   {
     "comment": "update with fk on cross-shard with a where condition",

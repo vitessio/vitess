@@ -102,5 +102,5 @@ func (fkc *FkCascade) GetOrdering() ([]ops.OrderBy, error) {
 
 // ShortDescription implements the Operator interface
 func (fkc *FkCascade) ShortDescription() string {
-	return "FkCascade"
+	return ""
 }
