@@ -61,35 +61,30 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.JoinTableExpr:
-		currScope := r.binder.scoper.currentScope()
-		if len(node.Condition.Using) == 0 {
-			return nil
-		}
-		err := rewriteJoinUsing(r.binder, node)
-		if err != nil {
-			return err
-		}
-		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			column, isColumn := node.(*sqlparser.ColName)
-			if !isColumn {
-				return true, nil
-			}
-			deps, err := r.binder.resolveColumn(column, currScope, false)
-			if err != nil {
-				return false, err
-			}
-			r.binder.recursive[column] = deps.recursive
-			r.binder.direct[column] = deps.direct
-			return true, nil
-		}, node.Condition.On)
-		if err != nil {
-			return err
-		}
-		node.Condition.Using = nil
+	// this rewriting is done in the `up` phase, because we need the scope to have been
+	// filled in with the available tables
+	node, ok := cursor.Node().(*sqlparser.JoinTableExpr)
+	if !ok || len(node.Condition.Using) == 0 {
+		return nil
 	}
-	return nil
+
+	err := rewriteJoinUsing(r.binder, node)
+	if err != nil {
+		return err
+	}
+
+	// since the binder has already been over the join, we need to invoke it again so it
+	// can bind columns to the right tables
+	sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
+		innerErr := r.binder.up(cursor)
+		if innerErr == nil {
+			return true
+		}
+
+		err = innerErr
+		return false
+	})
+	return err
 }
 
 // handleWhereClause processes WHERE clauses, specifically the HAVING clause.
