@@ -45,8 +45,23 @@ var (
 	resilientServer   *srvtopo.ResilientServer
 
 	Main = &cobra.Command{
-		Use:     "vtgate",
-		Short:   "", // TODO
+		Use:   "vtgate",
+		Short: "VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution. It speaks both the MySQL Protocol and a gRPC protocol.",
+		Example: `
+vtgate \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--log_dir $VTDATAROOT/tmp \
+	--port 15001 \
+	--grpc_port 15991 \
+	--mysql_server_port 15306 \
+	--cell test \
+	--cells_to_watch test \
+	--tablet_types_to_wait PRIMARY,REPLICA \
+	--service_map 'grpc-vtgateservice' \
+	--pid_file $VTDATAROOT/tmp/vtgate.pid \
+	--mysql_auth_server_impl none`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
