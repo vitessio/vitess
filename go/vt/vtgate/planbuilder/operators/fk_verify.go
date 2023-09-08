@@ -76,5 +76,5 @@ func (fkv *FkVerify) GetOrdering() ([]ops.OrderBy, error) {
 
 // ShortDescription implements the Operator interface
 func (fkv *FkVerify) ShortDescription() string {
-	return "FkVerify"
+	return ""
 }
