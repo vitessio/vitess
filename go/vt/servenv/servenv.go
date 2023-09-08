@@ -378,6 +378,8 @@ func MoveFlagsToCobraCommand(cmd *cobra.Command) {
 	cmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
 	cmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
 	cmd.Flags().AddGoFlag(flag.Lookup("vmodule"))
+
+	pflag.CommandLine = cmd.Flags()
 }
 
 // CobraPreRunE returns the common function that commands will need to load
