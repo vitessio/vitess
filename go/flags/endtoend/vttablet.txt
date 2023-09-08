@@ -1,3 +1,10 @@
+The VTTablet server _controls_ a running MySQL server. VTTablet supports two primary types of deployments:
+
+* Managed MySQL (most common)
+* External MySQL
+
+In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable_active_reparents`.
+
 Usage:
   vttablet [flags]
 

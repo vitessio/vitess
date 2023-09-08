@@ -57,8 +57,15 @@ var (
 	tm *tabletmanager.TabletManager
 
 	Main = &cobra.Command{
-		Use:     "vttablet",
-		Short:   "", // TODO
+		Use:   "vttablet",
+		Short: "The VTTablet server controls a running MySQL server.",
+		Long: fmt.Sprintf(`The VTTablet server _controls_ a running MySQL server. VTTablet supports two primary types of deployments:
+
+* Managed MySQL (most common)
+* External MySQL
+
+In addition to these deployment types, a partially managed VTTablet is also possible by setting %s.`, "`--disable_active_reparents`"),
+		Example: "", // TODO:
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
