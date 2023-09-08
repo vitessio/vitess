@@ -455,7 +455,7 @@ func findTablesWithColumn(b *binder, join *sqlparser.JoinTableExpr, column sqlpa
 	}
 
 	if leftTableInfo == nil || rightTableInfo == nil {
-		return nil, ShardedError{Inner: vterrors.VT03019(column.String())}
+		return nil, ShardedError{Inner: fmt.Errorf("column %s not found, can't handle JOIN USING without authoritative tables", column.String())}
 	}
 	var tableNames []sqlparser.TableName
 	for _, info := range leftTableInfo {
