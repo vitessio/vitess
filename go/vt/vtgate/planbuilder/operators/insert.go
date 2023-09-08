@@ -117,3 +117,7 @@ func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
 func (i *Insert) TablesUsed() []string {
 	return SingleQualifiedIdentifier(i.VTable.Keyspace, i.VTable.Name)
 }
+
+func (i *Insert) Statement() sqlparser.Statement {
+	return i.AST
+}
