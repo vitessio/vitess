@@ -149,6 +149,9 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		}
 		return dst
 	case TypeNull:
+		// JSON null is a 'null' string literal so we cannot use
+		// CAST(null as JSON) because that (surprisingly?) turns
+		// into an SQL NULL.
 		if top {
 			dst = append(dst, "CONVERT('"...)
 		}

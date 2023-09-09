@@ -131,7 +131,7 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 		case querypb.Type_JSON:
 			if col.length < 0 { // SQL NULL
 				buf.WriteString(sqltypes.NullStr)
-			} else { // Can be a JSON null string
+			} else { // Can be a JSON null string literal
 				buf2 := row.Values[col.offset : col.offset+col.length]
 				vv, err := vjson.MarshalSQLValue(buf2)
 				if err != nil {
