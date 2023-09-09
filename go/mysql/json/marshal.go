@@ -150,11 +150,11 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		return dst
 	case TypeNull:
 		if top {
-			dst = append(dst, "CAST('"...)
+			dst = append(dst, "CONVERT('"...)
 		}
 		dst = append(dst, "null"...)
 		if top {
-			dst = append(dst, "' as JSON)"...)
+			dst = append(dst, "' using utf8mb4)"...)
 		}
 		return dst
 	default:
