@@ -708,6 +708,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			if err == nil {
 				return
 			}
+			log.Errorf("data mismatch: %v, retrying", err)
 			time.Sleep(tick)
 		}
 	}
@@ -730,7 +731,7 @@ func compareQueryResults(t *testing.T, query string, values [][]string,
 		}
 		for j, val := range row {
 			if got := qr.Rows[i][j].ToString(); got != val {
-				return fmt.Errorf("mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
+				return fmt.Errorf("mismatch at (%d, %d): got '%s', want '%s'", i, j, qr.Rows[i][j].ToString(), val)
 			}
 		}
 	}

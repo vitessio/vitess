@@ -1641,17 +1641,17 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CONVERT('null' using utf8mb4),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,null,JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
-			{"1", "null", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
-		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null, '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values ('null', '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
 		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CONVERT('null' using utf8mb4),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
-			{"1", "null", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
@@ -1672,8 +1672,10 @@ func TestPlayerTypes(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		)
+		log.Errorf("Waiting for expected queries for input: %s...", tcases.input)
 		expectDBClientQueries(t, want)
 		if tcases.table != "" {
+			log.Errorf("Waiting for expected data for input: %s...", tcases.input)
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
