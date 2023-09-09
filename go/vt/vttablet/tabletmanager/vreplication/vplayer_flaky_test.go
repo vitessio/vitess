@@ -1672,10 +1672,8 @@ func TestPlayerTypes(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		)
-		log.Errorf("Waiting for expected queries for input: %s...", tcases.input)
 		expectDBClientQueries(t, want)
 		if tcases.table != "" {
-			log.Errorf("Waiting for expected data for input: %s...", tcases.input)
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
