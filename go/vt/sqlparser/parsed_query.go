@@ -129,9 +129,9 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 		case querypb.Type_TUPLE:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
 		case querypb.Type_JSON:
-			if col.length < 0 { // SQL NULL
+			if col.length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
-			} else { // Can be a JSON null string literal
+			} else { // May be a JSON null literal value
 				buf2 := row.Values[col.offset : col.offset+col.length]
 				vv, err := vjson.MarshalSQLValue(buf2)
 				if err != nil {

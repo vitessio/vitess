@@ -378,9 +378,13 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var newVal *sqltypes.Value
 			var err error
 			if field.Type == querypb.Type_JSON {
-				newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
-				if err != nil {
-					return nil, err
+				if vals[i].IsNull() { // An SQL NULL and not an actual JSON value
+					newVal = &sqltypes.NULL
+				} else { // May be a JSON null literal value
+					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
+					if err != nil {
+						return nil, err
+					}
 				}
 				bindVar, err = tp.bindFieldVal(field, newVal)
 			} else {
