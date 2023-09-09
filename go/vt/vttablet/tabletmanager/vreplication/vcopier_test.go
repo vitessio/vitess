@@ -563,7 +563,7 @@ func testPlayerCopyTables(t *testing.T) {
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), d decimal(8,0), j json, primary key(id))",
-		"insert into src1 values(2, 'bbb', 1, '{\"foo\": \"bar\"}'), (1, 'aaa', 0, JSON_ARRAY(123456789012345678901234567890, \"abcd\")), (3, 'ccc', 2, 'null'), (4, 'ddd', 3, '{\"name\": null}')",
+		"insert into src1 values(2, 'bbb', 1, '{\"foo\": \"bar\"}'), (1, 'aaa', 0, JSON_ARRAY(123456789012345678901234567890, \"abcd\")), (3, 'ccc', 2, 'null'), (4, 'ddd', 3, '{\"name\": \"matt\", \"size\": null}')",
 		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), d decimal(8,0), j json, primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -617,7 +617,7 @@ func testPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CONVERT('null' using utf8mb4)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', null))",
+		"insert into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CONVERT('null' using utf8mb4)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', _utf8mb4'matt', _utf8mb4'size', null))",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"4\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -635,7 +635,7 @@ func testPlayerCopyTables(t *testing.T) {
 		{"1", "aaa", "aaa", "0", "[123456789012345678901234567890, \"abcd\"]"},
 		{"2", "bbb", "bbb", "1", "{\"foo\": \"bar\"}"},
 		{"3", "ccc", "ccc", "2", "null"},
-		{"4", "ddd", "ddd", "3", "{\"name\": null}"},
+		{"4", "ddd", "ddd", "3", "{\"name\": \"matt\", \"size\": null}"},
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 4)
