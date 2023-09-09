@@ -1641,31 +1641,26 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST(null as JSON),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CONVERT('null' using utf8mb4),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
-			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"1", "null", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
-		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST('null' as JSON),CAST('true' as JSON),CAST('false' as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null, '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CONVERT('null' using utf8mb4),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
-			{"1", "null", "true", "false", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"1", "null", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
-		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
 		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
-		},
-	}, {
-		input:  "update vitess_json set val1 = 'true', val2 = 'null', val3 = 'false'",
-		output: "update vitess_json set val1=CAST('true' as JSON), val2=CAST('null' as JSON), val3=CAST('false' as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
-		table:  "vitess_json",
-		data: [][]string{
-			{"1", "true", "null", "false", `{"a": [98, 123]}`, `{}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}}
 
