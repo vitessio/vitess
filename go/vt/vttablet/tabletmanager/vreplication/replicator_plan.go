@@ -380,7 +380,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			if field.Type == querypb.Type_JSON {
 				if vals[i].IsNull() { // An SQL NULL and not an actual JSON value
 					newVal = &sqltypes.NULL
-				} else { // A JSON value (which may be an JSON null literal value)
+				} else { // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
 					if err != nil {
 						return nil, err
