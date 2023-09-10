@@ -41,6 +41,9 @@ var (
 	//go:embed mysqlctld.txt
 	mysqlctldTxt string
 
+	//go:embed query_analyzer.txt
+	queryAnalyzerTxt string
+
 	//go:embed vtaclcheck.txt
 	vtaclcheckTxt string
 
@@ -84,22 +87,23 @@ var (
 	zkTxt string
 
 	helpOutput = map[string]string{
-		"mysqlctl":     mysqlctlTxt,
-		"mysqlctld":    mysqlctldTxt,
-		"vtaclcheck":   vtaclcheckTxt,
-		"vtexplain":    vtexplainTxt,
-		"vtgate":       vtgateTxt,
-		"vttablet":     vttabletTxt,
-		"vttlstest":    vttlstestTxt,
-		"vtctld":       vtctldTxt,
-		"vtctlclient":  vtctlclientTxt,
-		"vtctldclient": vtctldclientTxt,
-		"vtorc":        vtorcTxt,
-		"vttestserver": vttestserverTxt,
-		"zkctld":       zkctldTxt,
-		"vtbackup":     vtbackupTxt,
-		"zk":           zkTxt,
-		"zkctl":        zkctlTxt,
+		"mysqlctl":       mysqlctlTxt,
+		"mysqlctld":      mysqlctldTxt,
+		"query_analyzer": queryAnalyzerTxt,
+		"vtaclcheck":     vtaclcheckTxt,
+		"vtexplain":      vtexplainTxt,
+		"vtgate":         vtgateTxt,
+		"vttablet":       vttabletTxt,
+		"vttlstest":      vttlstestTxt,
+		"vtctld":         vtctldTxt,
+		"vtctlclient":    vtctlclientTxt,
+		"vtctldclient":   vtctldclientTxt,
+		"vtorc":          vtorcTxt,
+		"vttestserver":   vttestserverTxt,
+		"zkctld":         zkctldTxt,
+		"vtbackup":       vtbackupTxt,
+		"zk":             zkTxt,
+		"zkctl":          zkctlTxt,
 	}
 )
 
