@@ -62,7 +62,7 @@ func init() {
 	// mysqlctl only starts and stops mysql, only needs dba.
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
 
-	servenv.MoveFlagsToCobraCommand(Root)
+	servenv.MovePersistentFlagsToCobraCommand(Root)
 
 	Root.PersistentFlags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port.")
 	Root.PersistentFlags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID.")
