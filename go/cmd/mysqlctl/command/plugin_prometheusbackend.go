@@ -14,16 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// mysqlctl initializes and controls mysqld with Vitess-specific configuration.
-package main
+package command
+
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
 
 import (
-	"vitess.io/vitess/go/cmd/mysqlctl/command"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/stats/prometheusbackend"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-func main() {
-	if err := command.Root.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	servenv.OnRun(func() {
+		prometheusbackend.Init("mysqlctl")
+	})
 }
