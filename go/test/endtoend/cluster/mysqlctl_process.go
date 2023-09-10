@@ -54,7 +54,7 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-		"init", "--",
+		"init",
 		"--init_db_sql_file", mysqlctl.InitDBFile}
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
@@ -143,7 +143,7 @@ ssl_key={{.ServerKey}}
 		}
 
 		if init {
-			tmpProcess.Args = append(tmpProcess.Args, "init", "--",
+			tmpProcess.Args = append(tmpProcess.Args, "init",
 				"--init_db_sql_file", mysqlctl.InitDBFile)
 		}
 	}
