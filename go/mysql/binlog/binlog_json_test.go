@@ -330,12 +330,12 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		{
 			name:     `true`,
 			data:     []byte{4, 1},
-			expected: `CAST(true as JSON)`,
+			expected: `CAST(_utf8mb4'true' as JSON)`,
 		},
 		{
 			name:     `false`,
 			data:     []byte{4, 2},
-			expected: `CAST(false as JSON)`,
+			expected: `CAST(_utf8mb4'false' as JSON)`,
 		},
 		{
 			name:     `null`,
