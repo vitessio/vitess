@@ -137,7 +137,7 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		return dst
 	case TypeBoolean:
 		if top {
-			dst = append(dst, "CAST("...)
+			dst = append(dst, "CAST(_utf8mb4'"...)
 		}
 		if v == ValueTrue {
 			dst = append(dst, "true"...)
@@ -145,19 +145,16 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 			dst = append(dst, "false"...)
 		}
 		if top {
-			dst = append(dst, " as JSON)"...)
+			dst = append(dst, "' as JSON)"...)
 		}
 		return dst
 	case TypeNull:
-		// JSON null is a 'null' string literal so we cannot use
-		// CAST(null as JSON) because that (surprisingly?) turns
-		// into an SQL NULL.
 		if top {
-			dst = append(dst, "CONVERT('"...)
+			dst = append(dst, "CAST(_utf8mb4'"...)
 		}
 		dst = append(dst, "null"...)
 		if top {
-			dst = append(dst, "' using utf8mb4)"...)
+			dst = append(dst, "' as JSON)"...)
 		}
 		return dst
 	default:
