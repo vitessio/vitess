@@ -1648,7 +1648,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values ('null', '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CONVERT('null' using utf8mb4),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CAST(_utf8mb4'null' as JSON),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
