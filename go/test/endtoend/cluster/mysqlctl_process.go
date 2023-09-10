@@ -146,8 +146,9 @@ ssl_key={{.ServerKey}}
 			tmpProcess.Args = append(tmpProcess.Args, "init",
 				"--init_db_sql_file", mysqlctl.InitDBFile)
 		}
+	} else {
+		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "start")
 	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
 	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
