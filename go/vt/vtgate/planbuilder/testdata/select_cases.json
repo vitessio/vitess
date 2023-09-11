@@ -873,7 +873,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "user_id": 0
+          "user_id2": 0
         },
         "TableName": "`user`_unsharded",
         "Inputs": [
@@ -895,8 +895,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
-            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
+            "FieldQuery": "select (select :user_id2 + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
+            "Query": "select (select :user_id2 + outm.m + unsharded.m from unsharded) from unsharded as outm",
             "Table": "unsharded"
           }
         ]

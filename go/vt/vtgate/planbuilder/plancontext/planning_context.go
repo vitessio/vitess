@@ -48,6 +48,9 @@ type PlanningContext struct {
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
 
+	// SubqueriesSettled ..
+	SubqueriesSettled bool
+
 	// ParentFKToIgnore stores a specific parent foreign key that we would need to ignore while planning
 	// a certain query. This field is used in UPDATE CASCADE planning, wherein while planning the child update
 	// query, we need to ignore the parent foreign key constraint that caused the cascade in question.

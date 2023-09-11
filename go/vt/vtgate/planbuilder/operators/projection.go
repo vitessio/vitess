@@ -141,6 +141,15 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 	return p, nil
 }
 
+func (p *Projection) hasSubqueryProjection() bool {
+	for _, projection := range p.Projections {
+		if _, ok := projection.(SubQueryExpression); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) (int, error) {
 	var err error
 	p.Columns, err = p.Columns.AddColumn(ae)
@@ -328,7 +337,11 @@ func (p *Projection) ShortDescription() string {
 			if aliasExpr.Expr == col.GetExpr() {
 				columns = append(columns, sqlparser.String(aliasExpr))
 			} else {
-				columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.ColumnName()))
+				if aliasExpr.As.IsEmpty() {
+					columns = append(columns, sqlparser.String(col.GetExpr()))
+				} else {
+					columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.As.String()))
+				}
 			}
 		}
 	}

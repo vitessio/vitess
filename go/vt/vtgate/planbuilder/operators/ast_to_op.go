@@ -228,6 +228,19 @@ func createSubquery(
 		innerSel.Where.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	}
 
+	innerSel = sqlparser.CopyOnRewrite(innerSel, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		colname, isColname := cursor.Node().(*sqlparser.ColName)
+		if !isColname {
+			return
+		}
+		deps := ctx.SemTable.RecursiveDeps(colname)
+		if deps.IsSolvedBy(subqID) {
+			return
+		}
+		rsv := ctx.ReservedVars.ReserveColName(colname)
+		cursor.Replace(sqlparser.NewArgument(rsv))
+		predicate = sqlparser.AndExpressions(predicate, colname)
+	}, nil).(*sqlparser.Select)
 	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
 		return nil, err
@@ -298,14 +311,10 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	// if neither of the two sides of the predicate is enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
 	if !deps.IsSolvedBy(jpc.subqID) && !deps.IsSolvedBy(jpc.outerID) && deps.IsSolvedBy(jpc.totalID) {
-		jpc.addPredicate(predicate)
+		jpc.predicates = append(jpc.predicates, predicate)
 	} else {
 		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
 	}
-}
-
-func (jpc *joinPredicateCollector) addPredicate(predicate sqlparser.Expr) {
-	jpc.predicates = append(jpc.predicates, predicate)
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {

@@ -379,11 +379,26 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 // findOrAddColNameBindVarName goes through the JoinColumns and looks for the given colName and returns the argument name if found.
 // if it's not found, a new JoinColumn passing this through will be added
 func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) (string, error) {
-	for _, thisCol := range aj.JoinColumns {
+	for i, thisCol := range aj.JoinColumns {
 		idx := slices.IndexFunc(thisCol.LHSExprs, func(e sqlparser.Expr) bool {
 			return ctx.SemTable.EqualsExpr(e, col)
 		})
+
 		if idx != -1 {
+			if len(thisCol.LHSExprs) == 1 && len(thisCol.BvNames) == 0 {
+				// this is a ColName that was not being sent to the RHS, so it has no bindvar name.
+				// let's add one.
+				expr := thisCol.LHSExprs[idx]
+				var bvname string
+				if col, ok := expr.(*sqlparser.ColName); ok {
+					bvname = ctx.ReservedVars.ReserveColName(col)
+				} else {
+					bvname = ctx.ReservedVars.ReserveVariable(sqlparser.String(expr))
+				}
+
+				thisCol.BvNames = append(thisCol.BvNames, bvname)
+				aj.JoinColumns[i] = thisCol
+			}
 			return thisCol.BvNames[idx], nil
 		}
 	}
@@ -462,6 +477,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner._sq)
 	return outer, rewrite.NewTree("merged subquery with rhs of join", inner), nil
 }
 
@@ -539,13 +555,19 @@ func tryPushProjection(
 	case *Route:
 		return rewrite.Swap(p, src, "push projection under route")
 	case *ApplyJoin:
-		if p.FromAggr {
+		if p.FromAggr || p.hasSubqueryProjection() && !ctx.SubqueriesSettled {
 			return p, rewrite.SameTree, nil
 		}
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
+		if p.hasSubqueryProjection() && !ctx.SubqueriesSettled {
+			return p, rewrite.SameTree, nil
+		}
 		return pushDownProjectionInVindex(ctx, p, src)
 	case *SubQueryContainer:
+		if p.hasSubqueryProjection() && !ctx.SubqueriesSettled {
+			return p, rewrite.SameTree, nil
+		}
 		return pushProjectionToOuter(ctx, p, src)
 	default:
 		return p, rewrite.SameTree, nil
@@ -678,7 +700,7 @@ func splitProjectionAcrossJoin(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	in ProjExpr,
-	colName *sqlparser.AliasedExpr,
+	column *sqlparser.AliasedExpr,
 ) error {
 	expr := in.GetExpr()
 
@@ -687,10 +709,65 @@ func splitProjectionAcrossJoin(
 		return nil
 	}
 
+	var col JoinColumn
+	var err error
+
+	switch expr := in.(type) {
+	case UnexploredExpression:
+		col, err = splitUnexploredExpression(ctx, join, lhs, rhs, expr, column)
+	case SubQueryExpression:
+		col, err = splitSubqueryExpression(ctx, join, lhs, rhs, expr, column)
+	default:
+		err = vterrors.VT13001(fmt.Sprintf("%T can't be split", in))
+	}
+	if err != nil {
+		return err
+	}
+
+	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
+	join.JoinColumns = append(join.JoinColumns, col)
+	return nil
+}
+
+func splitSubqueryExpression(
+	ctx *plancontext.PlanningContext,
+	join *ApplyJoin,
+	lhs, rhs *projector,
+	in SubQueryExpression,
+	originalAE *sqlparser.AliasedExpr,
+) (JoinColumn, error) {
+	ae := &sqlparser.AliasedExpr{Expr: in.E, As: originalAE.As}
+	col, err := join.getJoinColumnFor(ctx, ae, false)
+	if err != nil {
+		return JoinColumn{}, err
+	}
+	// Update the left and right child columns and names based on the JoinColumn type.
+	switch {
+	case col.IsPureLeft():
+		lhs.add(in, ae)
+	case col.IsPureRight():
+		rhs.add(in, ae)
+	case col.IsMixedLeftAndRight():
+		for _, lhsExpr := range col.LHSExprs {
+			lhs.add(&UnexploredExpression{E: lhsExpr}, aeWrap(lhsExpr))
+		}
+		rhsExpr := &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: originalAE.As}
+		rhs.add(&UnexploredExpression{E: col.RHSExpr}, rhsExpr)
+	}
+	return col, nil
+}
+
+func splitUnexploredExpression(
+	ctx *plancontext.PlanningContext,
+	join *ApplyJoin,
+	lhs, rhs *projector,
+	in ProjExpr,
+	colName *sqlparser.AliasedExpr,
+) (JoinColumn, error) {
 	// Get a JoinColumn for the current expression.
 	col, err := join.getJoinColumnFor(ctx, colName, false)
 	if err != nil {
-		return err
+		return JoinColumn{}, err
 	}
 
 	// Update the left and right child columns and names based on the JoinColumn type.
@@ -705,10 +782,7 @@ func splitProjectionAcrossJoin(
 		}
 		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
 	}
-
-	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns = append(join.JoinColumns, col)
-	return nil
+	return col, nil
 }
 
 // exposeColumnsThroughDerivedTable rewrites expressions within a join that is inside a derived table

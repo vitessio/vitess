@@ -116,31 +116,30 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 				if !ok {
 					continue
 				}
-				if isMerged(ctx, se) {
-					// if the expression has been merged, there is nothing left we need to do
-					continue
-				}
+				se.E = isMerged(ctx, se)
+				op.Projections[idx] = se
 				col, err := op.Columns.GetColumns()
 				if err != nil {
 					// if we can't get the columns, we can't change this query
 					return op, rewrite.SameTree, nil
 				}
-				col[idx].Expr = se.GetExpr()
+				col[idx].Expr = se.E
 			}
 			return op, rewrite.SameTree, nil
 		default:
 			return op, rewrite.SameTree, nil
 		}
 	}
+	ctx.SubqueriesSettled = true
 	return rewrite.BottomUp(op, TableID, visit, nil)
 }
 
-func isMerged(ctx *plancontext.PlanningContext, se SubQueryExpression) (merged bool) {
+func isMerged(ctx *plancontext.PlanningContext, se SubQueryExpression) sqlparser.Expr {
 	expr := se.GetExpr()
 	for _, sq := range se.sqs {
 		for _, sq2 := range ctx.MergedSubqueries {
 			if sq._sq == sq2 {
-				sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+				expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 					switch expr := cursor.Node().(type) {
 					case *sqlparser.ColName:
 						if expr.Name.String() != sq.ReplacedSqColName.Name.String() {
@@ -153,14 +152,13 @@ func isMerged(ctx *plancontext.PlanningContext, se SubQueryExpression) (merged b
 					default:
 						return true
 					}
-					merged = true
 					cursor.Replace(sq._sq)
 					return false
-				})
+				}).(sqlparser.Expr)
 			}
 		}
 	}
-	return
+	return expr
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

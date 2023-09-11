@@ -40,7 +40,7 @@ type SubQuery struct {
 	Original          sqlparser.Expr       // Original comparison or EXISTS expression.
 	_sq               *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
 	Predicates        sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
-	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will be empty for projections
+	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
 	ReplacedSqColName *sqlparser.ColName
 
 	// Fields filled in at the subquery settling phase:
