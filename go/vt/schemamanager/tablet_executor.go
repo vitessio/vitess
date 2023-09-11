@@ -450,7 +450,7 @@ func applyAllowZeroInDate(sql string) (string, error) {
 	if err != nil {
 		return sql, err
 	}
-	modifiedSqls := []string{}
+	var modifiedSqls []string
 	for _, singleSQL := range sqls {
 		// --allow-zero-in-date Applies to DDLs
 		stmt, err := sqlparser.Parse(singleSQL)
